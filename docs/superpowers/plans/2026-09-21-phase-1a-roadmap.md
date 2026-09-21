@@ -36,9 +36,32 @@ against the sample pack.
 - **Spec approval table (§16).** Several † rows still read "Pending". The plans
   follow the spec as written; update the table when the sign-off is formal.
 
+## Contracts `core` hands to the later plans
+
+Found while reviewing plan 1. `core` cannot enforce these itself; each is a requirement on the plan named.
+
+- **Time-zone offset is validated at ingest** (plans 4, 5). `clientTzOffsetMin` is minutes to add to UTC
+  (UTC+2 → `120`; the negation of `getTimezoneOffset()`), a finite integer within −720…+840. A `NaN` offset
+  turns a word's stability into `NaN` silently and for good.
+- **`today` is computed once per render or session** as `localDay(now, offset)` with the device's *current*
+  offset (plans 4, 6). The home screen and a session make the same `composeSession` call.
+- **`reviewsDoneToday` is one shared helper** over today's events: distinct words, introduced before today,
+  with their first scheduled review today (plans 2, 4). Two implementations would make the cap and the backlog drift.
+- **Settings are validated before they reach `core`** (plan 4): new-word limit finite and 0–30; desired
+  retention within (0, 1].
+- **The server enforces `review_id` uniqueness, first write wins** (plan 5). Replay resolves a collision
+  deterministically, but a collision is corruption, not sync.
+- **Alias writes are validated** as `u:` → `c:` and acyclic (plan 5). `resolveAlias` throws on a cycle, which
+  would abort a learner's whole replay.
+- **Tombstoned user words derive no state** (plan 2): filter them out of replay's result.
+- **Relearning across local midnight** counts as one elapsed day (23:55 *Again*, 00:05 retry). It follows from
+  spec §8.4's local date. If it proves too generous, add a day-rollover hour as a scheduler rule (a version bump).
+- **First edits of plan 2:** the stale `SessionPlan.reviews` comment; `lastReviewDay >= today` for the
+  relearning group; one off-24h step in the `SCHEDULER_VERSION` pin.
+
 ## Open items from spec §15
 
 Each is resolved in the plan that first needs it, and recorded in that plan's
 header. Plan 1 settles: slow-answer thresholds, desired-retention targets,
-mastery-tier thresholds, the new-word limit and review cap defaults, and the
-same-day relearn delay.
+mastery-tier thresholds, the new-word limit and review cap defaults, the
+same-day relearn delay, what a scheduling day is, and what counts as a lapse.

@@ -8,12 +8,15 @@
 
 **Tech Stack:** Node 24, pnpm 12, TypeScript 7, Vitest 5, fast-check 4, ts-fsrs 5.4.2 (FSRS-6).
 
+> **Revised 2026-09-21 after the whole-branch review.** The code blocks below are the code as merged, not as first planned. The review changed the scheduler to count in the learner's local calendar days (it first used 24-hour instants, which served reviews a day late), made replay ignore matching events by mode, stopped an exhausted collection from blocking the path, made the path queue apply unlocks itself, and hardened the version pin. `SCHEDULER_VERSION` is `r2` for that reason.
+
 **Spec:** `docs/superpowers/specs/2026-09-20-vocabulary-learning-app-design.md` — this plan implements §6.1 (word IDs), §7.1–§7.5, the distractor and matching rules of §8.1, the tiers of §8.3, and the replay half of §9.2. It is plan 1 of 8; see `docs/superpowers/plans/2026-09-21-phase-1a-roadmap.md`.
 
 ## Global Constraints
 
 - `core` is pure: no I/O, no framework, no platform APIs (spec §4.1). `tsconfig.base.json`, which `core/tsconfig.json` extends, sets `"lib": ["ES2022"]` and `"types": []`, so `fetch`, `process`, `document` and `localStorage` do not compile. Do not loosen it.
-- `core` never reads the clock and never calls `Math.random`. Times arrive as arguments (epoch milliseconds, `number`); randomness arrives as an `Rng`.
+- `core` never reads the clock, never calls `Math.random`, and never depends on the host locale. Times arrive as arguments (epoch milliseconds, `number`); randomness arrives as an `Rng`.
+- Scheduling counts in the learner's **local calendar days** (spec §8.4): `localDay(ts, clientTzOffsetMin)`, where the offset is minutes to add to UTC (UTC+2 → `120`, the negation of `getTimezoneOffset()`) and is stored in every event, so client and server derive the same days. There is one notion of due: `isDue`.
 - Any change to a scheduling rule or FSRS parameter is a `SCHEDULER_VERSION` bump (spec §4.3). Mastery-tier thresholds are presentational and are not.
 - A grade stored in an event is a fact and is never recomputed. Events are immutable; replay never rewrites them (spec §4.3, §6.1).
 - Practice events never touch review state (spec §7.4). Binary modes never grade *Easy* (spec §7.3).
@@ -29,6 +32,8 @@
 | Slow-answer threshold, multiple choice and listening (select) | 8 000 ms | `grading.ts` |
 | Desired retention: relaxed / standard / intensive | 0.85 / 0.90 / 0.94 | `scheduler.ts` |
 | Same-day return after *Again* | 10 minutes | `scheduler.ts` |
+| A scheduling day | the learner's local calendar day, from the event's `clientTzOffsetMin` | `scheduler.ts` |
+| A lapse | an *Again* on a word whose last grade was not *Again* | `scheduler.ts` |
 | Mastery tiers by stability: learning < 4 d ≤ young < 21 d ≤ mature | 4, 21 | `mastery.ts` |
 | Daily new-word limit: default / maximum | 10 / 30 | `session.ts` |
 | Daily review cap default | 100 | `session.ts` |
@@ -339,6 +344,7 @@ export interface CorpusEntry {
   readonly pos: string
   readonly level: CefrLevel
   readonly ipa: string
+  /** A back-reference to the entry's unit; the pack validator keeps it consistent with Unit.wordIds. */
   readonly unitId: string
   readonly themes: readonly string[]
   /** Primary translation first, then accepted alternates. */
@@ -352,22 +358,29 @@ export interface Unit {
   readonly level: CefrLevel
   /** Position in the path. Unique; lower comes first. */
   readonly order: number
+  /** The source of truth for unit membership and order; CorpusEntry.unitId is the back-reference. */
   readonly wordIds: readonly WordId[]
 }
 
 /**
  * One answer, as the client records it (spec §6.2). Times are epoch
  * milliseconds. Server-assigned fields live on StampedReviewEvent.
+ * Deliberately without a user_id: `core` always works on one learner's events.
  */
 export interface ReviewEvent {
   readonly reviewId: string
   readonly wordId: WordId
   readonly mode: Mode
+  /** By convention `'en_to_l1'` for listening and matching. */
   readonly direction: Direction
   readonly grade: Grade
   readonly latencyMs: number
   readonly practice: boolean
   readonly clientTs: number
+  /**
+   * Minutes to ADD to UTC for the learner's local time at the moment of the
+   * answer (UTC+2 is `120`): the NEGATION of `Date.prototype.getTimezoneOffset()`.
+   */
   readonly clientTzOffsetMin: number
   readonly deviceId: string
   readonly deviceSeq: number
@@ -534,14 +547,15 @@ git commit -m "feat(core): shared types and grade mapping"
 
 **Interfaces:**
 - Consumes: `Grade` (Task 2), `WordId` (Task 1).
-- Produces: `SCHEDULER_VERSION: string`; `DAY_MS`; `RELEARN_DELAY_MS`; `MAX_INTERVAL_DAYS`; `RETENTION_TARGETS = { relaxed: 0.85, standard: 0.9, intensive: 0.94 }`; `RetentionSetting`; `ReviewState { wordId, stability, difficulty, introducedTs, lastReviewTs, lastGrade, reps, lapses }`; `applyGrade(prev: ReviewState | null, wordId: WordId, grade: Grade, ts: number): ReviewState`; `intervalDays(stability: number, retention: number): number`; `dueAt(state: ReviewState, retention: number): number`; `retrievability(state: ReviewState, now: number): number`.
+- Produces: `SCHEDULER_VERSION: string`; `DAY_MS`; `RELEARN_DELAY_MS`; `MAX_INTERVAL_DAYS`; `RETENTION_TARGETS = { relaxed: 0.85, standard: 0.9, intensive: 0.94 }`; `RetentionSetting`; `localDay(ts: number, tzOffsetMin: number): number`; `ReviewState { wordId, stability, difficulty, introducedTs, lastReviewTs, lastReviewDay, lastGrade, reps, lapses }`; `applyGrade(prev: ReviewState | null, wordId: WordId, grade: Grade, ts: number, tzOffsetMin: number): ReviewState`; `intervalDays(stability: number, retention: number): number`; `dueDay(state: ReviewState, retention: number): number`; `isDue(state: ReviewState, retention: number, now: number, today: number): boolean`; `retrievability(state: ReviewState, now: number): number`.
 
 Design notes for the implementer:
 
 - `ReviewState` stores no due date. The due date is computed from stability and the learner's retention setting, which is why changing the setting reschedules at once and needs no replay (spec §7.1).
 - Use `FSRSAlgorithm` from ts-fsrs directly — `next_state`, `calculate_interval_modifier`, `forgetting_curve`. Do not use the higher-level `fsrs().repeat()` API: it owns due dates and learning steps, which here are ours.
-- Elapsed time is whole days of the millisecond difference, not calendar days, so the result does not depend on a time zone.
-- The last test pins exact numbers. If it ever fails after a dependency or rule change, that is the signal to bump `SCHEDULER_VERSION`, not to edit the numbers quietly.
+- Elapsed time is the difference of **local calendar days**, computed from each event's own time-zone offset. A word studied at 20:30 is due the next day from midnight, not from 20:30; a review the next morning is one elapsed day, not zero. (An earlier draft used 24-hour instants and whole days of the millisecond difference: it served more than half of all reviews a day late.)
+- `isDue` is the only notion of due. An *Again* is due by the clock, ten minutes later; everything else is due by the day.
+- The last test pins exact numbers along a path that crosses every rule: a first review, a later-day success, a lapse, a same-day *Again*, a same-day *Good*, and the interval table. It fails if `enable_short_term` is flipped. If it ever fails after a dependency or rule change, that is the signal to bump `SCHEDULER_VERSION`, not to edit the numbers quietly.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -552,89 +566,150 @@ import { describe, expect, it } from 'vitest'
 import {
   applyGrade,
   DAY_MS,
-  dueAt,
+  dueDay,
   intervalDays,
+  isDue,
+  localDay,
   RELEARN_DELAY_MS,
   RETENTION_TARGETS,
   retrievability,
   SCHEDULER_VERSION,
+  type ReviewState,
 } from './scheduler'
 import { Grade } from './types'
 import { corpusWordId } from './wordId'
 
 const word = corpusWordId('en-000001')
-const T0 = Date.UTC(2026, 0, 5, 9, 0, 0)
+/** Sofia winter time: minutes to ADD to UTC. */
+const TZ = 120
+/** The instant at which the learner's local wall clock reads day 5+`day` of January 2026, `hour`:`minute`. */
+const at = (day: number, hour: number, minute = 0) => Date.UTC(2026, 0, 5 + day, hour, minute) - TZ * 60_000
+const T0 = at(0, 11)
+const { relaxed, standard, intensive } = RETENTION_TARGETS
+
+describe('localDay', () => {
+  it('is the learner’s calendar day, so the same instant can fall on different days', () => {
+    const ts = Date.UTC(2026, 0, 5, 23, 0)
+    expect(localDay(ts, 120)).toBe(localDay(ts, 0) + 1)
+    expect(localDay(ts, -300)).toBe(localDay(ts, 0))
+  })
+
+  it('advances at the local midnight, not at 24-hour boundaries', () => {
+    expect(localDay(at(0, 23, 59), TZ)).toBe(localDay(at(0, 0, 0), TZ))
+    expect(localDay(at(1, 0, 0), TZ)).toBe(localDay(at(0, 0, 0), TZ) + 1)
+  })
+})
 
 describe('applyGrade', () => {
   it('creates state on the first review', () => {
-    const s = applyGrade(null, word, Grade.Good, T0)
-    expect(s).toMatchObject({ wordId: word, introducedTs: T0, lastReviewTs: T0, reps: 1, lapses: 0 })
+    const s = applyGrade(null, word, Grade.Good, T0, TZ)
+    expect(s).toMatchObject({
+      wordId: word,
+      introducedTs: T0,
+      lastReviewTs: T0,
+      lastReviewDay: localDay(T0, TZ),
+      reps: 1,
+      lapses: 0,
+    })
     expect(s.stability).toBeGreaterThan(0)
     expect(s.difficulty).toBeGreaterThanOrEqual(1)
     expect(s.difficulty).toBeLessThanOrEqual(10)
   })
 
   it('gives a first Easy more stability than Good, Good more than Hard, Hard more than Again', () => {
-    const by = (g: Grade) => applyGrade(null, word, g, T0).stability
+    const by = (g: Grade) => applyGrade(null, word, g, T0, TZ).stability
     expect(by(Grade.Easy)).toBeGreaterThan(by(Grade.Good))
     expect(by(Grade.Good)).toBeGreaterThan(by(Grade.Hard))
     expect(by(Grade.Hard)).toBeGreaterThan(by(Grade.Again))
   })
 
   it('grows stability on a successful later-day review and keeps introducedTs', () => {
-    const first = applyGrade(null, word, Grade.Good, T0)
-    const second = applyGrade(first, word, Grade.Good, T0 + 3 * DAY_MS)
+    const first = applyGrade(null, word, Grade.Good, T0, TZ)
+    const second = applyGrade(first, word, Grade.Good, T0 + 3 * DAY_MS, TZ)
     expect(second.stability).toBeGreaterThan(first.stability)
     expect(second.introducedTs).toBe(T0)
     expect(second.reps).toBe(2)
   })
 
-  it('counts a lapse for Again on a known word, but not on the first exposure', () => {
-    expect(applyGrade(null, word, Grade.Again, T0).lapses).toBe(0)
-    const first = applyGrade(null, word, Grade.Good, T0)
-    const lapsed = applyGrade(first, word, Grade.Again, T0 + 5 * DAY_MS)
+  it('counts elapsed time in local days: a next-morning review is one day, not zero', () => {
+    const first = applyGrade(null, word, Grade.Good, at(0, 21), TZ)
+    const nextMorning = applyGrade(first, word, Grade.Good, at(1, 8), TZ) // 11 hours later
+    const fullDay = applyGrade(first, word, Grade.Good, at(0, 21) + DAY_MS, TZ)
+    const sameDay = applyGrade(first, word, Grade.Good, at(0, 21), TZ)
+    expect(nextMorning.stability).toBeCloseTo(fullDay.stability, 10)
+    expect(nextMorning.stability).toBeGreaterThan(sameDay.stability)
+  })
+
+  it('counts a lapse only when the word leaves a passed state', () => {
+    expect(applyGrade(null, word, Grade.Again, T0, TZ).lapses).toBe(0)
+    const first = applyGrade(null, word, Grade.Good, T0, TZ)
+    const lapsed = applyGrade(first, word, Grade.Again, T0 + 5 * DAY_MS, TZ)
     expect(lapsed.lapses).toBe(1)
     expect(lapsed.stability).toBeLessThan(first.stability)
   })
 
+  it('counts consecutive Agains once, but Again → Good → Again twice', () => {
+    const first = applyGrade(null, word, Grade.Good, T0, TZ)
+    const again = applyGrade(first, word, Grade.Again, T0 + 5 * DAY_MS, TZ)
+    const againAgain = applyGrade(again, word, Grade.Again, T0 + 5 * DAY_MS, TZ)
+    expect(againAgain.lapses).toBe(1)
+    const recovered = applyGrade(againAgain, word, Grade.Good, T0 + 5 * DAY_MS, TZ)
+    expect(applyGrade(recovered, word, Grade.Again, T0 + 9 * DAY_MS, TZ).lapses).toBe(2)
+  })
+
   it('treats a timestamp before the previous review as zero elapsed time', () => {
-    const first = applyGrade(null, word, Grade.Good, T0)
-    expect(() => applyGrade(first, word, Grade.Good, T0 - DAY_MS)).not.toThrow()
+    const first = applyGrade(null, word, Grade.Good, T0, TZ)
+    expect(() => applyGrade(first, word, Grade.Good, T0 - DAY_MS, TZ)).not.toThrow()
   })
 
   it('is deterministic', () => {
-    const run = () => applyGrade(applyGrade(null, word, Grade.Good, T0), word, Grade.Hard, T0 + 2 * DAY_MS)
+    const run = () =>
+      applyGrade(applyGrade(null, word, Grade.Good, T0, TZ), word, Grade.Hard, T0 + 2 * DAY_MS, TZ)
     expect(run()).toEqual(run())
   })
 })
 
-describe('dueAt and desired retention', () => {
-  const state = applyGrade(applyGrade(null, word, Grade.Good, T0), word, Grade.Good, T0 + 3 * DAY_MS)
+describe('dueDay, isDue and desired retention', () => {
+  const state = applyGrade(applyGrade(null, word, Grade.Good, T0, TZ), word, Grade.Good, T0 + 3 * DAY_MS, TZ)
 
   it('schedules standard retention at about the stability, in whole days', () => {
-    expect(intervalDays(10, RETENTION_TARGETS.standard)).toBe(10)
-    expect((dueAt(state, RETENTION_TARGETS.standard) - state.lastReviewTs) % DAY_MS).toBe(0)
+    expect(intervalDays(10, standard)).toBe(10)
+    expect(dueDay(state, standard)).toBe(state.lastReviewDay + intervalDays(state.stability, standard))
   })
 
   it('orders the three settings: intensive soonest, relaxed latest', () => {
-    const due = (r: number) => dueAt(state, r)
-    expect(due(RETENTION_TARGETS.intensive)).toBeLessThan(due(RETENTION_TARGETS.standard))
-    expect(due(RETENTION_TARGETS.standard)).toBeLessThan(due(RETENTION_TARGETS.relaxed))
+    expect(dueDay(state, intensive)).toBeLessThan(dueDay(state, standard))
+    expect(dueDay(state, standard)).toBeLessThan(dueDay(state, relaxed))
   })
 
   it('never schedules a passed word less than a day out', () => {
-    expect(intervalDays(0.2, RETENTION_TARGETS.intensive)).toBe(1)
+    expect(intervalDays(0.2, intensive)).toBe(1)
   })
 
-  it('brings an Again back the same day', () => {
-    const lapsed = applyGrade(state, word, Grade.Again, T0 + 20 * DAY_MS)
-    expect(dueAt(lapsed, RETENTION_TARGETS.standard)).toBe(lapsed.lastReviewTs + RELEARN_DELAY_MS)
+  it('serves a one-day word on the next local day, however early on it the learner studies', () => {
+    const evening = at(0, 20, 30)
+    const day = localDay(evening, TZ)
+    const state1: ReviewState = { ...applyGrade(null, word, Grade.Good, evening, TZ), stability: 1 }
+    expect(intervalDays(state1.stability, standard)).toBe(1)
+    expect(isDue(state1, standard, evening, day)).toBe(false)
+    expect(isDue(state1, standard, at(0, 23, 59), day)).toBe(false)
+    // 30 minutes "early" by the clock, but a new calendar day.
+    expect(isDue(state1, standard, at(1, 8), day + 1)).toBe(true)
+    expect(isDue(state1, standard, at(1, 20), day + 1)).toBe(true)
+  })
+
+  it('brings an Again back the same day, after the relearn delay', () => {
+    const ts = T0 + 20 * DAY_MS
+    const day = localDay(ts, TZ)
+    const lapsed = applyGrade(state, word, Grade.Again, ts, TZ)
+    expect(isDue(lapsed, standard, ts + RELEARN_DELAY_MS - 1, day)).toBe(false)
+    expect(isDue(lapsed, standard, ts + RELEARN_DELAY_MS, day)).toBe(true)
   })
 })
 
 describe('retrievability', () => {
   it('is 1 at the moment of review, ~0.9 at the stability, and falls over time', () => {
-    const s = applyGrade(null, word, Grade.Good, T0)
+    const s = applyGrade(null, word, Grade.Good, T0, TZ)
     expect(retrievability(s, T0)).toBeCloseTo(1, 6)
     expect(retrievability(s, T0 + s.stability * DAY_MS)).toBeCloseTo(0.9, 2)
     expect(retrievability(s, T0 + 30 * DAY_MS)).toBeLessThan(retrievability(s, T0 + 10 * DAY_MS))
@@ -642,11 +717,47 @@ describe('retrievability', () => {
 })
 
 describe('SCHEDULER_VERSION', () => {
-  it('pins the state the current rules derive; bump the version if this changes', () => {
-    const s = applyGrade(applyGrade(null, word, Grade.Good, T0), word, Grade.Good, T0 + 2 * DAY_MS)
-    expect(SCHEDULER_VERSION).toBe('fsrs6-tsfsrs5.4.2-r1')
-    expect(s.stability).toBeCloseTo(10.96433194, 6)
-    expect(s.difficulty).toBeCloseTo(2.11121424, 6)
+  /**
+   * Every branch of the rules on one path: a first review, a later-day success,
+   * a lapse, a same-day relearn, a same-day recovery and a later-day success.
+   * These numbers are facts about ts-fsrs 5.4.2 with our parameters. If this
+   * test fails, the rules changed: bump SCHEDULER_VERSION (and re-derive), do
+   * NOT edit the numbers to match.
+   */
+  it('pins the state the current rules derive; a failure means bump SCHEDULER_VERSION', () => {
+    expect(SCHEDULER_VERSION).toBe('fsrs6-tsfsrs5.4.2-r2')
+
+    // Each step's offset is from the step before it, in local days.
+    const s1 = applyGrade(null, word, Grade.Good, at(0, 10), TZ) // first review
+    expect(s1.stability).toBeCloseTo(2.3065, 6)
+    expect(s1.difficulty).toBeCloseTo(2.11810397, 6)
+
+    const s2 = applyGrade(s1, word, Grade.Good, at(2, 10), TZ) // +2 days
+    expect(s2.stability).toBeCloseTo(10.96433194, 6)
+    expect(s2.difficulty).toBeCloseTo(2.11121424, 6)
+
+    const s3 = applyGrade(s2, word, Grade.Again, at(7, 10), TZ) // +5 days: a lapse
+    expect(s3.stability).toBeCloseTo(1.42875311, 6)
+    expect(s3.difficulty).toBeCloseTo(7.39223814, 6)
+
+    const s4 = applyGrade(s3, word, Grade.Again, at(7, 10), TZ) // same day: short-term
+    expect(s4.stability).toBeCloseTo(0.49549428, 6)
+    expect(s4.difficulty).toBeCloseTo(9.12807478, 6)
+
+    const s5 = applyGrade(s4, word, Grade.Good, at(7, 10), TZ) // same day: relearned
+    expect(s5.stability).toBeCloseTo(0.54524571, 6)
+    expect(s5.difficulty).toBeCloseTo(9.11417507, 6)
+
+    const s6 = applyGrade(s5, word, Grade.Good, at(10, 10), TZ) // +3 days
+    expect(s6.stability).toBeCloseTo(2.16541104, 6)
+    expect(s6.difficulty).toBeCloseTo(9.10028926, 6)
+
+    expect(s6.reps).toBe(6)
+    expect(s6.lapses).toBe(1)
+
+    expect(intervalDays(10, relaxed)).toBe(19)
+    expect(intervalDays(10, standard)).toBe(10)
+    expect(intervalDays(10, intensive)).toBe(5)
   })
 })
 ```
@@ -669,7 +780,7 @@ import type { WordId } from './wordId'
  * Identifies the FSRS library, its parameter set and our scheduling rules.
  * Any change to a rule or parameter in this file is a version bump (spec §4.3).
  */
-export const SCHEDULER_VERSION = 'fsrs6-tsfsrs5.4.2-r1'
+export const SCHEDULER_VERSION = 'fsrs6-tsfsrs5.4.2-r2'
 
 export const DAY_MS = 86_400_000
 
@@ -682,6 +793,15 @@ export const MAX_INTERVAL_DAYS = 36_500
 export const RETENTION_TARGETS = { relaxed: 0.85, standard: 0.9, intensive: 0.94 } as const
 export type RetentionSetting = keyof typeof RETENTION_TARGETS
 
+/**
+ * The learner's local calendar day as an integer, days since the epoch
+ * (spec §8.4: a day is the local date at the moment of the answer).
+ * `tzOffsetMin` is minutes to ADD to UTC, as on ReviewEvent.clientTzOffsetMin.
+ */
+export function localDay(ts: number, tzOffsetMin: number): number {
+  return Math.floor((ts + tzOffsetMin * 60_000) / DAY_MS)
+}
+
 /** FSRS memory state for one word. Derived from events, never edited. */
 export interface ReviewState {
   readonly wordId: WordId
@@ -689,32 +809,47 @@ export interface ReviewState {
   readonly difficulty: number
   readonly introducedTs: number
   readonly lastReviewTs: number
+  /** Local calendar day of the last review: what scheduling counts in. */
+  readonly lastReviewDay: number
   readonly lastGrade: Grade
   readonly reps: number
+  /**
+   * Times the word left a passed state: an Again on a word whose last grade was
+   * not Again. Consecutive Agains while relearning are one lapse, not several.
+   */
   readonly lapses: number
 }
 
 // Fuzz is off so that every engine derives the same state from the same events.
 const algorithm = new FSRSAlgorithm(generatorParameters({ enable_fuzz: false, enable_short_term: true }))
 
-/** Whole days between two instants. Time-zone free, so client and server agree. */
-function elapsedDays(fromTs: number, toTs: number): number {
-  return Math.max(0, Math.floor((toTs - fromTs) / DAY_MS))
-}
-
-/** Applies one scheduled answer. `prev` is null for a word's first review. */
-export function applyGrade(prev: ReviewState | null, wordId: WordId, grade: Grade, ts: number): ReviewState {
+/**
+ * Applies one scheduled answer. `prev` is null for a word's first review.
+ * `tzOffsetMin` is the offset the answer was given at (ReviewEvent.clientTzOffsetMin),
+ * so FSRS is told how many calendar days the learner actually let pass.
+ */
+export function applyGrade(
+  prev: ReviewState | null,
+  wordId: WordId,
+  grade: Grade,
+  ts: number,
+  tzOffsetMin: number,
+): ReviewState {
+  const day = localDay(ts, tzOffsetMin)
   const memory = prev ? { stability: prev.stability, difficulty: prev.difficulty } : null
-  const next = algorithm.next_state(memory, prev ? elapsedDays(prev.lastReviewTs, ts) : 0, grade)
+  const elapsedDays = prev ? Math.max(0, day - prev.lastReviewDay) : 0
+  const next = algorithm.next_state(memory, elapsedDays, grade)
+  const lapsed = prev !== null && grade === Grade.Again && prev.lastGrade !== Grade.Again
   return {
     wordId,
     stability: next.stability,
     difficulty: next.difficulty,
     introducedTs: prev ? prev.introducedTs : ts,
     lastReviewTs: ts,
+    lastReviewDay: day,
     lastGrade: grade,
     reps: (prev?.reps ?? 0) + 1,
-    lapses: (prev?.lapses ?? 0) + (prev && grade === Grade.Again ? 1 : 0),
+    lapses: (prev?.lapses ?? 0) + (lapsed ? 1 : 0),
   }
 }
 
@@ -727,9 +862,20 @@ export function intervalDays(stability: number, retention: number): number {
   return Math.min(Math.max(days, 1), MAX_INTERVAL_DAYS)
 }
 
-export function dueAt(state: ReviewState, retention: number): number {
-  if (state.lastGrade === Grade.Again) return state.lastReviewTs + RELEARN_DELAY_MS
-  return state.lastReviewTs + intervalDays(state.stability, retention) * DAY_MS
+/** The local calendar day a passed word comes back on. */
+export function dueDay(state: ReviewState, retention: number): number {
+  return state.lastReviewDay + intervalDays(state.stability, retention)
+}
+
+/**
+ * Whether the word is to be served. A word rated Again is relearning and comes
+ * back `RELEARN_DELAY_MS` after the answer; every other word is due on a whole
+ * local day, so the home screen and a session ask the same question and get
+ * the same answer (spec §8.4).
+ */
+export function isDue(state: ReviewState, retention: number, now: number, today: number): boolean {
+  if (state.lastGrade === Grade.Again) return now >= state.lastReviewTs + RELEARN_DELAY_MS
+  return today >= dueDay(state, retention)
 }
 
 /** Predicted probability of recall at `now`, in [0, 1]. */
@@ -748,7 +894,7 @@ export * from './scheduler'
 - [ ] **Step 4: Run the tests and the typecheck**
 
 Run: `pnpm test && pnpm typecheck`
-Expected: 23 tests pass; `tsc` prints nothing.
+Expected: 28 tests pass; `tsc` prints nothing.
 
 - [ ] **Step 5: Commit**
 
@@ -768,7 +914,9 @@ git commit -m "feat(core): FSRS scheduler with desired retention"
 
 **Interfaces:**
 - Consumes: `applyGrade`, `ReviewState`, `DAY_MS` (Task 3); `StampedReviewEvent`, `Grade` (Task 2); `WordId` (Task 1).
-- Produces: `ReplayEvent` (the `reviewId`, `wordId`, `grade`, `practice`, `effectiveTs`, `deviceId`, `deviceSeq` fields of `StampedReviewEvent`); `AliasMap = ReadonlyMap<WordId, WordId>`; `resolveAlias(wordId: WordId, aliases: AliasMap): WordId`; `compareEvents(a: ReplayEvent, b: ReplayEvent): number`; `replay(events: Iterable<ReplayEvent>, aliases?: AliasMap): Map<WordId, ReviewState>`.
+- Produces: `ReplayEvent` (the `reviewId`, `wordId`, `mode`, `grade`, `practice`, `effectiveTs`, `clientTzOffsetMin`, `deviceId`, `deviceSeq` fields of `StampedReviewEvent`); `AliasMap = ReadonlyMap<WordId, WordId>`; `resolveAlias(wordId: WordId, aliases: AliasMap): WordId`; `compareEvents(a: ReplayEvent, b: ReplayEvent): number`; `replay(events: Iterable<ReplayEvent>, aliases?: AliasMap): Map<WordId, ReviewState>`.
+
+Replay skips an event when it is practice **or** its mode is `matching` — the engine, not the client, guarantees that matching never moves the schedule (spec §8.1). Events are sorted before they are deduplicated, so even two different payloads under one `reviewId` resolve the same way in any input order.
 
 The same function runs on the server (authoritative) and on clients (provisional). A client replaying events it has not pushed yet uses each event's `clientTs` as its `effectiveTs`.
 
@@ -781,10 +929,12 @@ import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
 import { compareEvents, replay, resolveAlias, type ReplayEvent } from './replay'
 import { applyGrade, DAY_MS } from './scheduler'
-import { Grade } from './types'
+import { Grade, type Mode } from './types'
 import { corpusWordId, userWordId, type WordId } from './wordId'
 
 const T0 = Date.UTC(2026, 0, 5, 9, 0, 0)
+/** Sofia winter time: minutes to ADD to UTC. */
+const TZ = 120
 const bank = corpusWordId('en-000010')
 const river = corpusWordId('en-000011')
 const mine = userWordId('11111111-2222-4333-8444-555555555555')
@@ -792,15 +942,35 @@ const mine = userWordId('11111111-2222-4333-8444-555555555555')
 let seq = 0
 function ev(wordId: WordId, grade: Grade, effectiveTs: number, over: Partial<ReplayEvent> = {}): ReplayEvent {
   seq += 1
-  return { reviewId: `r${seq}`, wordId, grade, practice: false, effectiveTs, deviceId: 'dev-a', deviceSeq: seq, ...over }
+  return {
+    reviewId: `r${seq}`,
+    wordId,
+    mode: 'multiple_choice',
+    grade,
+    practice: false,
+    effectiveTs,
+    clientTzOffsetMin: TZ,
+    deviceId: 'dev-a',
+    deviceSeq: seq,
+    ...over,
+  }
 }
 
 describe('replay', () => {
   it('folds each word’s events through the scheduler in time order', () => {
     const a = ev(bank, Grade.Good, T0)
     const b = ev(bank, Grade.Hard, T0 + 3 * DAY_MS)
-    const expected = applyGrade(applyGrade(null, bank, Grade.Good, T0), bank, Grade.Hard, T0 + 3 * DAY_MS)
+    const expected = applyGrade(applyGrade(null, bank, Grade.Good, T0, TZ), bank, Grade.Hard, T0 + 3 * DAY_MS, TZ)
     expect(replay([b, a]).get(bank)).toEqual(expected)
+  })
+
+  it('counts elapsed days in the time zone the answer was given in', () => {
+    const evening = Date.UTC(2026, 0, 5, 22, 0) // 00:00 local the next day at +120
+    const morning = Date.UTC(2026, 0, 6, 6, 0)
+    const sofia = replay([ev(bank, Grade.Good, T0), ev(bank, Grade.Good, evening, { clientTzOffsetMin: TZ })])
+    const utc = replay([ev(river, Grade.Good, T0, { clientTzOffsetMin: 0 }), ev(river, Grade.Good, evening, { clientTzOffsetMin: 0 })])
+    expect(sofia.get(bank)?.stability).toBeGreaterThan(utc.get(river)?.stability ?? 0)
+    expect(sofia.get(bank)?.lastReviewDay).toBe(replay([ev(bank, Grade.Good, morning)]).get(bank)?.lastReviewDay)
   })
 
   it('keeps words independent', () => {
@@ -811,13 +981,27 @@ describe('replay', () => {
 
   it('skips practice events entirely', () => {
     const states = replay([ev(bank, Grade.Good, T0), ev(bank, Grade.Again, T0 + 60_000, { practice: true })])
-    expect(states.get(bank)).toEqual(applyGrade(null, bank, Grade.Good, T0))
+    expect(states.get(bank)).toEqual(applyGrade(null, bank, Grade.Good, T0, TZ))
     expect(replay([ev(river, Grade.Good, T0, { practice: true })]).has(river)).toBe(false)
+  })
+
+  it('never lets a matching event alter review state, even when it is not flagged practice', () => {
+    const matching = { mode: 'matching' as Mode, practice: false }
+    const states = replay([ev(bank, Grade.Good, T0), ev(bank, Grade.Again, T0 + 60_000, matching)])
+    expect(states.get(bank)).toEqual(applyGrade(null, bank, Grade.Good, T0, TZ))
+    expect(replay([ev(river, Grade.Good, T0, matching)]).has(river)).toBe(false)
   })
 
   it('deduplicates on reviewId', () => {
     const a = ev(bank, Grade.Good, T0)
     expect(replay([a, { ...a }, a]).get(bank)?.reps).toBe(1)
+  })
+
+  it('resolves a reviewId collision the same way whatever the input order', () => {
+    const a = ev(bank, Grade.Good, T0)
+    const b: ReplayEvent = { ...a, grade: Grade.Again, effectiveTs: T0 + 2 * DAY_MS, deviceSeq: a.deviceSeq + 1 }
+    expect(replay([a, b])).toEqual(replay([b, a]))
+    expect(replay([a, b]).get(bank)?.lastGrade).toBe(Grade.Good)
   })
 
   it('groups a merged user word’s events under the corpus entry', () => {
@@ -855,10 +1039,12 @@ describe('replay convergence (spec §13)', () => {
   const eventArb = fc.record({
     reviewId: fc.uuid(),
     wordId: fc.constantFrom(...words),
+    mode: fc.constantFrom<Mode>('flashcard', 'multiple_choice', 'listening_select', 'matching'),
     grade: fc.constantFrom(Grade.Again, Grade.Hard, Grade.Good, Grade.Easy),
     practice: fc.boolean(),
     // A narrow range forces timestamp ties, so the tie-breakers are exercised.
     effectiveTs: fc.integer({ min: 0, max: 40 }).map((n) => T0 + n * (DAY_MS / 4)),
+    clientTzOffsetMin: fc.constantFrom(-300, 0, 120, 330),
     deviceId: fc.constantFrom('dev-a', 'dev-b', 'dev-c'),
     deviceSeq: fc.integer({ min: 1, max: 50 }),
   })
@@ -887,6 +1073,15 @@ describe('replay convergence (spec §13)', () => {
       }),
     )
   })
+
+  it('ignores matching answers however they are graded', () => {
+    fc.assert(
+      fc.property(logArb, (log) => {
+        const scheduled = log.filter((e) => e.mode !== 'matching')
+        expect(replay(log)).toEqual(replay(scheduled))
+      }),
+    )
+  })
 })
 ```
 
@@ -907,7 +1102,15 @@ import type { WordId } from './wordId'
 /** The fields of an event that replay reads. A StampedReviewEvent satisfies it. */
 export type ReplayEvent = Pick<
   StampedReviewEvent,
-  'reviewId' | 'wordId' | 'grade' | 'practice' | 'effectiveTs' | 'deviceId' | 'deviceSeq'
+  | 'reviewId'
+  | 'wordId'
+  | 'mode'
+  | 'grade'
+  | 'practice'
+  | 'effectiveTs'
+  | 'clientTzOffsetMin'
+  | 'deviceId'
+  | 'deviceSeq'
 >
 
 /** user word → corpus entry merges (spec §6.1). Events are never rewritten. */
@@ -933,23 +1136,35 @@ export function compareEvents(a: ReplayEvent, b: ReplayEvent): number {
 }
 
 /**
+ * An event that never moves the schedule: practice, and every matching answer,
+ * whatever the client flagged it as. The engine is what makes the rule true
+ * (spec §8.1, §13) — the server accepts any well-formed event.
+ */
+function isScheduled(event: ReplayEvent): boolean {
+  return !event.practice && event.mode !== 'matching'
+}
+
+/**
  * Derives review state from the event log. The result depends only on the
- * set of events: not on their order, and not on duplicates. Practice events
- * are skipped (spec §7.4).
+ * set of events: not on their order, and not on duplicates. Practice and
+ * matching events are skipped (spec §7.4, §8.1).
  */
 export function replay(
   events: Iterable<ReplayEvent>,
   aliases: AliasMap = new Map(),
 ): Map<WordId, ReviewState> {
+  // Ordering before deduplication keeps the choice between two payloads that
+  // collide on one reviewId a function of the events, not of their arrival.
+  const ordered = [...events].filter(isScheduled).sort(compareEvents)
   const unique = new Map<string, ReplayEvent>()
-  for (const event of events) {
-    if (!event.practice && !unique.has(event.reviewId)) unique.set(event.reviewId, event)
-  }
-  const ordered = [...unique.values()].sort(compareEvents)
-  const states = new Map<WordId, ReviewState>()
   for (const event of ordered) {
+    if (!unique.has(event.reviewId)) unique.set(event.reviewId, event)
+  }
+  const states = new Map<WordId, ReviewState>()
+  for (const event of unique.values()) {
     const wordId = resolveAlias(event.wordId, aliases)
-    states.set(wordId, applyGrade(states.get(wordId) ?? null, wordId, event.grade, event.effectiveTs))
+    const prev = states.get(wordId) ?? null
+    states.set(wordId, applyGrade(prev, wordId, event.grade, event.effectiveTs, event.clientTzOffsetMin))
   }
   return states
 }
@@ -964,7 +1179,7 @@ export * from './replay'
 - [ ] **Step 4: Run the tests and the typecheck**
 
 Run: `pnpm test && pnpm typecheck`
-Expected: 33 tests pass; `tsc` prints nothing.
+Expected: 42 tests pass; `tsc` prints nothing.
 
 - [ ] **Step 5: Commit**
 
@@ -1000,8 +1215,10 @@ import { Grade } from './types'
 import { corpusWordId } from './wordId'
 
 const word = corpusWordId('en-000001')
+/** Sofia winter time: minutes to ADD to UTC. */
+const TZ = 120
 const T0 = Date.UTC(2026, 0, 5)
-const withStability = (stability: number): ReviewState => ({ ...applyGrade(null, word, Grade.Good, T0), stability })
+const withStability = (stability: number): ReviewState => ({ ...applyGrade(null, word, Grade.Good, T0, TZ), stability })
 
 describe('masteryTier', () => {
   it('is new until the word has state', () => {
@@ -1017,18 +1234,18 @@ describe('masteryTier', () => {
   })
 
   it('walks a typical word from learning to young to mature', () => {
-    let s = applyGrade(null, word, Grade.Good, T0)
+    let s = applyGrade(null, word, Grade.Good, T0, TZ)
     expect(masteryTier(s)).toBe('learning')
-    s = applyGrade(s, word, Grade.Good, T0 + 2 * DAY_MS)
+    s = applyGrade(s, word, Grade.Good, T0 + 2 * DAY_MS, TZ)
     expect(masteryTier(s)).toBe('young')
-    s = applyGrade(s, word, Grade.Good, T0 + 13 * DAY_MS)
+    s = applyGrade(s, word, Grade.Good, T0 + 13 * DAY_MS, TZ)
     expect(masteryTier(s)).toBe('mature')
   })
 
   it('drops a lapsed word back to learning', () => {
-    let s = applyGrade(null, word, Grade.Easy, T0)
-    s = applyGrade(s, word, Grade.Good, T0 + 8 * DAY_MS)
-    s = applyGrade(s, word, Grade.Again, T0 + 40 * DAY_MS)
+    let s = applyGrade(null, word, Grade.Easy, T0, TZ)
+    s = applyGrade(s, word, Grade.Good, T0 + 8 * DAY_MS, TZ)
+    s = applyGrade(s, word, Grade.Again, T0 + 40 * DAY_MS, TZ)
     expect(masteryTier(s)).toBe('learning')
   })
 })
@@ -1055,6 +1272,11 @@ export type MasteryTier = 'new' | 'learning' | 'young' | 'mature'
  */
 export const TIER_MIN_STABILITY_DAYS = { young: 4, mature: 21 } as const
 
+/**
+ * The tier for one word's memory state. It cannot see flags: a word flagged
+ * known is shown as known-by-declaration and must be excluded by the caller
+ * before mature words are counted (spec §7.4).
+ */
 export function masteryTier(state: ReviewState | null | undefined): MasteryTier {
   if (!state) return 'new'
   if (state.stability >= TIER_MIN_STABILITY_DAYS.mature) return 'mature'
@@ -1072,7 +1294,7 @@ export * from './mastery'
 - [ ] **Step 4: Run the tests and the typecheck**
 
 Run: `pnpm test && pnpm typecheck`
-Expected: 37 tests pass; `tsc` prints nothing.
+Expected: 46 tests pass; `tsc` prints nothing.
 
 - [ ] **Step 5: Commit**
 
@@ -1265,7 +1487,7 @@ export * from './modeSelection'
 - [ ] **Step 4: Run the tests and the typecheck**
 
 Run: `pnpm test && pnpm typecheck`
-Expected: 46 tests pass; `tsc` prints nothing.
+Expected: 55 tests pass; `tsc` prints nothing.
 
 - [ ] **Step 5: Commit**
 
@@ -1287,7 +1509,7 @@ git commit -m "feat(core): injectable rng and mode escalation"
 - Consumes: `Unit`, `CefrLevel`, `WordFlag`, `levelIndex` (Task 2); `WordId` (Task 1).
 - Produces: `PathContext { units, retired, flags, introduced, declaredLevel, unlocked }`; `isLive(wordId, ctx): boolean`; `assumedKnownWords(ctx): Set<WordId>`; `computeUnlocks(ctx): string[]` (unit IDs to **add**); `currentUnit(ctx): Unit | null`; `pathNewWords(ctx, limit: number): WordId[]`.
 
-Callers must apply `computeUnlocks` before asking for `currentUnit` or `pathNewWords`; the last test walks the path exactly that way. `introduced` means "has at least one non-practice review" — in practice, the keys of the map `replay` returns.
+`currentUnit` and `pathNewWords` apply the unlock rule themselves, over `ctx.unlocked` plus whatever `computeUnlocks` would add, so the queue cannot come back empty merely because the caller has not yet persisted an unlock. `ctx.unlocked` is the persisted set; callers still store what `computeUnlocks` returns. `introduced` means "has at least one non-practice review" — in practice, the keys of the map `replay` returns.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1373,6 +1595,19 @@ describe('computeUnlocks', () => {
 })
 
 describe('currentUnit and pathNewWords', () => {
+  it('sees the unlocks the context implies, without the caller persisting them first', () => {
+    const c = ctx({ unlocked: new Set(['a1-u1']), introduced: new Set([w(1), w(2), w(3)]) })
+    expect(computeUnlocks(c)).toEqual(['a1-u2'])
+    expect(currentUnit(c)?.unitId).toBe('a1-u2')
+    expect(pathNewWords(c, 3)).toEqual([w(4), w(5), w(6)])
+  })
+
+  it('serves a brand-new learner whose unlock set is still empty', () => {
+    const c = ctx({ unlocked: new Set() })
+    expect(currentUnit(c)?.unitId).toBe('a1-u1')
+    expect(pathNewWords(c, 2)).toEqual([w(1), w(2)])
+  })
+
   it('skips assumed-known units', () => {
     const c = ctx({ declaredLevel: 'A2', unlocked: new Set(['a1-u1', 'a1-u2', 'a2-u1']) })
     expect(currentUnit(c)?.unitId).toBe('a2-u1')
@@ -1487,7 +1722,11 @@ export interface PathContext {
   /** Words with at least one non-practice review, wherever they came from. */
   readonly introduced: ReadonlySet<WordId>
   readonly declaredLevel: CefrLevel
-  /** The learner's grow-only unit_unlock set. */
+  /**
+   * The learner's grow-only unit_unlock set, as persisted. The queue functions
+   * close over the unlocks it implies themselves, so they do not depend on the
+   * caller having written `computeUnlocks` back first.
+   */
   readonly unlocked: ReadonlySet<string>
 }
 
@@ -1521,14 +1760,14 @@ export function assumedKnownWords(ctx: PathContext): Set<WordId> {
 }
 
 /**
- * Unit IDs to add to the unlock set, in path order. Units below the declared
- * level are unlocked outright; from there on, a unit unlocks its successor
- * once every live word in it has been introduced. Never returns a removal.
+ * Every unit the context unlocks: the persisted set plus what the rules add to
+ * it. Units below the declared level are unlocked outright; from there on, a
+ * unit unlocks its successor once every live word in it has been introduced.
  */
-export function computeUnlocks(ctx: PathContext): string[] {
+function unlockedSet(ctx: PathContext, ordered: readonly Unit[]): Set<string> {
   const all = new Set(ctx.unlocked)
   const path: Unit[] = []
-  for (const unit of inPathOrder(ctx.units)) {
+  for (const unit of ordered) {
     if (isBelow(unit, ctx.declaredLevel)) all.add(unit.unitId)
     else path.push(unit)
   }
@@ -1538,18 +1777,31 @@ export function computeUnlocks(ctx: PathContext): string[] {
     const successor = path[i + 1]
     if (successor && all.has(unit.unitId) && pendingWords(unit, ctx).length === 0) all.add(successor.unitId)
   })
-  return inPathOrder(ctx.units)
-    .map((u) => u.unitId)
-    .filter((id) => all.has(id) && !ctx.unlocked.has(id))
+  return all
+}
+
+/** The earliest unit, at or above the declared level, with a live never-introduced word. */
+function firstPendingUnit(ctx: PathContext, ordered: readonly Unit[], unlocked: ReadonlySet<string>): Unit | null {
+  for (const unit of ordered) {
+    if (isBelow(unit, ctx.declaredLevel) || !unlocked.has(unit.unitId)) continue
+    if (pendingWords(unit, ctx).length > 0) return unit
+  }
+  return null
+}
+
+/**
+ * Unit IDs to add to the unlock set, in path order. Never returns a removal.
+ */
+export function computeUnlocks(ctx: PathContext): string[] {
+  const ordered = inPathOrder(ctx.units)
+  const all = unlockedSet(ctx, ordered)
+  return ordered.map((u) => u.unitId).filter((id) => all.has(id) && !ctx.unlocked.has(id))
 }
 
 /** The earliest unlocked unit, at or above the declared level, with a live never-introduced word. */
 export function currentUnit(ctx: PathContext): Unit | null {
-  for (const unit of inPathOrder(ctx.units)) {
-    if (isBelow(unit, ctx.declaredLevel) || !ctx.unlocked.has(unit.unitId)) continue
-    if (pendingWords(unit, ctx).length > 0) return unit
-  }
-  return null
+  const ordered = inPathOrder(ctx.units)
+  return firstPendingUnit(ctx, ordered, unlockedSet(ctx, ordered))
 }
 
 /**
@@ -1559,9 +1811,10 @@ export function currentUnit(ctx: PathContext): Unit | null {
  */
 export function pathNewWords(ctx: PathContext, limit: number): WordId[] {
   const out: WordId[] = []
-  const start = currentUnit(ctx)
+  const ordered = inPathOrder(ctx.units)
+  const start = firstPendingUnit(ctx, ordered, unlockedSet(ctx, ordered))
   if (!start) return out
-  for (const unit of inPathOrder(ctx.units)) {
+  for (const unit of ordered) {
     if (unit.order < start.order || isBelow(unit, ctx.declaredLevel)) continue
     for (const id of pendingWords(unit, ctx)) {
       if (out.length >= limit) return out
@@ -1581,7 +1834,7 @@ export * from './path'
 - [ ] **Step 4: Run the tests and the typecheck**
 
 Run: `pnpm test && pnpm typecheck`
-Expected: 60 tests pass; `tsc` prints nothing.
+Expected: 71 tests pass; `tsc` prints nothing.
 
 - [ ] **Step 5: Commit**
 
@@ -1600,10 +1853,10 @@ git commit -m "feat(core): level path, unit unlocks and the path queue"
 - Test: `core/src/session.test.ts`
 
 **Interfaces:**
-- Consumes: `dueAt`, `retrievability`, `ReviewState`, `RETENTION_TARGETS` (Task 3); `WordFlag` (Task 2); `WordId` (Task 1). `pathNew` is what `pathNewWords` (Task 7) returns.
+- Consumes: `isDue`, `localDay`, `retrievability`, `ReviewState`, `RETENTION_TARGETS` (Task 3); `WordFlag` (Task 2); `WordId` (Task 1). `pathNew` is what `pathNewWords` (Task 7) returns.
 - Produces: `DEFAULT_NEW_WORD_LIMIT = 10`; `MAX_NEW_WORD_LIMIT = 30`; `DEFAULT_REVIEW_CAP = 100`; `SessionInput`; `SessionPlan { reviews, newWords, backlogTotal, newWordsPaused }`; `composeSession(input: SessionInput): SessionPlan`.
 
-The home screen's primary *due today* figure is `composeSession({ ...input, dueBefore: endOfLocalDay }).reviews.length`; `backlogTotal` is its secondary number (spec §7.4).
+The home screen and a session make the **same call** with `today = localDay(now, tzOffsetMin)`, so the *due today* figure (`reviews.length`) is exactly what a session serves; `backlogTotal` is the secondary number (spec §7.4). Same-day relearn repeats bypass the daily cap and are not part of the backlog. A collection takes the quota only if it still has a servable word; otherwise the path resumes. `reviewsDoneToday` is the caller's count of distinct words, introduced before today, that have had their first scheduled review today.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1611,24 +1864,30 @@ The home screen's primary *due today* figure is `composeSession({ ...input, dueB
 
 ```ts
 import { describe, expect, it } from 'vitest'
-import { applyGrade, DAY_MS, RETENTION_TARGETS, type ReviewState } from './scheduler'
-import { composeSession, type SessionInput } from './session'
+import { applyGrade, localDay, RETENTION_TARGETS, type ReviewState } from './scheduler'
+import { composeSession, MAX_NEW_WORD_LIMIT, type SessionInput } from './session'
 import { Grade, type WordFlag } from './types'
 import { corpusWordId, type WordId } from './wordId'
 
 const w = (n: number) => corpusWordId(`en-${String(n).padStart(6, '0')}`)
-const T0 = Date.UTC(2026, 0, 5, 9)
-const NOW = T0 + 30 * DAY_MS
+/** Sofia winter time: minutes to ADD to UTC. */
+const TZ = 120
+/** The instant at which the learner's local wall clock reads `hour`:`minute` on day `day` of the run. */
+const at = (day: number, hour: number, minute = 0) => Date.UTC(2026, 0, 5 + day, hour, minute) - TZ * 60_000
+const TODAY_INDEX = 30
+/** This morning, 09:00 local. */
+const NOW = at(TODAY_INDEX, 9)
+const TODAY = localDay(NOW, TZ)
 
-/** A word first seen `daysAgo` days before NOW and rated Good once. */
+/** A word first seen on the evening `daysAgo` local days back and rated Good once. */
 function seen(n: number, daysAgo: number): [WordId, ReviewState] {
-  return [w(n), applyGrade(null, w(n), Grade.Good, NOW - daysAgo * DAY_MS)]
+  return [w(n), applyGrade(null, w(n), Grade.Good, at(TODAY_INDEX - daysAgo, 20), TZ)]
 }
 
 function input(over: Partial<SessionInput> = {}): SessionInput {
   return {
     now: NOW,
-    dueBefore: NOW,
+    today: TODAY,
     states: new Map(),
     flags: new Map(),
     retention: RETENTION_TARGETS.standard,
@@ -1658,10 +1917,16 @@ describe('composeSession: reviews', () => {
     expect(states.size).toBe(3)
   })
 
-  it('uses dueBefore, so the home screen can count words due later today', () => {
-    const states = new Map([seen(1, 1.5)]) // due in half a day
-    expect(composeSession(input({ states })).reviews).toEqual([])
-    expect(composeSession(input({ states, dueBefore: NOW + DAY_MS })).reviews).toEqual([w(1)])
+  it('is one call for the home screen and the session: a word due today is due all day', () => {
+    // Studied yesterday evening, one day of interval: due from the first minute of today.
+    const yesterday = applyGrade(null, w(1), Grade.Good, at(TODAY_INDEX - 1, 20, 30), TZ)
+    const states = new Map([[w(1), { ...yesterday, stability: 1 }]])
+    expect(composeSession(input({ states })).reviews).toEqual([w(1)])
+    expect(composeSession(input({ states, now: at(TODAY_INDEX, 0, 5) })).reviews).toEqual([w(1)])
+    expect(composeSession(input({ states, now: at(TODAY_INDEX, 23, 55) })).reviews).toEqual([w(1)])
+    // And not yet on the day it was studied.
+    const lastNight = input({ states, now: at(TODAY_INDEX - 1, 23, 0), today: TODAY - 1 })
+    expect(composeSession(lastNight).reviews).toEqual([])
   })
 
   it('reschedules immediately when desired retention changes', () => {
@@ -1693,6 +1958,35 @@ describe('composeSession: backlog protection', () => {
     expect(plan.newWordsPaused).toBe(false)
     expect(plan.newWords).toEqual([w(100)])
   })
+
+  it('lets a word rated Again today come back even with the cap exhausted', () => {
+    const ts = NOW - 11 * 60 * 1000
+    const lapsed = applyGrade(applyGrade(null, w(1), Grade.Good, at(TODAY_INDEX - 9, 20), TZ), w(1), Grade.Again, ts, TZ)
+    const plan = composeSession(
+      input({ states: new Map([[w(1), lapsed]]), reviewCap: 5, reviewsDoneToday: 5, pathNew: [w(100)] }),
+    )
+    expect(plan.reviews).toEqual([w(1)])
+    expect(plan.backlogTotal).toBe(0)
+    expect(plan.newWordsPaused).toBe(false)
+  })
+
+  it('serves the capped scheduled words first, then today’s relearns', () => {
+    const backlogStates = new Map(Array.from({ length: 3 }, (_, i) => seen(i + 1, 10)))
+    const ts = NOW - 11 * 60 * 1000
+    const lapsed = applyGrade(applyGrade(null, w(9), Grade.Good, at(TODAY_INDEX - 9, 20), TZ), w(9), Grade.Again, ts, TZ)
+    const states = new Map([...backlogStates, [w(9), lapsed]])
+    const plan = composeSession(input({ states, reviewCap: 2 }))
+    expect(plan.reviews).toHaveLength(3)
+    expect(plan.reviews.at(-1)).toBe(w(9))
+    expect(plan.backlogTotal).toBe(3)
+    expect(plan.newWordsPaused).toBe(true)
+  })
+
+  it('does not serve a word rated Again before the relearn delay has passed', () => {
+    const ts = NOW - 60 * 1000
+    const lapsed = applyGrade(applyGrade(null, w(1), Grade.Good, at(TODAY_INDEX - 9, 20), TZ), w(1), Grade.Again, ts, TZ)
+    expect(composeSession(input({ states: new Map([[w(1), lapsed]]) })).reviews).toEqual([])
+  })
 })
 
 describe('composeSession: new words', () => {
@@ -1713,10 +2007,39 @@ describe('composeSession: new words', () => {
     expect(composeSession(input({ collectionNew: null, pathNew: [w(1)] })).newWords).toEqual([w(1)])
   })
 
+  it('falls back to the path when every word left in the collection is introduced or flagged', () => {
+    const plan = composeSession(
+      input({
+        states: new Map([seen(70, 3)]),
+        flags: new Map<WordId, WordFlag>([[w(71), 'known'], [w(72), 'suspended']]),
+        collectionNew: [w(70), w(71), w(72)],
+        pathNew: [w(1), w(2)],
+      }),
+    )
+    expect(plan.newWords).toEqual([w(1), w(2)])
+  })
+
+  it('still gives the collection the whole quota while one servable word is left in it', () => {
+    const plan = composeSession(
+      input({
+        states: new Map([seen(70, 3)]),
+        collectionNew: [w(70), w(71)],
+        pathNew: [w(1), w(2)],
+      }),
+    )
+    expect(plan.newWords).toEqual([w(71)])
+  })
+
   it('only reviews when the limit is 0', () => {
     const plan = composeSession(input({ newWordLimit: 0, states: new Map([seen(1, 5)]), pathNew: [w(2)] }))
     expect(plan.reviews).toEqual([w(1)])
     expect(plan.newWords).toEqual([])
+  })
+
+  it('clamps the daily limit to the configurable range', () => {
+    const pathNew = Array.from({ length: 50 }, (_, i) => w(i + 1))
+    expect(composeSession(input({ newWordLimit: 999, pathNew })).newWords).toHaveLength(MAX_NEW_WORD_LIMIT)
+    expect(composeSession(input({ newWordLimit: -5, pathNew })).newWords).toEqual([])
   })
 
   it('never offers a word that is already introduced, flagged, or listed twice', () => {
@@ -1743,7 +2066,7 @@ Expected: FAIL — `Cannot find module './session'`.
 `core/src/session.ts`:
 
 ```ts
-import { dueAt, retrievability, type ReviewState } from './scheduler'
+import { isDue, retrievability, type ReviewState } from './scheduler'
 import type { WordFlag } from './types'
 import type { WordId } from './wordId'
 
@@ -1754,15 +2077,23 @@ export const DEFAULT_REVIEW_CAP = 100
 
 export interface SessionInput {
   readonly now: number
-  /** Words due at or before this instant count as due: `now` for a session, the end of the local day for the home screen. */
-  readonly dueBefore: number
+  /**
+   * The learner's local day number: `localDay(now, tzOffsetMin)`. Due-ness is a
+   * question about the calendar day (spec §8.4), so the home screen's count and
+   * the session it starts are the same call and give the same numbers.
+   */
+  readonly today: number
   readonly states: ReadonlyMap<WordId, ReviewState>
   readonly flags: ReadonlyMap<WordId, WordFlag>
   /** Desired retention, e.g. RETENTION_TARGETS.standard. */
   readonly retention: number
   readonly newWordLimit: number
   readonly reviewCap: number
-  /** Scheduled (non-practice) reviews of already-introduced words answered so far today. */
+  /**
+   * Distinct words, introduced before today, whose first scheduled
+   * (non-practice) review of the day has been answered. Same-day repeats and
+   * follow-ups of words introduced today do not count.
+   */
   readonly reviewsDoneToday: number
   readonly newWordsDoneToday: number
   /** New-word sources, each in serve order. Personal words are empty until Phase 2. */
@@ -1776,42 +2107,63 @@ export interface SessionPlan {
   /** Due words to review now, weakest first, within today's cap. */
   readonly reviews: readonly WordId[]
   readonly newWords: readonly WordId[]
-  /** Everything due, ignoring the cap: the home screen's secondary number. */
+  /** Everything scheduled for today, ignoring the cap: the home screen's secondary number. */
   readonly backlogTotal: number
   /** True when the backlog exceeds the cap, so new words wait. */
   readonly newWordsPaused: boolean
 }
 
+interface DueWord {
+  readonly wordId: WordId
+  readonly r: number
+}
+
+/** Weakest memory first, with a stable tie-break so every device agrees. */
+function weakestFirst(a: DueWord, b: DueWord): number {
+  return a.r - b.r || (a.wordId < b.wordId ? -1 : 1)
+}
+
 export function composeSession(input: SessionInput): SessionPlan {
-  const due: { wordId: WordId; r: number }[] = []
+  // Words rated Again earlier today are a repeat of work already started: the
+  // daily cap and the backlog are about words the schedule brought up today.
+  const scheduled: DueWord[] = []
+  const relearning: DueWord[] = []
   for (const [wordId, state] of input.states) {
     if (input.flags.has(wordId)) continue
-    if (dueAt(state, input.retention) <= input.dueBefore) {
-      due.push({ wordId, r: retrievability(state, input.now) })
-    }
+    if (!isDue(state, input.retention, input.now, input.today)) continue
+    const due: DueWord = { wordId, r: retrievability(state, input.now) }
+    if (state.lastReviewDay === input.today) relearning.push(due)
+    else scheduled.push(due)
   }
-  due.sort((a, b) => a.r - b.r || (a.wordId < b.wordId ? -1 : 1))
+  scheduled.sort(weakestFirst)
+  relearning.sort(weakestFirst)
 
   const capLeft = Math.max(0, input.reviewCap - input.reviewsDoneToday)
-  const newWordsPaused = due.length > capLeft
-  const quota = newWordsPaused ? 0 : Math.max(0, input.newWordLimit - input.newWordsDoneToday)
+  const newWordsPaused = scheduled.length > capLeft
+  const limit = Math.min(Math.max(input.newWordLimit, 0), MAX_NEW_WORD_LIMIT)
+  const quota = newWordsPaused ? 0 : Math.max(0, limit - input.newWordsDoneToday)
+
+  // Only words that can still be introduced decide which source is live: a
+  // collection whose remaining words are all introduced or flagged is spent,
+  // and the path resumes (spec §7.4).
+  const servable = (wordId: WordId) => !input.states.has(wordId) && !input.flags.has(wordId)
+  const personal = input.personalNew.filter(servable)
+  const collection = (input.collectionNew ?? []).filter(servable)
+  const path = input.pathNew.filter(servable)
 
   // An active collection with words left takes the whole quota; the path waits.
-  const collection = input.collectionNew ?? []
-  const sources = [input.personalNew, collection.length > 0 ? collection : input.pathNew]
   const newWords: WordId[] = []
-  for (const source of sources) {
+  for (const source of [personal, collection.length > 0 ? collection : path]) {
     for (const wordId of source) {
       if (newWords.length >= quota) break
-      if (input.states.has(wordId) || input.flags.has(wordId) || newWords.includes(wordId)) continue
-      newWords.push(wordId)
+      if (!newWords.includes(wordId)) newWords.push(wordId)
     }
   }
 
   return {
-    reviews: due.slice(0, capLeft).map((d) => d.wordId),
+    reviews: [...scheduled.slice(0, capLeft), ...relearning].map((d) => d.wordId),
     newWords,
-    backlogTotal: due.length,
+    backlogTotal: scheduled.length,
     newWordsPaused,
   }
 }
@@ -1826,7 +2178,7 @@ export * from './session'
 - [ ] **Step 4: Run the tests and the typecheck**
 
 Run: `pnpm test && pnpm typecheck`
-Expected: 72 tests pass; `tsc` prints nothing.
+Expected: 89 tests pass; `tsc` prints nothing.
 
 - [ ] **Step 5: Commit**
 
@@ -1846,7 +2198,7 @@ git commit -m "feat(core): session composition with backlog protection"
 
 **Interfaces:**
 - Consumes: `CorpusEntry`, `CefrLevel` (Task 2); `Rng`, `shuffle`, `seededRng` (Task 6).
-- Produces: `DistractorContext { pool, encountered, listening }`; `isValidDistractor(target: CorpusEntry, candidate: CorpusEntry, listening: boolean): boolean`; `pickDistractors(target: CorpusEntry, ctx: DistractorContext, count: number, rng: Rng): CorpusEntry[]`; `buildMatchingBoard(candidates: readonly CorpusEntry[], size: number, rng: Rng): CorpusEntry[] | null`.
+- Produces: `DistractorContext { pool, encountered: ReadonlySet<WordId>, listening }`; `isValidDistractor(target: CorpusEntry, candidate: CorpusEntry, listening: boolean): boolean`; `pickDistractors(target: CorpusEntry, ctx: DistractorContext, count: number, rng: Rng): CorpusEntry[]`; `buildMatchingBoard(candidates: readonly CorpusEntry[], size: number, rng: Rng): CorpusEntry[] | null`.
 
 Band and part of speech are strong preferences, not filters: a rare part of speech must still get three options. The exclusions — shared translation, another sense of the headword, a retired entry, a homophone in listening — are absolute, and apply between distractors as well as against the target, so that two options never show the same translation.
 
@@ -1860,6 +2212,7 @@ import { describe, expect, it } from 'vitest'
 import { buildMatchingBoard, isValidDistractor, pickDistractors, type DistractorContext } from './distractors'
 import { seededRng } from './rng'
 import type { CefrLevel, CorpusEntry } from './types'
+import { corpusWordId, type WordId } from './wordId'
 
 let n = 0
 function entry(headword: string, translations: string[], over: Partial<CorpusEntry> = {}): CorpusEntry {
@@ -1893,7 +2246,7 @@ const POOL = [big, large, small, bad, hot, cold, old, bankMoney, bankRiver, thei
 
 const ctx = (over: Partial<DistractorContext> = {}): DistractorContext => ({
   pool: POOL,
-  encountered: new Set(),
+  encountered: new Set<WordId>(),
   listening: false,
   ...over,
 })
@@ -1909,6 +2262,13 @@ describe('isValidDistractor', () => {
 
   it('compares translations case-insensitively, alternates included', () => {
     expect(isValidDistractor(entry('huge', ['Едър']), large, false)).toBe(false)
+  })
+
+  it('folds case and Unicode form the same way everywhere, whatever the host locale', () => {
+    expect(isValidDistractor(entry('Irish', ['ирландски']), entry('irish', ['ирски']), false)).toBe(false)
+    const precomposed = entry('fee', ['év']) // é
+    const combining = entry('charge', ['év']) // e + combining acute
+    expect(isValidDistractor(precomposed, combining, false)).toBe(false)
   })
 
   it('excludes homophones in listening modes only', () => {
@@ -1931,8 +2291,8 @@ describe('pickDistractors', () => {
     }
   })
 
-  it('prefers words the learner has met', () => {
-    const encountered = new Set([hot.entryId])
+  it('prefers words the learner has met, keyed by WordId as the caller holds them', () => {
+    const encountered = new Set([corpusWordId(hot.entryId)])
     for (let seed = 0; seed < 25; seed += 1) {
       expect(pickDistractors(big, ctx({ encountered }), 1, seededRng(seed))).toEqual([hot])
     }
@@ -1974,7 +2334,7 @@ describe('distractor invariants (spec §13)', () => {
     fc.assert(
       fc.property(poolArb, fc.boolean(), fc.nat(), (pool, listening, seed) => {
         const target = pool[0]!
-        const out = pickDistractors(target, { pool, encountered: new Set(), listening }, 3, seededRng(seed))
+        const out = pickDistractors(target, { pool, encountered: new Set<WordId>(), listening }, 3, seededRng(seed))
         const shown = [target, ...out]
         for (const d of out) expect(d.retired).toBe(false)
         for (let i = 0; i < shown.length; i += 1) {
@@ -2029,17 +2389,19 @@ Expected: FAIL — `Cannot find module './distractors'`.
 ```ts
 import { shuffle, type Rng } from './rng'
 import type { CorpusEntry } from './types'
+import { corpusWordId, type WordId } from './wordId'
 
 export interface DistractorContext {
   /** Candidate entries: normally the whole loaded corpus. */
   readonly pool: readonly CorpusEntry[]
-  /** entryIds the learner has already met; these are preferred. */
-  readonly encountered: ReadonlySet<string>
+  /** Words the learner has already met, e.g. `new Set(states.keys())`; these are preferred. */
+  readonly encountered: ReadonlySet<WordId>
   /** True for listening modes, where homophones are excluded too. */
   readonly listening: boolean
 }
 
-const norm = (s: string) => s.trim().toLocaleLowerCase()
+// Locale-independent by construction: `core` derives the same result everywhere.
+const norm = (s: string) => s.trim().normalize('NFC').toLowerCase()
 
 function sharesTranslation(a: CorpusEntry, b: CorpusEntry): boolean {
   const mine = new Set(a.translations.map(norm))
@@ -2067,7 +2429,7 @@ function score(target: CorpusEntry, c: CorpusEntry, ctx: DistractorContext, rng:
   return (
     (c.level === target.level ? 8 : 0) +
     (c.pos === target.pos ? 4 : 0) +
-    (ctx.encountered.has(c.entryId) ? 3 : 0) +
+    (ctx.encountered.has(corpusWordId(c.entryId)) ? 3 : 0) +
     lookalike * (ctx.listening ? 2 : 1) +
     rng() * 1.5 // so the same word does not always meet the same distractors
   )
@@ -2123,7 +2485,7 @@ export * from './distractors'
 - [ ] **Step 4: Run the tests and the typecheck**
 
 Run: `pnpm test && pnpm typecheck`
-Expected: 85 tests pass; `tsc` prints nothing.
+Expected: 103 tests pass; `tsc` prints nothing.
 
 - [ ] **Step 5: Verify the purity guard still holds**
 
@@ -2149,6 +2511,8 @@ git commit -m "feat(core): synonym-safe distractors and matching boards"
 |---|---|
 | §6.1 namespaced `word_id`; aliases resolved at replay, events never rewritten | 1, 4 |
 | §7.1 FSRS, default parameters; desired retention moves due dates, not stability | 3, 8 |
+| §8.4 a day is the learner's local calendar date — the unit scheduling counts in | 3, 4, 8 |
+| §8.1, §13 matching events never alter review state, enforced in replay | 4 |
 | §7.2 placement consequences, assumed known, unit unlock rule, current unit | 7 |
 | §7.3 grade mapping; binary modes never *Easy*; latency grading can be switched off (§11.1) | 2 |
 | §7.4 due first by retrievability; new-word sources and limit; backlog cap; known and suspended | 8 |
