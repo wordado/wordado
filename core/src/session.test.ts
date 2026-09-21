@@ -1,22 +1,28 @@
 import { describe, expect, it } from 'vitest'
-import { applyGrade, DAY_MS, RETENTION_TARGETS, type ReviewState } from './scheduler'
-import { composeSession, type SessionInput } from './session'
+import { applyGrade, localDay, RETENTION_TARGETS, type ReviewState } from './scheduler'
+import { composeSession, MAX_NEW_WORD_LIMIT, type SessionInput } from './session'
 import { Grade, type WordFlag } from './types'
 import { corpusWordId, type WordId } from './wordId'
 
 const w = (n: number) => corpusWordId(`en-${String(n).padStart(6, '0')}`)
-const T0 = Date.UTC(2026, 0, 5, 9)
-const NOW = T0 + 30 * DAY_MS
+/** Sofia winter time: minutes to ADD to UTC. */
+const TZ = 120
+/** The instant at which the learner's local wall clock reads `hour`:`minute` on day `day` of the run. */
+const at = (day: number, hour: number, minute = 0) => Date.UTC(2026, 0, 5 + day, hour, minute) - TZ * 60_000
+const TODAY_INDEX = 30
+/** This morning, 09:00 local. */
+const NOW = at(TODAY_INDEX, 9)
+const TODAY = localDay(NOW, TZ)
 
-/** A word first seen `daysAgo` days before NOW and rated Good once. */
+/** A word first seen on the evening `daysAgo` local days back and rated Good once. */
 function seen(n: number, daysAgo: number): [WordId, ReviewState] {
-  return [w(n), applyGrade(null, w(n), Grade.Good, NOW - daysAgo * DAY_MS)]
+  return [w(n), applyGrade(null, w(n), Grade.Good, at(TODAY_INDEX - daysAgo, 20), TZ)]
 }
 
 function input(over: Partial<SessionInput> = {}): SessionInput {
   return {
     now: NOW,
-    dueBefore: NOW,
+    today: TODAY,
     states: new Map(),
     flags: new Map(),
     retention: RETENTION_TARGETS.standard,
@@ -46,10 +52,16 @@ describe('composeSession: reviews', () => {
     expect(states.size).toBe(3)
   })
 
-  it('uses dueBefore, so the home screen can count words due later today', () => {
-    const states = new Map([seen(1, 1.5)]) // due in half a day
-    expect(composeSession(input({ states })).reviews).toEqual([])
-    expect(composeSession(input({ states, dueBefore: NOW + DAY_MS })).reviews).toEqual([w(1)])
+  it('is one call for the home screen and the session: a word due today is due all day', () => {
+    // Studied yesterday evening, one day of interval: due from the first minute of today.
+    const yesterday = applyGrade(null, w(1), Grade.Good, at(TODAY_INDEX - 1, 20, 30), TZ)
+    const states = new Map([[w(1), { ...yesterday, stability: 1 }]])
+    expect(composeSession(input({ states })).reviews).toEqual([w(1)])
+    expect(composeSession(input({ states, now: at(TODAY_INDEX, 0, 5) })).reviews).toEqual([w(1)])
+    expect(composeSession(input({ states, now: at(TODAY_INDEX, 23, 55) })).reviews).toEqual([w(1)])
+    // And not yet on the day it was studied.
+    const lastNight = input({ states, now: at(TODAY_INDEX - 1, 23, 0), today: TODAY - 1 })
+    expect(composeSession(lastNight).reviews).toEqual([])
   })
 
   it('reschedules immediately when desired retention changes', () => {
@@ -81,6 +93,35 @@ describe('composeSession: backlog protection', () => {
     expect(plan.newWordsPaused).toBe(false)
     expect(plan.newWords).toEqual([w(100)])
   })
+
+  it('lets a word rated Again today come back even with the cap exhausted', () => {
+    const ts = NOW - 11 * 60 * 1000
+    const lapsed = applyGrade(applyGrade(null, w(1), Grade.Good, at(TODAY_INDEX - 9, 20), TZ), w(1), Grade.Again, ts, TZ)
+    const plan = composeSession(
+      input({ states: new Map([[w(1), lapsed]]), reviewCap: 5, reviewsDoneToday: 5, pathNew: [w(100)] }),
+    )
+    expect(plan.reviews).toEqual([w(1)])
+    expect(plan.backlogTotal).toBe(0)
+    expect(plan.newWordsPaused).toBe(false)
+  })
+
+  it('serves the capped scheduled words first, then today’s relearns', () => {
+    const backlogStates = new Map(Array.from({ length: 3 }, (_, i) => seen(i + 1, 10)))
+    const ts = NOW - 11 * 60 * 1000
+    const lapsed = applyGrade(applyGrade(null, w(9), Grade.Good, at(TODAY_INDEX - 9, 20), TZ), w(9), Grade.Again, ts, TZ)
+    const states = new Map([...backlogStates, [w(9), lapsed]])
+    const plan = composeSession(input({ states, reviewCap: 2 }))
+    expect(plan.reviews).toHaveLength(3)
+    expect(plan.reviews.at(-1)).toBe(w(9))
+    expect(plan.backlogTotal).toBe(3)
+    expect(plan.newWordsPaused).toBe(true)
+  })
+
+  it('does not serve a word rated Again before the relearn delay has passed', () => {
+    const ts = NOW - 60 * 1000
+    const lapsed = applyGrade(applyGrade(null, w(1), Grade.Good, at(TODAY_INDEX - 9, 20), TZ), w(1), Grade.Again, ts, TZ)
+    expect(composeSession(input({ states: new Map([[w(1), lapsed]]) })).reviews).toEqual([])
+  })
 })
 
 describe('composeSession: new words', () => {
@@ -101,10 +142,39 @@ describe('composeSession: new words', () => {
     expect(composeSession(input({ collectionNew: null, pathNew: [w(1)] })).newWords).toEqual([w(1)])
   })
 
+  it('falls back to the path when every word left in the collection is introduced or flagged', () => {
+    const plan = composeSession(
+      input({
+        states: new Map([seen(70, 3)]),
+        flags: new Map<WordId, WordFlag>([[w(71), 'known'], [w(72), 'suspended']]),
+        collectionNew: [w(70), w(71), w(72)],
+        pathNew: [w(1), w(2)],
+      }),
+    )
+    expect(plan.newWords).toEqual([w(1), w(2)])
+  })
+
+  it('still gives the collection the whole quota while one servable word is left in it', () => {
+    const plan = composeSession(
+      input({
+        states: new Map([seen(70, 3)]),
+        collectionNew: [w(70), w(71)],
+        pathNew: [w(1), w(2)],
+      }),
+    )
+    expect(plan.newWords).toEqual([w(71)])
+  })
+
   it('only reviews when the limit is 0', () => {
     const plan = composeSession(input({ newWordLimit: 0, states: new Map([seen(1, 5)]), pathNew: [w(2)] }))
     expect(plan.reviews).toEqual([w(1)])
     expect(plan.newWords).toEqual([])
+  })
+
+  it('clamps the daily limit to the configurable range', () => {
+    const pathNew = Array.from({ length: 50 }, (_, i) => w(i + 1))
+    expect(composeSession(input({ newWordLimit: 999, pathNew })).newWords).toHaveLength(MAX_NEW_WORD_LIMIT)
+    expect(composeSession(input({ newWordLimit: -5, pathNew })).newWords).toEqual([])
   })
 
   it('never offers a word that is already introduced, flagged, or listed twice', () => {

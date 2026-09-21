@@ -5,7 +5,15 @@ import type { WordId } from './wordId'
 /** The fields of an event that replay reads. A StampedReviewEvent satisfies it. */
 export type ReplayEvent = Pick<
   StampedReviewEvent,
-  'reviewId' | 'wordId' | 'grade' | 'practice' | 'effectiveTs' | 'deviceId' | 'deviceSeq'
+  | 'reviewId'
+  | 'wordId'
+  | 'mode'
+  | 'grade'
+  | 'practice'
+  | 'effectiveTs'
+  | 'clientTzOffsetMin'
+  | 'deviceId'
+  | 'deviceSeq'
 >
 
 /** user word → corpus entry merges (spec §6.1). Events are never rewritten. */
@@ -31,23 +39,35 @@ export function compareEvents(a: ReplayEvent, b: ReplayEvent): number {
 }
 
 /**
+ * An event that never moves the schedule: practice, and every matching answer,
+ * whatever the client flagged it as. The engine is what makes the rule true
+ * (spec §8.1, §13) — the server accepts any well-formed event.
+ */
+function isScheduled(event: ReplayEvent): boolean {
+  return !event.practice && event.mode !== 'matching'
+}
+
+/**
  * Derives review state from the event log. The result depends only on the
- * set of events: not on their order, and not on duplicates. Practice events
- * are skipped (spec §7.4).
+ * set of events: not on their order, and not on duplicates. Practice and
+ * matching events are skipped (spec §7.4, §8.1).
  */
 export function replay(
   events: Iterable<ReplayEvent>,
   aliases: AliasMap = new Map(),
 ): Map<WordId, ReviewState> {
+  // Ordering before deduplication keeps the choice between two payloads that
+  // collide on one reviewId a function of the events, not of their arrival.
+  const ordered = [...events].filter(isScheduled).sort(compareEvents)
   const unique = new Map<string, ReplayEvent>()
-  for (const event of events) {
-    if (!event.practice && !unique.has(event.reviewId)) unique.set(event.reviewId, event)
-  }
-  const ordered = [...unique.values()].sort(compareEvents)
-  const states = new Map<WordId, ReviewState>()
   for (const event of ordered) {
+    if (!unique.has(event.reviewId)) unique.set(event.reviewId, event)
+  }
+  const states = new Map<WordId, ReviewState>()
+  for (const event of unique.values()) {
     const wordId = resolveAlias(event.wordId, aliases)
-    states.set(wordId, applyGrade(states.get(wordId) ?? null, wordId, event.grade, event.effectiveTs))
+    const prev = states.get(wordId) ?? null
+    states.set(wordId, applyGrade(prev, wordId, event.grade, event.effectiveTs, event.clientTzOffsetMin))
   }
   return states
 }

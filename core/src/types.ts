@@ -27,6 +27,7 @@ export interface CorpusEntry {
   readonly pos: string
   readonly level: CefrLevel
   readonly ipa: string
+  /** A back-reference to the entry's unit; the pack validator keeps it consistent with Unit.wordIds. */
   readonly unitId: string
   readonly themes: readonly string[]
   /** Primary translation first, then accepted alternates. */
@@ -40,22 +41,29 @@ export interface Unit {
   readonly level: CefrLevel
   /** Position in the path. Unique; lower comes first. */
   readonly order: number
+  /** The source of truth for unit membership and order; CorpusEntry.unitId is the back-reference. */
   readonly wordIds: readonly WordId[]
 }
 
 /**
  * One answer, as the client records it (spec §6.2). Times are epoch
  * milliseconds. Server-assigned fields live on StampedReviewEvent.
+ * Deliberately without a user_id: `core` always works on one learner's events.
  */
 export interface ReviewEvent {
   readonly reviewId: string
   readonly wordId: WordId
   readonly mode: Mode
+  /** By convention `'en_to_l1'` for listening and matching. */
   readonly direction: Direction
   readonly grade: Grade
   readonly latencyMs: number
   readonly practice: boolean
   readonly clientTs: number
+  /**
+   * Minutes to ADD to UTC for the learner's local time at the moment of the
+   * answer (UTC+2 is `120`): the NEGATION of `Date.prototype.getTimezoneOffset()`.
+   */
   readonly clientTzOffsetMin: number
   readonly deviceId: string
   readonly deviceSeq: number

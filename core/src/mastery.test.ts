@@ -5,8 +5,10 @@ import { Grade } from './types'
 import { corpusWordId } from './wordId'
 
 const word = corpusWordId('en-000001')
+/** Sofia winter time: minutes to ADD to UTC. */
+const TZ = 120
 const T0 = Date.UTC(2026, 0, 5)
-const withStability = (stability: number): ReviewState => ({ ...applyGrade(null, word, Grade.Good, T0), stability })
+const withStability = (stability: number): ReviewState => ({ ...applyGrade(null, word, Grade.Good, T0, TZ), stability })
 
 describe('masteryTier', () => {
   it('is new until the word has state', () => {
@@ -22,18 +24,18 @@ describe('masteryTier', () => {
   })
 
   it('walks a typical word from learning to young to mature', () => {
-    let s = applyGrade(null, word, Grade.Good, T0)
+    let s = applyGrade(null, word, Grade.Good, T0, TZ)
     expect(masteryTier(s)).toBe('learning')
-    s = applyGrade(s, word, Grade.Good, T0 + 2 * DAY_MS)
+    s = applyGrade(s, word, Grade.Good, T0 + 2 * DAY_MS, TZ)
     expect(masteryTier(s)).toBe('young')
-    s = applyGrade(s, word, Grade.Good, T0 + 13 * DAY_MS)
+    s = applyGrade(s, word, Grade.Good, T0 + 13 * DAY_MS, TZ)
     expect(masteryTier(s)).toBe('mature')
   })
 
   it('drops a lapsed word back to learning', () => {
-    let s = applyGrade(null, word, Grade.Easy, T0)
-    s = applyGrade(s, word, Grade.Good, T0 + 8 * DAY_MS)
-    s = applyGrade(s, word, Grade.Again, T0 + 40 * DAY_MS)
+    let s = applyGrade(null, word, Grade.Easy, T0, TZ)
+    s = applyGrade(s, word, Grade.Good, T0 + 8 * DAY_MS, TZ)
+    s = applyGrade(s, word, Grade.Again, T0 + 40 * DAY_MS, TZ)
     expect(masteryTier(s)).toBe('learning')
   })
 })
