@@ -1395,6 +1395,21 @@ describe('currentUnit and pathNewWords', () => {
     expect(pathNewWords(c, 3)).toEqual([w(3), w(4), w(5)])
   })
 
+  it('drains each unit before starting the next, so every offered word is unlocked by the time it is reached', () => {
+    const c = ctx({ unlocked: new Set(['a1-u1']), introduced: new Set([w(1), w(2)]), retired: new Set([w(5)]) })
+    const offered = pathNewWords(c, 100)
+    expect(offered).toEqual([w(3), w(4), w(6), w(7), w(8), w(9), w(10), w(11), w(12)])
+    // Introduce the words in the order offered: the unlock rule has always opened a word's unit first.
+    const unlocked = new Set(c.unlocked)
+    const introduced = new Set(c.introduced)
+    for (const id of offered) {
+      for (const unitId of computeUnlocks({ ...c, unlocked, introduced })) unlocked.add(unitId)
+      const home = UNITS.find((u) => u.wordIds.includes(id))
+      expect(home && unlocked.has(home.unitId)).toBe(true)
+      introduced.add(id)
+    }
+  })
+
   it('respects the limit and skips words that are not live', () => {
     const c = ctx({ unlocked: new Set(['a1-u1']), retired: new Set([w(2)]) })
     expect(pathNewWords(c, 2)).toEqual([w(1), w(3)])
@@ -1566,7 +1581,7 @@ export * from './path'
 - [ ] **Step 4: Run the tests and the typecheck**
 
 Run: `pnpm test && pnpm typecheck`
-Expected: 59 tests pass; `tsc` prints nothing.
+Expected: 60 tests pass; `tsc` prints nothing.
 
 - [ ] **Step 5: Commit**
 
@@ -1811,7 +1826,7 @@ export * from './session'
 - [ ] **Step 4: Run the tests and the typecheck**
 
 Run: `pnpm test && pnpm typecheck`
-Expected: 71 tests pass; `tsc` prints nothing.
+Expected: 72 tests pass; `tsc` prints nothing.
 
 - [ ] **Step 5: Commit**
 
@@ -2108,7 +2123,7 @@ export * from './distractors'
 - [ ] **Step 4: Run the tests and the typecheck**
 
 Run: `pnpm test && pnpm typecheck`
-Expected: 84 tests pass; `tsc` prints nothing.
+Expected: 85 tests pass; `tsc` prints nothing.
 
 - [ ] **Step 5: Verify the purity guard still holds**
 
