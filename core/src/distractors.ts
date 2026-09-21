@@ -1,16 +1,18 @@
 import { shuffle, type Rng } from './rng'
 import type { CorpusEntry } from './types'
+import { corpusWordId, type WordId } from './wordId'
 
 export interface DistractorContext {
   /** Candidate entries: normally the whole loaded corpus. */
   readonly pool: readonly CorpusEntry[]
-  /** entryIds the learner has already met; these are preferred. */
-  readonly encountered: ReadonlySet<string>
+  /** Words the learner has already met, e.g. `new Set(states.keys())`; these are preferred. */
+  readonly encountered: ReadonlySet<WordId>
   /** True for listening modes, where homophones are excluded too. */
   readonly listening: boolean
 }
 
-const norm = (s: string) => s.trim().toLocaleLowerCase()
+// Locale-independent by construction: `core` derives the same result everywhere.
+const norm = (s: string) => s.trim().normalize('NFC').toLowerCase()
 
 function sharesTranslation(a: CorpusEntry, b: CorpusEntry): boolean {
   const mine = new Set(a.translations.map(norm))
@@ -38,7 +40,7 @@ function score(target: CorpusEntry, c: CorpusEntry, ctx: DistractorContext, rng:
   return (
     (c.level === target.level ? 8 : 0) +
     (c.pos === target.pos ? 4 : 0) +
-    (ctx.encountered.has(c.entryId) ? 3 : 0) +
+    (ctx.encountered.has(corpusWordId(c.entryId)) ? 3 : 0) +
     lookalike * (ctx.listening ? 2 : 1) +
     rng() * 1.5 // so the same word does not always meet the same distractors
   )

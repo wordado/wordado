@@ -77,6 +77,19 @@ describe('computeUnlocks', () => {
 })
 
 describe('currentUnit and pathNewWords', () => {
+  it('sees the unlocks the context implies, without the caller persisting them first', () => {
+    const c = ctx({ unlocked: new Set(['a1-u1']), introduced: new Set([w(1), w(2), w(3)]) })
+    expect(computeUnlocks(c)).toEqual(['a1-u2'])
+    expect(currentUnit(c)?.unitId).toBe('a1-u2')
+    expect(pathNewWords(c, 3)).toEqual([w(4), w(5), w(6)])
+  })
+
+  it('serves a brand-new learner whose unlock set is still empty', () => {
+    const c = ctx({ unlocked: new Set() })
+    expect(currentUnit(c)?.unitId).toBe('a1-u1')
+    expect(pathNewWords(c, 2)).toEqual([w(1), w(2)])
+  })
+
   it('skips assumed-known units', () => {
     const c = ctx({ declaredLevel: 'A2', unlocked: new Set(['a1-u1', 'a1-u2', 'a2-u1']) })
     expect(currentUnit(c)?.unitId).toBe('a2-u1')

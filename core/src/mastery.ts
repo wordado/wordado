@@ -9,6 +9,11 @@ export type MasteryTier = 'new' | 'learning' | 'young' | 'mature'
  */
 export const TIER_MIN_STABILITY_DAYS = { young: 4, mature: 21 } as const
 
+/**
+ * The tier for one word's memory state. It cannot see flags: a word flagged
+ * known is shown as known-by-declaration and must be excluded by the caller
+ * before mature words are counted (spec §7.4).
+ */
 export function masteryTier(state: ReviewState | null | undefined): MasteryTier {
   if (!state) return 'new'
   if (state.stability >= TIER_MIN_STABILITY_DAYS.mature) return 'mature'

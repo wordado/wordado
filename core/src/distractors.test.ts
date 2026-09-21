@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { buildMatchingBoard, isValidDistractor, pickDistractors, type DistractorContext } from './distractors'
 import { seededRng } from './rng'
 import type { CefrLevel, CorpusEntry } from './types'
+import { corpusWordId, type WordId } from './wordId'
 
 let n = 0
 function entry(headword: string, translations: string[], over: Partial<CorpusEntry> = {}): CorpusEntry {
@@ -36,7 +37,7 @@ const POOL = [big, large, small, bad, hot, cold, old, bankMoney, bankRiver, thei
 
 const ctx = (over: Partial<DistractorContext> = {}): DistractorContext => ({
   pool: POOL,
-  encountered: new Set(),
+  encountered: new Set<WordId>(),
   listening: false,
   ...over,
 })
@@ -52,6 +53,13 @@ describe('isValidDistractor', () => {
 
   it('compares translations case-insensitively, alternates included', () => {
     expect(isValidDistractor(entry('huge', ['Едър']), large, false)).toBe(false)
+  })
+
+  it('folds case and Unicode form the same way everywhere, whatever the host locale', () => {
+    expect(isValidDistractor(entry('Irish', ['ирландски']), entry('irish', ['ирски']), false)).toBe(false)
+    const precomposed = entry('fee', ['év']) // é
+    const combining = entry('charge', ['év']) // e + combining acute
+    expect(isValidDistractor(precomposed, combining, false)).toBe(false)
   })
 
   it('excludes homophones in listening modes only', () => {
@@ -74,8 +82,8 @@ describe('pickDistractors', () => {
     }
   })
 
-  it('prefers words the learner has met', () => {
-    const encountered = new Set([hot.entryId])
+  it('prefers words the learner has met, keyed by WordId as the caller holds them', () => {
+    const encountered = new Set([corpusWordId(hot.entryId)])
     for (let seed = 0; seed < 25; seed += 1) {
       expect(pickDistractors(big, ctx({ encountered }), 1, seededRng(seed))).toEqual([hot])
     }
@@ -117,7 +125,7 @@ describe('distractor invariants (spec §13)', () => {
     fc.assert(
       fc.property(poolArb, fc.boolean(), fc.nat(), (pool, listening, seed) => {
         const target = pool[0]!
-        const out = pickDistractors(target, { pool, encountered: new Set(), listening }, 3, seededRng(seed))
+        const out = pickDistractors(target, { pool, encountered: new Set<WordId>(), listening }, 3, seededRng(seed))
         const shown = [target, ...out]
         for (const d of out) expect(d.retired).toBe(false)
         for (let i = 0; i < shown.length; i += 1) {

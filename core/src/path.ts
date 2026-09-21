@@ -10,7 +10,11 @@ export interface PathContext {
   /** Words with at least one non-practice review, wherever they came from. */
   readonly introduced: ReadonlySet<WordId>
   readonly declaredLevel: CefrLevel
-  /** The learner's grow-only unit_unlock set. */
+  /**
+   * The learner's grow-only unit_unlock set, as persisted. The queue functions
+   * close over the unlocks it implies themselves, so they do not depend on the
+   * caller having written `computeUnlocks` back first.
+   */
   readonly unlocked: ReadonlySet<string>
 }
 
@@ -44,14 +48,14 @@ export function assumedKnownWords(ctx: PathContext): Set<WordId> {
 }
 
 /**
- * Unit IDs to add to the unlock set, in path order. Units below the declared
- * level are unlocked outright; from there on, a unit unlocks its successor
- * once every live word in it has been introduced. Never returns a removal.
+ * Every unit the context unlocks: the persisted set plus what the rules add to
+ * it. Units below the declared level are unlocked outright; from there on, a
+ * unit unlocks its successor once every live word in it has been introduced.
  */
-export function computeUnlocks(ctx: PathContext): string[] {
+function unlockedSet(ctx: PathContext, ordered: readonly Unit[]): Set<string> {
   const all = new Set(ctx.unlocked)
   const path: Unit[] = []
-  for (const unit of inPathOrder(ctx.units)) {
+  for (const unit of ordered) {
     if (isBelow(unit, ctx.declaredLevel)) all.add(unit.unitId)
     else path.push(unit)
   }
@@ -61,18 +65,31 @@ export function computeUnlocks(ctx: PathContext): string[] {
     const successor = path[i + 1]
     if (successor && all.has(unit.unitId) && pendingWords(unit, ctx).length === 0) all.add(successor.unitId)
   })
-  return inPathOrder(ctx.units)
-    .map((u) => u.unitId)
-    .filter((id) => all.has(id) && !ctx.unlocked.has(id))
+  return all
+}
+
+/** The earliest unit, at or above the declared level, with a live never-introduced word. */
+function firstPendingUnit(ctx: PathContext, ordered: readonly Unit[], unlocked: ReadonlySet<string>): Unit | null {
+  for (const unit of ordered) {
+    if (isBelow(unit, ctx.declaredLevel) || !unlocked.has(unit.unitId)) continue
+    if (pendingWords(unit, ctx).length > 0) return unit
+  }
+  return null
+}
+
+/**
+ * Unit IDs to add to the unlock set, in path order. Never returns a removal.
+ */
+export function computeUnlocks(ctx: PathContext): string[] {
+  const ordered = inPathOrder(ctx.units)
+  const all = unlockedSet(ctx, ordered)
+  return ordered.map((u) => u.unitId).filter((id) => all.has(id) && !ctx.unlocked.has(id))
 }
 
 /** The earliest unlocked unit, at or above the declared level, with a live never-introduced word. */
 export function currentUnit(ctx: PathContext): Unit | null {
-  for (const unit of inPathOrder(ctx.units)) {
-    if (isBelow(unit, ctx.declaredLevel) || !ctx.unlocked.has(unit.unitId)) continue
-    if (pendingWords(unit, ctx).length > 0) return unit
-  }
-  return null
+  const ordered = inPathOrder(ctx.units)
+  return firstPendingUnit(ctx, ordered, unlockedSet(ctx, ordered))
 }
 
 /**
@@ -82,9 +99,10 @@ export function currentUnit(ctx: PathContext): Unit | null {
  */
 export function pathNewWords(ctx: PathContext, limit: number): WordId[] {
   const out: WordId[] = []
-  const start = currentUnit(ctx)
+  const ordered = inPathOrder(ctx.units)
+  const start = firstPendingUnit(ctx, ordered, unlockedSet(ctx, ordered))
   if (!start) return out
-  for (const unit of inPathOrder(ctx.units)) {
+  for (const unit of ordered) {
     if (unit.order < start.order || isBelow(unit, ctx.declaredLevel)) continue
     for (const id of pendingWords(unit, ctx)) {
       if (out.length >= limit) return out
