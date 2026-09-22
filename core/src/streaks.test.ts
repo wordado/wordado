@@ -51,20 +51,24 @@ describe('streakStatus', () => {
     expect(streakStatus(days, d('2026-03-08'))).toEqual({ length: 8, todayComplete: true, freezesLeft: 1 })
   })
 
-  it('breaks on the third missed day of a month', () => {
+  it('breaks on the third missed day of a month, and counts only the misses inside the surviving run', () => {
+    // Mar 2-4 are three misses in a row: the run breaks there, so it never reaches Mar 1,
+    // and none of those misses were ever "inside" the two-day run that survives (Mar 5-6).
     const days = [d('2026-03-01'), d('2026-03-05'), d('2026-03-06')]
-    expect(streakStatus(days, d('2026-03-06'))).toMatchObject({ length: 2, freezesLeft: 0 })
+    expect(streakStatus(days, d('2026-03-06'))).toMatchObject({ length: 2, freezesLeft: 2 })
+    // Two misses (Mar 2-3), then Mar 1 continues the run: both misses are inside it.
     const twoMisses = [d('2026-03-01'), d('2026-03-04'), d('2026-03-05')]
     expect(streakStatus(twoMisses, d('2026-03-05'))).toMatchObject({ length: 5, freezesLeft: 0 })
   })
 
   it('gives each calendar month its own freezes', () => {
-    // Four misses in a row across the month boundary: two in January, two in February.
+    // Four misses in a row across the month boundary: two in January, two in February,
+    // both months' misses committed once Jan 28 is reached and the run continues past them.
     const across = [...range('2026-01-28', '2026-01-29'), d('2026-02-03')]
     expect(streakStatus(across, d('2026-02-03'))).toEqual({ length: 7, todayComplete: true, freezesLeft: 0 })
-    // Three misses, all in February.
+    // Three misses, all in February, break the run before it reaches January: none committed.
     const inFeb = [...range('2026-01-29', '2026-01-31'), d('2026-02-04')]
-    expect(streakStatus(inFeb, d('2026-02-04'))).toMatchObject({ length: 1, freezesLeft: 0 })
+    expect(streakStatus(inFeb, d('2026-02-04'))).toMatchObject({ length: 1, freezesLeft: 2 })
   })
 
   it('starts on a completed day: leading misses never count', () => {

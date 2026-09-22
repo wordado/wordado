@@ -51,26 +51,36 @@ export interface StreakStatus {
  * today if today is complete, else yesterday (a day is not missed until it is
  * over), and extends back while every calendar month in it has at most
  * STREAK_FREEZES_PER_MONTH missed days. Adding a date can only lengthen it.
+ *
+ * A run of misses since the last completed day is only "spent" — committed to
+ * its month's count — once an earlier completed day is found, so the run
+ * keeps extending through it. A miss that instead breaks the run (its month's
+ * pending plus already-committed misses would exceed the allowance) is never
+ * committed: it lies outside the run this function reports, so it costs
+ * nothing against a later day's freezesLeft.
  */
 export function streakStatus(completeDays: Iterable<number>, today: number): StreakStatus {
   const days = new Set(completeDays)
   const todayComplete = days.has(today)
-  const missesByMonth = new Map<number, number>()
-  const missesIn = (month: number) => missesByMonth.get(month) ?? 0
+  const committedByMonth = new Map<number, number>()
+  const committedIn = (month: number) => committedByMonth.get(month) ?? 0
   let length = 0
   if (days.size > 0) {
     const earliest = Math.min(...days)
     const end = todayComplete ? today : today - 1
+    let pendingByMonth = new Map<number, number>()
     for (let day = end; day >= earliest; day -= 1) {
       if (days.has(day)) {
         length = end - day + 1
+        for (const [month, misses] of pendingByMonth) committedByMonth.set(month, committedIn(month) + misses)
+        pendingByMonth = new Map()
         continue
       }
       const month = monthOf(day)
-      const misses = missesIn(month) + 1
-      if (misses > STREAK_FREEZES_PER_MONTH) break
-      missesByMonth.set(month, misses)
+      const pending = (pendingByMonth.get(month) ?? 0) + 1
+      if (pending + committedIn(month) > STREAK_FREEZES_PER_MONTH) break
+      pendingByMonth.set(month, pending)
     }
   }
-  return { length, todayComplete, freezesLeft: STREAK_FREEZES_PER_MONTH - missesIn(monthOf(today)) }
+  return { length, todayComplete, freezesLeft: STREAK_FREEZES_PER_MONTH - committedIn(monthOf(today)) }
 }
