@@ -166,3 +166,8 @@ export async function pendingDocumentWrites(driver: SqlDriver): Promise<Document
   const rows = await driver.all<Row>('SELECT * FROM document WHERE patch IS NOT NULL ORDER BY type, key')
   return rows.map(fromRow).map((d) => ({ type: d.type, key: d.key, patch: d.patch! }))
 }
+
+/** Forgets a pending patch the server rejected; the next pull restores the server's fields. */
+export async function dropPendingPatch(tx: SqlDriver, type: string, key: string): Promise<void> {
+  await tx.run('UPDATE document SET patch = NULL WHERE type = ? AND key = ?', [type, key])
+}
