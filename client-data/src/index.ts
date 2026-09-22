@@ -1,3 +1,5 @@
 export * from './driver'
 export * from './database'
 export * from './env'
+export * from './schema'
+export * from './meta'
