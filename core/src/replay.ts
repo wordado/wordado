@@ -47,6 +47,16 @@ function isScheduled(event: ReplayEvent): boolean {
   return !event.practice && event.mode !== 'matching'
 }
 
+export interface ReplayOptions {
+  /**
+   * State derived from every event before `events`, to fold them onto: the
+   * server's snapshot when a client re-applies its newer events (spec §4.3).
+   */
+  readonly prior?: ReadonlyMap<WordId, ReviewState>
+  /** Tombstoned user words: their events stay in the log but derive no state (spec §9.2). */
+  readonly tombstoned?: ReadonlySet<WordId>
+}
+
 /**
  * Derives review state from the event log. The result depends only on the
  * set of events: not on their order, and not on duplicates. Practice and
@@ -55,6 +65,7 @@ function isScheduled(event: ReplayEvent): boolean {
 export function replay(
   events: Iterable<ReplayEvent>,
   aliases: AliasMap = new Map(),
+  options: ReplayOptions = {},
 ): Map<WordId, ReviewState> {
   // Ordering before deduplication keeps the choice between two payloads that
   // collide on one reviewId a function of the events, not of their arrival.
@@ -63,11 +74,14 @@ export function replay(
   for (const event of ordered) {
     if (!unique.has(event.reviewId)) unique.set(event.reviewId, event)
   }
-  const states = new Map<WordId, ReviewState>()
+  const states = new Map<WordId, ReviewState>(options.prior)
   for (const event of unique.values()) {
     const wordId = resolveAlias(event.wordId, aliases)
     const prev = states.get(wordId) ?? null
     states.set(wordId, applyGrade(prev, wordId, event.grade, event.effectiveTs, event.clientTzOffsetMin))
   }
+  // After alias resolution: a user word merged into an entry is tombstoned,
+  // but its events now derive the entry's state, which stays.
+  for (const wordId of options.tombstoned ?? []) states.delete(wordId)
   return states
 }

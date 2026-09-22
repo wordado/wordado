@@ -156,3 +156,37 @@ describe('replay convergence (spec §13)', () => {
     )
   })
 })
+
+describe('replay: from a prior state and with tombstones', () => {
+  it('folds events onto a prior state instead of starting from nothing', () => {
+    const a = ev(bank, Grade.Good, T0)
+    const b = ev(bank, Grade.Hard, T0 + 3 * DAY_MS)
+    const prior = replay([a])
+    expect(replay([b], new Map(), { prior })).toEqual(replay([a, b]))
+    expect(prior.get(bank)?.reps).toBe(1)
+  })
+
+  it('keeps prior state the events do not touch', () => {
+    const prior = replay([ev(river, Grade.Good, T0)])
+    const states = replay([ev(bank, Grade.Good, T0 + DAY_MS)], new Map(), { prior })
+    expect(states.get(river)).toEqual(prior.get(river))
+    expect(states.has(bank)).toBe(true)
+  })
+
+  it('derives no state for a tombstoned user word, whose events stay in the log', () => {
+    const events = [ev(mine, Grade.Good, T0), ev(bank, Grade.Good, T0)]
+    const states = replay(events, new Map(), { tombstoned: new Set([mine]) })
+    expect(states.has(mine)).toBe(false)
+    expect(states.has(bank)).toBe(true)
+    // Undeleting is only the absence of the tombstone: the events were never rewritten.
+    expect(replay(events).has(mine)).toBe(true)
+  })
+
+  it('keeps the entry\'s state when a user word merged into it is tombstoned', () => {
+    const events = [ev(mine, Grade.Good, T0), ev(bank, Grade.Good, T0 + DAY_MS)]
+    const aliases = new Map<WordId, WordId>([[mine, bank]])
+    const states = replay(events, aliases, { tombstoned: new Set([mine]) })
+    expect(states.get(bank)?.reps).toBe(2)
+    expect(states.has(mine)).toBe(false)
+  })
+})
