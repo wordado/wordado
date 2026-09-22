@@ -4,7 +4,7 @@
 
 **Goal:** Build the `core` package's learning engine — the pure TypeScript rules that decide what a learner studies, how an answer is graded, and what state the event log derives.
 
-**Architecture:** A pnpm workspace whose first package, `@vocapp/core`, has no I/O, no framework and no platform APIs. Review state is never edited: it is derived by replaying immutable review events through FSRS, so replay is a pure function of the *set* of events. Everything that varies at runtime — the clock, randomness, which modes can run — is passed in by the caller.
+**Architecture:** A pnpm workspace whose first package, `@wordado/core`, has no I/O, no framework and no platform APIs. Review state is never edited: it is derived by replaying immutable review events through FSRS, so replay is a pure function of the *set* of events. Everything that varies at runtime — the clock, randomness, which modes can run — is passed in by the caller.
 
 **Tech Stack:** Node 24, pnpm 12, TypeScript 7, Vitest 5, fast-check 4, ts-fsrs 5.4.2 (FSRS-6).
 
@@ -48,7 +48,7 @@ pnpm-workspace.yaml          lists packages (only core for now)
 tsconfig.base.json           strict compiler options shared by every package
 .gitignore
 core/
-  package.json               @vocapp/core; depends on ts-fsrs only
+  package.json               @wordado/core; depends on ts-fsrs only
   tsconfig.json              extends the base; no DOM, no Node types
   vitest.config.ts
   src/
@@ -108,7 +108,7 @@ coverage/
 
 ```json
 {
-  "name": "vocapp",
+  "name": "wordado",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@12.4.2",
@@ -158,7 +158,7 @@ packages:
 
 ```json
 {
-  "name": "@vocapp/core",
+  "name": "@wordado/core",
   "version": "0.0.0",
   "private": true,
   "type": "module",

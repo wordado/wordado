@@ -2,7 +2,7 @@
 
 **Status:** Revised after design review — pending re-approval (see §16)
 **Date:** 2026-09-20
-**Working name:** VocApp
+**Name:** Wordado
 
 ---
 
@@ -775,7 +775,7 @@ place — the link-or-enrich flow above — so none adds a second pipeline.
   it, drops words they already have, links those the corpus knows, and lists
   the rest as candidates to add. Nothing is enriched until the learner picks
   it, which keeps quota use deliberate (§8.8).
-- *Share sheet* (Phase 2, mobile). "Share to VocApp" from any app delivers a
+- *Share sheet* (Phase 2, mobile). "Share to Wordado" from any app delivers a
   word or a passage into the same flow.
 - *Bulk import* (Phase 2; moved up from Phase 3). CSV, and Anki text export.
   Imported rows that already carry a translation skip enrichment for that
@@ -1146,7 +1146,7 @@ eviction.
   iOS. Because the server holds everything that has been synced, eviction
   costs a re-download, not progress — provided the outbox was flushed.
 - *Multiple tabs.* OPFS access handles are exclusive. One tab holds a Web Lock
-  and owns the database; any other tab shows "VocApp is open in another tab"
+  and owns the database; any other tab shows "Wordado is open in another tab"
   with a take-over button.
 - *No OPFS* (private browsing, older browsers). The web client falls back to
   SQLite over IndexedDB — slower, but with the same guarantees. Only if that

@@ -1,5 +1,5 @@
 {
-  "name": "vocapp",
+  "name": "wordado",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@12.4.2",
