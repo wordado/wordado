@@ -1,4 +1,4 @@
-import { compareEvents, resolveAlias, type AliasMap, type ReplayEvent } from './replay'
+import { compareEvents, isScheduled, resolveAlias, type AliasMap, type ReplayEvent } from './replay'
 import { localDay, type ReviewState } from './scheduler'
 import { Grade } from './types'
 import type { WordId } from './wordId'
@@ -28,10 +28,6 @@ export interface ActivityOptions {
    * and classifies the events it has recorded since (spec §4.3).
    */
   readonly prior?: ReadonlyMap<WordId, ReviewState>
-}
-
-function isScheduled(event: ReplayEvent): boolean {
-  return !event.practice && event.mode !== 'matching'
 }
 
 /**

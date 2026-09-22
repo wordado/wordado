@@ -10,6 +10,7 @@ export function dayToIsoDate(day: number): string {
   return new Date(day * DAY_MS).toISOString().slice(0, 10)
 }
 
+/** Years 0-99 are out of range: `Date.UTC` remaps a two-digit year into 1900-1999. */
 export function isoDateToDay(iso: string): number {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso)
   if (!match) throw new Error(`Invalid date: ${JSON.stringify(iso)}`)

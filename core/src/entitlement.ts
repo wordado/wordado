@@ -51,6 +51,7 @@ export const DEFAULT_ENTITLEMENT: Entitlement = {
   expiresAt: null,
   quotas: { enrichmentPerDay: DEFAULT_ENRICHMENT_PER_DAY },
   version: 0,
+  // This synthetic fallback was never pulled, so it is always due for a refresh.
   staleAfter: 0,
 }
 

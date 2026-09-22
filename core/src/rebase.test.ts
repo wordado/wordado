@@ -61,24 +61,40 @@ describe('rebase', () => {
     expect(states.has(w(1))).toBe(true)
   })
 
-  it('never loses an event above the mark, whatever the server included', () => {
+  it('never loses an event above the mark, whatever the server included, and carries a fully-synced second device\'s state', () => {
     const arbEvent = fc.record({
       word: fc.integer({ min: 1, max: 4 }),
       seq: fc.integer({ min: 1, max: 30 }),
+      day: fc.integer({ min: 0, max: 20 }),
+    })
+    // A disjoint word range from arbEvent's, so this device's and the other's reps never mix.
+    const arbOtherEvent = fc.record({
+      word: fc.integer({ min: 5, max: 8 }),
+      seq: fc.integer({ min: 1, max: 20 }),
       day: fc.integer({ min: 0, max: 20 }),
     })
     fc.assert(
       fc.property(
         fc.uniqueArray(arbEvent, { selector: (e) => e.seq, maxLength: 30 }),
         fc.integer({ min: 0, max: 30 }),
-        (raw, mark) => {
+        fc.uniqueArray(arbOtherEvent, { selector: (e) => e.seq, minLength: 1, maxLength: 15 }),
+        (raw, mark, otherRaw) => {
           const local = raw.map((e) => ev(w(e.word), 'dev-a', e.seq, T0 + e.day * DAY_MS))
           const synced = local.filter((e) => e.deviceSeq <= mark)
-          const states = rebase(replay(synced), new Map([['dev-a', mark]]), local)
           const above = local.filter((e) => e.deviceSeq > mark)
+          // A second device the client has never had events from locally, but whose mark equals
+          // its highest deviceSeq: the server snapshot fully covers it, nothing above its mark.
+          const other = otherRaw.map((e) => ev(w(e.word), 'dev-b', e.seq, T0 + e.day * DAY_MS))
+          const otherMark = Math.max(...other.map((e) => e.deviceSeq))
+          const server = replay([...synced, ...other])
+          const marks = new Map([['dev-a', mark], ['dev-b', otherMark]])
+          const states = rebase(server, marks, local)
           for (const word of new Set(local.map((e) => e.wordId))) {
             const expectedReps = synced.filter((e) => e.wordId === word).length + above.filter((e) => e.wordId === word).length
             expect(states.get(word)?.reps).toBe(expectedReps)
+          }
+          for (const word of new Set(other.map((e) => e.wordId))) {
+            expect(states.get(word)?.reps).toBe(other.filter((e) => e.wordId === word).length)
           }
         },
       ),

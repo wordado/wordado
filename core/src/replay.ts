@@ -43,7 +43,7 @@ export function compareEvents(a: ReplayEvent, b: ReplayEvent): number {
  * whatever the client flagged it as. The engine is what makes the rule true
  * (spec §8.1, §13) — the server accepts any well-formed event.
  */
-function isScheduled(event: ReplayEvent): boolean {
+export function isScheduled(event: ReplayEvent): boolean {
   return !event.practice && event.mode !== 'matching'
 }
 

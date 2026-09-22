@@ -43,11 +43,6 @@ export interface UnitProgress {
 
 type Visibility = Pick<PathContext, 'retired' | 'flags'>
 
-/** A known word is known-by-declaration, never mature; flags are excluded by `isLive` first. */
-function stateOf(wordId: WordId, states: ReadonlyMap<WordId, ReviewState>, ctx: Visibility): ReviewState | null {
-  return isLive(wordId, ctx) ? (states.get(wordId) ?? null) : null
-}
-
 export function unitProgress(unit: Unit, states: ReadonlyMap<WordId, ReviewState>, ctx: Visibility): UnitProgress {
   let live = 0
   let introduced = 0
@@ -56,7 +51,8 @@ export function unitProgress(unit: Unit, states: ReadonlyMap<WordId, ReviewState
   for (const wordId of unit.wordIds) {
     if (!isLive(wordId, ctx)) continue
     live += 1
-    const state = stateOf(wordId, states, ctx)
+    // A known word is known-by-declaration, never mature; flags are excluded by `isLive` above.
+    const state = states.get(wordId) ?? null
     if (!state) continue
     introduced += 1
     if (state.passedOnLaterDay) passed += 1
