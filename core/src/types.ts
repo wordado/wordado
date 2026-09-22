@@ -19,6 +19,31 @@ export function levelIndex(level: CefrLevel): number {
 /** A learner's per-word flag (spec §7.4). */
 export type WordFlag = 'known' | 'suspended'
 
+/** Part-of-speech tags a pack may use (spec §5.2). */
+export const PARTS_OF_SPEECH = [
+  'noun',
+  'verb',
+  'adj',
+  'adv',
+  'pron',
+  'prep',
+  'det',
+  'num',
+  'conj',
+  'intj',
+  'phrase',
+] as const
+export type PartOfSpeech = (typeof PARTS_OF_SPEECH)[number]
+
+/** Audio accents a pack may carry per entry (spec §5.2). */
+export type Accent = 'uk' | 'us'
+
+/** Text shipped in a pack in English and in the pack's L1: unit titles, theme names (spec §8.9). */
+export interface LocalizedText {
+  readonly en: string
+  readonly l1: string
+}
+
 /** One sense of a headword, as `core` sees it, for one L1 (spec §5.2). */
 export interface CorpusEntry {
   /** Stable ID, without the `c:` prefix. */
