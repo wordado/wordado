@@ -3649,7 +3649,7 @@ Presentation-agnostic (spec §4.1): the hooks read the store and nothing else, s
 ```tsx
 // @vitest-environment happy-dom
 import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { act, cleanup, render, screen } from '@testing-library/react'
 import { Grade, type PackManifest } from '@wordado/core'
@@ -3660,7 +3660,8 @@ import type { PackFetcher } from './packs'
 import { ClientProvider, useClient, useProgress, useSessionPlan, useSyncStatus } from './react'
 import { testEnv } from './testing/testEnv'
 
-const SAMPLE_DIR = fileURLToPath(new URL('../../pipeline/samples/a1-bg/', import.meta.url))
+// happy-dom replaces the global URL class, so the path is built from the string form of import.meta.url.
+const SAMPLE_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'pipeline', 'samples', 'a1-bg')
 const manifest = JSON.parse(readFileSync(join(SAMPLE_DIR, 'manifest.json'), 'utf8')) as PackManifest
 const fromDisk: PackFetcher = async (d) => new Uint8Array(readFileSync(join(SAMPLE_DIR, d.url)))
 
