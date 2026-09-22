@@ -66,7 +66,9 @@ export function streakStatus(completeDays: Iterable<number>, today: number): Str
   const committedIn = (month: number) => committedByMonth.get(month) ?? 0
   let length = 0
   if (days.size > 0) {
-    const earliest = Math.min(...days)
+    // A loop, not Math.min(...days): the spread can exceed engine argument limits over a long history.
+    let earliest = Number.POSITIVE_INFINITY
+    for (const day of days) if (day < earliest) earliest = day
     const end = todayComplete ? today : today - 1
     let pendingByMonth = new Map<number, number>()
     for (let day = end; day >= earliest; day -= 1) {

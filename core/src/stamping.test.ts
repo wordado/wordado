@@ -155,6 +155,15 @@ describe('stampEvents', () => {
     expect(stampEvents(backlog, window(), SERVER_NOW).events.every((e) => e.xpEligible)).toBe(true)
   })
 
+  it('marks the same five events ineligible split across two pages as in one, carry threaded through', () => {
+    const burst = Array.from({ length: DENSITY_MAX_EVENTS + 5 }, (_, i) => ev(SERVER_NOW - 3_600_000 + i * 500))
+    const whole = stampEvents(burst, window(), SERVER_NOW).events.filter((e) => !e.xpEligible).map((e) => e.reviewId)
+    const page1 = stampEvents(burst.slice(0, 40), window(), SERVER_NOW)
+    const page2 = stampEvents(burst.slice(40), window(), SERVER_NOW, page1.carry)
+    const paged = [...page1.events, ...page2.events].filter((e) => !e.xpEligible).map((e) => e.reviewId)
+    expect(paged).toEqual(whole)
+  })
+
   it('keeps every event inside the window and in per-device order, for any page', () => {
     const arbEvent = fc.record({
       clientTs: fc.integer({ min: SERVER_NOW - 30 * DAY_MS, max: SERVER_NOW + 30 * DAY_MS }),

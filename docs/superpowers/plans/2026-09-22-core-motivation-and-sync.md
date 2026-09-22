@@ -2561,7 +2561,7 @@ git commit -m "feat(core): placement test scoring and item selection"
 ## Contracts this plan hands to the later plans
 
 - **`ReplayEvent.effectiveTs` for an unstamped event is its `clientTs`** (plan 4). `client-data` sets it when it reads the outbox; it also passes the pulled review state as `ActivityOptions.prior` and `ReplayOptions.prior`, and today's local events, when it counts the day or rebases.
-- **The daily summary is served per local day** (plan 5): the server runs `summarizeDays(classifyEvents(events above the server's marks, { prior }))` — the same set `rebase` re-applies — and sends the trailing 90 days; the client merges it with `summarizeDays` of its unsynced events through `mergeSummaries`, then calls `retentionRate`.
+- **The daily summary is served per local day** (plan 5): the server runs `summarizeDays(classifyEvents(log))` and sends the trailing 90 days; the client merges it with `summarizeDays(classifyEvents(events above the server's marks, { prior }))` — the same set `rebase` re-applies — through `mergeSummaries`, then calls `retentionRate`.
 - **`day_complete.local_date` is stored as `dayToIsoDate(localDate)`** (plans 4, 5). The server accepts a `DayCompleteEvent` only if the log holds at least one answer on that local date (spec §8.4).
 - **One window per `push_id`** (plan 5): `openPushWindow` on the first page, `stampEvents` on every page with the stored window. Duplicates on `review_id` are dropped before stamping; `device.last_accepted` advances to the highest stamped `(deviceSeq, effectiveTs)`.
 - **`applyPatch` is called in the transaction that stores the document** (plan 5), with `nextVersion` from the document's own counter. A `server_owned` class is stored per document type, not per write.
