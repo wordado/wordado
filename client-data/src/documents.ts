@@ -164,7 +164,7 @@ export async function confirmPushedDocument(tx: SqlDriver, wire: WireDocument, s
 /** Every pending patch, for page 0 of a push. */
 export async function pendingDocumentWrites(driver: SqlDriver): Promise<DocumentWrite[]> {
   const rows = await driver.all<Row>('SELECT * FROM document WHERE patch IS NOT NULL ORDER BY type, key')
-  return rows.map(fromRow).map((d) => ({ type: d.type, key: d.key, patch: d.patch! }))
+  return rows.map(fromRow).flatMap((d) => (d.patch ? [{ type: d.type, key: d.key, patch: d.patch }] : []))
 }
 
 /** Forgets a pending patch the server rejected; the next pull restores the server's fields. */

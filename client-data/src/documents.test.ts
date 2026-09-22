@@ -148,6 +148,20 @@ describe('typed documents', () => {
     expect(await readEntitlement(db.driver)).toEqual({ tier: 'free', source: 'default', expiresAt: null, quotas: { enrichmentPerDay: 20 }, version: 4, staleAfter: 1_000 })
   })
 
+  it('treats an entitlement this build cannot read as absent, never as a crash', async () => {
+    const db = await open()
+    const seed = (fields: Record<string, unknown>) =>
+      db.transaction((tx) => applyServerDocument(tx, wire({ type: 'entitlement', class: 'server_owned', version: 7, fields, fieldVersions: {}, staleAfter: 5 })))
+    await seed({ tier: 'pro', source: 'default', expiresAt: null, quotas: { enrichmentPerDay: 20 } })
+    expect(await readEntitlement(db.driver)).toBeNull()
+    await seed({ tier: 'plus', source: 'default', expiresAt: 'never', quotas: { enrichmentPerDay: 20 } })
+    expect(await readEntitlement(db.driver)).toBeNull()
+    await seed({ tier: 'plus', source: 'web', expiresAt: 99, quotas: {} })
+    expect(await readEntitlement(db.driver)).toBeNull()
+    await seed({ tier: 'plus', source: 'web', expiresAt: 99, quotas: { enrichmentPerDay: 500 }, extra: true })
+    expect(await readEntitlement(db.driver)).toEqual({ tier: 'plus', source: 'web', expiresAt: 99, quotas: { enrichmentPerDay: 500 }, version: 7, staleAfter: 5 })
+  })
+
   it('files a content report as a pending document', async () => {
     const db = await open()
     const env = testEnv()

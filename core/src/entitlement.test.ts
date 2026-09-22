@@ -69,3 +69,11 @@ describe('isStale', () => {
     expect(isStale(plus, plus.staleAfter)).toBe(true)
   })
 })
+
+describe('canUse with a tier this build does not know', () => {
+  it('grants the free tier rather than throwing (spec §4.3)', () => {
+    const future = { ...DEFAULT_ENTITLEMENT, tier: 'pro' as never, version: 9, staleAfter: 1 }
+    expect(canUse('collections.theme', future, 0)).toBe(true)
+    expect(canUse('forecast', future, 0)).toBe(false)
+  })
+})

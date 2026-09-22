@@ -1,5 +1,7 @@
 import {
   DEFAULT_SETTINGS,
+  ENTITLEMENT_SOURCES,
+  ENTITLEMENT_TIERS,
   isWordId,
   validateSettingsPatch,
   type Entitlement,
@@ -66,12 +68,34 @@ export async function addUnlocks(tx: SqlDriver, unitIds: readonly string[]): Pro
   await writeLocalPatch(tx, DOC.unitUnlock, '', { units: [...unitIds] })
 }
 
-/** The cached server-owned entitlement (spec §8.8), or null before the first pull. */
+/**
+ * The cached server-owned entitlement (spec §8.8), or null before the first
+ * pull and whenever the copy is not one this build understands (a tier or
+ * source it does not know): null means the default tier, never a crash.
+ */
 export async function readEntitlement(driver: SqlDriver): Promise<Entitlement | null> {
   const doc = await getDocument(driver, DOC.entitlement, '')
-  if (!doc) return null
-  const fields = doc.fields as unknown as Omit<Entitlement, 'version' | 'staleAfter'>
-  return { ...fields, version: doc.version, staleAfter: doc.staleAfter ?? 0 }
+  if (!doc || doc.deleted) return null
+  const { tier, source, expiresAt, quotas } = doc.fields
+  const perDay = (quotas as { enrichmentPerDay?: unknown } | null)?.enrichmentPerDay
+  const valid =
+    typeof tier === 'string' &&
+    (ENTITLEMENT_TIERS as readonly string[]).includes(tier) &&
+    typeof source === 'string' &&
+    (ENTITLEMENT_SOURCES as readonly string[]).includes(source) &&
+    (expiresAt === null || (typeof expiresAt === 'number' && Number.isFinite(expiresAt))) &&
+    typeof perDay === 'number' &&
+    Number.isInteger(perDay) &&
+    perDay >= 0
+  if (!valid) return null
+  return {
+    tier: tier as Entitlement['tier'],
+    source: source as Entitlement['source'],
+    expiresAt: expiresAt as number | null,
+    quotas: { enrichmentPerDay: perDay },
+    version: doc.version,
+    staleAfter: doc.staleAfter ?? 0,
+  }
 }
 
 /** user word → corpus entry merges (Phase 2); empty until then. */

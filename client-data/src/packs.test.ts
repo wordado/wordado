@@ -34,6 +34,7 @@ describe('installPacks', () => {
     expect(report).toEqual({ staged: ['corpus-bg'], appUpdateNeeded: [], rejected: [] })
     expect(await loadActiveCorpus(db)).toBeNull()
     expect(await activateStagedPacks(db)).toEqual(['corpus-bg'])
+    expect(await activateStagedPacks(db)).toEqual([])
     const corpus = await loadActiveCorpus(db)
     expect(corpus?.entries.size).toBe(60)
     expect(await installedPacks(db)).toEqual([{ pack_id: 'corpus-bg', corpus_version: 0, schema_version: 1 }])

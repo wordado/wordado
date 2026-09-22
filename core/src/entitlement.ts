@@ -3,7 +3,8 @@ export const ENTITLEMENT_TIERS = ['free', 'plus'] as const
 export type EntitlementTier = (typeof ENTITLEMENT_TIERS)[number]
 
 /** Where the entitlement came from. Nothing else in the system knows a provider exists. */
-export type EntitlementSource = 'default' | 'app_store' | 'play' | 'web' | 'grant'
+export const ENTITLEMENT_SOURCES = ['default', 'app_store', 'play', 'web', 'grant'] as const
+export type EntitlementSource = (typeof ENTITLEMENT_SOURCES)[number]
 
 /** The server-owned synced document (spec §8.8, §9.2). Read-only on clients. */
 export interface Entitlement {
@@ -67,7 +68,9 @@ export function effectiveEntitlement(cached: Entitlement | null | undefined, now
 
 /** The one capability check. Nothing else asks whether a learner is paying. */
 export function canUse(capability: Capability, cached: Entitlement | null | undefined, now: number): boolean {
-  return TIER_CAPABILITIES[effectiveEntitlement(cached, now).tier].has(capability)
+  // A tier this build does not know (a newer server, spec §4.3) grants what the free tier grants.
+  const capabilities = TIER_CAPABILITIES[effectiveEntitlement(cached, now).tier] ?? TIER_CAPABILITIES.free
+  return capabilities.has(capability)
 }
 
 /** Whether the client should try to refresh its copy. Says nothing about what is honoured. */

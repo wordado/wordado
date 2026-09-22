@@ -23,6 +23,8 @@ export interface InstallReport {
   readonly rejected: readonly { readonly packId: string; readonly reason: string }[]
 }
 
+const messageOf = (err: unknown): string => (err instanceof Error ? err.message : String(err))
+
 interface PackRow {
   pack_id: string
   corpus_version: number
@@ -68,7 +70,7 @@ async function checkFetched(
   try {
     loadCorpus([...others.filter((p) => p.pack_id !== pack.pack_id), pack])
   } catch (err) {
-    return `does not merge with the installed packs: ${(err as Error).message}`
+    return `does not merge with the installed packs: ${messageOf(err)}`
   }
   return { pack, text }
 }
@@ -95,7 +97,7 @@ export async function installPacks(
     try {
       bytes = await fetchPack(descriptor)
     } catch (err) {
-      rejected.push({ packId: descriptor.pack_id, reason: `fetch failed: ${(err as Error).message}` })
+      rejected.push({ packId: descriptor.pack_id, reason: `fetch failed: ${messageOf(err)}` })
       continue
     }
     const checked = await checkFetched(env, descriptor, bytes, others)

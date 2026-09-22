@@ -25,18 +25,17 @@ CREATE TABLE review_event (
   word_id TEXT NOT NULL,
   mode TEXT NOT NULL,
   direction TEXT NOT NULL,
-  grade INTEGER NOT NULL,
+  grade INTEGER NOT NULL CHECK (grade BETWEEN 1 AND 4),
   latency_ms INTEGER NOT NULL,
-  practice INTEGER NOT NULL,
+  practice INTEGER NOT NULL CHECK (practice IN (0, 1)),
   client_ts INTEGER NOT NULL,
   client_tz_offset_min INTEGER NOT NULL,
   device_id TEXT NOT NULL,
   device_seq INTEGER NOT NULL,
   scheduler_version TEXT NOT NULL,
-  pushed INTEGER NOT NULL DEFAULT 0
+  pushed INTEGER NOT NULL DEFAULT 0 CHECK (pushed IN (0, 1))
 );
 CREATE UNIQUE INDEX review_event_device ON review_event (device_id, device_seq);
-CREATE INDEX review_event_outbox ON review_event (pushed);
 CREATE TABLE review_state (
   word_id TEXT PRIMARY KEY,
   state TEXT NOT NULL
@@ -57,7 +56,7 @@ CREATE TABLE day_complete (
   local_date TEXT PRIMARY KEY,
   rule_version TEXT NOT NULL,
   client_ts INTEGER NOT NULL,
-  pushed INTEGER NOT NULL DEFAULT 0
+  pushed INTEGER NOT NULL DEFAULT 0 CHECK (pushed IN (0, 1))
 );
 CREATE TABLE document (
   type TEXT NOT NULL,
@@ -66,7 +65,7 @@ CREATE TABLE document (
   version INTEGER NOT NULL,
   fields TEXT NOT NULL,
   field_versions TEXT NOT NULL,
-  deleted INTEGER NOT NULL DEFAULT 0,
+  deleted INTEGER NOT NULL DEFAULT 0 CHECK (deleted IN (0, 1)),
   stale_after INTEGER,
   patch TEXT,
   PRIMARY KEY (type, key)

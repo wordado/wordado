@@ -1,6 +1,7 @@
 import { applyGrade, Grade, localDay, type DaySummary, type ReviewState } from '@wordado/core'
 import { describe, expect, it } from 'vitest'
 import { Database } from './database'
+import type { SqlDriver, SqlValue } from './driver'
 import { nodeSqliteDriver } from './drivers/nodeSqlite'
 import {
   allSummaries,
@@ -54,6 +55,49 @@ describe('appendAnswer', () => {
     expect(await unpushedEvents(db.driver)).toHaveLength(2)
     const reloaded = await loadLearner(db, learner.deviceId)
     expect(reloaded.states).toEqual(learner.states)
+  })
+
+  it('keeps an answer recorded while a reload was reading the log', async () => {
+    const env = testEnv()
+    const inner = nodeSqliteDriver()
+    let release: () => void = () => {}
+    const stalled = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    let stallNext = false
+    // Runs the query, then holds the rows back: a pull's reload overlapping an answer.
+    const driver: SqlDriver = {
+      ...inner,
+      all: async <T extends object>(sql: string, params: readonly SqlValue[] = []) => {
+        const rows = await inner.all<T>(sql, params)
+        if (stallNext && sql.includes('FROM review_event')) {
+          stallNext = false
+          await stalled
+        }
+        return rows
+      },
+    }
+    const db = new Database(driver)
+    await migrate(db)
+    const learner = await loadLearner(db, await ensureDevice(db, env))
+    stallNext = true
+    const reload = reloadLearner(db, learner)
+    await new Promise((r) => setTimeout(r, 5))
+    const append = appendAnswer(db, env, learner, answer(WATER))
+    await new Promise((r) => setTimeout(r, 5))
+    release()
+    await Promise.all([reload, append])
+    expect(learner.localEvents).toHaveLength(1)
+    expect(learner.states.get(WATER)?.reps).toBe(1)
+  })
+
+  it('takes a failed commit back out of memory', async () => {
+    const { db, env, learner } = await open()
+    await appendAnswer(db, env, learner, answer(HELLO))
+    await db.exec('DROP TABLE review_event')
+    await expect(appendAnswer(db, env, learner, answer(WATER))).rejects.toThrow()
+    expect(learner.localEvents.map((e) => e.wordId)).toEqual([HELLO])
+    expect(learner.states.has(WATER)).toBe(false)
   })
 
   it('logs practice and matching answers without touching the schedule', async () => {

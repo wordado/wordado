@@ -136,30 +136,36 @@ export class SyncEngine {
     const pageCount = Math.max(1, Math.ceil(events.length / SYNC_PAGE_SIZE))
     for (let page = 0; page < pageCount; page += 1) {
       const slice = events.slice(page * SYNC_PAGE_SIZE, (page + 1) * SYNC_PAGE_SIZE)
+      const lastPage = page === pageCount - 1
       const response = await transport.push({
         protocolVersion: SYNC_PROTOCOL_VERSION,
         pushId,
         clientNow,
         deviceId: learner.deviceId,
         page,
-        lastPage: page === pageCount - 1,
+        lastPage,
         events: slice.map(({ pushed: _pushed, ...event }) => event),
-        dayComplete: page === 0 ? dayComplete : [],
+        // Completed days ride on the last page: the server accepts one only once the
+        // log holds an answer on that date, and the answers arrive in sequence order.
+        dayComplete: lastPage ? dayComplete : [],
         documents: page === 0 ? documents : [],
       })
       if (response.status === 'upgrade_required') return 'upgrade_required'
+      const pushedIds = new Set(slice.map((e) => e.reviewId))
       await db.transaction(async (tx) => {
         await markEventsPushed(tx, slice.map((e) => e.reviewId))
+        learner.localEvents = learner.localEvents.map((e) => (pushedIds.has(e.reviewId) ? { ...e, pushed: true } : e))
+        if (lastPage) await markDayCompletePushed(tx, dayComplete.map((d) => d.localDate))
         if (page !== 0) return
-        await markDayCompletePushed(tx, dayComplete.map((d) => d.localDate))
         for (const doc of response.documents) {
           const sent = documents.find((w) => w.type === doc.type && w.key === doc.key)
           if (sent) await confirmPushedDocument(tx, doc, sent.patch)
         }
         for (const r of response.rejected) await dropPendingPatch(tx, r.type, r.key)
+        // A rejected write leaves optimistic fields behind and bumps no server version,
+        // so the cursor is reset: the next pull returns every document and overwrites them.
+        if (response.rejected.length > 0) await setMeta(tx, 'documents_since', '0')
       })
-      const pushedIds = new Set(slice.map((e) => e.reviewId))
-      learner.localEvents = learner.localEvents.map((e) => (pushedIds.has(e.reviewId) ? { ...e, pushed: true } : e))
       this.set({ pendingEvents: Math.max(0, events.length - (page + 1) * SYNC_PAGE_SIZE) })
     }
     return 'ok'

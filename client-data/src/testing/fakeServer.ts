@@ -31,12 +31,17 @@ export interface FakeServerOptions {
   readonly minProtocolVersion?: number
 }
 
+/** Document types the server owns, whatever exists yet (spec §8.8, §9.2; plan 2 contract: per type, not per write). */
+export const SERVER_OWNED_TYPES: ReadonlySet<string> = new Set(['entitlement'])
+
 const unitsOf = (fields: Record<string, unknown>): string[] =>
   Array.isArray(fields['units']) ? (fields['units'] as unknown[]).filter((u): u is string => typeof u === 'string') : []
 
 /**
  * The sync endpoints as `core`'s rules define them (spec §9.2, §4.3, §8.4,
  * §10): what plan 5's server must do, executable. One user, in memory.
+ * Left to the real server: expiring a push window after its last page, and
+ * trimming the pulled summary to the trailing 90 days.
  */
 export class FakeServer implements SyncTransport {
   readonly events = new Map<string, StampedReviewEvent>()
@@ -50,6 +55,8 @@ export class FakeServer implements SyncTransport {
   failNext: Error | null = null
   /** The next push is applied, then the response is lost: a retry must be idempotent. */
   failAfterNext = false
+  /** The next push page with this index fails before it is applied: a backlog split across pushes. */
+  failOnPushPage: number | null = null
   minProtocolVersion: number
 
   constructor(private readonly options: FakeServerOptions) {
@@ -64,15 +71,24 @@ export class FakeServer implements SyncTransport {
     }
   }
 
+  /**
+   * The date of an answer is the client's local date at the moment it was
+   * given (spec §8.4): `clientTs` with its offset, which is what the client
+   * used, and which a clock correction does not move across midnight.
+   */
   private hasAnswerOn(localDate: string): boolean {
     for (const e of this.events.values()) {
-      if (dayToIsoDate(localDay(e.effectiveTs, e.clientTzOffsetMin)) === localDate) return true
+      if (dayToIsoDate(localDay(e.clientTs, e.clientTzOffsetMin)) === localDate) return true
     }
     return false
   }
 
   async push(page: PushPage): Promise<PushResponse> {
     this.maybeFail()
+    if (this.failOnPushPage === page.page) {
+      this.failOnPushPage = null
+      throw new Error(`connection lost before page ${page.page}`)
+    }
     this.pushes.push(page)
     if (page.protocolVersion < this.minProtocolVersion) return { status: 'upgrade_required', minProtocolVersion: this.minProtocolVersion }
     const serverNow = this.options.now()
@@ -95,13 +111,14 @@ export class FakeServer implements SyncTransport {
       const mark = this.devices.get(e.deviceId)
       if (!mark || e.deviceSeq > mark.deviceSeq) this.devices.set(e.deviceId, { deviceSeq: e.deviceSeq, effectiveTs: e.effectiveTs })
     }
-    for (const d of page.dayComplete) if (this.hasAnswerOn(d.localDate)) this.dayComplete.add(d.localDate)
+    // Evaluated on the last page, once every answer of the push is in the log.
+    if (page.lastPage) for (const d of page.dayComplete) if (this.hasAnswerOn(d.localDate)) this.dayComplete.add(d.localDate)
     const documents: WireDocument[] = []
     const rejected: DocumentRejection[] = []
     for (const write of page.documents) {
       const id = `${write.type}/${write.key}`
       const existing = this.documents.get(id)
-      if (existing?.class === 'server_owned') {
+      if (SERVER_OWNED_TYPES.has(write.type) || existing?.class === 'server_owned') {
         rejected.push({ type: write.type, key: write.key, reason: 'server_owned' })
         continue
       }

@@ -112,20 +112,26 @@ export async function loadLearner(db: Database, deviceId: string, options: Learn
   return learner
 }
 
-/** Re-reads every table into the learner, after a pull. */
+/**
+ * Re-reads every table into the learner, after a pull. Runs as a transaction
+ * so it is serialised with `appendAnswer`: a read that overlapped an append
+ * could otherwise replace `localEvents` with a list from before the answer.
+ */
 export async function reloadLearner(db: Database, learner: Learner): Promise<void> {
-  const states = await db.all<{ state: string }>('SELECT state FROM review_state')
-  learner.serverStates = new Map(states.map((r) => JSON.parse(r.state) as ReviewState).map((s) => [s.wordId, s]))
-  const marks = await db.all<{ device_id: string; device_seq: number }>('SELECT device_id, device_seq FROM device_mark')
-  learner.marks = new Map(marks.map((m) => [m.device_id, m.device_seq]))
-  learner.localEvents = await readEvents(db.driver)
-  const summaries = await db.all<{ day: number; reviews: number; successes: number; new_words: number; answered: number; practice: number }>('SELECT * FROM day_summary')
-  learner.summaries = new Map(
-    summaries.map((s) => [s.day, { day: s.day, reviews: s.reviews, successes: s.successes, newWords: s.new_words, answered: s.answered, practice: s.practice }]),
-  )
-  const days = await db.all<{ local_date: string }>('SELECT local_date FROM day_complete')
-  learner.completeDays = new Set(days.map((d) => isoDateToDay(d.local_date)))
-  learner.states = deriveStates(learner)
+  await db.transaction(async (tx) => {
+    const states = await tx.all<{ state: string }>('SELECT state FROM review_state')
+    learner.serverStates = new Map(states.map((r) => JSON.parse(r.state) as ReviewState).map((s) => [s.wordId, s]))
+    const marks = await tx.all<{ device_id: string; device_seq: number }>('SELECT device_id, device_seq FROM device_mark')
+    learner.marks = new Map(marks.map((m) => [m.device_id, m.device_seq]))
+    learner.localEvents = await readEvents(tx)
+    const summaries = await tx.all<{ day: number; reviews: number; successes: number; new_words: number; answered: number; practice: number }>('SELECT * FROM day_summary')
+    learner.summaries = new Map(
+      summaries.map((s) => [s.day, { day: s.day, reviews: s.reviews, successes: s.successes, newWords: s.new_words, answered: s.answered, practice: s.practice }]),
+    )
+    const days = await tx.all<{ local_date: string }>('SELECT local_date FROM day_complete')
+    learner.completeDays = new Set(days.map((d) => isoDateToDay(d.local_date)))
+    learner.states = deriveStates(learner)
+  })
 }
 
 /** The events the server's snapshot cannot contain (spec §4.3). */
@@ -176,40 +182,52 @@ export interface AnswerInput {
 /**
  * Records one answer (spec §6.2, §9.2): the event is appended with the next
  * device sequence in one transaction, and the derived state is recomputed.
+ * The in-memory log changes inside the same transaction, so a concurrent
+ * reload (serialised behind it) always sees the answer; a failed commit
+ * takes the answer back out of memory.
  */
 export async function appendAnswer(db: Database, env: ClientEnv, learner: Learner, input: AnswerInput): Promise<ReviewEvent> {
   const tz = env.tzOffsetMin()
   if (!isValidTzOffset(tz)) throw new Error(`Impossible time-zone offset ${tz}`)
-  const event = await db.transaction(async (tx) => {
-    const deviceSeq = await nextDeviceSeq(tx)
-    const e: ReviewEvent = {
-      reviewId: env.uuid(),
-      ...input,
-      clientTs: env.now(),
-      clientTzOffsetMin: tz,
-      deviceId: learner.deviceId,
-      deviceSeq,
-      schedulerVersion: SCHEDULER_VERSION,
+  let local: LocalEvent | null = null
+  try {
+    return await db.transaction(async (tx) => {
+      const deviceSeq = await nextDeviceSeq(tx)
+      const e: ReviewEvent = {
+        reviewId: env.uuid(),
+        ...input,
+        clientTs: env.now(),
+        clientTzOffsetMin: tz,
+        deviceId: learner.deviceId,
+        deviceSeq,
+        schedulerVersion: SCHEDULER_VERSION,
+      }
+      await tx.run(
+        `INSERT INTO review_event (review_id, word_id, mode, direction, grade, latency_ms, practice, client_ts, client_tz_offset_min, device_id, device_seq, scheduler_version, pushed)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+        [e.reviewId, e.wordId, e.mode, e.direction, e.grade, e.latencyMs, e.practice ? 1 : 0, e.clientTs, e.clientTzOffsetMin, e.deviceId, e.deviceSeq, e.schedulerVersion],
+      )
+      local = { ...e, pushed: false }
+      learner.localEvents.push(local)
+      learner.states = deriveStates(learner)
+      return e
+    })
+  } catch (err) {
+    if (local !== null) {
+      learner.localEvents = learner.localEvents.filter((e) => e !== local)
+      learner.states = deriveStates(learner)
     }
-    await tx.run(
-      `INSERT INTO review_event (review_id, word_id, mode, direction, grade, latency_ms, practice, client_ts, client_tz_offset_min, device_id, device_seq, scheduler_version, pushed)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
-      [e.reviewId, e.wordId, e.mode, e.direction, e.grade, e.latencyMs, e.practice ? 1 : 0, e.clientTs, e.clientTzOffsetMin, e.deviceId, e.deviceSeq, e.schedulerVersion],
-    )
-    return e
-  })
-  learner.localEvents.push({ ...event, pushed: false })
-  learner.states = deriveStates(learner)
-  return event
+    throw err
+  }
 }
 
 /** Records the completed day once (spec §8.4). False when it was already recorded. */
 export async function recordDayComplete(db: Database, learner: Learner, day: number, now: number): Promise<boolean> {
   if (learner.completeDays.has(day)) return false
-  await db.transaction((tx) =>
-    tx.run('INSERT OR IGNORE INTO day_complete (local_date, rule_version, client_ts, pushed) VALUES (?, ?, ?, 0)', [dayToIsoDate(day), DAY_COMPLETE_RULE_VERSION, now]),
-  )
-  learner.completeDays.add(day)
+  await db.transaction(async (tx) => {
+    await tx.run('INSERT OR IGNORE INTO day_complete (local_date, rule_version, client_ts, pushed) VALUES (?, ?, ?, 0)', [dayToIsoDate(day), DAY_COMPLETE_RULE_VERSION, now])
+    learner.completeDays.add(day)
+  })
   return true
 }
 
@@ -230,6 +248,12 @@ export async function markDayCompletePushed(tx: SqlDriver, dates: readonly strin
   for (const date of dates) await tx.run('UPDATE day_complete SET pushed = 1 WHERE local_date = ?', [date])
 }
 
+function chunks<T>(items: readonly T[], size: number): T[][] {
+  const out: T[][] = []
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size))
+  return out
+}
+
 export interface SnapshotInput {
   readonly states: readonly ReviewState[]
   readonly marks: Readonly<Record<string, number>>
@@ -245,15 +269,24 @@ export interface SnapshotInput {
  */
 export async function replaceSnapshot(tx: SqlDriver, input: SnapshotInput): Promise<void> {
   await tx.run('DELETE FROM review_state')
-  for (const s of input.states) await tx.run('INSERT INTO review_state (word_id, state) VALUES (?, ?)', [s.wordId, JSON.stringify(s)])
+  // Batched: on wa-sqlite every statement is an async hop, and a pull carries thousands of rows.
+  for (const chunk of chunks(input.states, 200)) {
+    await tx.run(
+      `INSERT INTO review_state (word_id, state) VALUES ${chunk.map(() => '(?, ?)').join(', ')}`,
+      chunk.flatMap((s) => [s.wordId, JSON.stringify(s)]),
+    )
+  }
   await tx.run('DELETE FROM device_mark')
   for (const [deviceId, seq] of Object.entries(input.marks)) {
     await tx.run('INSERT INTO device_mark (device_id, device_seq) VALUES (?, ?)', [deviceId, seq])
     await tx.run('DELETE FROM review_event WHERE device_id = ? AND device_seq <= ? AND pushed = 1', [deviceId, seq])
   }
   await tx.run('DELETE FROM day_summary')
-  for (const s of input.summaries) {
-    await tx.run('INSERT INTO day_summary (day, reviews, successes, new_words, answered, practice) VALUES (?, ?, ?, ?, ?, ?)', [s.day, s.reviews, s.successes, s.newWords, s.answered, s.practice])
+  for (const chunk of chunks(input.summaries, 200)) {
+    await tx.run(
+      `INSERT INTO day_summary (day, reviews, successes, new_words, answered, practice) VALUES ${chunk.map(() => '(?, ?, ?, ?, ?, ?)').join(', ')}`,
+      chunk.flatMap((s) => [s.day, s.reviews, s.successes, s.newWords, s.answered, s.practice]),
+    )
   }
   for (const date of input.dayComplete) {
     await tx.run('INSERT INTO day_complete (local_date, rule_version, client_ts, pushed) VALUES (?, ?, 0, 1) ON CONFLICT (local_date) DO UPDATE SET pushed = 1', [date, DAY_COMPLETE_RULE_VERSION])

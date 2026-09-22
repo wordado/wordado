@@ -136,9 +136,11 @@ export class Client {
   private buildSnapshot(): ClientSnapshot {
     const ctx = this.context()
     const plan = ctx ? sessionPlan(ctx) : null
-    const provisionalToday = provisionalXp(this.learner).byUtcDay.get(utcDay(this.env.now())) ?? 0
-    const provisional = provisionalXp(this.learner).total
+    const xp = provisionalXp(this.learner)
+    const provisionalToday = xp.byUtcDay.get(utcDay(this.env.now())) ?? 0
+    const provisional = xp.total
     const pulledToday = this.xp && this.xp.utcDay === utcDay(this.env.now()) ? this.xp.today : 0
+    const status = this.engine?.status ?? INITIAL_SYNC_STATUS
     return {
       deviceId: this.learner.deviceId,
       userId: this.userId,
@@ -151,7 +153,8 @@ export class Client {
       progress: ctx && plan ? progressView(ctx, plan) : null,
       entitlement: this.entitlement,
       xp: { total: (this.xp?.total ?? 0) + provisional, today: pulledToday + provisionalToday, provisional },
-      sync: this.engine?.status ?? INITIAL_SYNC_STATUS,
+      // The outbox size is known from memory at all times, not only after a push.
+      sync: { ...status, pendingEvents: this.learner.localEvents.filter((e) => !e.pushed).length },
     }
   }
 
@@ -226,7 +229,8 @@ export class Client {
   async sync(options: { force?: boolean } = {}): Promise<SyncOutcome> {
     if (!this.engine) return 'skipped'
     const outcome = await this.engine.sync(options)
-    if (outcome === 'synced') {
+    // A push can settle documents (a merge another device won) even when the pull then fails.
+    if (outcome !== 'skipped') {
       await this.reloadDocuments()
       this.xp = await readPulledXp(this.db.driver)
     }

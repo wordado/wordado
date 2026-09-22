@@ -1,8 +1,8 @@
-import { Grade, localDay, SYNC_PAGE_SIZE, type WordId } from '@wordado/core'
+import { dayToIsoDate, Grade, localDay, SYNC_PAGE_SIZE, type WordId } from '@wordado/core'
 import { describe, expect, it } from 'vitest'
 import { Database } from './database'
 import { pendingDocumentWrites } from './documents'
-import { patchSettings, readEntitlement, readSettings } from './documentTypes'
+import { patchSettings, readEntitlement, readFlags, readSettings, setFlag } from './documentTypes'
 import { nodeSqliteDriver } from './drivers/nodeSqlite'
 import { appendAnswer, loadLearner, recordDayComplete, unpushedEvents, type AnswerInput, type Learner } from './learner'
 import { ensureDevice } from './meta'
@@ -86,7 +86,7 @@ describe('SyncEngine', () => {
     expect(await readSettings(b.db.driver)).toMatchObject(merged)
   })
 
-  it('pages a large backlog under one push id, small things on page 0 only', async () => {
+  it('pages a large backlog under one push id: documents on page 0, completed days on the last', async () => {
     const { env, server } = world()
     const a = await device(server, env)
     for (let i = 0; i < SYNC_PAGE_SIZE * 2 + 5; i += 1) {
@@ -99,9 +99,86 @@ describe('SyncEngine', () => {
     expect(new Set(server.pushes.map((p) => p.pushId)).size).toBe(1)
     expect(server.pushes.map((p) => p.events.length)).toEqual([SYNC_PAGE_SIZE, SYNC_PAGE_SIZE, 5])
     expect(server.pushes.map((p) => p.lastPage)).toEqual([false, false, true])
-    expect(server.pushes.map((p) => p.dayComplete.length)).toEqual([1, 0, 0])
+    expect(server.pushes.map((p) => p.dayComplete.length)).toEqual([0, 0, 1])
+    expect([...server.dayComplete]).toEqual([dayToIsoDate(localDay(env.now(), 120))])
     expect(server.events.size).toBe(SYNC_PAGE_SIZE * 2 + 5)
     expect([...server.events.values()].every((e) => e.xpEligible)).toBe(true)
+  })
+
+  it('keeps a completed day whose answers arrive on a later page of the same push', async () => {
+    const { env, server } = world()
+    const a = await device(server, env)
+    for (let i = 0; i < SYNC_PAGE_SIZE; i += 1) {
+      await appendAnswer(a.db, env, a.learner, answer(`c:w${i}`))
+      env.advance(3_000)
+    }
+    env.advance(24 * 3_600_000)
+    await appendAnswer(a.db, env, a.learner, answer('c:later-1'))
+    const day = localDay(env.now(), 120)
+    await recordDayComplete(a.db, a.learner, day, env.now())
+    await a.engine.sync()
+    expect([...server.dayComplete]).toEqual([dayToIsoDate(day)])
+    expect(await a.db.all("SELECT pushed FROM day_complete")).toEqual([{ pushed: 1 }])
+  })
+
+  it('lets the server drop a completed day with no answer on that date, without retrying it', async () => {
+    const { env, server } = world()
+    const a = await device(server, env)
+    await appendAnswer(a.db, env, a.learner, answer('c:hello-1'))
+    await recordDayComplete(a.db, a.learner, localDay(env.now(), 120) + 1, env.now())
+    await a.engine.sync()
+    expect(server.dayComplete.size).toBe(0)
+    server.pushes.length = 0
+    await a.engine.sync()
+    expect(server.pushes).toHaveLength(0)
+  })
+
+  it('refreshes every document after a rejected write, so no phantom field survives', async () => {
+    const { env, server } = world()
+    const a = await device(server, env)
+    await a.db.transaction((tx) => patchSettings(tx, { newWordLimit: 4 }))
+    await a.engine.sync()
+    // An edit whose base the server never issued: rejected as base_ahead_of_server.
+    await a.db.transaction((tx) =>
+      tx.run("UPDATE document SET fields = ?, patch = ? WHERE type = 'settings'", [
+        JSON.stringify({ newWordLimit: 9 }),
+        JSON.stringify({ baseVersion: 99, fields: { newWordLimit: 9 } }),
+      ]),
+    )
+    expect((await readSettings(a.db.driver)).newWordLimit).toBe(9)
+    await a.engine.sync()
+    expect(await pendingDocumentWrites(a.db.driver)).toEqual([])
+    expect((await readSettings(a.db.driver)).newWordLimit).toBe(4)
+  })
+
+  it('carries a flag and its removal across devices', async () => {
+    const { env, server } = world()
+    const a = await device(server, env)
+    const b = await device(server, env)
+    await a.db.transaction((tx) => setFlag(tx, 'c:hello-1', 'known'))
+    await a.engine.sync()
+    await b.engine.sync()
+    expect([...(await readFlags(b.db.driver))]).toEqual([['c:hello-1', 'known']])
+    await a.db.transaction((tx) => setFlag(tx, 'c:hello-1', null))
+    await a.engine.sync()
+    await b.engine.sync()
+    expect([...(await readFlags(b.db.driver))]).toEqual([])
+  })
+
+  it('resumes a backlog whose second page failed under a new push id', async () => {
+    const { env, server } = world()
+    const a = await device(server, env)
+    for (let i = 0; i < SYNC_PAGE_SIZE + 3; i += 1) {
+      await appendAnswer(a.db, env, a.learner, answer(`c:w${i}`))
+      env.advance(3_000)
+    }
+    server.failOnPushPage = 1
+    expect(await a.engine.sync()).toBe('failed')
+    expect(server.events.size).toBe(SYNC_PAGE_SIZE)
+    expect(await unpushedEvents(a.db.driver)).toHaveLength(3)
+    expect(await a.engine.sync({ force: true })).toBe('synced')
+    expect(server.events.size).toBe(SYNC_PAGE_SIZE + 3)
+    expect(new Set(server.pushes.map((p) => p.pushId)).size).toBe(2)
   })
 
   it('retries idempotently when the response is lost after the server applied the push', async () => {
