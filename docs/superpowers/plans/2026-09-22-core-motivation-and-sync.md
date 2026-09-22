@@ -10,6 +10,8 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-20-vocabulary-learning-app-design.md` — this plan implements §4.3 (the rebase rule), §7.2 (placement scoring, unit markers), §8.3 (retention rate, level completion, daily summary), §8.4 (streaks, day_complete), §8.7 (XP), §8.8 (entitlement, capability check), §9.2 (effective time, versioned and server-owned documents, tombstones), and the XP-eligibility rules of §10. It is plan 2 of 8; see `docs/superpowers/plans/2026-09-21-phase-1a-roadmap.md`, whose "Contracts `core` hands to the later plans" section lists the edits this plan makes to plan 1's code.
 
+> **Revised 2026-09-22 after the whole-branch review.** The review changed `stampEvents` to thread a per-device carry across the pages of a push (its stamps must not depend on pagination), made `classifyEvents` treat a last day later than the answer's as a same-day repeat (as `composeSession` and the scheduler do), made `freezesLeft` count only misses inside the run, and added `answered` and `practice` to the daily summary so a device can rebuild today's counts after a pull. The task bodies below show the code as first planned; the merged code in `core/src` is the record.
+
 ## Global Constraints
 
 - `core` is pure: no I/O, no framework, no platform APIs (spec §4.1). `tsconfig.base.json` sets `"lib": ["ES2022"]` and `"types": []`, so `fetch`, `process`, `document` and `localStorage` do not compile. Do not loosen it. `Date.UTC`, `new Date(ms)` and the UTC getters are calendar arithmetic and are allowed; `Date.now()` and `new Date()` are not.
@@ -39,6 +41,7 @@
 | Free-tier enrichment quota | 20 lookups per day | `entitlement.ts` |
 | Named capabilities | `collections.theme`, `collections.exam`, `capture.paste`, `capture.share`, `capture.import`, `capture.extension`, `forecast`, `streak.extra_freezes`, `enrichment` | `entitlement.ts` |
 | Placement probe: words per band / right answers to pass | 8 / 6, starting at B1 | `placement.ts` |
+| Placement test length | at most 24 words (3 probes × 8), usually 16–24 | `placement.ts` |
 
 ## Decisions recorded here
 
@@ -2558,11 +2561,15 @@ git commit -m "feat(core): placement test scoring and item selection"
 ## Contracts this plan hands to the later plans
 
 - **`ReplayEvent.effectiveTs` for an unstamped event is its `clientTs`** (plan 4). `client-data` sets it when it reads the outbox; it also passes the pulled review state as `ActivityOptions.prior` and `ReplayOptions.prior`, and today's local events, when it counts the day or rebases.
-- **The daily summary is served per local day** (plan 5): the server runs `summarizeDays(classifyEvents(log))` and sends the trailing 90 days; the client merges it with `summarizeDays` of its unsynced events through `mergeSummaries`, then calls `retentionRate`.
+- **The daily summary is served per local day** (plan 5): the server runs `summarizeDays(classifyEvents(events above the server's marks, { prior }))` — the same set `rebase` re-applies — and sends the trailing 90 days; the client merges it with `summarizeDays` of its unsynced events through `mergeSummaries`, then calls `retentionRate`.
 - **`day_complete.local_date` is stored as `dayToIsoDate(localDate)`** (plans 4, 5). The server accepts a `DayCompleteEvent` only if the log holds at least one answer on that local date (spec §8.4).
 - **One window per `push_id`** (plan 5): `openPushWindow` on the first page, `stampEvents` on every page with the stored window. Duplicates on `review_id` are dropped before stamping; `device.last_accepted` advances to the highest stamped `(deviceSeq, effectiveTs)`.
 - **`applyPatch` is called in the transaction that stores the document** (plan 5), with `nextVersion` from the document's own counter. A `server_owned` class is stored per document type, not per write.
 - **`DEFAULT_ENTITLEMENT` is what the server issues** (plan 5), with a real `version` and `staleAfter = receivedAt + ENTITLEMENT_STALE_AFTER_MS`. `canUse` is the only place `web/` may ask about a capability (plan 6).
 - **`ReviewState` grew two fields** (`introducedDay`, `passedOnLaterDay`). The server's `review_state` table (plan 5) stores both; the client's local schema (plan 4) does too.
+- **Today's counts after a pull** (plan 4): `DayCounts` for today = the pulled `DaySummary` for today (`reviews`, `newWords`, `answered`, `practice`) plus `dayCounts(classifyEvents(events above the marks, { prior }), today)`, field by field.
+- **Offline XP is provisional** (plan 4): `computeXp(events above the marks, { prior })` cannot see XP other devices earned today, so the display may exceed the cap until the next pull.
+- **One push, one device** (plan 5): a push carries one device's events; `stampEvents` threads `StampCarry` from page to page, seeded empty on the first page (the window's lower bound already covers the previous push).
+- **A tombstoned word's next answer after an undelete** classifies as `new` on a client whose `prior` came from a pull (server state omits tombstoned words) and as `review` on the server; the server's XP is authoritative (plans 4, 5).
 
 Left for later plans: XP amounts by league week and late-event cut-off (Phase 1b, spec §8.5); the three-record merge of a user word into a corpus entry (plan 5, on plan 3's user-word shape); validation of settings, offsets and aliases at ingest (plans 4, 5, per the roadmap).
