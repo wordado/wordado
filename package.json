@@ -6,7 +6,8 @@
   "engines": { "node": ">=24" },
   "scripts": {
     "test": "pnpm -r test",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "sample-pack": "pnpm --filter @wordado/pipeline corpus build samples/a1-bg"
   },
   "devDependencies": {
     "typescript": "^7.0.2",
