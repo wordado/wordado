@@ -22,7 +22,14 @@ function state(n: number, passed: boolean, stability?: number): [WordId, ReviewS
 const visible = { retired: new Set<WordId>(), flags: new Map<WordId, WordFlag>() }
 
 describe('retentionRate', () => {
-  const summary = (day: number, reviews: number, successes: number): DaySummary => ({ day, reviews, successes, newWords: 0 })
+  const summary = (day: number, reviews: number, successes: number): DaySummary => ({
+    day,
+    reviews,
+    successes,
+    newWords: 0,
+    answered: reviews,
+    practice: 0,
+  })
 
   it('is null until a review has been counted', () => {
     expect(retentionRate([], TODAY)).toBeNull()

@@ -155,29 +155,35 @@ describe('dayCounts', () => {
 })
 
 describe('summarizeDays and mergeSummaries', () => {
-  it('summarises reviews, first-attempt successes and new words per local day', () => {
+  it('summarises reviews, first-attempt successes, new words, and every answer and practice answer per local day', () => {
     const events = [
       ev(bank, Grade.Good, at(0, 10)),
       ev(river, Grade.Good, at(0, 10)),
       ev(bank, Grade.Again, at(2, 9)),
-      ev(bank, Grade.Good, at(2, 9, 30)), // same-day relearn: not a first attempt
+      ev(bank, Grade.Good, at(2, 9, 30)), // same-day relearn: not a first attempt, still answered
       ev(river, Grade.Hard, at(2, 9)),
       ev(river, Grade.Good, at(2, 11), { practice: true }),
     ]
     const summary = summarizeDays(classifyEvents(events))
-    expect(summary.get(day(0))).toEqual({ day: day(0), reviews: 0, successes: 0, newWords: 2 })
-    expect(summary.get(day(2))).toEqual({ day: day(2), reviews: 2, successes: 1, newWords: 0 })
+    expect(summary.get(day(0))).toEqual({ day: day(0), reviews: 0, successes: 0, newWords: 2, answered: 2, practice: 0 })
+    expect(summary.get(day(2))).toEqual({ day: day(2), reviews: 2, successes: 1, newWords: 0, answered: 4, practice: 1 })
     expect(summary.has(day(1))).toBe(false)
   })
 
+  it('gives a day with only practice answers a summary row', () => {
+    const events = [ev(bank, Grade.Good, at(0, 10), { practice: true }), ev(river, Grade.Good, at(0, 11), { mode: 'matching' as Mode })]
+    const summary = summarizeDays(classifyEvents(events))
+    expect(summary.get(day(0))).toEqual({ day: day(0), reviews: 0, successes: 0, newWords: 0, answered: 2, practice: 2 })
+  })
+
   it('adds the pulled summary and the days recorded since', () => {
-    const pulled: DaySummary[] = [{ day: day(0), reviews: 5, successes: 4, newWords: 1 }]
+    const pulled: DaySummary[] = [{ day: day(0), reviews: 5, successes: 4, newWords: 1, answered: 7, practice: 1 }]
     const local: DaySummary[] = [
-      { day: day(0), reviews: 1, successes: 1, newWords: 0 },
-      { day: day(1), reviews: 2, successes: 0, newWords: 3 },
+      { day: day(0), reviews: 1, successes: 1, newWords: 0, answered: 2, practice: 1 },
+      { day: day(1), reviews: 2, successes: 0, newWords: 3, answered: 5, practice: 0 },
     ]
     const merged = mergeSummaries(pulled, local)
-    expect(merged.get(day(0))).toEqual({ day: day(0), reviews: 6, successes: 5, newWords: 1 })
+    expect(merged.get(day(0))).toEqual({ day: day(0), reviews: 6, successes: 5, newWords: 1, answered: 9, practice: 2 })
     expect(merged.get(day(1))).toEqual(local[1])
   })
 })

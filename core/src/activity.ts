@@ -102,19 +102,23 @@ export interface DaySummary {
   /** Those answered with any grade but Again. */
   readonly successes: number
   readonly newWords: number
+  /** Every answer of any kind that day: what a device needs to rebuild `answeredToday` after a pull. */
+  readonly answered: number
+  readonly practice: number
 }
 
 export function summarizeDays(classified: Iterable<ClassifiedEvent>): Map<number, DaySummary> {
   const out = new Map<number, DaySummary>()
   for (const item of classified) {
-    if (item.kind !== 'review' && item.kind !== 'new') continue
-    const prev = out.get(item.day) ?? { day: item.day, reviews: 0, successes: 0, newWords: 0 }
+    const prev = out.get(item.day) ?? { day: item.day, reviews: 0, successes: 0, newWords: 0, answered: 0, practice: 0 }
     const review = item.kind === 'review'
     out.set(item.day, {
       day: item.day,
       reviews: prev.reviews + (review ? 1 : 0),
       successes: prev.successes + (review && item.event.grade !== Grade.Again ? 1 : 0),
-      newWords: prev.newWords + (review ? 0 : 1),
+      newWords: prev.newWords + (item.kind === 'new' ? 1 : 0),
+      answered: prev.answered + 1,
+      practice: prev.practice + (item.kind === 'practice' ? 1 : 0),
     })
   }
   return out
@@ -134,6 +138,8 @@ export function mergeSummaries(...sources: Iterable<DaySummary>[]): Map<number, 
               reviews: prev.reviews + s.reviews,
               successes: prev.successes + s.successes,
               newWords: prev.newWords + s.newWords,
+              answered: prev.answered + s.answered,
+              practice: prev.practice + s.practice,
             }
           : s,
       )
