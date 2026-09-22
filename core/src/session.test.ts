@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyGrade, localDay, RETENTION_TARGETS, type ReviewState } from './scheduler'
+import { applyGrade, localDay, RELEARN_DELAY_MS, RETENTION_TARGETS, type ReviewState } from './scheduler'
 import { composeSession, MAX_NEW_WORD_LIMIT, type SessionInput } from './session'
 import { Grade, type WordFlag } from './types'
 import { corpusWordId, type WordId } from './wordId'
@@ -187,5 +187,18 @@ describe('composeSession: new words', () => {
       }),
     )
     expect(plan.newWords).toEqual([w(3), w(4)])
+  })
+})
+
+describe('composeSession: relearning across devices', () => {
+  it('treats a word last reviewed on a later local day as relearning, not as backlog', () => {
+    // Rated Again at 12:30 Sofia time on a device set to UTC+14, where it is already 00:30 tomorrow.
+    const ahead = applyGrade(null, w(1), Grade.Again, at(TODAY_INDEX, 12, 30), 14 * 60)
+    expect(ahead.lastReviewDay).toBe(TODAY + 1)
+    const now = at(TODAY_INDEX, 12, 30) + RELEARN_DELAY_MS
+    const plan = composeSession(input({ states: new Map([[w(1), ahead]]), now }))
+    expect(plan.reviews).toEqual([w(1)])
+    expect(plan.backlogTotal).toBe(0)
+    expect(plan.newWordsPaused).toBe(false)
   })
 })

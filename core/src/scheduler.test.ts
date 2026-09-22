@@ -52,6 +52,21 @@ describe('applyGrade', () => {
     expect(s.difficulty).toBeLessThanOrEqual(10)
   })
 
+  it('records the introduction day and whether a later day was passed', () => {
+    const first = applyGrade(null, word, Grade.Good, at(0, 21), TZ)
+    expect(first.introducedDay).toBe(localDay(at(0, 21), TZ))
+    expect(first.passedOnLaterDay).toBe(false)
+    const sameDay = applyGrade(first, word, Grade.Good, at(0, 23), TZ)
+    expect(sameDay.passedOnLaterDay).toBe(false)
+    const nextDayAgain = applyGrade(sameDay, word, Grade.Again, at(1, 8), TZ)
+    expect(nextDayAgain.passedOnLaterDay).toBe(false)
+    const nextDayGood = applyGrade(nextDayAgain, word, Grade.Hard, at(1, 8), TZ)
+    expect(nextDayGood.passedOnLaterDay).toBe(true)
+    expect(nextDayGood.introducedDay).toBe(first.introducedDay)
+    // Sticky: a later lapse does not take it away.
+    expect(applyGrade(nextDayGood, word, Grade.Again, at(9, 8), TZ).passedOnLaterDay).toBe(true)
+  })
+
   it('gives a first Easy more stability than Good, Good more than Hard, Hard more than Again', () => {
     const by = (g: Grade) => applyGrade(null, word, g, T0, TZ).stability
     expect(by(Grade.Easy)).toBeGreaterThan(by(Grade.Good))
@@ -188,8 +203,16 @@ describe('SCHEDULER_VERSION', () => {
     expect(s6.stability).toBeCloseTo(2.16541104, 6)
     expect(s6.difficulty).toBeCloseTo(9.10028926, 6)
 
-    expect(s6.reps).toBe(6)
-    expect(s6.lapses).toBe(1)
+    const s7 = applyGrade(s6, word, Grade.Good, at(10, 21), TZ) // same day, evening
+    expect(s7.stability).toBeCloseTo(2.16541104, 6)
+    expect(s7.difficulty).toBeCloseTo(9.08641734, 6)
+
+    const s8 = applyGrade(s7, word, Grade.Good, at(11, 8), TZ) // next morning, 11 h later: one local day
+    expect(s8.stability).toBeCloseTo(3.24450688, 6)
+    expect(s8.difficulty).toBeCloseTo(9.07255929, 6)
+
+    expect(s8.reps).toBe(8)
+    expect(s8.lapses).toBe(1)
 
     expect(intervalDays(10, relaxed)).toBe(19)
     expect(intervalDays(10, standard)).toBe(10)

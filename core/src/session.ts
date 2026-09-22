@@ -36,7 +36,10 @@ export interface SessionInput {
 }
 
 export interface SessionPlan {
-  /** Due words to review now, weakest first, within today's cap. */
+  /**
+   * Due words to review now: today's scheduled reviews, weakest first, within
+   * today's cap, followed by words rated Again earlier today that are back.
+   */
   readonly reviews: readonly WordId[]
   readonly newWords: readonly WordId[]
   /** Everything scheduled for today, ignoring the cap: the home screen's secondary number. */
@@ -64,7 +67,8 @@ export function composeSession(input: SessionInput): SessionPlan {
     if (input.flags.has(wordId)) continue
     if (!isDue(state, input.retention, input.now, input.today)) continue
     const due: DueWord = { wordId, r: retrievability(state, input.now) }
-    if (state.lastReviewDay === input.today) relearning.push(due)
+    // `>=`: a device whose clock runs behind another's may see a review from a later local day.
+    if (state.lastReviewDay >= input.today) relearning.push(due)
     else scheduled.push(due)
   }
   scheduled.sort(weakestFirst)

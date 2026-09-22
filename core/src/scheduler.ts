@@ -34,6 +34,8 @@ export interface ReviewState {
   readonly stability: number
   readonly difficulty: number
   readonly introducedTs: number
+  /** Local calendar day of the first scheduled review. */
+  readonly introducedDay: number
   readonly lastReviewTs: number
   /** Local calendar day of the last review: what scheduling counts in. */
   readonly lastReviewDay: number
@@ -44,6 +46,11 @@ export interface ReviewState {
    * not Again. Consecutive Agains while relearning are one lapse, not several.
    */
   readonly lapses: number
+  /**
+   * Whether a scheduled review on a day after `introducedDay` was passed
+   * (any grade but Again). Read by the unit-complete marker (spec §7.2).
+   */
+  readonly passedOnLaterDay: boolean
 }
 
 // Fuzz is off so that every engine derives the same state from the same events.
@@ -71,11 +78,14 @@ export function applyGrade(
     stability: next.stability,
     difficulty: next.difficulty,
     introducedTs: prev ? prev.introducedTs : ts,
+    introducedDay: prev ? prev.introducedDay : day,
     lastReviewTs: ts,
     lastReviewDay: day,
     lastGrade: grade,
     reps: (prev?.reps ?? 0) + 1,
     lapses: (prev?.lapses ?? 0) + (lapsed ? 1 : 0),
+    passedOnLaterDay:
+      prev !== null && (prev.passedOnLaterDay || (grade !== Grade.Again && day > prev.introducedDay)),
   }
 }
 
