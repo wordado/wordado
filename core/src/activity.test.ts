@@ -1,6 +1,7 @@
+import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
 import { classifyEvents, dayCounts, mergeSummaries, summarizeDays, type DaySummary } from './activity'
-import { replay, type ReplayEvent } from './replay'
+import { compareEvents, replay, type ReplayEvent } from './replay'
 import { localDay } from './scheduler'
 import { Grade, type Mode } from './types'
 import { corpusWordId, userWordId, type WordId } from './wordId'
@@ -85,6 +86,52 @@ describe('classifyEvents', () => {
     const classified = classifyEvents([a, b], { aliases: new Map<WordId, WordId>([[mine, bank]]) })
     expect(classified.map((c) => c.wordId)).toEqual([bank, bank])
     expect(classified.map((c) => c.kind)).toEqual(['new', 'review'])
+  })
+
+  it("treats a prior lastReviewDay later than today's (a device ahead) as a same-day repeat, not a review", () => {
+    // A Good rated at 12:30 Sofia time, replayed on a device set to UTC+14, where it is already 00:30 tomorrow.
+    const before = ev(bank, Grade.Again, at(0, 12, 30), { clientTzOffsetMin: 14 * 60 })
+    const prior = replay([before])
+    expect(prior.get(bank)?.lastReviewDay).toBe(day(0) + 1)
+    const sameInstantOnSofia = ev(bank, Grade.Good, at(0, 12, 30))
+    expect(kinds([sameInstantOnSofia], { prior })).toEqual([[sameInstantOnSofia.reviewId, 'repeat']])
+  })
+
+  it('resolves a reviewId collision to the payload earliest in compareEvents order, whatever the array order', () => {
+    const early = ev(bank, Grade.Good, at(0, 10))
+    const late = { ...ev(bank, Grade.Again, at(2, 10)), reviewId: early.reviewId }
+    const forward = classifyEvents([early, late])
+    const backward = classifyEvents([late, early])
+    expect(forward).toEqual(backward)
+    expect(forward).toHaveLength(1)
+    expect(forward[0]?.day).toBe(day(0))
+  })
+
+  it('classifies the same whether the log is passed whole or split into a prior and the events since, when every earlier event sorts first', () => {
+    const words = [bank, river, mine]
+    const arbEvent = fc.record({
+      word: fc.integer({ min: 0, max: words.length - 1 }),
+      grade: fc.constantFrom(Grade.Again, Grade.Hard, Grade.Good, Grade.Easy),
+      day: fc.integer({ min: 0, max: 8 }),
+      hour: fc.integer({ min: 0, max: 20 }),
+      deviceSeq: fc.integer({ min: 1, max: 1_000 }),
+    })
+    fc.assert(
+      fc.property(
+        fc.uniqueArray(arbEvent, { selector: (e) => e.deviceSeq, minLength: 2, maxLength: 20 }),
+        fc.integer({ min: 0, max: 1_000 }),
+        (raw, splitPick) => {
+          const events = raw.map((e) => ev(words[e.word]!, e.grade, at(e.day, e.hour), { deviceSeq: e.deviceSeq }))
+          const sorted = [...events].sort(compareEvents)
+          const splitIndex = splitPick % (sorted.length + 1)
+          const head = sorted.slice(0, splitIndex)
+          const tail = sorted.slice(splitIndex)
+          const whole = kinds(sorted)
+          const split = [...kinds(head), ...kinds(tail, { prior: replay(head) })]
+          expect(split).toEqual(whole)
+        },
+      ),
+    )
   })
 })
 

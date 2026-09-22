@@ -58,7 +58,10 @@ export function classifyEvents<E extends ReplayEvent>(
     let kind: EventKind = 'practice'
     if (isScheduled(event)) {
       const last = lastDay.get(wordId)
-      kind = last === undefined ? 'new' : last === day ? 'repeat' : 'review'
+      // `>=`: a last day later than this answer's (a device ahead) is still the
+      // same day's repeat, mirroring composeSession's relearning check and the
+      // scheduler's same-day elapsed-0 treatment.
+      kind = last === undefined ? 'new' : last >= day ? 'repeat' : 'review'
       lastDay.set(wordId, day)
     }
     out.push({ event, kind, wordId, day })
