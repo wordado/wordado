@@ -738,7 +738,7 @@ import { MAX_NEW_WORD_LIMIT } from './session'
 
 function errorsOf(patch: Record<string, unknown>): string[] {
   const result = validateSettingsPatch(patch)
-  return result.ok ? [] : result.errors
+  return result.ok ? [] : [...result.errors]
 }
 
 describe('validateSettingsPatch', () => {
