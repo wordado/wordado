@@ -91,6 +91,12 @@ describe('loadCorpus', () => {
     expect(() => loadCorpus([pack(), otherL1])).toThrow(/es/)
     const sameOrder = pack({ pack_id: 'x', entries: [entry({ entry_id: 'rice-1', unit_id: 'a1-09' })], units: [unit('a1-09', 'A1', 1, ['rice-1'])], audio: [] })
     expect(() => loadCorpus([pack(), sameOrder])).toThrow(/order 1/)
+    // The same sense under a new ID, however it is spelled, is a duplicate across packs too (spec §13).
+    const sameSense = pack({ pack_id: 'x', entries: [entry({ entry_id: 'water-2', unit_id: 'a1-09', headword: 'Water ' })], units: [unit('a1-09', 'A1', 9, ['water-2'])], audio: [] })
+    expect(() => loadCorpus([pack(), sameSense])).toThrow(/water-2 is the same sense as water-1/)
+    const otherTheme = pack({ pack_id: 'x', entries: [], units: [], audio: [], themes: [{ ...theme('food'), name: { en: 'Meals', l1: 'Ястия' } }] })
+    expect(() => loadCorpus([pack(), otherTheme])).toThrow(/food/)
+    expect(loadCorpus([pack(), pack({ pack_id: 'x', entries: [], units: [], audio: [] })]).themes).toHaveLength(2)
   })
 })
 

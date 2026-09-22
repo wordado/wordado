@@ -1,5 +1,6 @@
 import type { Pack } from './pack'
 import { levelIndex, type CorpusEntry, type LocalizedText, type Unit } from './types'
+import { norm } from './validation'
 import { corpusWordId, type WordId } from './wordId'
 
 /** A theme is offered once this many live entries carry its tag (spec §8.9). Tuning value (§15). */
@@ -35,8 +36,9 @@ export interface Corpus {
 
 /**
  * Merges validated packs — the manifest's list (spec §5.1) — into one corpus.
- * Throws on what only a list can get wrong: an entry, unit, clip or unit
- * order in two packs, or packs for two L1s.
+ * Throws on what only a list can get wrong: an entry, sense, unit, clip or
+ * unit order in two packs, a theme defined differently in two packs, or
+ * packs for two L1s (spec §5.1, §13).
  */
 export function loadCorpus(packs: readonly Pack[]): Corpus {
   const first = packs[0]
@@ -46,10 +48,15 @@ export function loadCorpus(packs: readonly Pack[]): Corpus {
   const themes = new Map<string, Theme>()
   const clips = new Map<string, AudioClip>()
   const retired = new Set<WordId>()
+  const senses = new Map<string, string>()
   for (const pack of packs) {
     if (pack.l1 !== first.l1) throw new Error(`Pack ${pack.pack_id} is for L1 ${pack.l1}, not ${first.l1}`)
     for (const e of pack.entries) {
       if (entries.has(e.entry_id)) throw new Error(`Entry ${e.entry_id} appears in more than one pack`)
+      const sense = `${norm(e.headword)}|${e.pos}|${norm(e.sense)}`
+      const same = senses.get(sense)
+      if (same !== undefined) throw new Error(`Entry ${e.entry_id} is the same sense as ${same} of another pack`)
+      senses.set(sense, e.entry_id)
       entries.set(e.entry_id, {
         entryId: e.entry_id,
         headword: e.headword,
@@ -73,7 +80,12 @@ export function loadCorpus(packs: readonly Pack[]): Corpus {
       units.push({ unitId: u.unit_id, level: u.level, order: u.order, title: u.title, wordIds: u.entry_ids.map(corpusWordId) })
     }
     for (const t of pack.themes) {
-      if (!themes.has(t.theme_id)) themes.set(t.theme_id, { themeId: t.theme_id, name: t.name, description: t.description })
+      const theme: Theme = { themeId: t.theme_id, name: t.name, description: t.description }
+      const known = themes.get(t.theme_id)
+      if (known && JSON.stringify(known) !== JSON.stringify(theme)) {
+        throw new Error(`Theme ${t.theme_id} is defined differently in two packs`)
+      }
+      themes.set(t.theme_id, theme)
     }
     for (const c of pack.audio) {
       if (clips.has(c.clip_id)) throw new Error(`Clip ${c.clip_id} appears in more than one pack`)

@@ -38,13 +38,14 @@ export function text(r: Report, raw: Raw, key: string, path: string, nonEmpty = 
     return ''
   }
   if (nonEmpty && v.trim() === '') r.add(at(path, key), 'must not be empty')
+  else if (v !== v.trim()) r.add(at(path, key), 'must not start or end with whitespace')
   return v
 }
 
 export function texts(r: Report, raw: Raw, key: string, path: string): string[] {
   const v = raw[key]
-  if (!Array.isArray(v) || !v.every((x) => typeof x === 'string' && x.trim() !== '')) {
-    r.add(at(path, key), 'must be an array of non-empty strings')
+  if (!Array.isArray(v) || !v.every((x) => typeof x === 'string' && x.trim() !== '' && x === x.trim())) {
+    r.add(at(path, key), 'must be an array of non-empty strings without leading or trailing whitespace')
     return []
   }
   return v as string[]

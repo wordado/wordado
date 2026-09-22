@@ -8,6 +8,8 @@
 
 **Tech Stack:** Node 24, pnpm 12, TypeScript 7, Vitest 5, fast-check 4 (unchanged). New in `pipeline` only: `tsx` (runs TypeScript under Node) and `@types/node`. `core` gains no dependency.
 
+> **Revised 2026-09-22 after the whole-branch review.** The review found that pnpm 12 writes an `allowBuilds` placeholder into `pnpm-workspace.yaml` on install, which had been committed and broke `pnpm install --frozen-lockfile` (fixed: `esbuild: false`). It also tightened the rules: strings with leading or trailing whitespace are rejected, so bytes never differ by an invisible space; a clip is the audio of exactly one entry; an entry's themes, variants and translations hold no repeats; `loadCorpus` rejects the same sense under a new ID in a second pack and a theme defined differently in two packs; `validateManifest` takes an options object like `validatePack`; `selectPacks` treats an installed pack whose schema this build no longer reads as missing; and the sample test compares translations with the distractor rule's normalisation. A `.gitattributes` keeps `.pack` and `.m4a` files byte-exact. The task bodies below show the code as first planned; the merged code in `core/src` and `pipeline/src` is the record.
+
 **Spec:** `docs/superpowers/specs/2026-09-20-vocabulary-learning-app-design.md` — this plan implements §5.1 (packs, manifest, stability rules, schema version), §5.2 (entry contents), the theme definitions and minimum size of §8.9, the audio manifest of §9.3, the bundled demo sample of §8.6, and the corpus-pipeline tests of §13. It is plan 3 of 8; see `docs/superpowers/plans/2026-09-21-phase-1a-roadmap.md`.
 
 ## Global Constraints
@@ -1287,7 +1289,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 **Interfaces:**
 - Consumes: the internal helpers of `validation.ts` (Task 2).
-- Produces: `MANIFEST_SCHEMA_VERSION = 1`; `PackDescriptor { pack_id, l1, corpus_version, schema_version, url, sha256, bytes }`; `PackManifest { schema_version, corpus_version, packs }`; `ManifestValidation`; `validateManifest(value: unknown, supportedSchemaVersions?): ManifestValidation`; `InstalledPack { pack_id, corpus_version, schema_version }`; `PackSelectionInput { manifest, l1, installed, supportedSchemaVersions }`; `PackSelection { fetch, appUpdateNeeded }`; `selectPacks(input): PackSelection`.
+- Produces: `MANIFEST_SCHEMA_VERSION = 1`; `PackDescriptor { pack_id, l1, corpus_version, schema_version, url, sha256, bytes }`; `PackManifest { schema_version, corpus_version, packs }`; `ManifestValidation`; `ValidateManifestOptions { supportedSchemaVersions? }`; `validateManifest(value: unknown, options?): ManifestValidation`; `InstalledPack { pack_id, corpus_version, schema_version }`; `PackSelectionInput { manifest, l1, installed, supportedSchemaVersions }`; `PackSelection { fetch, appUpdateNeeded }`; `selectPacks(input): PackSelection`.
 
 The manifest is a list from day one (spec §5.1, §14): one item at launch, but `selectPacks` handles several per L1 without a special case. The rule for a pack whose schema is newer than the client reads comes straight from §5.1: keep the current pack, report that the app needs an update.
 
@@ -1707,12 +1709,15 @@ A *source* is the pack without `schema_version` and `audio`: the pipeline derive
 
 - [ ] **Step 1: Add the package to the workspace**
 
-`pnpm-workspace.yaml`:
+`pnpm-workspace.yaml` (pnpm 12 refuses to run esbuild's postinstall without an `allowBuilds` verdict and writes a placeholder you must resolve; esbuild works from its optional platform package, so the answer is `false`):
 
 ```yaml
 packages:
   - core
   - pipeline
+
+allowBuilds:
+  esbuild: false
 ```
 
 `pipeline/package.json`:
@@ -1767,8 +1772,8 @@ In the root `package.json`, add to `scripts`:
     "sample-pack": "pnpm --filter @wordado/pipeline corpus build samples/a1-bg"
 ```
 
-Run: `pnpm install`
-Expected: `pipeline` linked, `tsx` and `@types/node` added, `pnpm-lock.yaml` updated.
+Run: `pnpm install && pnpm install --frozen-lockfile`
+Expected: `pipeline` linked, `tsx` and `@types/node` added, `pnpm-lock.yaml` updated, and the second install exits 0 (a fresh clone and CI depend on it).
 
 - [ ] **Step 2: Write the failing tests**
 

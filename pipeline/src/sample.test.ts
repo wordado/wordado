@@ -57,9 +57,11 @@ describe('the A1 Bulgarian sample pack', () => {
   })
 
   it('has no two entries sharing a translation, so no demo distractor is ambiguous', () => {
+    // The same normalisation the distractor rule applies (case, NFC, trim).
+    const norm = (s: string) => s.trim().normalize('NFC').toLowerCase()
     const seen = new Map<string, string>()
     for (const e of pool) {
-      for (const t of e.translations) {
+      for (const t of e.translations.map(norm)) {
         expect(seen.get(t), `${t} in ${e.entryId} and ${seen.get(t)}`).toBeUndefined()
         seen.set(t, e.entryId)
       }

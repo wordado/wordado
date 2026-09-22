@@ -86,6 +86,20 @@ describe('validatePack', () => {
     )
   })
 
+  it('rejects strings with leading or trailing whitespace, so bytes never differ by an invisible space', () => {
+    expect(paths(withEntry(0, { headword: ' hello' }))).toEqual(['entries[0].headword'])
+    expect(paths(withEntry(0, { translation: 'здравей ' }))).toEqual(['entries[0].translation'])
+    expect(paths(withEntry(0, { sense: '   ' }))).toEqual(['entries[0].sense'])
+    expect(paths(withEntry(0, { alternates: ['здравейте '] }))).toEqual(['entries[0].alternates'])
+  })
+
+  it('rejects repeats inside one entry: themes, variants, and a translation listed twice', () => {
+    expect(paths(withEntry(0, { themes: ['greetings', 'greetings'] }))).toEqual(['entries[0].themes[1]'])
+    expect(paths(withEntry(0, { variants: ['Hallo', 'hallo'] }))).toEqual(['entries[0].variants[1]'])
+    expect(paths(withEntry(0, { alternates: ['Hello-1'] }))).toEqual(['entries[0].alternates[0]'])
+    expect(paths(withEntry(0, { alternates: ['x', 'x'] }))).toEqual(['entries[0].alternates[1]'])
+  })
+
   it('requires an example sentence and IPA on live entries only', () => {
     expect(paths(withEntry(2, { examples: [] }))).toEqual(['entries[2].examples'])
     expect(paths(withEntry(2, { ipa: '' }))).toEqual(['entries[2].ipa'])
@@ -143,6 +157,9 @@ describe('validatePack', () => {
     const base = fixture()
     const orphan = { ...base, audio: [...base.audio, clip('bread-1-uk')] }
     expect(paths(orphan)).toEqual(['audio[2].clip_id'])
+    // A clip is the audio of exactly one entry: a pasted reference would play the wrong word.
+    expect(paths(withEntry(2, { audio: { uk: 'hello-1-uk' } }))).toEqual(['entries[2].audio.uk'])
+    expect(paths(withEntry(0, { audio: { uk: 'hello-1-uk', us: 'hello-1-uk' } }))).toEqual(['entries[0].audio.us'])
   })
 
   it('checks clip URLs and checksums', () => {

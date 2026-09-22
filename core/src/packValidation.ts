@@ -115,7 +115,7 @@ function crossCheck(r: Report, pack: Pack): void {
   const entries = new Map(pack.entries.map((e) => [e.entry_id, e]))
   const themes = new Set(pack.themes.map((t) => t.theme_id))
   const clips = new Set(pack.audio.map((c) => c.clip_id))
-  const referenced = new Set<string>()
+  const referencedBy = new Map<string, string>()
 
   pack.entries.forEach((e, i) => {
     const path = `entries[${i}]`
@@ -125,12 +125,17 @@ function crossCheck(r: Report, pack: Pack): void {
       if (unit.level !== e.level) r.add(`${path}.level`, `differs from the level of unit ${e.unit_id}`)
       if (!unit.entry_ids.includes(e.entry_id)) r.add(`${path}.unit_id`, `unit ${e.unit_id} does not list this entry`)
     }
+    checkUnique(r, e.themes, (j) => `${path}.themes[${j}]`, 'theme')
     e.themes.forEach((t, j) => {
       if (!themes.has(t)) r.add(`${path}.themes[${j}]`, `unknown theme ${JSON.stringify(t)}`)
     })
+    checkUnique(r, e.variants.map(norm), (j) => `${path}.variants[${j}]`, 'variant')
+    checkUnique(r, [e.translation, ...e.alternates].map(norm), (j) => `${path}.alternates[${j - 1}]`, 'translation')
     for (const [accent, clip] of Object.entries(e.audio)) {
       if (!clips.has(clip)) r.add(`${path}.audio.${accent}`, `unknown clip ${JSON.stringify(clip)}`)
-      referenced.add(clip)
+      const owner = referencedBy.get(clip)
+      if (owner !== undefined) r.add(`${path}.audio.${accent}`, `clip ${clip} is already the audio of ${owner}`)
+      else referencedBy.set(clip, e.entry_id)
     }
   })
 
@@ -154,15 +159,15 @@ function crossCheck(r: Report, pack: Pack): void {
   })
 
   pack.audio.forEach((c, i) => {
-    if (!referenced.has(c.clip_id)) r.add(`audio[${i}].clip_id`, 'no entry references this clip')
+    if (!referencedBy.has(c.clip_id)) r.add(`audio[${i}].clip_id`, 'no entry references this clip')
   })
 }
 
 /**
  * Checks a parsed pack document (spec §5.1, §13): every field, every ID
  * reference, no duplicate sense, units and entries consistent both ways, path
- * order monotone in level, and an audio manifest that is referenced and
- * well-formed. Structural errors are all collected; cross checks run only
+ * order monotone in level, and an audio manifest that is well-formed with
+ * every clip the audio of exactly one entry. Structural errors are all collected; cross checks run only
  * on a structurally sound pack.
  */
 export function validatePack(value: unknown, options: ValidatePackOptions = {}): PackValidation {

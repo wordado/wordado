@@ -57,10 +57,13 @@ function parseDescriptor(r: Report, raw: Raw, path: string): PackDescriptor {
   }
 }
 
-export function validateManifest(
-  value: unknown,
-  supportedSchemaVersions: readonly number[] = [MANIFEST_SCHEMA_VERSION],
-): ManifestValidation {
+export interface ValidateManifestOptions {
+  /** Defaults to `[MANIFEST_SCHEMA_VERSION]`. */
+  readonly supportedSchemaVersions?: readonly number[]
+}
+
+export function validateManifest(value: unknown, options: ValidateManifestOptions = {}): ManifestValidation {
+  const supportedSchemaVersions = options.supportedSchemaVersions ?? [MANIFEST_SCHEMA_VERSION]
   if (!isRecord(value)) return { status: 'invalid', errors: [{ path: '', message: 'must be an object' }] }
   const schema = value['schema_version']
   if (typeof schema !== 'number' || !Number.isInteger(schema) || schema < 1) {
@@ -105,7 +108,10 @@ export function selectPacks(input: PackSelectionInput): PackSelection {
   const appUpdateNeeded: PackDescriptor[] = []
   for (const offered of input.manifest.packs) {
     if (offered.l1 !== input.l1) continue
-    const have = input.installed.find((p) => p.pack_id === offered.pack_id)
+    // An installed pack in a schema this build no longer reads counts as missing.
+    const have = input.installed.find(
+      (p) => p.pack_id === offered.pack_id && input.supportedSchemaVersions.includes(p.schema_version),
+    )
     if (have && have.corpus_version >= offered.corpus_version) continue
     if (input.supportedSchemaVersions.includes(offered.schema_version)) fetch.push(offered)
     else appUpdateNeeded.push(offered)

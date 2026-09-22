@@ -63,6 +63,11 @@ describe('selectPacks', () => {
     expect(out.fetch).toEqual([extra])
   })
 
+  it('refetches an installed pack whose schema this build no longer reads', () => {
+    const installed = [{ pack_id: 'corpus-bg', corpus_version: 1, schema_version: 0 }]
+    expect(selectPacks({ manifest: manifest([bg(1)]), l1: 'bg', installed, supportedSchemaVersions: supported }).fetch).toEqual([bg(1)])
+  })
+
   it('leaves an installed pack alone when the manifest no longer lists it', () => {
     const installed = [{ pack_id: 'gone-bg', corpus_version: 1, schema_version: 1 }]
     expect(selectPacks({ manifest: manifest([]), l1: 'bg', installed, supportedSchemaVersions: supported })).toEqual({ fetch: [], appUpdateNeeded: [] })
