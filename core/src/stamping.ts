@@ -43,7 +43,10 @@ export function openPushWindow(input: PushWindowInput): PushWindow {
   const clockOffsetMs = Math.abs(skew) > CLOCK_TOLERANCE_MS ? skew : 0
   // A never-seen device's bound is the account's creation less a day, which covers a demo (spec §8.6).
   const lowerBound = input.lastAccepted ? input.lastAccepted.effectiveTs : input.accountCreatedAt - 86_400_000
-  return { clockOffsetMs, lowerBound, upperBound: input.serverNow }
+  const upperBound = input.serverNow
+  // Server instances' clocks can differ by milliseconds: without this, a lower
+  // bound just above the upper one would clamp (and so mark ineligible) every event.
+  return { clockOffsetMs, lowerBound: Math.min(lowerBound, upperBound), upperBound }
 }
 
 function byDevice(a: ReviewEvent, b: ReviewEvent): number {
@@ -51,16 +54,34 @@ function byDevice(a: ReviewEvent, b: ReviewEvent): number {
   return a.deviceSeq - b.deviceSeq
 }
 
+/** Per device, what the next page of the same push needs to stamp consistently (spec §9.2). */
+export interface DeviceCarry {
+  readonly lastEffectiveTs: number
+  /** This device's stamped timestamps within `DENSITY_WINDOW_MS` before and including `lastEffectiveTs`, ascending. */
+  readonly recentTs: readonly number[]
+}
+
+/** By deviceId. Threaded from page to page of one push; empty on the first page. */
+export type StampCarry = ReadonlyMap<string, DeviceCarry>
+
+export interface StampResult {
+  /** Ordered by (deviceId, deviceSeq). */
+  readonly events: StampedReviewEvent[]
+  /** The input carry, updated for every device this page touched. */
+  readonly carry: StampCarry
+}
+
 /**
  * Assigns effective time and the XP verdict to one page of a push (spec §9.2
  * steps 2–4, §10). Returns the events ordered by (deviceId, deviceSeq). Pure:
- * stamping the same page against the same window gives the same stamps.
+ * stamping the same pages against the same window and carry gives the same stamps.
  */
 export function stampEvents(
   events: readonly ReviewEvent[],
-  window: PushWindow,
+  pushWindow: PushWindow,
   receivedAt: number,
-): StampedReviewEvent[] {
+  carry: StampCarry = new Map(),
+): StampResult {
   const ordered = [...events].sort(byDevice)
   const out: StampedReviewEvent[] = []
   let prevDevice: string | null = null
@@ -68,29 +89,48 @@ export function stampEvents(
   for (const event of ordered) {
     if (event.deviceId !== prevDevice) {
       prevDevice = event.deviceId
-      prevTs = Number.NEGATIVE_INFINITY
+      prevTs = carry.get(event.deviceId)?.lastEffectiveTs ?? Number.NEGATIVE_INFINITY
     }
-    const corrected = event.clientTs + window.clockOffsetMs
-    const clamped = Math.min(Math.max(corrected, window.lowerBound), window.upperBound)
+    const corrected = event.clientTs + pushWindow.clockOffsetMs
+    const clamped = Math.min(Math.max(corrected, pushWindow.lowerBound), pushWindow.upperBound)
     const wasClamped = clamped !== corrected
-    // Restore device_seq order: never earlier than the device's previous event.
+    // Restore device_seq order: never earlier than the device's previous event (in this page or the carry).
     const effectiveTs = Math.max(clamped, prevTs)
     prevTs = effectiveTs
     const plausible = event.latencyMs >= PLAUSIBILITY_FLOOR_MS[event.mode]
     out.push({ ...event, receivedAt, effectiveTs, xpEligible: !wasClamped && plausible })
   }
-  return markDense(out)
+  const { events: densed, recentByDevice } = markDense(out, carry)
+  const nextCarry = new Map(carry)
+  for (const [deviceId, recentTs] of recentByDevice) {
+    nextCarry.set(deviceId, { lastEffectiveTs: recentTs[recentTs.length - 1]!, recentTs })
+  }
+  return { events: densed, carry: nextCarry }
 }
 
-/** Marks events XP-ineligible where one device's answers exceed the density ceiling. */
-function markDense(events: StampedReviewEvent[]): StampedReviewEvent[] {
-  return events.map((event, i) => {
-    let count = 0
-    for (let j = i; j >= 0; j -= 1) {
-      const other = events[j]!
-      if (other.deviceId !== event.deviceId || other.effectiveTs <= event.effectiveTs - DENSITY_WINDOW_MS) break
-      count += 1
+/**
+ * Marks events XP-ineligible where one device's answers, carried density
+ * included, exceed the density ceiling. An event moved only by order
+ * restoration (never earlier than the device's previous stamp) still counts
+ * toward density: rare, and documented rather than special-cased.
+ */
+function markDense(
+  events: StampedReviewEvent[],
+  carry: StampCarry,
+): { events: StampedReviewEvent[]; recentByDevice: Map<string, number[]> } {
+  const out: StampedReviewEvent[] = []
+  const recentByDevice = new Map<string, number[]>()
+  let currentDevice: string | null = null
+  let windowTs: number[] = []
+  for (const event of events) {
+    if (event.deviceId !== currentDevice) {
+      currentDevice = event.deviceId
+      windowTs = [...(carry.get(event.deviceId)?.recentTs ?? [])]
     }
-    return count > DENSITY_MAX_EVENTS ? { ...event, xpEligible: false } : event
-  })
+    windowTs = windowTs.filter((ts) => ts > event.effectiveTs - DENSITY_WINDOW_MS)
+    windowTs.push(event.effectiveTs)
+    out.push(windowTs.length > DENSITY_MAX_EVENTS ? { ...event, xpEligible: false } : event)
+    recentByDevice.set(event.deviceId, windowTs)
+  }
+  return { events: out, recentByDevice }
 }
