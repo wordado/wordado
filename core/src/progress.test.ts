@@ -10,7 +10,7 @@ const w = (n: number) => corpusWordId(`en-${String(n).padStart(6, '0')}`)
 const TZ = 120
 const at = (day: number, hour: number) => Date.UTC(2026, 0, 5 + day, hour) - TZ * 60_000
 const TODAY = localDay(at(40, 12), TZ)
-const unit = (unitId: string, level: CefrLevel, order: number, ids: number[]): Unit => ({ unitId, level, order, wordIds: ids.map(w) })
+const unit = (unitId: string, level: CefrLevel, order: number, ids: number[]): Unit => ({ unitId, level, order, title: { en: unitId, l1: unitId }, wordIds: ids.map(w) })
 
 /** Introduced on day 0 and, if `passed`, rated Good on day 3; `stability` overrides the result. */
 function state(n: number, passed: boolean, stability?: number): [WordId, ReviewState] {

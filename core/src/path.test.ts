@@ -9,6 +9,7 @@ const unit = (unitId: string, level: CefrLevel, order: number, ids: number[]): U
   unitId,
   level,
   order,
+  title: { en: unitId, l1: unitId },
   wordIds: ids.map(w),
 })
 

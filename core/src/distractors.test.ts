@@ -11,12 +11,16 @@ function entry(headword: string, translations: string[], over: Partial<CorpusEnt
   return {
     entryId: `en-${String(n).padStart(6, '0')}`,
     headword,
-    pos: 'adjective',
+    variants: [],
+    pos: 'adj',
+    sense: '',
     level: 'A1',
     ipa: `/${headword}/`,
     unitId: 'a1-u1',
     themes: [],
     translations,
+    examples: [],
+    audio: {},
     retired: false,
     ...over,
   }
@@ -31,8 +35,8 @@ const cold = entry('cold', ['студен'])
 const old = entry('old', ['стар'], { retired: true })
 const bankMoney = entry('bank', ['банка'], { pos: 'noun' })
 const bankRiver = entry('bank', ['бряг'], { pos: 'noun' })
-const their = entry('their', ['техен'], { pos: 'determiner', ipa: '/ðeə/' })
-const there = entry('there', ['там'], { pos: 'adverb', ipa: '/ðeə/' })
+const their = entry('their', ['техен'], { pos: 'det', ipa: '/ðeə/' })
+const there = entry('there', ['там'], { pos: 'adv', ipa: '/ðeə/' })
 const POOL = [big, large, small, bad, hot, cold, old, bankMoney, bankRiver, their, there]
 
 const ctx = (over: Partial<DistractorContext> = {}): DistractorContext => ({
@@ -78,7 +82,7 @@ describe('pickDistractors', () => {
   it('prefers the target’s band and part of speech', () => {
     for (let seed = 0; seed < 25; seed += 1) {
       const out = pickDistractors(big, ctx(), 3, seededRng(seed))
-      expect(out.every((d) => d.pos === 'adjective' && d.level === 'A1')).toBe(true)
+      expect(out.every((d) => d.pos === 'adj' && d.level === 'A1')).toBe(true)
     }
   })
 
@@ -119,7 +123,11 @@ describe('distractor invariants (spec §13)', () => {
   })
   const poolArb = fc
     .array(entryArb, { minLength: 1, maxLength: 30 })
-    .map((pool) => pool.map((e, i): CorpusEntry => ({ ...e, entryId: `e${i}`, unitId: 'u', themes: [] })))
+    .map((pool) =>
+      pool.map(
+        (e, i): CorpusEntry => ({ ...e, entryId: `e${i}`, unitId: 'u', themes: [], variants: [], sense: '', examples: [], audio: {} }),
+      ),
+    )
 
   it('no distractor is ambiguous with its target or with another distractor', () => {
     fc.assert(

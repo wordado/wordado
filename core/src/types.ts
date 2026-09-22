@@ -49,7 +49,11 @@ export interface CorpusEntry {
   /** Stable ID, without the `c:` prefix. */
   readonly entryId: string
   readonly headword: string
-  readonly pos: string
+  /** Accepted spellings (colour / color); exact matches in typing modes (spec §8.1). */
+  readonly variants: readonly string[]
+  readonly pos: PartOfSpeech
+  /** Sense gloss in the L1; empty when the headword alone is unambiguous. */
+  readonly sense: string
   readonly level: CefrLevel
   readonly ipa: string
   /** A back-reference to the entry's unit; the pack validator keeps it consistent with Unit.wordIds. */
@@ -57,6 +61,10 @@ export interface CorpusEntry {
   readonly themes: readonly string[]
   /** Primary translation first, then accepted alternates. */
   readonly translations: readonly string[]
+  /** English example sentences. */
+  readonly examples: readonly string[]
+  /** Clip IDs into the corpus's audio manifest, by accent (spec §9.3). */
+  readonly audio: Readonly<Partial<Record<Accent, string>>>
   readonly retired: boolean
 }
 
@@ -66,6 +74,7 @@ export interface Unit {
   readonly level: CefrLevel
   /** Position in the path. Unique; lower comes first. */
   readonly order: number
+  readonly title: LocalizedText
   /** The source of truth for unit membership and order; CorpusEntry.unitId is the back-reference. */
   readonly wordIds: readonly WordId[]
 }
