@@ -48,3 +48,16 @@ export async function withScratchDatabase(fn: (db: Db) => Promise<void>): Promis
     await admin.end()
   }
 }
+
+let users = 0
+
+/** A user row as Better Auth would write it, without signing in: for tests below the HTTP layer. */
+export async function createTestUser(db: Db = testDb(), createdAt = Date.now()): Promise<string> {
+  users += 1
+  const id = `user-${users}-${Math.random().toString(36).slice(2, 10)}`
+  await db.query(
+    `insert into "user" (id, name, email, "emailVerified", "createdAt", "updatedAt") values ($1, '', $2, true, $3, $3)`,
+    [id, `${id}@example.com`, new Date(createdAt)],
+  )
+  return id
+}
