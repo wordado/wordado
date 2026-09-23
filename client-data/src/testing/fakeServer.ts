@@ -39,8 +39,10 @@ const unitsOf = (fields: Record<string, unknown>): string[] =>
 /**
  * The sync endpoints as `core`'s rules define them (spec §9.2, §4.3, §8.4,
  * §10): what plan 5's server must do, executable. One user, in memory.
- * Left to the real server: expiring a push window after its last page, and
- * trimming the pulled summary to the trailing 90 days.
+ * Left to the real server: expiring a push window after its last page,
+ * trimming the pulled summary to the trailing 90 days, and sending every
+ * server-owned document on each pull whatever the cursor (the fake sends
+ * only documents above it).
  */
 export class FakeServer implements SyncTransport {
   readonly events = new Map<string, StampedReviewEvent>()

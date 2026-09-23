@@ -34,8 +34,9 @@ const SUMMARY_SQL = `
 /**
  * What a device needs to be ready after one pull (spec §9.2), read under
  * the learner's lock so the marks describe exactly the events the states
- * include (spec §4.3). Its size does not grow with the learner's history:
- * states are per word and the summary is trimmed.
+ * include (spec §4.3). States are per word and the summary is trimmed to
+ * SUMMARY_DAYS, so those do not grow with the learner's history; the
+ * completed dates do, and so do a first pull's documents (cursor 0).
  */
 export async function handlePull(deps: ServerDeps, userId: string, request: PullRequest): Promise<PullResponse> {
   const min = deps.config.minProtocolVersion

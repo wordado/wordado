@@ -5,6 +5,7 @@ import {
   ENTITLEMENT_STALE_AFTER_MS,
   localDay,
   dayToIsoDate,
+  Grade,
   replay,
   SCHEDULER_VERSION,
   summarizeDays,
@@ -77,6 +78,40 @@ describe('POST /v1/sync/pull (spec §9.2)', () => {
     expect(reply.dayComplete).toEqual([date])
     const xp = computeXp(log)
     expect(reply.xp).toEqual({ total: xp.total, utcDay: utcDay(h.clock.now), today: xp.byUtcDay.get(utcDay(h.clock.now)) ?? 0 })
+  })
+
+  it("summarises real reviews exactly as core's summarizeDays does, across time zones (spec §8.3)", async () => {
+    const h = harness()
+    const s = await h.signIn()
+    await h.deps.db.query('update "user" set "createdAt" = $2 where id = $1', [s.userId, new Date(h.clock.now - 30 * DAY)])
+    const t = h.clock.now
+    // dev-a in Tokyo (+9h), dev-b in New York (-5h): the same instant falls on different local days.
+    const tokyo = { clientTzOffsetMin: 540 }
+    const newYork = { clientTzOffsetMin: -300 }
+    const a = [
+      rawEvent('dev-a', 1, t - 3 * DAY, { ...tokyo, wordId: 'c:w-1' }),
+      rawEvent('dev-a', 2, t - 3 * DAY + MINUTE, { ...tokyo, wordId: 'c:w-2' }),
+      rawEvent('dev-a', 3, t - 3 * DAY + 2 * MINUTE, { ...tokyo, wordId: 'c:w-3' }),
+      rawEvent('dev-a', 4, t - 3 * DAY + 3 * MINUTE, { ...tokyo, wordId: 'c:w-1', grade: Grade.Again }),
+      rawEvent('dev-a', 5, t - 30 * MINUTE, { ...tokyo, wordId: 'c:w-1', grade: Grade.Again }),
+      rawEvent('dev-a', 6, t - 29 * MINUTE, { ...tokyo, wordId: 'c:w-2', grade: Grade.Good }),
+      rawEvent('dev-a', 7, t - 28 * MINUTE, { ...tokyo, wordId: 'c:w-1', grade: Grade.Good }),
+      rawEvent('dev-a', 8, t - 27 * MINUTE, { ...tokyo, wordId: 'c:w-9', practice: true }),
+    ]
+    const b = [
+      rawEvent('dev-b', 1, t - 2 * DAY, { ...newYork, wordId: 'c:w-4' }),
+      rawEvent('dev-b', 2, t - 20 * MINUTE, { ...newYork, wordId: 'c:w-4', grade: Grade.Hard }),
+      rawEvent('dev-b', 3, t - 19 * MINUTE, { ...newYork, wordId: 'c:w-3', grade: Grade.Again }),
+    ]
+    await s.post('/v1/sync/push', pushPage('dev-a', t, a))
+    await s.post('/v1/sync/push', pushPage('dev-b', t, b))
+    const reply = (await s.post('/v1/sync/pull', request())).body
+    const log = await storedLog(h, s)
+    expect(log).toHaveLength(11)
+    const expected = [...summarizeDays(classifyEvents(log)).values()].sort((x, y) => x.day - y.day)
+    expect(reply.summaries).toEqual(expected)
+    // Not vacuous: real reviews, some failed.
+    expect(reply.summaries.some((d: { reviews: number; successes: number }) => d.reviews > 0 && d.successes < d.reviews)).toBe(true)
   })
 
   it('returns only documents above the cursor, and every server-owned one', async () => {
