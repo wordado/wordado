@@ -6,6 +6,7 @@ import { accountRoutes } from './account/routes'
 import { createAuth } from './auth'
 import type { ServerDeps } from './deps'
 import { requireUser, type AppEnv } from './http'
+import { syncRoutes } from './sync/routes'
 
 /** A sync page of 500 events is about 150 KB. */
 export const MAX_BODY_BYTES = 1_000_000
@@ -27,6 +28,7 @@ export function createApp(deps: ServerDeps): Hono<AppEnv> {
   app.use('/v1/*', bodyLimit({ maxSize: MAX_BODY_BYTES, onError: (c) => c.json({ error: 'too_large' }, 413) }))
 
   accountRoutes(app, deps, user)
+  syncRoutes(app, deps, user)
 
   app.notFound((c) => c.json({ error: 'not_found' }, 404))
   app.onError((error, c) => {
