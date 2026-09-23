@@ -1,0 +1,24 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "wordado",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-09-01",
+  // pg needs Node's net, tls and crypto shims: Cloudflare's supported path for Hyperdrive.
+  "compatibility_flags": ["nodejs_compat"],
+  // Local values; plan 7 sets the deployed ones.
+  "vars": {
+    "BASE_URL": "http://localhost:8787",
+    "MIN_PROTOCOL_VERSION": "1",
+    "TRUSTED_ORIGINS": "http://localhost:5173"
+  },
+  // Locally, the CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE environment variable points
+  // this at the database; the dev and smoke scripts set it to the Docker one by default (spec §4.4).
+  // Plan 7 creates the real Hyperdrive and puts its id here.
+  "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "00000000000000000000000000000000" }],
+  "queues": {
+    "producers": [{ "binding": "JOBS", "queue": "wordado-jobs" }],
+    "consumers": [{ "queue": "wordado-jobs", "max_batch_size": 10, "max_batch_timeout": 5, "max_retries": 5 }]
+  },
+  "triggers": { "crons": ["*/15 * * * *"] },
+  "observability": { "enabled": true }
+}

@@ -1,0 +1,9 @@
+# Copied to .dev.vars by `pnpm dev`. The Worker's secrets for local runs; never commit .dev.vars.
+BETTER_AUTH_SECRET=local-development-only-secret-0123456789abcdef
+# Optional: Google sign-in, with http://localhost:8787/api/auth/callback/google registered as a redirect (spec §4.4).
+# GOOGLE_CLIENT_ID=
+# GOOGLE_CLIENT_SECRET=
+# Optional: reminders. `pnpm --filter @wordado/server vapid-keys` prints a pair.
+# VAPID_PUBLIC_KEY=
+# VAPID_PRIVATE_KEY=
+# VAPID_SUBJECT=mailto:you@example.com

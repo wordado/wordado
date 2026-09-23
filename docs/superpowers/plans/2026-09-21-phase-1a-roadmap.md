@@ -28,8 +28,7 @@ against the sample pack.
 
 - **Legal review** (spec §15) gates plan 8: licences of candidate frequency
   lists, and the per-country age-of-consent table the age gate in plan 6 needs.
-- **Docker is not installed on this machine.** Plan 5 runs Postgres in Docker
-  (spec §4.4). Install Docker Desktop, OrbStack or Colima before plan 5.
+- **Docker** — resolved 2026-09-23: Docker Desktop is installed, and plan 5 runs Postgres in it (spec §4.4).
 - **A name and domain.** Resend needs a verified sending domain before sign-in
   emails can be sent from a deployed beta (`docs/research/2026-09-21-app-name-research.md`).
   Local development prints codes to the console and is not blocked.
