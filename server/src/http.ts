@@ -3,13 +3,18 @@ import type { Auth } from './auth'
 
 export type AppEnv = { Variables: { userId: string } }
 
-/** Resolves the session cookie to a user, or answers 401 (spec §8.6). */
+/**
+ * Resolves the session cookie to a user, or answers 401 (spec §8.6). Once a
+ * day of use Better Auth extends the session and sends a new cookie; it is
+ * passed on, or the browser's cookie would still lapse after 60 days.
+ */
 export function requireUser(auth: Auth): MiddlewareHandler<AppEnv> {
   return async (c, next) => {
-    const session = await auth.api.getSession({ headers: c.req.raw.headers })
+    const { headers, response: session } = await auth.api.getSession({ headers: c.req.raw.headers, returnHeaders: true })
     if (!session) return c.json({ error: 'unauthorized' }, 401)
     c.set('userId', session.user.id)
     await next()
+    for (const cookie of headers.getSetCookie()) c.res.headers.append('set-cookie', cookie)
   }
 }
 

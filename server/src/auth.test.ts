@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { BASE_URL, harness } from '../test/harness'
-import { OTP_SENDS_PER_MINUTE } from './auth'
+import { OTP_SENDS_PER_MINUTE, SESSION_DAYS } from './auth'
 
 const json = { 'content-type': 'application/json', origin: BASE_URL }
 
@@ -30,6 +30,28 @@ describe('sign-in (spec §8.6)', () => {
       [session.userId],
     )
     expect(row?.days).toBe(60)
+  })
+
+  it('extends the session on an ordinary API call once a day of use has passed', async () => {
+    const h = harness()
+    const session = await h.signIn()
+    // Better Auth reads the real clock: age the session by two days in the database instead.
+    await h.deps.db.query(`update session set "expiresAt" = "expiresAt" - interval '2 days' where "userId" = $1`, [session.userId])
+    const reply = await session.get('/v1/me')
+    expect(reply.status).toBe(200)
+    const cookie = reply.headers.getSetCookie().find((c) => c.includes('session_token='))
+    expect(cookie).toMatch(new RegExp(`Max-Age=${SESSION_DAYS * 86_400}\\b`))
+    const [row] = await h.deps.db.query<{ days: number }>(
+      `select round(extract(epoch from ("expiresAt" - now())) / 86400)::int as days from session where "userId" = $1`,
+      [session.userId],
+    )
+    expect(row?.days).toBe(SESSION_DAYS)
+  })
+
+  it('sets no cookie on an API call while the session is fresh', async () => {
+    const h = harness()
+    const session = await h.signIn()
+    expect((await session.get('/v1/me')).headers.getSetCookie()).toEqual([])
   })
 
   it('refuses a wrong code, and the right one after three wrong attempts', async () => {
