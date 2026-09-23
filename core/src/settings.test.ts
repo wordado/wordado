@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_SETTINGS, isValidTzOffset, MAX_REVIEW_CAP, validateSettingsPatch } from './settings'
+import { DEFAULT_SETTINGS, isValidTzOffset, MAX_REVIEW_CAP, settingsFromFields, validateSettingsPatch } from './settings'
 import { MAX_NEW_WORD_LIMIT } from './session'
 
 function errorsOf(patch: Record<string, unknown>): string[] {
@@ -47,5 +47,16 @@ describe('isValidTzOffset', () => {
     expect(isValidTzOffset(-721)).toBe(false)
     expect(isValidTzOffset(90.5)).toBe(false)
     expect(isValidTzOffset(Number.NaN)).toBe(false)
+  })
+})
+
+describe('settingsFromFields', () => {
+  it('fills defaults, keeps every stored field that validates, and ignores the rest', () => {
+    expect(settingsFromFields({})).toEqual(DEFAULT_SETTINGS)
+    expect(settingsFromFields({ newWordLimit: 5, retention: 'relaxed', reviewCap: -3, colour: 'blue' })).toEqual({
+      ...DEFAULT_SETTINGS,
+      newWordLimit: 5,
+      retention: 'relaxed',
+    })
   })
 })

@@ -1,37 +1,29 @@
 import {
-  DEFAULT_SETTINGS,
+  DOCUMENT_TYPES,
   ENTITLEMENT_SOURCES,
   ENTITLEMENT_TIERS,
   isWordId,
+  settingsFromFields,
   validateSettingsPatch,
   type Entitlement,
+  type ReportField,
   type Settings,
   type WordFlag,
   type WordId,
 } from '@wordado/core'
-import { getDocument, listDocuments, UNLOCK_TYPE, writeLocalPatch, type Fields } from './documents'
+import { getDocument, listDocuments, writeLocalPatch, type Fields } from './documents'
 import type { SqlDriver } from './driver'
 import type { ClientEnv } from './env'
 
-/** The document types of Phase 1a (spec §6.2, §8.8, §8.10). */
-export const DOC = {
-  settings: 'settings',
-  wordFlag: 'word_flag',
-  unitUnlock: UNLOCK_TYPE,
-  wordAlias: 'word_alias',
-  entitlement: 'entitlement',
-  contentReport: 'content_report',
-} as const
+/** The document types of Phase 1a (spec §6.2, §8.8, §8.10), as core names them. */
+export const DOC = DOCUMENT_TYPES
+
+export type { ReportField }
 
 /** Settings with defaults; a stored field that fails validation is ignored rather than trusted. */
 export async function readSettings(driver: SqlDriver): Promise<Settings> {
   const doc = await getDocument(driver, DOC.settings, '')
-  const out: Record<string, unknown> = { ...DEFAULT_SETTINGS }
-  for (const [key, value] of Object.entries(doc?.fields ?? {})) {
-    const result = validateSettingsPatch({ [key]: value })
-    if (result.ok) Object.assign(out, result.fields)
-  }
-  return out as unknown as Settings
+  return settingsFromFields(doc?.fields ?? {})
 }
 
 /** Validates (roadmap contract) and writes a settings patch. */
@@ -107,8 +99,6 @@ export async function readAliases(driver: SqlDriver): Promise<Map<WordId, WordId
   }
   return out
 }
-
-export type ReportField = 'translation' | 'example' | 'audio' | 'level' | 'other'
 
 export interface ContentReportInput {
   readonly wordId: WordId

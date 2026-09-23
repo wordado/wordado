@@ -30,8 +30,11 @@ export function resolveAlias(wordId: WordId, aliases: AliasMap): WordId {
   return current
 }
 
+/** The fields that place an event in replay order. */
+export type EventOrder = Pick<ReplayEvent, 'effectiveTs' | 'deviceId' | 'deviceSeq' | 'reviewId'>
+
 /** The total, deterministic replay order (spec §9.2). */
-export function compareEvents(a: ReplayEvent, b: ReplayEvent): number {
+export function compareEvents(a: EventOrder, b: EventOrder): number {
   if (a.effectiveTs !== b.effectiveTs) return a.effectiveTs - b.effectiveTs
   if (a.deviceId !== b.deviceId) return a.deviceId < b.deviceId ? -1 : 1
   if (a.deviceSeq !== b.deviceSeq) return a.deviceSeq - b.deviceSeq

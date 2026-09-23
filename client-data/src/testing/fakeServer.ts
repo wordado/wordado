@@ -1,5 +1,6 @@
 import {
   applyPatch,
+  checkDocumentWrite,
   classifyEvents,
   computeXp,
   createDocument,
@@ -9,6 +10,7 @@ import {
   openPushWindow,
   replay,
   SCHEDULER_VERSION,
+  SERVER_OWNED_DOCUMENT_TYPES,
   stampEvents,
   summarizeDays,
   utcDay,
@@ -30,9 +32,6 @@ export interface FakeServerOptions {
   readonly accountCreatedAt?: number
   readonly minProtocolVersion?: number
 }
-
-/** Document types the server owns, whatever exists yet (spec §8.8, §9.2; plan 2 contract: per type, not per write). */
-export const SERVER_OWNED_TYPES: ReadonlySet<string> = new Set(['entitlement'])
 
 const unitsOf = (fields: Record<string, unknown>): string[] =>
   Array.isArray(fields['units']) ? (fields['units'] as unknown[]).filter((u): u is string => typeof u === 'string') : []
@@ -118,8 +117,13 @@ export class FakeServer implements SyncTransport {
     for (const write of page.documents) {
       const id = `${write.type}/${write.key}`
       const existing = this.documents.get(id)
-      if (SERVER_OWNED_TYPES.has(write.type) || existing?.class === 'server_owned') {
+      if (SERVER_OWNED_DOCUMENT_TYPES.has(write.type) || existing?.class === 'server_owned') {
         rejected.push({ type: write.type, key: write.key, reason: 'server_owned' })
+        continue
+      }
+      const check = checkDocumentWrite(write)
+      if (!check.ok) {
+        rejected.push({ type: write.type, key: write.key, reason: check.reason })
         continue
       }
       const current = existing

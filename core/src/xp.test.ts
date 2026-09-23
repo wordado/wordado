@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
+import { classifyEvents } from './activity'
+import { utcDay } from './calendar'
 import { localDay } from './scheduler'
 import { Grade, type Mode } from './types'
 import { corpusWordId, type WordId } from './wordId'
-import { computeXp, DAILY_XP_CAP, XP_AMOUNTS, type XpEvent } from './xp'
+import { awardXp, computeXp, DAILY_XP_CAP, XP_AMOUNTS, type XpEvent } from './xp'
 import { replay } from './replay'
 
 /** Sofia winter time: minutes to ADD to UTC. */
@@ -88,5 +90,48 @@ describe('computeXp', () => {
     const prior = replay([before])
     const today = ev(w(1), Grade.Good, at(2, 10))
     expect(computeXp([today], { prior }).awards.get(today.reviewId)).toBe(XP_AMOUNTS.review)
+  })
+})
+
+describe('awardXp', () => {
+  // Day 0 passes the cap (105 new words), with a same-day repeat and a practice
+  // answer; day 1 has reviews and one ineligible answer.
+  function log(): XpEvent[] {
+    const out: XpEvent[] = []
+    for (let n = 1; n <= 105; n += 1) out.push(ev(w(n), Grade.Good, at(0, 8) + n * 1000))
+    out.push(ev(w(1), Grade.Again, at(0, 9)))
+    out.push(ev(w(2), Grade.Good, at(0, 9, 5), { practice: true }))
+    for (let n = 1; n <= 20; n += 1) out.push(ev(w(n), Grade.Good, at(1, 8) + n * 1000))
+    out.push(ev(w(200), Grade.Good, at(1, 9), { xpEligible: false }))
+    return out
+  }
+
+  it('is computeXp over the classified log', () => {
+    const events = log()
+    expect(awardXp(classifyEvents(events))).toEqual(computeXp(events))
+  })
+
+  it('gives a UTC day the same awards computed alone as computed with the whole log', () => {
+    const classified = classifyEvents(log())
+    const whole = awardXp(classified)
+    const days = new Set(classified.map((c) => utcDay(c.event.effectiveTs)))
+    expect(days.size).toBe(2)
+    for (const day of days) {
+      const alone = awardXp(classified.filter((c) => utcDay(c.event.effectiveTs) === day))
+      for (const [reviewId, amount] of alone.awards) expect(amount).toBe(whole.awards.get(reviewId))
+      expect(alone.byUtcDay.get(day)).toBe(whole.byUtcDay.get(day))
+    }
+  })
+
+  it('does not depend on the order of its input', () => {
+    const classified = classifyEvents(log())
+    expect(awardXp([...classified].reverse())).toEqual(awardXp(classified))
+  })
+
+  it('spends the cap and pays nothing to an ineligible answer', () => {
+    const events = log()
+    const xp = awardXp(classifyEvents(events))
+    expect(xp.byUtcDay.get(utcDay(at(0, 8)))).toBe(DAILY_XP_CAP)
+    expect(xp.awards.get(events[events.length - 1]!.reviewId)).toBe(0)
   })
 })

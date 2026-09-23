@@ -73,3 +73,17 @@ export const TZ_OFFSET_MAX = 840
 export function isValidTzOffset(minutes: number): boolean {
   return isInt(minutes, TZ_OFFSET_MIN, TZ_OFFSET_MAX)
 }
+
+/**
+ * A stored settings document read as Settings: the defaults, overlaid with
+ * every stored field that validates. A field this build does not know or
+ * cannot accept (a newer client's) is ignored, never trusted.
+ */
+export function settingsFromFields(fields: Readonly<Record<string, unknown>>): Settings {
+  const out: Record<string, unknown> = { ...DEFAULT_SETTINGS }
+  for (const [key, value] of Object.entries(fields)) {
+    const result = validateSettingsPatch({ [key]: value })
+    if (result.ok) Object.assign(out, result.fields)
+  }
+  return out as unknown as Settings
+}
