@@ -41,9 +41,10 @@ export function createAuth(deps: ServerDeps) {
         expiresIn: OTP_SECONDS,
         allowedAttempts: 3,
         storeOTP: 'hashed',
-        // Not awaited: how long sending takes must not show in the response.
+        // Not awaited: how long sending takes must not show in the response. A failure
+        // cannot reach the learner any more, so it is logged (without the address).
         async sendVerificationOTP({ email, otp }) {
-          deps.background(deps.mailer.sendSignInCode(email, otp))
+          deps.background(deps.mailer.sendSignInCode(email, otp).catch((error: unknown) => console.error('sign-in code not sent', error)))
         },
       }),
     ],

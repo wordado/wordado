@@ -61,6 +61,7 @@ describe('migrate', () => {
         'review_state',
         'schema_migration',
         'session',
+        'sign_in_code_send',
         'user',
         'verification',
       ])

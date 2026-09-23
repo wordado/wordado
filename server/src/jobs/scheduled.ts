@@ -1,5 +1,6 @@
 import type { ServerDeps } from '../deps'
 import { sendDueReminders } from '../reminders/schedule'
+import { pruneSignInLimits } from '../signInLimit'
 import { requestStaleRederivations } from './rederive'
 
 /** A push whose last page has not come a day after its first has been abandoned (spec §9.2). */
@@ -19,6 +20,7 @@ export async function runScheduled(deps: ServerDeps): Promise<void> {
   const steps: (() => Promise<unknown>)[] = [
     () => requestStaleRederivations(deps),
     () => cleanupPushWindows(deps),
+    () => pruneSignInLimits(deps),
     () => sendDueReminders(deps),
   ]
   const results = await Promise.allSettled(steps.map((step) => step()))

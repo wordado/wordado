@@ -7,6 +7,7 @@ import { createAuth } from './auth'
 import type { ServerDeps } from './deps'
 import { requireUser, type AppEnv } from './http'
 import { reminderRoutes } from './reminders/routes'
+import { signInEmailLimit } from './signInLimit'
 import { syncRoutes } from './sync/routes'
 
 /** A sync page of 500 events is about 150 KB. */
@@ -21,6 +22,7 @@ export function createApp(deps: ServerDeps): Hono<AppEnv> {
     await deps.db.query('select 1')
     return c.json({ ok: true })
   })
+  app.post('/api/auth/email-otp/send-verification-otp', signInEmailLimit(deps))
   app.on(['GET', 'POST'], '/api/auth/*', (c) => auth.handler(c.req.raw))
 
   // JSON bodies already need a CORS preflight cross-site, which this app never
