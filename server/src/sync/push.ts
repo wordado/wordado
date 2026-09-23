@@ -15,7 +15,8 @@ import {
 import type { Queryable } from '../db/db'
 import type { ServerDeps } from '../deps'
 import { lockLearner } from '../learner'
-import { rederiveWords } from './derive'
+import { markStale, rederiveWords } from './derive'
+import { applyDocumentWrites } from './documents'
 import { insertEvents } from './events'
 
 interface OpenWindow {
@@ -126,17 +127,18 @@ async function acceptDayComplete(tx: Queryable, userId: string, days: readonly W
 
 /**
  * One push page (spec §9.2), in one transaction under the learner's lock:
- * the window, the stamp, the log, the device mark, the words' derivation,
- * and — on the last page, once every answer of the push is in — the
- * completed days. A retried page changes nothing: its answers are
- * duplicates, and completed days are a set.
+ * the window, the stamp, the log, the device mark, the words' derivation;
+ * on the last page, once every answer of the push is in, the completed days;
+ * then the document writes. A retried page changes nothing: its answers are
+ * duplicates, completed days are a set, and a re-sent patch merges to the
+ * same fields.
  */
 export async function handlePush(deps: ServerDeps, userId: string, page: PushPage): Promise<PushResponse> {
   const min = deps.config.minProtocolVersion
   if (page.protocolVersion < min) return { status: 'upgrade_required', minProtocolVersion: min }
   const serverNow = deps.now()
-  return deps.db.transaction(async (tx) => {
-    await lockLearner(tx, userId)
+  const { response, aliasesChanged } = await deps.db.transaction(async (tx) => {
+    const learner = await lockLearner(tx, userId)
     const open = await pushWindow(tx, userId, page, serverNow)
     const fresh = await freshEvents(tx, userId, page.events)
     const { events, carry } = stampEvents(fresh, open.window, serverNow, open.carry)
@@ -152,6 +154,12 @@ export async function handlePush(deps: ServerDeps, userId: string, page: PushPag
       )
     }
     if (page.lastPage) await acceptDayComplete(tx, userId, page.dayComplete, serverNow)
-    return { status: 'ok', documents: [], rejected: [] }
+    const written = await applyDocumentWrites(tx, userId, learner.documentVersion, page.documents, serverNow)
+    if (written.aliasesChanged) await markStale(tx, userId)
+    const ok: PushResponse = { status: 'ok', documents: written.documents, rejected: written.rejected }
+    return { response: ok, aliasesChanged: written.aliasesChanged }
   })
+  // After commit, so the consumer sees the alias. If the send fails, the cron finds the stale learner (Task 8).
+  if (aliasesChanged) await deps.jobs.send({ kind: 'rederive', userId }).catch((error: unknown) => console.error('rederive request failed', error))
+  return response
 }
