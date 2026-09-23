@@ -192,16 +192,28 @@ describe('GET /v1/reminder', () => {
   it('speaks of the streak in the evening when today is still to do', async () => {
     const h = await withReminders()
     const s = await h.signIn()
+    await subscribe(s, { streakNudge: true })
     await completeDay(h, s, isoDay(-2))
     await completeDay(h, s, isoDay(-1))
     at(h, 0, 20, 30)
     expect((await s.get('/v1/reminder?tz=0&lang=en')).body.body).toBe("Your 2-day streak needs today's practice.")
   })
 
+  it('keeps to the due count in the evening for a learner who did not opt in to the streak nudge', async () => {
+    const h = await withReminders()
+    const s = await h.signIn()
+    await subscribe(s, { streakNudge: false })
+    await completeDay(h, s, isoDay(-2))
+    await completeDay(h, s, isoDay(-1))
+    at(h, 0, 20, 30)
+    expect((await s.get('/v1/reminder?tz=0&lang=en')).body.body).toBe('A few minutes of new words today?')
+  })
+
   it('refuses a missing or impossible offset', async () => {
     const h = await withReminders()
     const s = await h.signIn()
     expect((await s.get('/v1/reminder')).status).toBe(400)
+    expect((await s.get('/v1/reminder?tz=')).status).toBe(400)
     expect((await s.get('/v1/reminder?tz=900')).status).toBe(400)
   })
 })

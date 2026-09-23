@@ -35,6 +35,8 @@ export function webPushSender(keys: VapidKeys, now: () => number, send: Fetch = 
       privateKey ??= importVapidKeys(keys)
       const response = await send(endpoint, {
         method: 'POST',
+        // Never follow a redirect: an allow-listed host that answers 3xx must not move the POST elsewhere.
+        redirect: 'manual',
         headers: {
           authorization: await vapidAuthorization(keys, await privateKey, endpoint, now()),
           ttl: String(TTL_SECONDS),

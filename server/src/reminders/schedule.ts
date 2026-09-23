@@ -44,14 +44,20 @@ async function studiedOn(db: Queryable, userId: string, day: number): Promise<bo
   return rows.length > 0
 }
 
+async function wantsStreakNudge(db: Queryable, userId: string): Promise<boolean> {
+  const rows = await db.query('select 1 from push_subscription where user_id = $1 and streak_nudge limit 1', [userId])
+  return rows.length > 0
+}
+
 /**
- * What a reminder says now (spec §8.11): in the evening, if a streak needs
- * today, the streak; otherwise today's due count, without flagged words and
- * held to the learner's review cap (spec §7.4).
+ * What a reminder says now (spec §8.11): in the evening, if the learner opted
+ * into the streak nudge and a streak needs today, the streak; otherwise
+ * today's due count, without flagged words and held to the learner's review
+ * cap (spec §7.4).
  */
 export async function currentReminder(db: Queryable, userId: string, now: number, tzOffsetMin: number): Promise<Reminder> {
   const today = localDay(now, tzOffsetMin)
-  if (localMinute(now, tzOffsetMin) >= NUDGE_MINUTE) {
+  if (localMinute(now, tzOffsetMin) >= NUDGE_MINUTE && (await wantsStreakNudge(db, userId))) {
     const streak = await streakOf(db, userId, today)
     if (streak.length > 0 && !streak.todayComplete) return { kind: 'streak', days: streak.length }
   }

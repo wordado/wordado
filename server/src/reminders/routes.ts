@@ -82,7 +82,9 @@ export function reminderRoutes(app: Hono<AppEnv>, deps: ServerDeps, user: Middle
 
   /** What the woken service worker shows. `tz` is the device's offset now, in minutes to add to UTC. */
   app.get('/v1/reminder', user, async (c) => {
-    const tz = Number(c.req.query('tz'))
+    const raw = c.req.query('tz')
+    if (!raw) return invalid(c, ['tz is required'])
+    const tz = Number(raw)
     if (!isValidTzOffset(tz)) return invalid(c, ['tz must be the minutes to add to UTC'])
     const language: ReminderLanguage = c.req.query('lang') === 'bg' ? 'bg' : 'en'
     return c.json(reminderText(language, await currentReminder(deps.db, c.get('userId'), deps.now(), tz)))

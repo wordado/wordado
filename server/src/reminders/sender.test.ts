@@ -43,6 +43,17 @@ describe('webPushSender', () => {
     await expect(answering(500).send('https://fcm.googleapis.com/fcm/send/abc')).rejects.toThrow('500')
   })
 
+  it('never follows a redirect: an allow-listed host answering 3xx is a failure, not a new destination', async () => {
+    const keys = await generateVapidKeys('mailto:reminders@wordado.com')
+    const calls: RequestInit[] = []
+    const sender = webPushSender(keys, () => 0, async (_url, init) => {
+      calls.push(init)
+      return new Response(null, { status: 302, headers: { location: 'https://example.com/steal' } })
+    })
+    await expect(sender.send('https://fcm.googleapis.com/fcm/send/abc')).rejects.toThrow('302')
+    expect(calls[0]!.redirect).toBe('manual')
+  })
+
   it('never calls an endpoint outside the push services', async () => {
     const keys = await generateVapidKeys('mailto:reminders@wordado.com')
     let called = false
