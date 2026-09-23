@@ -48,8 +48,10 @@ export interface DocumentRejection {
 
 /**
  * One page of a push. Every page of one push shares `pushId` and `clientNow`,
- * so the server fixes the window once (spec §9.2 step 1). Page 0 also carries
- * the small things; later pages carry events only.
+ * so the server fixes the window once (spec §9.2 step 1). Answers and
+ * document writes fill pages from page 0, within `SYNC_PAGE_SIZE` and
+ * `MAX_PAGE_DOCUMENTS`; completed days ride on the last page, after every
+ * answer, within `MAX_PAGE_DAY_COMPLETE`.
  */
 export interface PushPage {
   readonly protocolVersion: number

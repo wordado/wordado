@@ -1,4 +1,5 @@
 import {
+  answerProblems,
   classifyEvents,
   computeXp,
   DAY_COMPLETE_RULE_VERSION,
@@ -6,8 +7,8 @@ import {
   dayToIsoDate,
   isAboveMark,
   isoDateToDay,
-  isValidTzOffset,
   mergeSummaries,
+  normalizeLatencyMs,
   rebase,
   SCHEDULER_VERSION,
   summarizeDays,
@@ -188,7 +189,9 @@ export interface AnswerInput {
  */
 export async function appendAnswer(db: Database, env: ClientEnv, learner: Learner, input: AnswerInput): Promise<ReviewEvent> {
   const tz = env.tzOffsetMin()
-  if (!isValidTzOffset(tz)) throw new Error(`Impossible time-zone offset ${tz}`)
+  // The server's own rule: an answer it would refuse must never reach the outbox, or the page carrying it fails for good.
+  const problems = answerProblems({ ...input, clientTzOffsetMin: tz })
+  if (problems.length > 0) throw new Error(`Cannot record the answer: invalid ${problems.join(', ')} (time-zone offset ${tz})`)
   let local: LocalEvent | null = null
   try {
     return await db.transaction(async (tx) => {
@@ -196,6 +199,7 @@ export async function appendAnswer(db: Database, env: ClientEnv, learner: Learne
       const e: ReviewEvent = {
         reviewId: env.uuid(),
         ...input,
+        latencyMs: normalizeLatencyMs(input.latencyMs),
         clientTs: env.now(),
         clientTzOffsetMin: tz,
         deviceId: learner.deviceId,

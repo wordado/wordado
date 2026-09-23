@@ -115,6 +115,25 @@ describe('appendAnswer', () => {
     expect(learner.localEvents).toHaveLength(0)
     expect(await db.all('SELECT count(*) AS c FROM review_event')).toEqual([{ c: 0 }])
   })
+  it.each([
+    ['a latency that is not a number', { latencyMs: Number.NaN }],
+    ['a negative latency', { latencyMs: -1 }],
+    ['a grade of 5', { grade: 5 as Grade }],
+    ['a word that is not a word ID', { wordId: 'hello' as AnswerInput['wordId'] }],
+  ])('refuses %s before anything is written: the server would refuse the page for good', async (_, over) => {
+    const { db, env, learner } = await open()
+    await expect(appendAnswer(db, env, learner, answer(HELLO, over))).rejects.toThrow(/answer/)
+    expect(learner.localEvents).toHaveLength(0)
+    expect(await db.all('SELECT count(*) AS c FROM review_event')).toEqual([{ c: 0 }])
+  })
+
+  it('stores a long or fractional latency as the server will: rounded, at most an hour', async () => {
+    const { db, env, learner } = await open()
+    const long = await appendAnswer(db, env, learner, answer(HELLO, { latencyMs: 7_200_000 }))
+    const fractional = await appendAnswer(db, env, learner, answer(WATER, { latencyMs: 1500.6 }))
+    expect([long.latencyMs, fractional.latencyMs]).toEqual([3_600_000, 1501])
+    expect((await unpushedEvents(db.driver)).map((e) => e.latencyMs)).toEqual([3_600_000, 1501])
+  })
 })
 
 describe('the server snapshot and the rebase rule', () => {

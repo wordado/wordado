@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { SCHEDULER_VERSION } from './scheduler'
 import { SYNC_PAGE_SIZE } from './syncProtocol'
-import { MAX_LATENCY_MS, MAX_PAGE_DOCUMENTS, parsePullRequest, parsePushPage, protocolVersionOf } from './syncValidation'
+import { answerProblems, MAX_LATENCY_MS, MAX_PAGE_DOCUMENTS, normalizeLatencyMs, parsePullRequest, parsePushPage, protocolVersionOf } from './syncValidation'
 
 const event = (over: Record<string, unknown> = {}) => ({
   reviewId: 'r-1',
@@ -66,7 +66,7 @@ describe('parsePushPage', () => {
     ['an unknown mode', page({ events: [event({ mode: 'typing' })] })],
     ['a grade of 5', page({ events: [event({ grade: 5 })] })],
     ['a negative latency', page({ events: [event({ latencyMs: -1 })] })],
-    ['a latency over an hour', page({ events: [event({ latencyMs: MAX_LATENCY_MS + 1 })] })],
+    ['a latency that is not a number', page({ events: [event({ latencyMs: '1500' })] })],
     ['a word that is not a word ID', page({ events: [event({ wordId: 'hello' })] })],
     ["another device's event", page({ events: [event({ deviceId: 'dev-b' })] })],
     ['a practice flag that is not a boolean', page({ events: [event({ practice: 'no' })] })],
@@ -79,11 +79,48 @@ describe('parsePushPage', () => {
     expect(parsePushPage(raw)).toMatchObject({ ok: false })
   })
 
+  it('keeps a long or fractional latency, clamped to an hour and rounded: plausibility, not shape (Goal 7)', () => {
+    const parsed = parsePushPage(page({ events: [event({ latencyMs: 2 * MAX_LATENCY_MS }), event({ reviewId: 'r-2', deviceSeq: 2, latencyMs: 1500.6 })] }))
+    expect(parsed.ok && parsed.value.events.map((e) => e.latencyMs)).toEqual([MAX_LATENCY_MS, 1501])
+  })
+
   it('names what is wrong', () => {
     expect(parsePushPage(page({ events: [event(), event({ reviewId: 'r-2', grade: 0 })] }))).toEqual({
       ok: false,
       errors: ['events[1].grade is invalid'],
     })
+  })
+})
+
+describe('answerProblems', () => {
+  const answer = { wordId: 'c:hello-1', mode: 'flashcard', direction: 'l1_to_en', grade: 4, latencyMs: 12.5, practice: true, clientTzOffsetMin: -300 }
+
+  it('accepts what a push page would accept', () => {
+    expect(answerProblems(answer)).toEqual([])
+    expect(answerProblems({ ...answer, latencyMs: 10 * MAX_LATENCY_MS })).toEqual([])
+  })
+
+  it.each([
+    ['wordId', { wordId: 'hello' }],
+    ['mode', { mode: 'typing' }],
+    ['direction', { direction: 'sideways' }],
+    ['grade', { grade: 0 }],
+    ['latencyMs', { latencyMs: Number.NaN }],
+    ['latencyMs', { latencyMs: Number.POSITIVE_INFINITY }],
+    ['latencyMs', { latencyMs: -0.5 }],
+    ['practice', { practice: 1 }],
+    ['clientTzOffsetMin', { clientTzOffsetMin: 900 }],
+  ])('names a bad %s', (field, over) => {
+    expect(answerProblems({ ...answer, ...over })).toEqual([field])
+  })
+})
+
+describe('normalizeLatencyMs', () => {
+  it('rounds to a whole millisecond and clamps to an hour', () => {
+    expect(normalizeLatencyMs(1500.6)).toBe(1501)
+    expect(normalizeLatencyMs(0.2)).toBe(0)
+    expect(normalizeLatencyMs(MAX_LATENCY_MS + 0.4)).toBe(MAX_LATENCY_MS)
+    expect(normalizeLatencyMs(7_200_000)).toBe(MAX_LATENCY_MS)
   })
 })
 

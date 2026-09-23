@@ -1,4 +1,4 @@
-import { dayToIsoDate, Grade, localDay, SYNC_PAGE_SIZE, type WordId } from '@wordado/core'
+import { dayToIsoDate, Grade, localDay, MAX_PAGE_DAY_COMPLETE, MAX_PAGE_DOCUMENTS, SYNC_PAGE_SIZE, SYNC_PROTOCOL_VERSION, type WordId } from '@wordado/core'
 import { describe, expect, it } from 'vitest'
 import { Database } from './database'
 import { pendingDocumentWrites } from './documents'
@@ -103,6 +103,70 @@ describe('SyncEngine', () => {
     expect([...server.dayComplete]).toEqual([dayToIsoDate(localDay(env.now(), 120))])
     expect(server.events.size).toBe(SYNC_PAGE_SIZE * 2 + 5)
     expect([...server.events.values()].every((e) => e.xpEligible)).toBe(true)
+  })
+
+  it('pages document writes at most a page-full at a time, from page 0, under one push id', async () => {
+    const { env, server } = world()
+    const a = await device(server, env)
+    const count = MAX_PAGE_DOCUMENTS * 2 + 5
+    await a.db.transaction(async (tx) => {
+      for (let i = 0; i < count; i += 1) await setFlag(tx, `c:w${i}` as WordId, 'known')
+    })
+    await appendAnswer(a.db, env, a.learner, answer('c:hello-1'))
+    await recordDayComplete(a.db, a.learner, localDay(env.now(), 120), env.now())
+    expect(await a.engine.sync()).toBe('synced')
+    expect(server.pushes.map((p) => p.documents.length)).toEqual([MAX_PAGE_DOCUMENTS, MAX_PAGE_DOCUMENTS, 5])
+    expect(server.pushes.map((p) => p.events.length)).toEqual([1, 0, 0])
+    expect(server.pushes.map((p) => [p.page, p.lastPage])).toEqual([[0, false], [1, false], [2, true]])
+    expect(server.pushes.map((p) => p.dayComplete.length)).toEqual([0, 0, 1])
+    expect(new Set(server.pushes.map((p) => `${p.pushId}@${p.clientNow}`)).size).toBe(1)
+    expect(await pendingDocumentWrites(a.db.driver)).toEqual([])
+    expect((await readFlags(a.db.driver)).size).toBe(count)
+    expect([...server.documents.keys()].filter((k) => k.startsWith('word_flag/'))).toHaveLength(count)
+  })
+
+  it('pages documents beside a backlog of answers', async () => {
+    const { env, server } = world()
+    const a = await device(server, env)
+    for (let i = 0; i < SYNC_PAGE_SIZE + 1; i += 1) {
+      await appendAnswer(a.db, env, a.learner, answer(`c:w${i}`))
+      env.advance(3_000)
+    }
+    await a.db.transaction(async (tx) => {
+      for (let i = 0; i < MAX_PAGE_DOCUMENTS + 1; i += 1) await setFlag(tx, `c:f${i}` as WordId, 'suspended')
+    })
+    expect(await a.engine.sync()).toBe('synced')
+    expect(server.pushes.map((p) => [p.events.length, p.documents.length])).toEqual([[SYNC_PAGE_SIZE, MAX_PAGE_DOCUMENTS], [1, 1]])
+    expect(await pendingDocumentWrites(a.db.driver)).toEqual([])
+  })
+
+  it('sends completed days at most a page-full per push, each on its last page after every answer', async () => {
+    const { env, server } = world()
+    const a = await device(server, env)
+    const days = MAX_PAGE_DAY_COMPLETE + 2
+    for (let i = 0; i < days; i += 1) {
+      await appendAnswer(a.db, env, a.learner, answer(`c:w${i}`))
+      await recordDayComplete(a.db, a.learner, localDay(env.now(), 120), env.now())
+      env.advance(86_400_000)
+    }
+    expect(await a.engine.sync()).toBe('synced')
+    expect(server.pushes.map((p) => [p.events.length, p.dayComplete.length, p.lastPage])).toEqual([
+      [days, MAX_PAGE_DAY_COMPLETE, true],
+      [0, 2, true],
+    ])
+    expect(server.dayComplete.size).toBe(days)
+    expect(await a.db.all('SELECT count(*) AS c FROM day_complete WHERE pushed = 0')).toEqual([{ c: 0 }])
+  })
+
+  it('has the fake refuse the pages the real server refuses', async () => {
+    const { server } = world()
+    const flag = (i: number) => ({ type: 'word_flag', key: `c:w${i}`, patch: { baseVersion: 0, fields: { flag: 'known' } } })
+    const page = {
+      protocolVersion: SYNC_PROTOCOL_VERSION, pushId: 'p-1', clientNow: 0, deviceId: 'd-1', page: 0, lastPage: true, events: [], dayComplete: [],
+      documents: Array.from({ length: MAX_PAGE_DOCUMENTS + 1 }, (_, i) => flag(i)),
+    }
+    await expect(server.push(page)).rejects.toThrow(/400/)
+    expect(server.documents.size).toBe(0)
   })
 
   it('keeps a completed day whose answers arrive on a later page of the same push', async () => {

@@ -8,6 +8,7 @@ import {
   localDay,
   mergeUnlockSets,
   openPushWindow,
+  parsePushPage,
   replay,
   SCHEDULER_VERSION,
   SERVER_OWNED_DOCUMENT_TYPES,
@@ -84,14 +85,18 @@ export class FakeServer implements SyncTransport {
     return false
   }
 
-  async push(page: PushPage): Promise<PushResponse> {
+  async push(sent: PushPage): Promise<PushResponse> {
     this.maybeFail()
-    if (this.failOnPushPage === page.page) {
+    if (this.failOnPushPage === sent.page) {
       this.failOnPushPage = null
-      throw new Error(`connection lost before page ${page.page}`)
+      throw new Error(`connection lost before page ${sent.page}`)
     }
-    this.pushes.push(page)
-    if (page.protocolVersion < this.minProtocolVersion) return { status: 'upgrade_required', minProtocolVersion: this.minProtocolVersion }
+    this.pushes.push(sent)
+    if (sent.protocolVersion < this.minProtocolVersion) return { status: 'upgrade_required', minProtocolVersion: this.minProtocolVersion }
+    // The real server's 400: the same parse, so a page it would refuse fails here too.
+    const parsed = parsePushPage(sent)
+    if (!parsed.ok) throw new Error(`400 invalid: ${parsed.errors.slice(0, 3).join('; ')}`)
+    const page = parsed.value
     const serverNow = this.options.now()
     let entry = this.windows.get(page.pushId)
     if (!entry) {

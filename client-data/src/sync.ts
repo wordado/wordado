@@ -1,4 +1,16 @@
-import { SYNC_PAGE_SIZE, SYNC_PROTOCOL_VERSION, type PullRequest, type PullResponse, type PushPage, type PushResponse, type Rng } from '@wordado/core'
+import {
+  MAX_PAGE_DAY_COMPLETE,
+  MAX_PAGE_DOCUMENTS,
+  SYNC_PAGE_SIZE,
+  SYNC_PROTOCOL_VERSION,
+  type DocumentWrite,
+  type PullRequest,
+  type PullResponse,
+  type PushPage,
+  type PushResponse,
+  type Rng,
+  type WireDayComplete,
+} from '@wordado/core'
 import type { Database } from './database'
 import { applyServerDocument, confirmPushedDocument, dropPendingPatch, pendingDocumentWrites } from './documents'
 import type { SqlDriver } from './driver'
@@ -11,6 +23,7 @@ import {
   replaceSnapshot,
   unpushedEvents,
   type Learner,
+  type LocalEvent,
 } from './learner'
 import { getMeta, setMeta } from './meta'
 
@@ -50,6 +63,12 @@ export const BACKOFF_MAX_MS = 5 * 60_000
 /** Doubling from a second to the ceiling, with ×0.5–1.5 jitter so devices do not retry in step. Tuning (§15). */
 export function backoffMs(failures: number, rng: Rng): number {
   return Math.min(BACKOFF_MAX_MS, BACKOFF_BASE_MS * 2 ** Math.max(0, failures - 1)) * (0.5 + rng())
+}
+
+function chunk<T>(items: readonly T[], size: number): T[][] {
+  const out: T[][] = []
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size))
+  return out
 }
 
 /** Authoritative XP as of the last pull (spec §8.7, §10). */
@@ -124,18 +143,37 @@ export class SyncEngine {
     return 'upgrade_required'
   }
 
+  /**
+   * Everything pending, in pages the server accepts (spec §9.2): answers
+   * `SYNC_PAGE_SIZE` a page and document writes `MAX_PAGE_DOCUMENTS` a page,
+   * both from page 0, under one push id and one `clientNow`. Completed days
+   * ride on the last page, after every answer, `MAX_PAGE_DAY_COMPLETE` at a
+   * time; any beyond that follow in pushes of their own. A page the server
+   * would refuse for its size would fail on every retry and wedge the outbox.
+   */
   private async push(): Promise<'ok' | 'upgrade_required'> {
-    const { db, env, learner, transport } = this.deps
+    const { db } = this.deps
     const events = await unpushedEvents(db.driver)
     const dayComplete = await pendingDayComplete(db.driver)
     const documents = await pendingDocumentWrites(db.driver)
     this.set({ pendingEvents: events.length })
     if (events.length === 0 && dayComplete.length === 0 && documents.length === 0) return 'ok'
+    const dayChunks = chunk(dayComplete, MAX_PAGE_DAY_COMPLETE)
+    if ((await this.pushOnce(events, documents, dayChunks[0] ?? [])) === 'upgrade_required') return 'upgrade_required'
+    for (const days of dayChunks.slice(1)) if ((await this.pushOnce([], [], days)) === 'upgrade_required') return 'upgrade_required'
+    return 'ok'
+  }
+
+  private async pushOnce(events: readonly LocalEvent[], documents: readonly DocumentWrite[], dayComplete: readonly WireDayComplete[]): Promise<'ok' | 'upgrade_required'> {
+    const { db, env, learner, transport } = this.deps
     const pushId = env.uuid()
     const clientNow = env.now()
-    const pageCount = Math.max(1, Math.ceil(events.length / SYNC_PAGE_SIZE))
+    const eventPages = chunk(events, SYNC_PAGE_SIZE)
+    const documentPages = chunk(documents, MAX_PAGE_DOCUMENTS)
+    const pageCount = Math.max(1, eventPages.length, documentPages.length)
     for (let page = 0; page < pageCount; page += 1) {
-      const slice = events.slice(page * SYNC_PAGE_SIZE, (page + 1) * SYNC_PAGE_SIZE)
+      const slice = eventPages[page] ?? []
+      const writes = documentPages[page] ?? []
       const lastPage = page === pageCount - 1
       const response = await transport.push({
         protocolVersion: SYNC_PROTOCOL_VERSION,
@@ -148,7 +186,7 @@ export class SyncEngine {
         // Completed days ride on the last page: the server accepts one only once the
         // log holds an answer on that date, and the answers arrive in sequence order.
         dayComplete: lastPage ? dayComplete : [],
-        documents: page === 0 ? documents : [],
+        documents: writes,
       })
       if (response.status === 'upgrade_required') return 'upgrade_required'
       const pushedIds = new Set(slice.map((e) => e.reviewId))
@@ -156,9 +194,8 @@ export class SyncEngine {
         await markEventsPushed(tx, slice.map((e) => e.reviewId))
         learner.localEvents = learner.localEvents.map((e) => (pushedIds.has(e.reviewId) ? { ...e, pushed: true } : e))
         if (lastPage) await markDayCompletePushed(tx, dayComplete.map((d) => d.localDate))
-        if (page !== 0) return
         for (const doc of response.documents) {
-          const sent = documents.find((w) => w.type === doc.type && w.key === doc.key)
+          const sent = writes.find((w) => w.type === doc.type && w.key === doc.key)
           if (sent) await confirmPushedDocument(tx, doc, sent.patch)
         }
         for (const r of response.rejected) await dropPendingPatch(tx, r.type, r.key)

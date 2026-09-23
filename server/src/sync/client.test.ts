@@ -6,14 +6,16 @@ import {
   migrate as migrateClient,
   patchSettings,
   readPulledXp,
+  readFlags,
   readSettings,
+  setFlag,
   SyncEngine,
   type AnswerInput,
   type SyncTransport,
 } from '@wordado/client-data'
 import { nodeSqliteDriver } from '@wordado/client-data/src/drivers/nodeSqlite'
 import { testEnv, type TestEnv } from '@wordado/client-data/src/testing/testEnv'
-import { Grade, replay, type WordId } from '@wordado/core'
+import { Grade, MAX_LATENCY_MS, MAX_PAGE_DOCUMENTS, replay, type WordId } from '@wordado/core'
 import { describe, expect, it } from 'vitest'
 import { harness, type Session } from '../../test/harness'
 import { loadEvents, toStampedEvent } from './events'
@@ -78,5 +80,28 @@ describe('client-data against the real server', () => {
     expect(b.learner.states).toEqual(server)
     expect(await readPulledXp(a.db.driver)).toEqual(await readPulledXp(b.db.driver))
     expect((await readPulledXp(a.db.driver))?.total).toBe(40)
+  })
+  it('syncs an outbox holding more flags than a page takes and a two-hour answer, and the server keeps them all', async () => {
+    const env = testEnv(Date.now())
+    const h = harness({ now: () => env.now() })
+    const session = await h.signIn()
+    const a = await device(session, env)
+    const flags = MAX_PAGE_DOCUMENTS + 1
+    await a.db.transaction(async (tx) => {
+      for (let i = 0; i < flags; i += 1) await setFlag(tx, `c:w-${i}` as WordId, 'known')
+    })
+    await appendAnswer(a.db, env, a.learner, { ...answer('c:hello-1'), latencyMs: 2 * MAX_LATENCY_MS })
+    // As an outbox written before the rule would hold it: the server must still take the page.
+    await a.db.run('UPDATE review_event SET latency_ms = ?', [2 * MAX_LATENCY_MS + 0.5])
+    expect(await a.engine.sync()).toBe('synced')
+
+    const [held] = await h.deps.db.query<{ count: number }>(
+      `select count(*)::int as count from document where user_id = $1 and type = 'word_flag' and not deleted`,
+      [session.userId],
+    )
+    expect(held?.count).toBe(flags)
+    const log = await loadEvents(h.deps.db, session.userId)
+    expect(log.map((e) => [e.wordId, e.latencyMs])).toEqual([['c:hello-1', MAX_LATENCY_MS]])
+    expect((await readFlags(a.db.driver)).size).toBe(flags)
   })
 })

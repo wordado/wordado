@@ -15,7 +15,7 @@ export const MAX_PAGE_DOCUMENTS = 200
 export const MAX_PAGE_DAY_COMPLETE = 400
 /** reviewId, pushId, deviceId, schedulerVersion, ruleVersion. */
 export const MAX_ID_LENGTH = 64
-/** No answer takes an hour; a larger latency is corrupt, not slow. */
+/** No answer takes an hour: a longer latency is stored as an hour (a left-open tab, a sleeping laptop). */
 export const MAX_LATENCY_MS = 3_600_000
 
 export type Parsed<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly errors: readonly string[] }
@@ -23,6 +23,34 @@ export type Parsed<T> = { readonly ok: true; readonly value: T } | { readonly ok
 const isInt = (v: unknown, min: number): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v >= min
 const isId = (v: unknown): v is string => typeof v === 'string' && v.length <= MAX_ID_LENGTH && ID.test(v)
 const isVersionText = (v: unknown): v is string => typeof v === 'string' && v.length > 0 && v.length <= MAX_ID_LENGTH
+
+/** A latency as it is stored: a whole number of milliseconds, at most an hour. */
+export function normalizeLatencyMs(ms: number): number {
+  return Math.min(MAX_LATENCY_MS, Math.max(0, Math.round(ms)))
+}
+
+/**
+ * What an answer must be to be recorded at all (spec §9.2), in one place:
+ * the client refuses to write an answer that fails it, and the server
+ * refuses a push page carrying one, so nothing the client stores can wedge
+ * its outbox. Shape only — a long latency is plausibility (Goal 7) and is
+ * normalised, not refused. Returns the fields that fail.
+ */
+export function answerProblems(raw: Readonly<Record<string, unknown>>): string[] {
+  const problems: string[] = []
+  const check = (ok: boolean, field: string) => {
+    if (!ok) problems.push(field)
+  }
+  check(typeof raw['wordId'] === 'string' && isWordId(raw['wordId']), 'wordId')
+  check(MODES.includes(raw['mode'] as Mode), 'mode')
+  check(DIRECTIONS.includes(raw['direction'] as Direction), 'direction')
+  check(isInt(raw['grade'], 1) && raw['grade'] <= 4, 'grade')
+  check(typeof raw['latencyMs'] === 'number' && Number.isFinite(raw['latencyMs']) && raw['latencyMs'] >= 0, 'latencyMs')
+  check(typeof raw['practice'] === 'boolean', 'practice')
+  // The roadmap contract: a NaN or impossible offset would poison a word's state for good.
+  check(typeof raw['clientTzOffsetMin'] === 'number' && isValidTzOffset(raw['clientTzOffsetMin']), 'clientTzOffsetMin')
+  return problems
+}
 
 function isIsoDate(v: unknown): v is string {
   if (typeof v !== 'string') return false
@@ -56,15 +84,8 @@ function parseEvent(raw: unknown, deviceId: unknown, path: string, errors: strin
     if (!ok) errors.push(`${path}.${field} is invalid`)
   }
   check(isId(raw['reviewId']), 'reviewId')
-  check(typeof raw['wordId'] === 'string' && isWordId(raw['wordId']), 'wordId')
-  check(MODES.includes(raw['mode'] as Mode), 'mode')
-  check(DIRECTIONS.includes(raw['direction'] as Direction), 'direction')
-  check(isInt(raw['grade'], 1) && raw['grade'] <= 4, 'grade')
-  check(isInt(raw['latencyMs'], 0) && raw['latencyMs'] <= MAX_LATENCY_MS, 'latencyMs')
-  check(typeof raw['practice'] === 'boolean', 'practice')
+  for (const field of answerProblems(raw)) errors.push(`${path}.${field} is invalid`)
   check(isInt(raw['clientTs'], 0), 'clientTs')
-  // The roadmap contract: a NaN or impossible offset would poison a word's state for good.
-  check(typeof raw['clientTzOffsetMin'] === 'number' && isValidTzOffset(raw['clientTzOffsetMin']), 'clientTzOffsetMin')
   check(raw['deviceId'] === deviceId, 'deviceId')
   check(isInt(raw['deviceSeq'], 0), 'deviceSeq')
   check(isVersionText(raw['schedulerVersion']), 'schedulerVersion')
@@ -75,7 +96,7 @@ function parseEvent(raw: unknown, deviceId: unknown, path: string, errors: strin
     mode: raw['mode'] as Mode,
     direction: raw['direction'] as Direction,
     grade: raw['grade'] as Grade,
-    latencyMs: raw['latencyMs'] as number,
+    latencyMs: normalizeLatencyMs(raw['latencyMs'] as number),
     practice: raw['practice'] as boolean,
     clientTs: raw['clientTs'] as number,
     clientTzOffsetMin: raw['clientTzOffsetMin'] as number,
