@@ -31,3 +31,27 @@ export async function readJson(c: Context): Promise<unknown> {
 export function invalid(c: Context, errors: readonly string[]) {
   return c.json({ error: 'invalid', errors: errors.slice(0, 20) }, 400)
 }
+
+/** ISO 3166-1 alpha-2, as the age gate stores it (spec §11). */
+const COUNTRY = /^[A-Z]{2}$/
+
+/**
+ * In front of Better Auth's update-user, which stores `country` as any
+ * string it is given: only a two-letter country code, or null to clear it.
+ */
+export function checkUpdateUser(): MiddlewareHandler<AppEnv> {
+  return async (c, next) => {
+    let body: unknown
+    try {
+      body = await c.req.raw.clone().json()
+    } catch {
+      // Not JSON: Better Auth refuses it itself.
+      return next()
+    }
+    if (typeof body === 'object' && body !== null && 'country' in body) {
+      const country = (body as Record<string, unknown>)['country']
+      if (country !== null && !(typeof country === 'string' && COUNTRY.test(country))) return invalid(c, ['country is invalid'])
+    }
+    return next()
+  }
+}

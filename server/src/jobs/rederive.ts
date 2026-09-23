@@ -44,5 +44,13 @@ export async function handleJob(deps: ServerDeps, job: Job): Promise<void> {
         await lockLearner(tx, job.userId)
         await rederiveUser(tx, job.userId)
       })
+      return
+    default:
+      return unhandledJob(job.kind)
   }
+}
+
+/** Fails to compile when a Job kind has no case above; throws for a message no build knows. */
+function unhandledJob(kind: never): never {
+  throw new Error(`Unknown job kind ${String(kind)}`)
 }

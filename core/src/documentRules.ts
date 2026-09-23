@@ -26,6 +26,8 @@ export const MAX_UNLOCKED_UNITS = 2000
 /** Characters of JSON in one patch's fields. */
 export const MAX_DOCUMENT_BYTES = 16_384
 export const MAX_KEY_LENGTH = 128
+/** The largest pack version a report may name: the server stores it in a 32-bit integer column. */
+export const MAX_PACK_VERSION = 2_147_483_647
 
 export type DocumentWriteCheck =
   | { readonly ok: true }
@@ -84,7 +86,7 @@ function checkFields(type: string, key: string, fields: Readonly<Record<string, 
         ...(typeof wordId === 'string' && isWordId(wordId) ? [] : ['wordId must be a word ID']),
         ...((REPORT_FIELDS as readonly unknown[]).includes(field) ? [] : ['field must be a report field']),
         ...(typeof note === 'string' && note.length <= MAX_REPORT_NOTE_LENGTH ? [] : [`note must be text of at most ${MAX_REPORT_NOTE_LENGTH} characters`]),
-        ...(isCount(packVersion) ? [] : ['packVersion must be a non-negative integer']),
+        ...(isCount(packVersion) && (packVersion as number) <= MAX_PACK_VERSION ? [] : [`packVersion must be an integer from 0 to ${MAX_PACK_VERSION}`]),
         ...(isCount(createdAt) ? [] : ['createdAt must be a time']),
         ...unknownFields(fields, ['wordId', 'field', 'note', 'packVersion', 'createdAt']),
       ]

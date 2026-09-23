@@ -17,7 +17,8 @@
   "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "00000000000000000000000000000000" }],
   "queues": {
     "producers": [{ "binding": "JOBS", "queue": "wordado-jobs" }],
-    "consumers": [{ "queue": "wordado-jobs", "max_batch_size": 10, "max_batch_timeout": 5, "max_retries": 5 }]
+    // One message per invocation: each is a whole learner's log re-derived, which must fit one consumer's CPU budget.
+    "consumers": [{ "queue": "wordado-jobs", "max_batch_size": 1, "max_batch_timeout": 5, "max_retries": 5 }]
   },
   "triggers": { "crons": ["*/15 * * * *"] },
   "observability": { "enabled": true }

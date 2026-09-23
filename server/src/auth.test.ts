@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { BASE_URL, harness } from '../test/harness'
+import { AUTH_MAX_BODY_BYTES } from './app'
 import { OTP_SENDS_PER_MINUTE, SESSION_DAYS } from './auth'
 
 const json = { 'content-type': 'application/json', origin: BASE_URL }
@@ -106,6 +107,40 @@ describe('sign-in (spec §8.6)', () => {
     const update = await session.post('/api/auth/update-user', { country: 'BG' })
     expect(update.status).toBe(200)
     expect((await session.get('/v1/me')).body.country).toBe('BG')
+  })
+
+  it.each([['a name', 'Bulgaria'], ['lower case', 'bg'], ['a number', 359], ['a list', ['BG']]])(
+    'refuses a country given as %s, and changes nothing',
+    async (_, country) => {
+      const h = harness()
+      const session = await h.signIn()
+      await session.post('/api/auth/update-user', { country: 'BG' })
+      const update = await session.post('/api/auth/update-user', { country })
+      expect(update.status).toBe(400)
+      expect(update.body).toEqual({ error: 'invalid', errors: ['country is invalid'] })
+      expect((await session.get('/v1/me')).body.country).toBe('BG')
+    },
+  )
+
+  it('clears the country with null, and leaves it alone when update-user does not name it', async () => {
+    const h = harness()
+    const session = await h.signIn()
+    await session.post('/api/auth/update-user', { country: 'BG' })
+    expect((await session.post('/api/auth/update-user', { name: 'Ana' })).status).toBe(200)
+    expect((await session.get('/v1/me')).body.country).toBe('BG')
+    expect((await session.post('/api/auth/update-user', { country: null })).status).toBe(200)
+    expect((await session.get('/v1/me')).body.country).toBe(null)
+  })
+
+  it(`refuses an auth request body over ${AUTH_MAX_BODY_BYTES} bytes`, async () => {
+    const h = harness()
+    const reply = await h.request('/api/auth/sign-in/email-otp', {
+      method: 'POST',
+      headers: json,
+      body: JSON.stringify({ email: 'ana@example.com', otp: '123456', padding: 'x'.repeat(AUTH_MAX_BODY_BYTES) }),
+    })
+    expect(reply.status).toBe(413)
+    expect(reply.body).toEqual({ error: 'too_large' })
   })
 
   it("offers Google sign-in when it is configured, redirecting back to this server", async () => {

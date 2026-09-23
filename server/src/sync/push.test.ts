@@ -171,6 +171,43 @@ describe('POST /v1/sync/push (spec §9.2)', () => {
     expect(await h.deps.db.query('select local_date from day_complete where user_id = $1', [s.userId])).toEqual([{ local_date: date }])
   })
 
+  it('changes nothing when a middle page is retried alone while its window is stored', async () => {
+    const h = harness()
+    const s = await h.signIn()
+    const clientNow = h.clock.now + HOUR // an hour fast
+    const answers = [1, 2, 3, 4, 5, 6].map((n) => rawEvent('dev-a', n, clientNow - (10 - n) * MINUTE, { wordId: `c:w-${n}` }))
+    const pages = [0, 1, 2].map((p) =>
+      pushPage('dev-a', clientNow, answers.slice(p * 2, p * 2 + 2), { pushId: 'middle', page: p, lastPage: p === 2 }),
+    )
+    await s.post('/v1/sync/push', pages[0])
+    await s.post('/v1/sync/push', pages[1])
+    const before = { rows: await eventRows(h, s.userId), xp: await xpTotal(h, s.userId), mark: await mark(h, s.userId, 'dev-a') }
+    const window = await h.deps.db.query('select * from push_window where user_id = $1', [s.userId])
+    h.clock.advance(10 * MINUTE)
+    expect((await s.post('/v1/sync/push', pages[1])).body.status).toBe('ok')
+    expect(await eventRows(h, s.userId)).toEqual(before.rows)
+    expect(await xpTotal(h, s.userId)).toBe(before.xp)
+    expect(await mark(h, s.userId, 'dev-a')).toEqual(before.mark)
+    expect(await h.deps.db.query('select * from push_window where user_id = $1', [s.userId])).toEqual(window)
+    await s.post('/v1/sync/push', pages[2])
+    const rows = await eventRows(h, s.userId)
+    expect(rows).toHaveLength(6)
+    expect(rows.map((r) => r.client_ts - r.effective_ts)).toEqual(Array(6).fill(HOUR))
+    await expectDerivedFromLog(h, s.userId)
+  })
+
+  it('stores a reviewId repeated within one page once, keeping the first occurrence', async () => {
+    const h = harness()
+    const s = await h.signIn()
+    const first = rawEvent('dev-a', 1, h.clock.now - MINUTE)
+    const reply = await s.post('/v1/sync/push', pushPage('dev-a', h.clock.now, [first, { ...first, grade: 1, latencyMs: 99 }]))
+    expect(reply.body.status).toBe('ok')
+    const rows = await eventRows(h, s.userId)
+    expect(rows).toHaveLength(1)
+    expect(rows[0]!.grade).toBe(first.grade)
+    await expectDerivedFromLog(h, s.userId)
+  })
+
   it('stores both of two devices pushing at the same moment (Review Focus)', async () => {
     const h = harness()
     const s = await h.signIn()

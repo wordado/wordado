@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { checkDocumentWrite, DOCUMENT_TYPES, MAX_DOCUMENT_BYTES, MAX_REPORT_NOTE_LENGTH, SERVER_OWNED_DOCUMENT_TYPES } from './documentRules'
+import { checkDocumentWrite, DOCUMENT_TYPES, MAX_DOCUMENT_BYTES, MAX_PACK_VERSION, MAX_REPORT_NOTE_LENGTH, SERVER_OWNED_DOCUMENT_TYPES } from './documentRules'
 import type { DocumentWrite } from './syncProtocol'
 
 const write = (type: string, key: string, fields: Record<string, unknown>, deleted?: boolean): DocumentWrite => ({
@@ -20,6 +20,7 @@ describe('checkDocumentWrite', () => {
       write('word_alias', 'u:0b6f', { target: 'c:hello-1' }),
       write('word_alias', 'u:0b6f', {}, true),
       write('content_report', '7d9b1c2e-4f5a-4b6c-9d8e-0f1a2b3c4d5e', report),
+      write('content_report', 'rep-2', { ...report, packVersion: MAX_PACK_VERSION }),
     ]) {
       expect(checkDocumentWrite(w)).toEqual({ ok: true })
     }
@@ -49,6 +50,8 @@ describe('checkDocumentWrite', () => {
     ['a report on an unknown field', write('content_report', 'rep-1', { ...report, field: 'spelling' })],
     ['a report with a long note', write('content_report', 'rep-1', { ...report, note: 'x'.repeat(MAX_REPORT_NOTE_LENGTH + 1) })],
     ['a report with a negative pack version', write('content_report', 'rep-1', { ...report, packVersion: -1 })],
+    ['a report created at an unsafe time', write('content_report', 'rep-1', { ...report, createdAt: 2 ** 53 })],
+    ['a report with a pack version past a 32-bit integer', write('content_report', 'rep-1', { ...report, packVersion: 2_147_483_648 })],
     ['a report under a key that is not an ID', write('content_report', 'a b', report)],
     ['an oversized patch', write('settings', '', { activeTheme: 'x'.repeat(MAX_DOCUMENT_BYTES) })],
   ])('rejects %s as invalid', (_, w) => {
