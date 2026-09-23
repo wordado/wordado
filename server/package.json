@@ -1,0 +1,27 @@
+{
+  "name": "@wordado/server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "db:up": "docker compose up -d --wait",
+    "db:down": "docker compose down",
+    "migrate": "tsx scripts/migrate.ts",
+    "test": "pnpm db:up && vitest run",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@wordado/core": "workspace:*",
+    "better-auth": "^1.7.5",
+    "hono": "^4.13.8",
+    "pg": "^8.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/pg": "^8.23.1",
+    "@wordado/client-data": "workspace:*",
+    "fast-check": "^4.10.2",
+    "tsx": "^4.19.0",
+    "wrangler": "^4.130.0"
+  }
+}

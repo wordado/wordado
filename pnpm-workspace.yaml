@@ -2,7 +2,10 @@ packages:
   - core
   - pipeline
   - client-data
+  - server
 
-# esbuild (via tsx and vitest) runs from its optional platform package; its postinstall is not needed.
+# esbuild (via tsx, vitest and wrangler) and workerd (via wrangler) run from their
+# optional platform packages; their postinstall scripts are not needed.
 allowBuilds:
   esbuild: false
+  workerd: false
