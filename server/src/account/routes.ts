@@ -1,6 +1,9 @@
+import { dayToIsoDate, utcDay } from '@wordado/core'
 import type { Hono, MiddlewareHandler } from 'hono'
 import type { ServerDeps } from '../deps'
-import type { AppEnv } from '../http'
+import { invalid, readJson, type AppEnv } from '../http'
+import { deleteAccount } from './deletion'
+import { buildExport } from './export'
 
 export function accountRoutes(app: Hono<AppEnv>, deps: ServerDeps, user: MiddlewareHandler<AppEnv>): void {
   app.get('/v1/me', user, async (c) => {
@@ -17,5 +20,23 @@ export function accountRoutes(app: Hono<AppEnv>, deps: ServerDeps, user: Middlew
     const country = c.req.header('cf-ipcountry')
     const known = country !== undefined && /^[A-Z]{2}$/.test(country) && country !== 'XX' && country !== 'T1'
     return c.json({ country: known ? country : null })
+  })
+
+  /** Self-service erasure (spec §11). The body guards against a stray request. */
+  app.delete('/v1/account', user, async (c) => {
+    const body = await readJson(c)
+    const confirmed = typeof body === 'object' && body !== null && (body as { confirm?: unknown }).confirm === true
+    if (!confirmed) return invalid(c, ['send {"confirm": true} to delete the account'])
+    await deleteAccount(deps.db, c.get('userId'))
+    return c.json({ deleted: true })
+  })
+
+  /** The portable copy (spec §11). */
+  app.get('/v1/export', user, async (c) => {
+    const now = deps.now()
+    const data = await buildExport(deps.db, c.get('userId'), now)
+    if (!data) return c.json({ error: 'unauthorized' }, 401)
+    c.header('content-disposition', `attachment; filename="wordado-export-${dayToIsoDate(utcDay(now))}.json"`)
+    return c.json(data)
   })
 }
