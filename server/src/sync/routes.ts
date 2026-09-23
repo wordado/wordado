@@ -1,7 +1,8 @@
-import { parsePushPage, protocolVersionOf } from '@wordado/core'
+import { parsePullRequest, parsePushPage, protocolVersionOf } from '@wordado/core'
 import type { Context, Hono, MiddlewareHandler } from 'hono'
 import type { ServerDeps } from '../deps'
 import { invalid, readJson, type AppEnv } from '../http'
+import { handlePull } from './pull'
 import { handlePush } from './push'
 
 /**
@@ -23,5 +24,14 @@ export function syncRoutes(app: Hono<AppEnv>, deps: ServerDeps, user: Middleware
     const parsed = parsePushPage(raw)
     if (!parsed.ok) return invalid(c, parsed.errors)
     return c.json(await handlePush(deps, c.get('userId'), parsed.value))
+  })
+
+  app.post('/v1/sync/pull', user, async (c) => {
+    const raw = await readJson(c)
+    const upgrade = upgradeRequired(c, deps, raw)
+    if (upgrade) return upgrade
+    const parsed = parsePullRequest(raw)
+    if (!parsed.ok) return invalid(c, parsed.errors)
+    return c.json(await handlePull(deps, c.get('userId'), parsed.value))
   })
 }
