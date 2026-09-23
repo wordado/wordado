@@ -7,6 +7,7 @@
     "db:up": "docker compose up -d --wait",
     "db:down": "docker compose down",
     "migrate": "tsx scripts/migrate.ts",
+    "vapid-keys": "tsx scripts/vapid-keys.ts",
     "test": "pnpm db:up && vitest run",
     "typecheck": "tsc -p tsconfig.json"
   },

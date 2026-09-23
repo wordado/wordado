@@ -6,6 +6,7 @@ import { accountRoutes } from './account/routes'
 import { createAuth } from './auth'
 import type { ServerDeps } from './deps'
 import { requireUser, type AppEnv } from './http'
+import { reminderRoutes } from './reminders/routes'
 import { syncRoutes } from './sync/routes'
 
 /** A sync page of 500 events is about 150 KB. */
@@ -29,6 +30,7 @@ export function createApp(deps: ServerDeps): Hono<AppEnv> {
 
   accountRoutes(app, deps, user)
   syncRoutes(app, deps, user)
+  reminderRoutes(app, deps, user)
 
   app.notFound((c) => c.json({ error: 'not_found' }, 404))
   app.onError((error, c) => {
