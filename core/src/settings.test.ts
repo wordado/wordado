@@ -29,6 +29,12 @@ describe('validateSettingsPatch', () => {
     expect(errorsOf({ audio: 'yes' })).toEqual(['audio'])
   })
 
+  it('accepts latency grading on or off, and nothing else (spec §11.1)', () => {
+    expect(validateSettingsPatch({ latencyGrading: false })).toEqual({ ok: true, fields: { latencyGrading: false } })
+    expect(errorsOf({ latencyGrading: 'no' })).toEqual(['latencyGrading'])
+    expect(errorsOf({ latencyGrading: 0 })).toEqual(['latencyGrading'])
+  })
+
   it('rejects unknown fields and collects every error', () => {
     expect(errorsOf({ newWordLimit: 99, colour: 'blue' })).toEqual(['newWordLimit', 'colour'])
   })
@@ -58,5 +64,13 @@ describe('settingsFromFields', () => {
       newWordLimit: 5,
       retention: 'relaxed',
     })
+  })
+})
+
+describe('latency grading', () => {
+  it('is on by default, and a stored value that is not a boolean is ignored', () => {
+    expect(DEFAULT_SETTINGS.latencyGrading).toBe(true)
+    expect(settingsFromFields({ latencyGrading: false }).latencyGrading).toBe(false)
+    expect(settingsFromFields({ latencyGrading: 'off' }).latencyGrading).toBe(true)
   })
 })

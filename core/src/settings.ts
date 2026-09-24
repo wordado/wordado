@@ -13,6 +13,8 @@ export interface Settings {
   /** The active theme collection (spec §8.9); null for path order. */
   readonly activeTheme: string | null
   readonly audio: boolean
+  /** Slow correct answers count as Hard (spec §7.3); off grades on correctness alone (spec §11.1). */
+  readonly latencyGrading: boolean
 }
 
 export const MAX_REVIEW_CAP = 1000
@@ -25,6 +27,7 @@ export const DEFAULT_SETTINGS: Settings = {
   dailyGoal: null,
   activeTheme: null,
   audio: true,
+  latencyGrading: true,
 }
 
 export type SettingsValidation =
@@ -56,7 +59,7 @@ export function validateSettingsPatch(patch: Record<string, unknown>): SettingsV
                 ? value === null || isInt(value, 1, Number.MAX_SAFE_INTEGER)
                 : key === 'activeTheme'
                   ? value === null || (typeof value === 'string' && value !== '')
-                  : key === 'audio'
+                  : key === 'audio' || key === 'latencyGrading'
                     ? typeof value === 'boolean'
                     : false
     if (valid) fields[key] = value
