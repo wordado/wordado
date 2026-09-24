@@ -14,7 +14,7 @@
   "dependencies": {
     "@fontsource-variable/golos-text": "^5.3.0",
     "@fontsource-variable/literata": "^5.3.0",
-    "@journeyapps/wa-sqlite": "2.0.6",
+    "@journeyapps/wa-sqlite": "2.0.5",
     "@wordado/client-data": "workspace:*",
     "@wordado/core": "workspace:*",
     "react": "^19.3.0",

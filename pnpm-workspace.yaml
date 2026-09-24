@@ -10,6 +10,3 @@ packages:
 allowBuilds:
   esbuild: false
   workerd: false
-
-minimumReleaseAgeExclude:
-  - '@journeyapps/wa-sqlite@2.0.6'
