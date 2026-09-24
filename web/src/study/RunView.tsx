@@ -82,6 +82,16 @@ export function RunView(props: { readonly run: StudyRun; readonly kind: RunKind 
         <button type="button" className="link-button report-open" onClick={() => setReporting(true)}>
           {t('report.open')}
         </button>
+        {(snapshot.phase === 'prompt' || snapshot.phase === 'revealed') && (
+          <div className="set-aside" role="group" aria-label={t('study.setAsideLabel')}>
+            <button type="button" className="link-button" onClick={() => void run.setAside('known')}>
+              {t('study.known')}
+            </button>
+            <button type="button" className="link-button" onClick={() => void run.setAside('suspended')}>
+              {t('study.notNow')}
+            </button>
+          </div>
+        )}
       </div>
       <p className="note keys-hint">{t('study.keysHint')}</p>
       {reporting && <ReportDialog wordId={item.wordId} entry={item.entry} onClose={() => setReporting(false)} />}
@@ -284,6 +294,7 @@ function Done(props: { readonly snapshot: RunSnapshot; readonly kind: RunKind })
       {snapshot.unlocked.map((unitId) => (
         <p key={unitId}>{t('done.unlocked', { title: unitTitle(unitId) })}</p>
       ))}
+      {snapshot.setAside > 0 && <p>{t('done.setAside', { count: snapshot.setAside })}</p>}
       <div className="actions">
         <Link className="button primary" to={{ name: 'practice' }}>
           {t('done.practiceMore')}

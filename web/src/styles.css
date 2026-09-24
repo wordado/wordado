@@ -867,3 +867,66 @@ label.check input {
   padding: 0;
   list-style: none;
 }
+
+/* Set-aside words and the onboarding question */
+
+.set-aside {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin-top: var(--space-3);
+}
+
+.unit-words ul,
+ul.unit-words {
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.unit-words li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-1) 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.word-head {
+  font-family: var(--font-entry);
+  font-weight: 600;
+}
+
+.word-status {
+  color: var(--ink-soft);
+  font-size: var(--step--1);
+}
+
+.word-actions {
+  display: flex;
+  gap: var(--space-3);
+  margin-left: auto;
+}
+
+.unit-words summary {
+  min-height: 2.75rem;
+  padding: var(--space-2) 0;
+  cursor: pointer;
+}
+
+.onboard {
+  margin: var(--space-4) 0;
+  padding: var(--space-4);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+}
+
+.onboard-themes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: var(--space-3) 0;
+  padding: 0;
+  list-style: none;
+}

@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, screen, within } from '@testing-library/react'
-import { MAX_NEW_WORD_LIMIT } from '@wordado/core'
+import { MAX_NEW_WORD_LIMIT, type WordId } from '@wordado/core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { fakeAccounts, fakeAudio, renderWith, setup } from '../test/fixtures'
 import { Settings } from './Settings'
@@ -137,5 +137,19 @@ describe('Settings: the account (spec §11)', () => {
     expect(confirm.disabled).toBe(false)
     await act(async () => fireEvent.click(confirm))
     expect(accounts.calls).toEqual(['deleteAccount'])
+  })
+})
+
+describe('Settings: words set aside (spec §7.4)', () => {
+  it('lists them and brings one back', async () => {
+    const ctx = await setup()
+    await ctx.client.setFlag('c:hello-1' as WordId, 'suspended')
+    renderWith(<Settings />, ctx)
+    const list = screen.getByRole('region', { name: 'Words set aside' })
+    expect(within(list).getByText('hello')).toBeTruthy()
+    expect(within(list).getByText('Not now')).toBeTruthy()
+    await act(async () => fireEvent.click(within(list).getByRole('button', { name: 'Bring back: hello' })))
+    expect(ctx.client.snapshot.flags.size).toBe(0)
+    expect(within(list).getByText('No words are set aside.')).toBeTruthy()
   })
 })

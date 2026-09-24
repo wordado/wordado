@@ -289,3 +289,25 @@ describe('RunView: reporting a problem', () => {
     expect((screen.getByRole('button', { name: 'Send report' }) as HTMLButtonElement).disabled).toBe(false)
   })
 })
+
+describe('setting a word aside (spec §7.4)', () => {
+  it('flags the word on the card, records no answer, and shows the next word', async () => {
+    const ctx = await setup()
+    const run = await StudyRun.start(ctx.client, ctx.env, { kind: 'session', mode: 'flashcard', cachedClips: () => new Set(), online: () => false })
+    renderWith(<RunView run={run} kind="session" />, ctx)
+    const first = run.snapshot.item!.entry.headword
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'I know this word' })))
+    expect(screen.getByText(/^0 done/)).toBeTruthy()
+    expect(document.querySelector('.hw-word')?.textContent).not.toBe(first)
+    expect([...ctx.client.snapshot.flags.values()]).toEqual(['known'])
+  })
+
+  it('says how many words were set aside when the run ends', async () => {
+    const ctx = await setup()
+    const run = await StudyRun.start(ctx.client, ctx.env, { kind: 'session', mode: 'flashcard', cachedClips: () => new Set(), online: () => false })
+    renderWith(<RunView run={run} kind="session" />, ctx)
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Not now' })))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Stop for now' })))
+    expect(screen.getByText('1 word set aside. You can bring it back in settings.')).toBeTruthy()
+  })
+})

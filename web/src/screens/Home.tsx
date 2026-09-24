@@ -1,22 +1,28 @@
-import { useClientSnapshot } from '@wordado/client-data'
-import type { Mode } from '@wordado/core'
+import { useClient, useClientSnapshot } from '@wordado/client-data'
+import { offeredThemes, type Mode } from '@wordado/core'
+import { useState } from 'react'
 import { useApp } from '../app/context'
-import { useT } from '../i18n/i18n'
+import { localized, useT } from '../i18n/i18n'
 import { MODE_LABEL } from '../labels'
 import { Link } from '../router'
+import { useOnline } from '../useOnline'
 
 const ONE_WAY: readonly Mode[] = ['flashcard', 'multiple_choice', 'listening_select']
 
 /** Today (spec §8.3): the capped due figure first, the backlog second, then the day's motivation. */
 export function Home() {
-  const { t } = useT()
+  const { t, locale } = useT()
   const { audio } = useApp()
-  const { plan, progress, xp } = useClientSnapshot()
+  const client = useClient()
+  const { plan, progress, xp, states, settings, corpus } = useClientSnapshot()
+  useOnline() // re-renders on every `online`/`offline` event, so `canListen` below is re-evaluated
+  const [skipped, setSkipped] = useState(false)
   if (!plan || !progress) return null
   const reviews = plan.reviews.length
   const fresh = plan.newWords.length
   const nothing = reviews + fresh === 0
-  const canListen = audio.streamable() || audio.cachedClips().size > 0
+  // Re-evaluated on every `online`/`offline` event (useOnline re-renders), and never with audio off (spec §11.1).
+  const canListen = settings.audio && (audio.streamable() || audio.cachedClips().size > 0)
   const modes = ONE_WAY.filter((mode) => mode !== 'listening_select' || canListen)
   const { streak } = progress
   return (
@@ -24,6 +30,24 @@ export function Home() {
       <h1 id="today" className="today">
         {nothing ? t('home.allDone') : reviews > 0 ? t('home.reviews', { count: reviews }) : t('home.newWords', { count: fresh })}
       </h1>
+      {!skipped && states.size === 0 && settings.activeTheme === null && corpus && offeredThemes(corpus).length > 0 && (
+        <div className="onboard" role="group" aria-labelledby="onboard-title">
+          <h2 id="onboard-title">{t('onboard.title')}</h2>
+          <p className="note">{t('onboard.hint')}</p>
+          <ul className="onboard-themes">
+            {offeredThemes(corpus).map((theme) => (
+              <li key={theme.themeId}>
+                <button type="button" className="button" onClick={() => void client.updateSettings({ activeTheme: theme.themeId })}>
+                  {localized(theme.name, locale)}
+                </button>
+              </li>
+            ))}
+          </ul>
+          <button type="button" className="link-button" onClick={() => setSkipped(true)}>
+            {t('onboard.skip')}
+          </button>
+        </div>
+      )}
       {nothing && <p className="today-more">{t('home.allDoneHint')}</p>}
       {!nothing && reviews > 0 && fresh > 0 && <p className="today-more">{t('home.newWords', { count: fresh })}</p>}
       {progress.backlogTotal > progress.dueToday && <p className="note">{t('home.backlog', { count: progress.backlogTotal })}</p>}

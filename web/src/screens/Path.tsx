@@ -1,6 +1,7 @@
-import { useClientSnapshot, type PathView } from '@wordado/client-data'
+import { useClient, useClientSnapshot, type PathView } from '@wordado/client-data'
 import type { UnitProgress, Unit } from '@wordado/core'
 import { localized, useT } from '../i18n/i18n'
+import { FlagControls } from '../study/FlagControls'
 
 type UnitStatus = 'locked' | 'current' | 'complete' | 'mastered' | 'open'
 
@@ -18,6 +19,7 @@ const ICON: Readonly<Record<UnitStatus, string>> = { locked: '○', current: '�
 /** The level path (spec §7.2): units in order, what is open, where new words come from. */
 export function Path() {
   const { t, locale } = useT()
+  const client = useClient()
   const { corpus, progress, path } = useClientSnapshot()
   if (!corpus || !progress || !path) return null
   const levels = [...new Set(corpus.units.map((u) => u.level))]
@@ -56,6 +58,23 @@ export function Path() {
                       {status !== 'locked' && unitProgress && (
                         <p className="note">{t('path.introduced', { introduced: unitProgress.introduced, live: unitProgress.live })}</p>
                       )}
+                      <details className="unit-words">
+                        <summary>{t('path.words', { count: unit.wordIds.length })}</summary>
+                        <ul>
+                          {unit.wordIds.map((wordId) => {
+                            const entry = client.entry(wordId)
+                            if (!entry) return null
+                            return (
+                              <li key={wordId}>
+                                <span lang="en" className="word-head">
+                                  {entry.headword}
+                                </span>
+                                <FlagControls wordId={wordId} headword={entry.headword} />
+                              </li>
+                            )
+                          })}
+                        </ul>
+                      </details>
                     </li>
                   )
                 })}

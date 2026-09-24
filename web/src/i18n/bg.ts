@@ -111,6 +111,10 @@ export const bg: Messages = {
   'settings.deleteOffline': 'Свържете се, за да изтриете профила си.',
   'settings.demo': 'Пробвате Wordado без профил. Напредъкът ви остава на това устройство.',
 
+  'settings.setAside': 'Оставени настрана думи',
+  'settings.setAsideHint': 'Думите, които знаете или отлагате, не се преподават и не се преговарят. Върнете дума и тя се връща с напредъка си.',
+  'settings.setAsideNone': 'Няма оставени настрана думи.',
+
   'signin.title': 'Създайте профил или влезте',
   'signin.againTitle': 'Влезте отново',
   'signin.gateIntro': 'Първо два въпроса, които законът изисква. Пазим само държавата ви.',
@@ -161,6 +165,10 @@ export const bg: Messages = {
   'home.xp': '{today} XP днес, {total} общо',
   'home.xpProvisional': 'XP се потвърждава, когато напредъкът ви се синхронизира.',
 
+  'onboard.title': 'За какво ви е английският?',
+  'onboard.hint': 'Изберете и думите от темата ще са първи. Можете да го промените по всяко време в „Теми“.',
+  'onboard.skip': 'Пропусни',
+
   'mode.flashcard': 'Карти',
   'mode.multiple_choice': 'Избор на отговор',
   'mode.listening_select': 'Слушане',
@@ -188,6 +196,9 @@ export const bg: Messages = {
   'study.keysHint': 'Клавиши: от 1 до 4 за отговор, интервал за продължаване.',
   'study.error': 'Отговорът ви не беше запазен: {message}',
   'study.aboveLevel': 'Над вашето ниво ({level})',
+  'study.setAsideLabel': 'Пропуснете тази дума',
+  'study.known': 'Знам тази дума',
+  'study.notNow': 'Не сега',
   'done.session': 'Сесията приключи',
   'done.practice': 'Упражнението приключи',
   'done.answered': { one: 'Отговорихте на {count} дума.', other: 'Отговорихте на {count} думи.' },
@@ -196,6 +207,7 @@ export const bg: Messages = {
   'done.practiceMore': 'Упражнете още',
   'done.home': 'Обратно към днес',
   'done.nothing': 'В момента няма какво да учите.',
+  'done.setAside': { one: '{count} дума е оставена настрана. Можете да я върнете от настройките.', other: '{count} думи са оставени настрана. Можете да ги върнете от настройките.' },
 
   'practice.title': 'Упражнения',
   'practice.intro': 'Упражненията не променят кога думите се връщат за преговор.',
@@ -220,6 +232,15 @@ export const bg: Messages = {
   'path.complete': 'Завършен',
   'path.mastered': 'Усвоен',
   'path.open': 'Отворен',
+  'path.words': { one: '{count} дума', other: '{count} думи' },
+  'path.wordNew': 'Незапочната',
+
+  'flag.known': 'Известна',
+  'flag.suspended': 'Не сега',
+  'flag.markKnown': 'Знам я',
+  'flag.markLater': 'Не сега',
+  'flag.bringBack': 'Върнете',
+  'flag.action': '{action}: {word}',
 
   'themes.title': 'Теми',
   'themes.intro': 'Изберете тема и думите ѝ идват първи. Прегледите ви остават същите.',

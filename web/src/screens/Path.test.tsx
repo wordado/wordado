@@ -1,4 +1,4 @@
-import { act, cleanup, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { answerNew, renderWith, setup } from '../test/fixtures'
 import { Path } from './Path'
@@ -40,5 +40,22 @@ describe('Path', () => {
     const ctx = await setup()
     renderWith(<Path />, { ...ctx, locale: 'bg' })
     expect(screen.getByRole('heading', { name: 'Хора и поздрави' })).toBeTruthy()
+  })
+
+  it('lists a unit’s words, and sets one aside before it is ever taught (spec §7.4)', async () => {
+    const ctx = await setup()
+    renderWith(<Path />, ctx)
+    const food = unit('Food and drink')
+    food.querySelector('details')!.open = true
+    const words = within(food).getAllByRole('listitem')
+    expect(words).toHaveLength(20)
+    const first = words[0]!
+    const headword = first.querySelector('[lang="en"]')!.textContent!
+    expect(within(first).getByText('Not started')).toBeTruthy()
+    await act(async () => fireEvent.click(within(first).getByRole('button', { name: `I know it: ${headword}` })))
+    expect(within(first).getByText('Known')).toBeTruthy()
+    expect([...ctx.client.snapshot.flags.values()]).toEqual(['known'])
+    await act(async () => fireEvent.click(within(first).getByRole('button', { name: `Bring back: ${headword}` })))
+    expect(ctx.client.snapshot.flags.size).toBe(0)
   })
 })

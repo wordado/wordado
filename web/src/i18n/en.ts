@@ -116,6 +116,10 @@ export const en = {
   'settings.deleteOffline': 'Connect to delete your account.',
   'settings.demo': 'You are trying Wordado without an account. Your progress stays on this device.',
 
+  'settings.setAside': 'Words set aside',
+  'settings.setAsideHint': 'Words you know or put off are never taught or reviewed. Bring one back and it returns with its progress.',
+  'settings.setAsideNone': 'No words are set aside.',
+
   'signin.title': 'Create an account or sign in',
   'signin.againTitle': 'Sign in again',
   'signin.gateIntro': 'First, two questions the law asks us. Only your country is kept.',
@@ -166,6 +170,10 @@ export const en = {
   'home.xp': '{today} XP today, {total} in all',
   'home.xpProvisional': 'XP is confirmed when your progress syncs.',
 
+  'onboard.title': 'What do you want English for?',
+  'onboard.hint': 'Pick one and its words come first. You can change it any time under Themes.',
+  'onboard.skip': 'Skip',
+
   'mode.flashcard': 'Flashcards',
   'mode.multiple_choice': 'Multiple choice',
   'mode.listening_select': 'Listening',
@@ -193,6 +201,9 @@ export const en = {
   'study.keysHint': 'Keys: 1 to 4 answer, Space continues.',
   'study.error': 'Your answer wasn’t saved: {message}',
   'study.aboveLevel': 'Above your level ({level})',
+  'study.setAsideLabel': 'Skip this word',
+  'study.known': 'I know this word',
+  'study.notNow': 'Not now',
   'done.session': 'Session complete',
   'done.practice': 'Practice complete',
   'done.answered': { one: 'You answered {count} word.', other: 'You answered {count} words.' },
@@ -201,6 +212,7 @@ export const en = {
   'done.practiceMore': 'Practise more',
   'done.home': 'Back to today',
   'done.nothing': 'Nothing to study right now.',
+  'done.setAside': { one: '{count} word set aside. You can bring it back in settings.', other: '{count} words set aside. You can bring them back in settings.' },
 
   'practice.title': 'Practice',
   'practice.intro': 'Practice doesn’t change when words come back for review.',
@@ -225,6 +237,15 @@ export const en = {
   'path.complete': 'Complete',
   'path.mastered': 'Mastered',
   'path.open': 'Open',
+  'path.words': { one: '{count} word', other: '{count} words' },
+  'path.wordNew': 'Not started',
+
+  'flag.known': 'Known',
+  'flag.suspended': 'Not now',
+  'flag.markKnown': 'I know it',
+  'flag.markLater': 'Not now',
+  'flag.bringBack': 'Bring back',
+  'flag.action': '{action}: {word}',
 
   'themes.title': 'Themes',
   'themes.intro': 'Pick a theme and its words come first. Your reviews stay the same.',
