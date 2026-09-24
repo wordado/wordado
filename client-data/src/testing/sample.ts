@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { PackManifest } from '@wordado/core'
+import type { CefrLevel, Corpus, PackManifest } from '@wordado/core'
 import { Client } from '../client'
 import { nodeSqliteDriver } from '../drivers/nodeSqlite'
 import type { PackFetcher } from '../packs'
@@ -23,4 +23,18 @@ export async function openSampleClient(env: TestEnv = testEnv()): Promise<Client
   await client.installPacks(sampleManifest, sampleFetcher)
   await client.startSession()
   return client
+}
+
+/**
+ * The sample with its entries spread across `levels` in equal runs, in the
+ * order the corpus lists them. The sample is all A1; the placement test needs
+ * bands, and nothing else about the entries changes.
+ */
+export function leveledCorpus(corpus: Corpus, levels: readonly CefrLevel[]): Corpus {
+  const entries = [...corpus.entries.values()]
+  const per = Math.ceil(entries.length / levels.length)
+  return {
+    ...corpus,
+    entries: new Map(entries.map((entry, i) => [entry.entryId, { ...entry, level: levels[Math.floor(i / per)]! }])),
+  }
 }
