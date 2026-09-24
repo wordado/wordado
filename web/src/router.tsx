@@ -92,7 +92,7 @@ export interface LinkProps {
   readonly to: Route
   readonly className?: string
   readonly children?: ReactNode
-  readonly 'aria-current'?: 'page'
+  readonly 'aria-current'?: 'page' | undefined
 }
 
 /** An ordinary link that navigates in place; a modified click opens a tab as usual. */
