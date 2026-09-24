@@ -1,7 +1,8 @@
-import { useClient, useClientSnapshot } from '@wordado/client-data'
+import { placementAvailable, useClient, useClientSnapshot } from '@wordado/client-data'
 import { CEFR_LEVELS, MAX_NEW_WORD_LIMIT, MAX_REVIEW_CAP, RETENTION_TARGETS, type CefrLevel, type RetentionSetting, type Settings } from '@wordado/core'
 import { useEffect, useId, useState } from 'react'
 import { useT, type MessageKey } from '../i18n/i18n'
+import { Link } from '../router'
 import { parseWholeNumber } from './fields'
 
 /** The highest daily goal the screen offers; `core` allows any positive whole number. */
@@ -108,6 +109,13 @@ export function StudySettings() {
           </label>
         ))}
       </fieldset>
+      {placementAvailable(corpus) ? (
+        <p>
+          <Link to={{ name: 'placement' }}>{t('placement.link')}</Link>
+        </p>
+      ) : (
+        <p className="note">{t('placement.unavailableNote')}</p>
+      )}
       <NumberSetting
         label={t('settings.newWords')}
         hint={t('settings.newWordsHint', { max: MAX_NEW_WORD_LIMIT })}

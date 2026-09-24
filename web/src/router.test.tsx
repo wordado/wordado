@@ -42,6 +42,11 @@ describe('routes', () => {
     expect(parseRoute('/settings', '')).toEqual({ name: 'settings' })
     expect(routeHref({ name: 'settings' })).toBe('/settings')
   })
+
+  it('routes the placement test under settings', () => {
+    expect(parseRoute('/settings/placement', '')).toEqual({ name: 'placement' })
+    expect(routeHref({ name: 'placement' })).toBe('/settings/placement')
+  })
 })
 
 function Where() {

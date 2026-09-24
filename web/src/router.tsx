@@ -12,6 +12,7 @@ export type Route =
   | { readonly name: 'progress' }
   | { readonly name: 'signin' }
   | { readonly name: 'settings' }
+  | { readonly name: 'placement' }
 
 /** Modes a learner can choose for a run; matching has its own route. */
 const RUN_MODES: readonly Mode[] = ['flashcard', 'multiple_choice', 'listening_select']
@@ -42,6 +43,8 @@ export function parseRoute(pathname: string, search: string): Route {
       return { name: 'signin' }
     case '/settings':
       return { name: 'settings' }
+    case '/settings/placement':
+      return { name: 'placement' }
     default:
       return { name: 'home' }
   }
@@ -61,6 +64,8 @@ export function routeHref(route: Route): string {
       return withMode('/practice/words', route.mode)
     case 'matching':
       return '/practice/matching'
+    case 'placement':
+      return '/settings/placement'
     default:
       return `/${route.name}`
   }

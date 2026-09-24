@@ -140,6 +140,15 @@ describe('Settings: the account (spec §11)', () => {
   })
 })
 
+describe('Settings: the placement test (spec §7.2)', () => {
+  it('says why there is no test on the A1-only sample', async () => {
+    const ctx = await setup()
+    renderWith(<Settings />, ctx)
+    expect(screen.queryByRole('link', { name: 'Find your level with a short test' })).toBeNull()
+    expect(screen.getByText('A placement test opens once words of more than one level are installed.')).toBeTruthy()
+  })
+})
+
 describe('Settings: words set aside (spec §7.4)', () => {
   it('lists them and brings one back', async () => {
     const ctx = await setup()

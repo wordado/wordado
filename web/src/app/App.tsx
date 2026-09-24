@@ -4,6 +4,7 @@ import { Link, useRoute, type Route } from '../router'
 import { Home } from '../screens/Home'
 import { Matching } from '../screens/Matching'
 import { Path } from '../screens/Path'
+import { Placement } from '../screens/Placement'
 import { Practice } from '../screens/Practice'
 import { Progress } from '../screens/Progress'
 import { Settings } from '../screens/Settings'
@@ -41,6 +42,8 @@ function Screen(props: { readonly route: Route }) {
       return <SignIn />
     case 'settings':
       return <Settings />
+    case 'placement':
+      return <Placement />
     default:
       return <Home />
   }
@@ -91,7 +94,10 @@ export function App(props: { readonly resumed: boolean }) {
           <ul>
             {NAV.map((item) => (
               <li key={item.label}>
-                <Link to={item.route} aria-current={item.route.name === route.name ? 'page' : undefined}>
+                <Link
+                  to={item.route}
+                  aria-current={item.route.name === route.name || (item.route.name === 'settings' && route.name === 'placement') ? 'page' : undefined}
+                >
                   {t(item.label)}
                 </Link>
               </li>
