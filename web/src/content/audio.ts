@@ -52,6 +52,7 @@ export class AudioStore implements AudioPort {
   private readonly playable = new Map<string, boolean>()
   private formatsPlay = false
   private player: PlayerLike | null = null
+  private pending: { reject: (err: Error) => void } | null = null
 
   constructor(private readonly options: AudioStoreOptions) {}
 
@@ -95,49 +96,94 @@ export class AudioStore implements AudioPort {
   }
 
   /**
+   * Fetches `clip`'s bytes, verifies them against the pack's checksum, and
+   * caches them (spec §9.3) — the one place either `prefetch` or `play`
+   * puts an unverified clip into the cache. Throws if the fetch fails or the
+   * bytes do not match; nothing is cached on failure.
+   */
+  private async fetchVerifyAndCache(clip: AudioClip): Promise<Uint8Array<ArrayBuffer>> {
+    const response = await this.fetch(this.url(clip))
+    if (!response.ok) throw new Error(`The clip could not be fetched (${response.status})`)
+    const bytes = new Uint8Array(await response.arrayBuffer())
+    if (bytes.byteLength !== clip.bytes || (await this.options.sha256(bytes)) !== clip.sha256) {
+      throw new Error('The clip does not match the pack’s checksum')
+    }
+    const cache = await this.open()
+    await cache.put(this.url(clip), new Response(bytes, { headers: { 'content-type': clip.mime } }))
+    this.cached.set(clip.clipId, clip.mime)
+    return bytes
+  }
+
+  /**
    * Fetches, verifies and caches the clips not cached yet, one at a time
    * (spec §9.3). A clip that fails to fetch or to verify is skipped; it is
    * tried again at the next prefetch. Returns how many were added.
    */
   async prefetch(clips: readonly AudioClip[]): Promise<number> {
-    const cache = await this.open()
     let added = 0
     for (const clip of clips) {
       if (this.cached.has(clip.clipId)) continue
       try {
-        const response = await this.fetch(this.url(clip))
-        if (!response.ok) continue
-        const bytes = new Uint8Array(await response.arrayBuffer())
-        if (bytes.byteLength !== clip.bytes || (await this.options.sha256(bytes)) !== clip.sha256) continue
-        await cache.put(this.url(clip), new Response(bytes, { headers: { 'content-type': clip.mime } }))
-        this.cached.set(clip.clipId, clip.mime)
+        await this.fetchVerifyAndCache(clip)
         added += 1
       } catch {
-        // Offline, or the CDN failed: the next prefetch tries again.
+        // Offline, the CDN failed, or the bytes failed verification: the next prefetch tries again.
       }
     }
     return added
   }
 
+  /**
+   * Plays a clip, verifying it first when it is not already cached (spec
+   * §9.3 and plan 3's verify-before-use contract: streamed bytes are checked
+   * exactly like prefetched ones, never played unverified). Starting a new
+   * `play()` immediately rejects a still-pending one, so its listeners are
+   * removed and its object URL revoked instead of leaking.
+   */
   async play(clip: AudioClip): Promise<void> {
+    this.pending?.reject(new Error('Superseded by another clip'))
+
     const cache = await this.open()
-    const response = (await cache.match(this.url(clip))) ?? (await this.fetch(this.url(clip)))
-    if (!response.ok) throw new Error(`The clip could not be fetched (${response.status})`)
-    const source = URL.createObjectURL(await response.blob())
+    const cached = await cache.match(this.url(clip))
+    const bytes = cached ? new Uint8Array(await cached.arrayBuffer()) : await this.fetchVerifyAndCache(clip)
+    const source = URL.createObjectURL(await new Response(bytes, { headers: { 'content-type': clip.mime } }).blob())
+
     this.player?.pause()
     const player = (this.options.player ?? (() => new Audio()))()
     this.player = player
+
+    const token: { reject: (err: Error) => void } = { reject: () => undefined }
+    this.pending = token
+
     try {
       await new Promise<void>((resolve, reject) => {
-        const ended = () => resolve()
-        const failed = () => reject(new Error('The clip could not be played'))
+        const removeListeners = () => {
+          player.removeEventListener('ended', ended)
+          player.removeEventListener('error', failed)
+        }
+        const ended = () => {
+          removeListeners()
+          resolve()
+        }
+        const failed = () => {
+          removeListeners()
+          reject(new Error('The clip could not be played'))
+        }
+        token.reject = (err) => {
+          removeListeners()
+          reject(err)
+        }
         player.addEventListener('ended', ended)
         player.addEventListener('error', failed)
         player.src = source
-        player.play().catch(reject)
+        player.play().catch((err) => {
+          removeListeners()
+          reject(err)
+        })
       })
     } finally {
       URL.revokeObjectURL(source)
+      if (this.pending === token) this.pending = null
     }
   }
 }

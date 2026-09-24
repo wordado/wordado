@@ -99,9 +99,43 @@ describe('AudioStore', () => {
     const s = store({ fetch: server({ a: 'aaa' }), player: () => fakePlayer('fails') })
     await expect(s.play(a)).rejects.toThrow()
   })
+
+  it('refuses to stream an uncached clip whose bytes fail verification, and caches nothing', async () => {
+    const a = await clip('a', 'aaa')
+    const s = store({ fetch: server({ a: 'tampered' }) })
+    await expect(s.play(a)).rejects.toThrow()
+    expect(s.cachedClips().size).toBe(0)
+  })
+
+  it('verifies a matching uncached clip before streaming it, and caches it once verified', async () => {
+    const a = await clip('a', 'aaa')
+    const player = fakePlayer('ends')
+    const s = store({ fetch: server({ a: 'aaa' }), player: () => player })
+    await s.play(a)
+    expect(player.played).toBe(1)
+    expect(s.cachedClips()).toEqual(new Set(['a']))
+  })
+
+  it('a superseded play rejects and cleans up; the next play still resolves when its clip ends', async () => {
+    const a = await clip('a', 'aaa')
+    const b = await clip('b', 'bbb')
+    const never = fakePlayer('never')
+    const ends = fakePlayer('ends')
+    let calls = 0
+    const s = store({ fetch: server({ a: 'aaa', b: 'bbb' }), player: () => (calls++ === 0 ? never : ends) })
+    await s.prefetch([a, b])
+    const firstPlay = s.play(a)
+    // Lets the first play() reach the 'waiting for ended' stage before the second supersedes it.
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    const secondPlay = s.play(b)
+    await expect(firstPlay).rejects.toThrow('Superseded')
+    await expect(secondPlay).resolves.toBeUndefined()
+    expect(never.played).toBe(1)
+    expect(ends.played).toBe(1)
+  })
 })
 
-function fakePlayer(outcome: 'ends' | 'fails'): PlayerLike & { played: number } {
+function fakePlayer(outcome: 'ends' | 'fails' | 'never'): PlayerLike & { played: number } {
   const target = new EventTarget()
   const player = {
     src: '',
@@ -112,7 +146,8 @@ function fakePlayer(outcome: 'ends' | 'fails'): PlayerLike & { played: number } 
     play: async () => {
       player.played += 1
       if (outcome === 'fails') throw new DOMException('no decoder', 'NotSupportedError')
-      setTimeout(() => target.dispatchEvent(new Event('ended')), 5)
+      if (outcome === 'ends') setTimeout(() => target.dispatchEvent(new Event('ended')), 5)
+      // 'never': resolves but never dispatches 'ended' or 'error' — used to test a superseded play.
     },
   }
   return player
