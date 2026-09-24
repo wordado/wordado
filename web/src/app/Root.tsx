@@ -28,15 +28,17 @@ export function Root(props: { readonly boot: Boot; readonly services: Omit<AppSe
           </button>
         </main>
       )
-    case 'failed':
+    case 'failed': {
+      const key = state.reason === 'lock' ? 'boot.failedLock' : state.reason === 'storage' ? 'boot.failedStorage' : 'boot.failed'
       return (
         <main className="notice">
-          <h1>{t('boot.failed')}</h1>
+          <h1>{t(key)}</h1>
           <button type="button" className="button primary" onClick={() => void props.boot.retry()}>
             {t('boot.retry')}
           </button>
         </main>
       )
+    }
     default:
       return (
         <main className="notice">

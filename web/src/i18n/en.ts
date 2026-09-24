@@ -18,6 +18,8 @@ export const en = {
 
   'boot.starting': 'Opening your words…',
   'boot.failed': 'The words could not be loaded. Check your connection and try again.',
+  'boot.failedStorage': 'Wordado could not open its storage in this browser. Try again, or use another browser.',
+  'boot.failedLock': 'Wordado could not check whether it is open in another tab. Try again.',
   'boot.retry': 'Try again',
   'tab.elsewhere': 'Wordado is open in another tab.',
   'tab.elsewhereHint': 'Only one tab can hold your progress at a time.',
@@ -99,6 +101,7 @@ export const en = {
   'path.introduced': '{introduced} of {live} started',
   'path.complete': 'Complete',
   'path.mastered': 'Mastered',
+  'path.open': 'Open',
 
   'themes.title': 'Themes',
   'themes.intro': 'Pick a theme and its words come first. Your reviews stay the same.',

@@ -8,7 +8,12 @@ export type BootState =
   | { readonly status: 'elsewhere' }
   /** `resumed` is true once the shell appears after a take-over or a retry, rather than the first load, so `App` knows to move focus itself. */
   | { readonly status: 'ready'; readonly client: Client; readonly backend: Backend; readonly resumed: boolean }
-  | { readonly status: 'failed'; readonly message: string }
+  /**
+   * 'lock' — the tab lock could not be taken; 'storage' — opening the
+   * database or the Client on it failed; 'content' — no pack could be
+   * installed or was already there.
+   */
+  | { readonly status: 'failed'; readonly message: string; readonly reason: 'lock' | 'storage' | 'content' }
 
 /** What Boot needs of the tab lock (Task 5's TabLock). */
 export interface LockPort {
@@ -43,6 +48,10 @@ export class Boot {
   private backend: Backend = 'memory'
   /** Bumped when the database is given up, so an open still in flight does not become ready. */
   private generation = 0
+  /** Whether this tab currently holds the lock; cleared on `release()` and by a failed acquire or take-over. */
+  private lockHeld = false
+  /** Which lock step `retry()` repeats first when the lock has been lost: `start()`'s acquire, or `takeOver()`. */
+  private lastLockAttempt: 'acquire' | 'takeOver' = 'acquire'
   /**
    * Set only while opening the driver and the Client, i.e. before `this.client`
    * exists to be closed the ordinary way. `release()` awaits it so the lock is
@@ -59,41 +68,67 @@ export class Boot {
 
   async start(): Promise<void> {
     this.store.set({ status: 'starting' })
+    this.lastLockAttempt = 'acquire'
     let held: boolean
     try {
       held = await this.lock.acquire()
     } catch (err) {
-      this.store.set({ status: 'failed', message: messageOf(err) })
+      this.store.set({ status: 'failed', message: messageOf(err), reason: 'lock' })
       return
     }
     if (!held) {
       this.store.set({ status: 'elsewhere' })
       return
     }
+    this.lockHeld = true
     await this.open(false)
   }
 
   /** The learner chose to use Wordado in this tab (spec §9.1). */
   async takeOver(): Promise<void> {
     this.store.set({ status: 'starting' })
+    this.lastLockAttempt = 'takeOver'
     try {
       await this.lock.takeOver()
     } catch (err) {
-      this.store.set({ status: 'failed', message: messageOf(err) })
+      this.store.set({ status: 'failed', message: messageOf(err), reason: 'lock' })
       return
     }
+    this.lockHeld = true
     await this.open(true)
   }
 
-  /** After a failed start: the lock is still held, so only the opening is tried again. */
+  /**
+   * After a failed start: if the lock is still held (a storage or content
+   * failure), only the opening is tried again; if the lock itself failed
+   * (`acquire` or `takeOver`), that same step is repeated first.
+   */
   async retry(): Promise<void> {
     this.store.set({ status: 'starting' })
+    if (!this.lockHeld) {
+      try {
+        if (this.lastLockAttempt === 'takeOver') {
+          await this.lock.takeOver()
+        } else {
+          const held = await this.lock.acquire()
+          if (!held) {
+            this.store.set({ status: 'elsewhere' })
+            return
+          }
+        }
+      } catch (err) {
+        this.store.set({ status: 'failed', message: messageOf(err), reason: 'lock' })
+        return
+      }
+      this.lockHeld = true
+    }
     await this.open(true)
   }
 
   /** Called by the lock when another tab takes over: close, and say so. 6b flushes the outbox first. */
   async release(): Promise<void> {
     this.generation += 1
+    this.lockHeld = false
     if (this.opening) await this.opening.catch(() => undefined)
     const client = this.client
     this.client = null
@@ -103,8 +138,8 @@ export class Boot {
 
   private async open(resumed: boolean): Promise<void> {
     const generation = this.generation
-    try {
-      if (!this.client) {
+    if (!this.client) {
+      try {
         const acquiring = this.acquireClient(generation)
         this.opening = acquiring
         try {
@@ -112,8 +147,13 @@ export class Boot {
         } finally {
           if (this.opening === acquiring) this.opening = null
         }
-        if (generation !== this.generation) return
+      } catch (err) {
+        if (generation === this.generation) this.store.set({ status: 'failed', message: messageOf(err), reason: 'storage' })
+        return
       }
+      if (generation !== this.generation) return
+    }
+    try {
       const client = this.client!
       let installFailure: unknown = null
       try {
@@ -129,7 +169,7 @@ export class Boot {
       this.store.set({ status: 'ready', client, backend: this.backend, resumed })
       void this.deps.onReady?.(client).catch(() => undefined)
     } catch (err) {
-      if (generation === this.generation) this.store.set({ status: 'failed', message: messageOf(err) })
+      if (generation === this.generation) this.store.set({ status: 'failed', message: messageOf(err), reason: 'content' })
     }
   }
 

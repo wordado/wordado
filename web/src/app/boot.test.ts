@@ -122,7 +122,7 @@ describe('Boot', () => {
       },
     })
     await b.start()
-    expect(b.store.get()).toEqual({ status: 'failed', message: 'Failed to fetch' })
+    expect(b.store.get()).toEqual({ status: 'failed', message: 'Failed to fetch', reason: 'content' })
     online = true
     await b.retry()
     expect(ready(b).snapshot.corpus).not.toBeNull()
@@ -184,11 +184,46 @@ describe('Boot', () => {
       },
     })
     await b.start()
-    expect(b.store.get()).toEqual({ status: 'failed', message: 'The disk is unavailable' })
+    expect(b.store.get()).toEqual({ status: 'failed', message: 'The disk is unavailable', reason: 'storage' })
     expect(failing.closes()).toBe(1)
 
     await b.retry()
     expect(ready(b).snapshot.corpus).not.toBeNull()
+  })
+
+  it('retries the opening on a storage failure without touching the lock', async () => {
+    let acquireCalls = 0
+    const failing = countingDriver({
+      ...nodeSqliteDriver(),
+      exec: async () => {
+        throw new Error('The disk is unavailable')
+      },
+    })
+    let attempt = 0
+    const deps: BootDeps = {
+      env: testEnv(),
+      l1: 'bg',
+      openDriver: async () => {
+        attempt += 1
+        return attempt === 1 ? { driver: failing.driver, backend: 'opfs' } : { driver: nodeSqliteDriver(), backend: 'opfs' }
+      },
+      fetchManifest: async () => sampleManifest,
+      fetchPack: sampleFetcher,
+    }
+    const lock: LockPort = {
+      acquire: async () => {
+        acquireCalls += 1
+        return true
+      },
+      takeOver: async () => undefined,
+    }
+    const b = new Boot(deps, () => lock)
+    await b.start()
+    expect(b.store.get()).toMatchObject({ status: 'failed', reason: 'storage' })
+    expect(acquireCalls).toBe(1)
+    await b.retry()
+    expect(ready(b).snapshot.corpus).not.toBeNull()
+    expect(acquireCalls).toBe(1)
   })
 
   it('fails when the lock cannot be acquired', async () => {
@@ -207,7 +242,7 @@ describe('Boot', () => {
     }
     const b = new Boot(deps, () => lock)
     await b.start()
-    expect(b.store.get()).toEqual({ status: 'failed', message: 'Locks are not available in this context' })
+    expect(b.store.get()).toEqual({ status: 'failed', message: 'Locks are not available in this context', reason: 'lock' })
   })
 
   it('fails when a take-over cannot get the lock', async () => {
@@ -228,6 +263,61 @@ describe('Boot', () => {
     await b.start()
     expect(b.store.get().status).toBe('elsewhere')
     await b.takeOver()
-    expect(b.store.get()).toEqual({ status: 'failed', message: 'The owner never answered' })
+    expect(b.store.get()).toEqual({ status: 'failed', message: 'The owner never answered', reason: 'lock' })
+  })
+
+  it('retries the acquire after a lock failure, and becomes ready once it succeeds', async () => {
+    let succeed = false
+    let acquireCalls = 0
+    const deps: BootDeps = {
+      env: testEnv(),
+      l1: 'bg',
+      openDriver: async () => ({ driver: nodeSqliteDriver(), backend: 'opfs' }),
+      fetchManifest: async () => sampleManifest,
+      fetchPack: sampleFetcher,
+    }
+    const lock: LockPort = {
+      acquire: async () => {
+        acquireCalls += 1
+        if (!succeed) throw new Error('Locks are not available in this context')
+        return true
+      },
+      takeOver: async () => undefined,
+    }
+    const b = new Boot(deps, () => lock)
+    await b.start()
+    expect(b.store.get()).toMatchObject({ status: 'failed', reason: 'lock' })
+    succeed = true
+    await b.retry()
+    expect(acquireCalls).toBe(2)
+    expect(ready(b).snapshot.corpus).not.toBeNull()
+  })
+
+  it('retries the take-over after it fails, and becomes ready once it succeeds', async () => {
+    let succeed = false
+    let takeOverCalls = 0
+    const deps: BootDeps = {
+      env: testEnv(),
+      l1: 'bg',
+      openDriver: async () => ({ driver: nodeSqliteDriver(), backend: 'opfs' }),
+      fetchManifest: async () => sampleManifest,
+      fetchPack: sampleFetcher,
+    }
+    const lock: LockPort = {
+      acquire: async () => false,
+      takeOver: async () => {
+        takeOverCalls += 1
+        if (!succeed) throw new Error('The owner never answered')
+      },
+    }
+    const b = new Boot(deps, () => lock)
+    await b.start()
+    expect(b.store.get().status).toBe('elsewhere')
+    await b.takeOver()
+    expect(b.store.get()).toMatchObject({ status: 'failed', reason: 'lock' })
+    succeed = true
+    await b.retry()
+    expect(takeOverCalls).toBe(2)
+    expect(ready(b).snapshot.corpus).not.toBeNull()
   })
 })

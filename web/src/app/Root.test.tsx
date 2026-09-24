@@ -77,4 +77,51 @@ describe('Root', () => {
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('10 нови думи')
     expect(screen.getByRole('button', { name: 'Български' }).getAttribute('aria-pressed')).toBe('true')
   })
+
+  it('shows a storage message when opening the database fails', async () => {
+    const env = testEnv()
+    const lock: LockPort = { acquire: async () => true, takeOver: async () => undefined }
+    const boot = new Boot(
+      {
+        env,
+        l1: 'bg',
+        openDriver: async () => {
+          throw new Error('disk unavailable')
+        },
+        fetchManifest: async () => sampleManifest,
+        fetchPack: sampleFetcher,
+      },
+      () => lock,
+    )
+    render(
+      <I18nProvider storage={{ getItem: () => 'en', setItem: () => undefined }}>
+        <Root boot={boot} services={{ env, audio: fakeAudio(), afterRun: () => undefined }} />
+      </I18nProvider>,
+    )
+    await act(() => boot.start())
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(
+      'Wordado could not open its storage in this browser. Try again, or use another browser.',
+    )
+  })
+
+  it('shows a lock message when the tab lock fails', async () => {
+    const env = testEnv()
+    const lock: LockPort = {
+      acquire: async () => {
+        throw new Error('Locks are not available in this context')
+      },
+      takeOver: async () => undefined,
+    }
+    const boot = new Boot(
+      { env, l1: 'bg', openDriver: async () => ({ driver: nodeSqliteDriver(), backend: 'opfs' }), fetchManifest: async () => sampleManifest, fetchPack: sampleFetcher },
+      () => lock,
+    )
+    render(
+      <I18nProvider storage={{ getItem: () => 'en', setItem: () => undefined }}>
+        <Root boot={boot} services={{ env, audio: fakeAudio(), afterRun: () => undefined }} />
+      </I18nProvider>,
+    )
+    await act(() => boot.start())
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Wordado could not check whether it is open in another tab. Try again.')
+  })
 })

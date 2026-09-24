@@ -13,6 +13,8 @@ export const bg: Messages = {
 
   'boot.starting': 'Отваряме думите ви…',
   'boot.failed': 'Думите не можаха да се заредят. Проверете връзката си и опитайте отново.',
+  'boot.failedStorage': 'Wordado не можа да отвори хранилището си в този браузър. Опитайте отново или използвайте друг браузър.',
+  'boot.failedLock': 'Wordado не можа да провери дали е отворено в друг раздел. Опитайте отново.',
   'boot.retry': 'Опитайте отново',
   'tab.elsewhere': 'Wordado е отворено в друг раздел.',
   'tab.elsewhereHint': 'Само един раздел може да пази напредъка ви в даден момент.',
@@ -94,6 +96,7 @@ export const bg: Messages = {
   'path.introduced': 'Започнати {introduced} от {live}',
   'path.complete': 'Завършен',
   'path.mastered': 'Усвоен',
+  'path.open': 'Отворен',
 
   'themes.title': 'Теми',
   'themes.intro': 'Изберете тема и думите ѝ идват първи. Прегледите ви остават същите.',
