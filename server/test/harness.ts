@@ -15,10 +15,10 @@ export interface Session {
   readonly userId: string
   readonly email: string
   readonly cookie: string
-  get(path: string): Promise<Reply>
-  post(path: string, body: unknown): Promise<Reply>
-  put(path: string, body: unknown): Promise<Reply>
-  del(path: string, body?: unknown): Promise<Reply>
+  get(path: string, headers?: Record<string, string>): Promise<Reply>
+  post(path: string, body: unknown, headers?: Record<string, string>): Promise<Reply>
+  put(path: string, body: unknown, headers?: Record<string, string>): Promise<Reply>
+  del(path: string, body?: unknown, headers?: Record<string, string>): Promise<Reply>
 }
 
 export interface TestClock {
@@ -114,20 +114,20 @@ export function harness(options: HarnessOptions = {}): Harness {
   const request = async (path: string, init: RequestInit = {}) => toReply(await app.request(path, init))
 
   function session(userId: string, email: string, cookie: string): Session {
-    const send = (method: string, path: string, body?: unknown) =>
+    const send = (method: string, path: string, body?: unknown, extra: Record<string, string> = {}) =>
       request(path, {
         method,
-        headers: { cookie, origin: BASE_URL, ...(body === undefined ? {} : { 'content-type': 'application/json' }) },
+        headers: { cookie, origin: BASE_URL, ...(body === undefined ? {} : { 'content-type': 'application/json' }), ...extra },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       })
     return {
       userId,
       email,
       cookie,
-      get: (path) => send('GET', path),
-      post: (path, body) => send('POST', path, body),
-      put: (path, body) => send('PUT', path, body),
-      del: (path, body) => send('DELETE', path, body),
+      get: (path, headers) => send('GET', path, undefined, headers),
+      post: (path, body, headers) => send('POST', path, body, headers),
+      put: (path, body, headers) => send('PUT', path, body, headers),
+      del: (path, body, headers) => send('DELETE', path, body, headers),
     }
   }
 

@@ -1,11 +1,12 @@
 import { Hono, type Context } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
+import { every } from 'hono/combine'
 import { csrf } from 'hono/csrf'
 import { HTTPException } from 'hono/http-exception'
 import { accountRoutes } from './account/routes'
 import { createAuth } from './auth'
 import type { ServerDeps } from './deps'
-import { checkUpdateUser, requireUser, type AppEnv } from './http'
+import { checkUpdateUser, requireUser, sameUser, type AppEnv } from './http'
 import { reminderRoutes } from './reminders/routes'
 import { signInEmailLimit } from './signInLimit'
 import { syncRoutes } from './sync/routes'
@@ -18,6 +19,8 @@ export const AUTH_MAX_BODY_BYTES = 16_384
 export function createApp(deps: ServerDeps): Hono<AppEnv> {
   const auth = createAuth(deps)
   const user = requireUser(auth)
+  /** Sync and push subscriptions: the session user, who must be the one the client names. */
+  const owner = every(user, sameUser())
   const app = new Hono<AppEnv>()
 
   app.get('/health', async (c) => {
@@ -36,8 +39,8 @@ export function createApp(deps: ServerDeps): Hono<AppEnv> {
   app.use('/v1/*', bodyLimit({ maxSize: MAX_BODY_BYTES, onError: tooLarge }))
 
   accountRoutes(app, deps, user)
-  syncRoutes(app, deps, user)
-  reminderRoutes(app, deps, user)
+  syncRoutes(app, deps, owner)
+  reminderRoutes(app, deps, user, owner)
 
   app.notFound((c) => c.json({ error: 'not_found' }, 404))
   app.onError((error, c) => {

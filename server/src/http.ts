@@ -18,6 +18,23 @@ export function requireUser(auth: Auth): MiddlewareHandler<AppEnv> {
   }
 }
 
+/** The learner a client means to sync, sent beside the session cookie. */
+export const EXPECTED_USER_HEADER = 'x-wordado-user'
+
+/**
+ * After requireUser: a client that names the learner it means to sync or
+ * subscribe for is refused when the cookie belongs to someone else, so one
+ * learner's answers never land in another's account. A request without the
+ * header (an older client) is let through.
+ */
+export function sameUser(): MiddlewareHandler<AppEnv> {
+  return async (c, next) => {
+    const expected = c.req.header(EXPECTED_USER_HEADER)
+    if (expected !== undefined && expected !== c.get('userId')) return c.json({ error: 'wrong_user' }, 409)
+    await next()
+  }
+}
+
 /** The request's JSON body; `undefined` when it is not JSON, which every caller answers with 400. */
 export async function readJson(c: Context): Promise<unknown> {
   if (!/^application\/json\b/i.test(c.req.header('content-type') ?? '')) return undefined

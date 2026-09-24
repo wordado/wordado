@@ -47,7 +47,8 @@ function parseSubscription(raw: unknown): Parsed<SubscriptionInput> {
   }
 }
 
-export function reminderRoutes(app: Hono<AppEnv>, deps: ServerDeps, user: MiddlewareHandler<AppEnv>): void {
+/** `owner` is `user` plus the check that the client means this learner (spec §8.6). */
+export function reminderRoutes(app: Hono<AppEnv>, deps: ServerDeps, user: MiddlewareHandler<AppEnv>, owner: MiddlewareHandler<AppEnv>): void {
   app.get('/v1/push/public-key', (c) =>
     deps.config.vapid ? c.json({ publicKey: deps.config.vapid.publicKey }) : c.json({ error: 'not_configured' }, 404),
   )
@@ -57,7 +58,7 @@ export function reminderRoutes(app: Hono<AppEnv>, deps: ServerDeps, user: Middle
    * so a change of time zone or of daylight saving follows the learner. A
    * browser that changes hands (sign-out, sign-in) moves to the new learner.
    */
-  app.put('/v1/push/subscription', user, async (c) => {
+  app.put('/v1/push/subscription', owner, async (c) => {
     const parsed = parseSubscription(await readJson(c))
     if (!parsed.ok) return invalid(c, parsed.errors)
     const s = parsed.value
@@ -72,7 +73,7 @@ export function reminderRoutes(app: Hono<AppEnv>, deps: ServerDeps, user: Middle
     return c.json({ ok: true })
   })
 
-  app.delete('/v1/push/subscription', user, async (c) => {
+  app.delete('/v1/push/subscription', owner, async (c) => {
     const body = await readJson(c)
     const endpoint = typeof body === 'object' && body !== null ? (body as { endpoint?: unknown }).endpoint : undefined
     if (typeof endpoint !== 'string') return invalid(c, ['endpoint is required'])
