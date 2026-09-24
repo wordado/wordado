@@ -1,5 +1,5 @@
 import { Grade, RELEARN_DELAY_MS, type Mode } from '@wordado/core'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { PRACTICE_RUN_SIZE, StudyRun, type RunOptions } from './run'
 import { openSampleClient } from './testing/sample'
 import { testEnv } from './testing/testEnv'
@@ -145,5 +145,40 @@ describe('StudyRun', () => {
     await run.rate(Grade.Good)
     run.finish()
     expect(run.snapshot).toMatchObject({ phase: 'done', item: null, answered: 1 })
+  })
+
+  it('stays finished when finish() lands while a flashcard rating is being saved', async () => {
+    const env = testEnv()
+    const client = await openSampleClient(env)
+    const run = await StudyRun.start(client, env, options({ mode: 'flashcard' }))
+    run.reveal()
+    const pending = run.rate(Grade.Good)
+    run.finish()
+    await pending
+    expect(run.snapshot).toMatchObject({ phase: 'done', item: null, answered: 1 })
+  })
+
+  it('stays finished when finish() lands while a choice is being saved', async () => {
+    const env = testEnv()
+    const client = await openSampleClient(env)
+    const run = await StudyRun.start(client, env, options({ mode: 'multiple_choice' }))
+    const item = run.snapshot.item!
+    if (item.mode === 'flashcard') throw new Error('expected a choice item')
+    const pending = run.choose(item.answerIndex)
+    run.finish()
+    await pending
+    expect(run.snapshot).toMatchObject({ phase: 'done', item: null, answered: 1 })
+  })
+
+  it("measures a flashcard's latency from the prompt being shown, not from the reveal", async () => {
+    const env = testEnv()
+    const client = await openSampleClient(env)
+    const run = await StudyRun.start(client, env, options({ mode: 'flashcard' }))
+    const spy = vi.spyOn(client, 'answer')
+    env.advance(5_000)
+    run.reveal()
+    env.advance(1_000)
+    await run.rate(Grade.Good)
+    expect(spy).toHaveBeenCalledWith(expect.objectContaining({ latencyMs: 6_000 }))
   })
 })

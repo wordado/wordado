@@ -1,5 +1,5 @@
-import { Grade, MATCHING_PAIRS } from '@wordado/core'
-import { describe, expect, it } from 'vitest'
+import { corpusWordId, Grade, MATCHING_PAIRS } from '@wordado/core'
+import { describe, expect, it, vi } from 'vitest'
 import { MatchingRun } from './matching'
 import { openSampleClient } from './testing/sample'
 import { testEnv } from './testing/testEnv'
@@ -24,20 +24,43 @@ describe('MatchingRun', () => {
     const { env, client } = await clientWithWords(MATCHING_PAIRS)
     const states = client.snapshot.states
     const run = MatchingRun.start(client, env)!
+    const spy = vi.spyOn(client, 'answer')
     const { left, right } = run.snapshot
     expect(left).toHaveLength(MATCHING_PAIRS)
     expect(new Set(right)).toEqual(new Set(left))
-    const [a, b] = [left[0]!.entryId, left[1]!.entryId]
+    const [a, b, c] = [left[0]!.entryId, left[1]!.entryId, left[2]!.entryId]
 
     await run.select('left', a)
     await run.select('right', b)
     expect(run.snapshot).toMatchObject({ selected: null, miss: { left: a, right: b } })
     expect(run.snapshot.matched.size).toBe(0)
+    expect(spy).not.toHaveBeenCalled()
 
     await run.select('right', a)
     await run.select('left', a)
     expect(run.snapshot.matched).toEqual(new Set([a]))
     expect(run.snapshot.miss).toBeNull()
+    // a came from a wrong pairing first: it grades Again.
+    expect(spy).toHaveBeenLastCalledWith({
+      wordId: corpusWordId(a),
+      mode: 'matching',
+      direction: 'en_to_l1',
+      grade: Grade.Again,
+      latencyMs: expect.any(Number),
+      practice: true,
+    })
+
+    await run.select('left', c)
+    await run.select('right', c)
+    // c was never part of a miss: it grades Good.
+    expect(spy).toHaveBeenLastCalledWith({
+      wordId: corpusWordId(c),
+      mode: 'matching',
+      direction: 'en_to_l1',
+      grade: Grade.Good,
+      latencyMs: expect.any(Number),
+      practice: true,
+    })
 
     for (const entry of left.slice(1)) {
       await run.select('left', entry.entryId)
@@ -46,8 +69,7 @@ describe('MatchingRun', () => {
     expect(run.snapshot.done).toBe(true)
     // Practice never touches the schedule (spec §7.4).
     expect(client.snapshot.states).toEqual(states)
-    const practiced = client.snapshot.progress
-    expect(practiced).not.toBeNull()
+    expect(spy.mock.calls.every(([input]) => input.mode === 'matching' && input.practice === true)).toBe(true)
   })
 
   it('ignores a matched word and a second selection on the same side replaces the first', async () => {

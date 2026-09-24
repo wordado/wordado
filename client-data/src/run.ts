@@ -73,6 +73,7 @@ export class StudyRun {
   private shownAt = 0
   private presentedAt: number | null = null
   private busy = false
+  private finished = false
   private readonly skipped = new Set<WordId>()
   private practiceQueue: WordId[] = []
 
@@ -137,7 +138,12 @@ export class StudyRun {
     }
   }
 
-  /** The prompt is fully presented (for listening, the audio has ended): latency counts from here (spec §7.3). */
+  /**
+   * The prompt is fully presented (for listening, the audio has ended):
+   * latency counts from here (spec §7.3). A flashcard's front is presented
+   * the moment it is shown (`shownAt`), so a flashcard view need not call
+   * this; the reveal shows the answer, not the prompt.
+   */
   presented(): void {
     if (this.presentedAt === null) this.presentedAt = this.env.now()
   }
@@ -146,30 +152,29 @@ export class StudyRun {
     return Math.max(0, this.env.now() - (this.presentedAt ?? this.shownAt))
   }
 
-  /** Shows a flashcard's answer. */
+  /** Shows a flashcard's answer. Latency keeps counting from the prompt, not from here (spec §7.3). */
   reveal(): void {
     const { phase, item } = this.snapshot
     if (phase !== 'prompt' || item?.mode !== 'flashcard') return
-    this.presented()
     this.set({ phase: 'revealed' })
   }
 
-  /** A flashcard's self-rating, passed through (spec §7.3). Moves straight on. */
+  /** A flashcard's self-rating, passed through (spec §7.3). Moves straight on, unless `finish` ended the run meanwhile. */
   async rate(rating: Grade): Promise<void> {
     const { phase, item } = this.snapshot
     if (phase !== 'revealed' || item?.mode !== 'flashcard') return
     const grade = gradeAnswer('flashcard', { kind: 'self_rated', rating }, { latencyGrading: true })
-    if (await this.record(item, grade)) this.advance()
+    if ((await this.record(item, grade)) && !this.finished) this.advance()
   }
 
-  /** Picks an option of a choice item; binary grading with latency (spec §7.3). Shows feedback. */
+  /** Picks an option of a choice item; binary grading with latency (spec §7.3). Shows feedback, unless `finish` ended the run meanwhile. */
   async choose(index: number): Promise<void> {
     const { phase, item } = this.snapshot
     if (phase !== 'prompt' || !item || item.mode === 'flashcard') return
     if (!Number.isInteger(index) || index < 0 || index >= item.options.length) return
     const correct = index === item.answerIndex
     const grade = gradeAnswer(item.mode, { kind: 'binary', correct, latencyMs: this.latency() }, { latencyGrading: true })
-    if (await this.record(item, grade)) this.set({ phase: 'feedback', feedback: { correct, chosen: index, grade } })
+    if ((await this.record(item, grade)) && !this.finished) this.set({ phase: 'feedback', feedback: { correct, chosen: index, grade } })
   }
 
   /** Leaves the feedback for the next item. */
@@ -177,8 +182,9 @@ export class StudyRun {
     if (this.snapshot.phase === 'feedback') this.advance()
   }
 
-  /** Ends the run now; every answer given so far is already recorded. */
+  /** Ends the run now; every answer given so far is already recorded, and one still being saved is not undone. */
   finish(): void {
+    this.finished = true
     this.set({ phase: 'done', item: null, feedback: null, remaining: 0 })
   }
 
@@ -201,7 +207,8 @@ export class StudyRun {
       this.set({
         answered: s.answered + 1,
         // The answered word has left the queue unless it is due again already.
-        remaining: this.queue().length,
+        // Finished meanwhile: the count is already 0 and stays put, not recomputed from a queue this run no longer serves.
+        remaining: this.finished ? s.remaining : this.queue().length,
         dayCompleted: s.dayCompleted || result.dayCompleted,
         unlocked: [...s.unlocked, ...result.unlocked],
         error: null,
