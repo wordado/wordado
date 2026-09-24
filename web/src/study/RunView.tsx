@@ -1,5 +1,5 @@
 import { useClientSnapshot, type RunKind, type RunSnapshot, type StudyRun } from '@wordado/client-data'
-import { entryClips, Grade, type ChoiceItem, type CorpusEntry } from '@wordado/core'
+import { entryClips, Grade, isAboveLevel, type ChoiceItem, type CorpusEntry } from '@wordado/core'
 import { useEffect, useId, useRef, useState } from 'react'
 import { useApp } from '../app/context'
 import { ClipSuperseded } from '../content/audio'
@@ -9,7 +9,6 @@ import { Link } from '../router'
 import { useStore } from '../useStore'
 import { Headword, Translation } from './Headword'
 import { keyAction } from './keys'
-import { isAboveLevel } from './level'
 import { ReportDialog } from './ReportDialog'
 
 const GRADES: readonly Grade[] = [Grade.Again, Grade.Hard, Grade.Good, Grade.Easy]
@@ -26,7 +25,7 @@ export function RunView(props: { readonly run: StudyRun; readonly kind: RunKind 
   // Keys work anywhere on the page, except in a form field or while the report dialog is open.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (reporting || event.altKey || event.ctrlKey || event.metaKey) return
+      if (reporting || event.repeat || event.altKey || event.ctrlKey || event.metaKey) return
       const target = event.target as HTMLElement | null
       if (target?.closest('input, textarea, select')) return
       // A focused button already answers Enter and Space itself.
@@ -56,6 +55,12 @@ export function RunView(props: { readonly run: StudyRun; readonly kind: RunKind 
     if (wasReporting.current && !reporting) card.current?.focus()
     wasReporting.current = reporting
   }, [reporting])
+
+  // Time in the report dialog doesn't count as thinking time (spec §8.10).
+  useEffect(() => {
+    if (reporting) run.pause()
+    else run.resume()
+  }, [reporting, run])
 
   if (snapshot.phase === 'done') return <Done snapshot={snapshot} kind={props.kind} />
   if (!item) return null

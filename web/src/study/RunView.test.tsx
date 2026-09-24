@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
-import { StudyRun, type RunOptions } from '@wordado/client-data'
+import { ITEM_SETTLE_MS, StudyRun, type RunOptions } from '@wordado/client-data'
 import { Grade } from '@wordado/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AudioPort } from '../content/audio'
@@ -39,33 +39,37 @@ function deferred<T = void>(): { promise: Promise<T>; resolve: (value: T) => voi
 
 describe('RunView: multiple choice', () => {
   it('answers with a digit, marks the answer by icon and words, and continues with Enter', async () => {
-    const { run } = await start('multiple_choice')
+    const { run, env } = await start('multiple_choice')
     const item = run.snapshot.item!
     if (item.mode === 'flashcard') throw new Error('expected a choice item')
     expect(options()).toHaveLength(4)
+    env.advance(ITEM_SETTLE_MS)
     await press(String(item.answerIndex + 1))
     expect(screen.getByRole('status').textContent).toContain('Correct')
     expect(document.querySelector('.is-answer')?.textContent).toContain('✓')
     expect(document.activeElement?.textContent).toBe('Continue')
+    env.advance(ITEM_SETTLE_MS)
     await press('Enter')
     expect(run.snapshot.phase).toBe('prompt')
     expect(run.snapshot.item?.wordId).not.toBe(item.wordId)
   })
 
   it('names the right answer after a wrong one', async () => {
-    const { run } = await start('multiple_choice')
+    const { run, env } = await start('multiple_choice')
     const item = run.snapshot.item!
     if (item.mode === 'flashcard') throw new Error('expected a choice item')
     const wrong = (item.answerIndex + 1) % item.options.length
+    env.advance(ITEM_SETTLE_MS)
     await act(async () => fireEvent.click(options()[wrong]!))
     expect(screen.getByRole('status').textContent).toMatch(/^✗ Not quite\. The answer is .+\.$/)
     expect(document.querySelector('.is-wrong')?.textContent).toContain('✗')
   })
 
   it('records one answer for a double press', async () => {
-    const { run } = await start('multiple_choice')
+    const { run, env } = await start('multiple_choice')
     const item = run.snapshot.item!
     if (item.mode === 'flashcard') throw new Error('expected a choice item')
+    env.advance(ITEM_SETTLE_MS)
     await act(async () => {
       fireEvent.keyDown(document.body, { key: String(item.answerIndex + 1) })
       fireEvent.keyDown(document.body, { key: String(item.answerIndex + 1) })
@@ -73,11 +77,23 @@ describe('RunView: multiple choice', () => {
     expect(run.snapshot.answered).toBe(1)
   })
 
-  it('moves focus to each new prompt', async () => {
-    const { run } = await start('multiple_choice')
+  it('ignores a held key (a synthetic repeat), even for a fresh item', async () => {
+    const { run, env } = await start('multiple_choice')
     const item = run.snapshot.item!
     if (item.mode === 'flashcard') throw new Error('expected a choice item')
+    env.advance(ITEM_SETTLE_MS)
+    await act(async () => void fireEvent.keyDown(document.body, { key: String(item.answerIndex + 1), repeat: true }))
+    expect(run.snapshot.answered).toBe(0)
+    expect(run.snapshot.phase).toBe('prompt')
+  })
+
+  it('moves focus to each new prompt', async () => {
+    const { run, env } = await start('multiple_choice')
+    const item = run.snapshot.item!
+    if (item.mode === 'flashcard') throw new Error('expected a choice item')
+    env.advance(ITEM_SETTLE_MS)
     await press(String(item.answerIndex + 1))
+    env.advance(ITEM_SETTLE_MS)
     await press('Enter')
     expect(document.activeElement?.classList.contains('card')).toBe(true)
   })
@@ -85,9 +101,10 @@ describe('RunView: multiple choice', () => {
 
 describe('RunView: flashcards', () => {
   it('reveals with Space and passes the self-rating through', async () => {
-    const { run, client } = await start('flashcard')
+    const { run, client, env } = await start('flashcard')
     const item = run.snapshot.item!
     expect(screen.queryByRole('group', { name: 'How well did you know it?' })).toBeNull()
+    env.advance(ITEM_SETTLE_MS)
     await press(' ')
     expect(screen.getByText(item.entry.translations[0]!)).toBeTruthy()
     expect(screen.getByRole('group', { name: 'How well did you know it?' })).toBeTruthy()
@@ -97,8 +114,9 @@ describe('RunView: flashcards', () => {
   })
 
   it('moves focus to the revealed answer, since the button that had it just unmounted', async () => {
-    const { run } = await start('flashcard')
+    const { run, env } = await start('flashcard')
     const item = run.snapshot.item!
+    env.advance(ITEM_SETTLE_MS)
     await press(' ')
     const region = screen.getByRole('region', { name: item.entry.translations[0]! })
     expect(document.activeElement).toBe(region)
@@ -122,10 +140,11 @@ describe('RunView: listening', () => {
         throw new Error('no decoder')
       },
     })
-    const { run } = await start('listening_select', audio)
+    const { run, env } = await start('listening_select', audio)
     await screen.findByText('The audio didn’t play. You can still answer.')
     const item = run.snapshot.item!
     if (item.mode === 'flashcard') throw new Error('expected a choice item')
+    env.advance(ITEM_SETTLE_MS)
     await press(String(item.answerIndex + 1))
     expect(run.snapshot.answered).toBe(1)
   })
@@ -185,7 +204,9 @@ describe('RunView: listening', () => {
     const { run, env, client } = await start('listening_select', audio)
     const firstItem = run.snapshot.item!
     if (firstItem.mode === 'flashcard') throw new Error('expected a choice item')
+    env.advance(ITEM_SETTLE_MS)
     await press(String(firstItem.answerIndex + 1)) // answered without its own clip ever ending
+    env.advance(ITEM_SETTLE_MS)
     await press('Enter')
     const secondItem = run.snapshot.item!
     if (secondItem.mode === 'flashcard') throw new Error('expected a choice item')
@@ -200,7 +221,8 @@ describe('RunView: listening', () => {
 
 describe('RunView: the end of a run', () => {
   it('stops on request and says what was done', async () => {
-    const { run } = await start('flashcard')
+    const { run, env } = await start('flashcard')
+    env.advance(ITEM_SETTLE_MS)
     await press(' ')
     await press('3')
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Stop for now' })))
