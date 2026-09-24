@@ -6,6 +6,14 @@ import { createStore, type Store } from './store'
 /** Words in one practice run (spec §7.4). Tuning (§15). */
 export const PRACTICE_RUN_SIZE = 10
 
+/**
+ * How long a freshly shown item ignores `choose`, `reveal` and `rate` (and
+ * feedback ignores `next`), so a rating or a held key that lands right after
+ * the view has already moved on cannot answer what it moved on to. Tuning
+ * (spec §15): well below the 400 ms floor a real answer needs to be plausible.
+ */
+export const ITEM_SETTLE_MS = 250
+
 /** A run's clock and randomness: the app's `ClientEnv`. */
 export type RunEnv = Pick<ClientEnv, 'now' | 'rng'>
 
@@ -72,6 +80,12 @@ export class StudyRun {
   readonly store: Store<RunSnapshot> = createStore(INITIAL)
   private shownAt = 0
   private presentedAt: number | null = null
+  /** When the current item's feedback phase began; `next()`'s own settle reference. */
+  private feedbackAt: number | null = null
+  /** Set while the report dialog is open (spec §8.10); excluded from latency, not from the settle check. */
+  private pausedAt: number | null = null
+  /** Total time paused for the current item so far; subtracted from latency only. */
+  private pausedMs = 0
   private busy = false
   private finished = false
   private readonly skipped = new Set<WordId>()
@@ -133,9 +147,17 @@ export class StudyRun {
       }
       this.shownAt = this.env.now()
       this.presentedAt = null
+      this.feedbackAt = null
+      this.pausedAt = null
+      this.pausedMs = 0
       this.set({ phase: 'prompt', item, feedback: null, remaining: queue.length })
       return
     }
+  }
+
+  /** Whether at least ITEM_SETTLE_MS has passed since `reference`, on this run's clock. */
+  private settled(reference: number): boolean {
+    return this.env.now() - reference >= ITEM_SETTLE_MS
   }
 
   /**
@@ -149,13 +171,14 @@ export class StudyRun {
   }
 
   private latency(): number {
-    return Math.max(0, this.env.now() - (this.presentedAt ?? this.shownAt))
+    return Math.max(0, this.env.now() - (this.presentedAt ?? this.shownAt) - this.pausedMs)
   }
 
   /** Shows a flashcard's answer. Latency keeps counting from the prompt, not from here (spec §7.3). */
   reveal(): void {
     const { phase, item } = this.snapshot
     if (phase !== 'prompt' || item?.mode !== 'flashcard') return
+    if (!this.settled(this.shownAt)) return
     this.set({ phase: 'revealed' })
   }
 
@@ -163,6 +186,7 @@ export class StudyRun {
   async rate(rating: Grade): Promise<void> {
     const { phase, item } = this.snapshot
     if (phase !== 'revealed' || item?.mode !== 'flashcard') return
+    if (!this.settled(this.shownAt)) return
     const grade = gradeAnswer('flashcard', { kind: 'self_rated', rating }, { latencyGrading: true })
     if ((await this.record(item, grade)) && !this.finished) this.advance()
   }
@@ -172,14 +196,36 @@ export class StudyRun {
     const { phase, item } = this.snapshot
     if (phase !== 'prompt' || !item || item.mode === 'flashcard') return
     if (!Number.isInteger(index) || index < 0 || index >= item.options.length) return
+    if (!this.settled(this.shownAt)) return
     const correct = index === item.answerIndex
     const grade = gradeAnswer(item.mode, { kind: 'binary', correct, latencyMs: this.latency() }, { latencyGrading: true })
-    if ((await this.record(item, grade)) && !this.finished) this.set({ phase: 'feedback', feedback: { correct, chosen: index, grade } })
+    if ((await this.record(item, grade)) && !this.finished) {
+      this.feedbackAt = this.env.now()
+      this.set({ phase: 'feedback', feedback: { correct, chosen: index, grade } })
+    }
   }
 
   /** Leaves the feedback for the next item. */
   next(): void {
-    if (this.snapshot.phase === 'feedback') this.advance()
+    if (this.snapshot.phase !== 'feedback') return
+    if (!this.settled(this.feedbackAt ?? this.shownAt)) return
+    this.advance()
+  }
+
+  /**
+   * The report dialog is open (spec §8.10): thinking time stops counting.
+   * `resume` excludes it from the current item's latency; the settle check is
+   * based on when the item (or its feedback) first appeared, not on active
+   * time, so it is never reopened by a pause.
+   */
+  pause(): void {
+    if (this.pausedAt === null) this.pausedAt = this.env.now()
+  }
+
+  resume(): void {
+    if (this.pausedAt === null) return
+    this.pausedMs += this.env.now() - this.pausedAt
+    this.pausedAt = null
   }
 
   /** Ends the run now; every answer given so far is already recorded, and one still being saved is not undone. */

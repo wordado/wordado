@@ -1,8 +1,8 @@
 import { Grade, RELEARN_DELAY_MS, type Mode } from '@wordado/core'
 import { describe, expect, it, vi } from 'vitest'
-import { PRACTICE_RUN_SIZE, StudyRun, type RunOptions } from './run'
+import { ITEM_SETTLE_MS, PRACTICE_RUN_SIZE, StudyRun, type RunOptions } from './run'
 import { openSampleClient } from './testing/sample'
-import { testEnv } from './testing/testEnv'
+import { testEnv, type TestEnv } from './testing/testEnv'
 
 const options = (over: Partial<RunOptions> = {}): RunOptions => ({
   kind: 'session',
@@ -12,11 +12,12 @@ const options = (over: Partial<RunOptions> = {}): RunOptions => ({
   ...over,
 })
 
-/** Answers whatever is asked, correctly, until the run ends. */
-async function playThrough(run: StudyRun, grade: Grade = Grade.Good): Promise<void> {
+/** Answers whatever is asked, correctly, until the run ends. Settles before every action, as a learner would. */
+async function playThrough(run: StudyRun, env: TestEnv, grade: Grade = Grade.Good): Promise<void> {
   for (let guard = 0; guard < 200 && run.snapshot.phase !== 'done'; guard += 1) {
     const { phase, item } = run.snapshot
     if (!item) break
+    env.advance(ITEM_SETTLE_MS)
     if (item.mode === 'flashcard') {
       if (phase === 'prompt') run.reveal()
       await run.rate(grade)
@@ -36,7 +37,7 @@ describe('StudyRun', () => {
     const run = await StudyRun.start(client, env, options())
     expect(run.snapshot).toMatchObject({ phase: 'prompt', remaining: 10, answered: 0 })
     expect(run.snapshot.item?.wordId).toBe(planned[0])
-    await playThrough(run)
+    await playThrough(run, env)
     expect(run.snapshot).toMatchObject({ phase: 'done', item: null, answered: 10, remaining: 0, dayCompleted: true })
     expect(run.snapshot.unlocked).toEqual(['a1-01'])
     expect(client.snapshot.progress?.tiers.new).toBe(50)
@@ -63,10 +64,12 @@ describe('StudyRun', () => {
     const item = run.snapshot.item!
     if (item.mode === 'flashcard') throw new Error('expected a choice item')
     const wrong = (item.answerIndex + 1) % item.options.length
+    env.advance(ITEM_SETTLE_MS)
     await run.choose(wrong)
     expect(run.snapshot).toMatchObject({ phase: 'feedback', feedback: { correct: false, chosen: wrong, grade: Grade.Again } })
     // Again brings the word back after the relearn delay, not now: 9 are left.
     expect(run.snapshot.remaining).toBe(9)
+    env.advance(ITEM_SETTLE_MS)
     run.next()
     expect(run.snapshot.phase).toBe('prompt')
     expect(run.snapshot.item?.wordId).not.toBe(item.wordId)
@@ -78,6 +81,7 @@ describe('StudyRun', () => {
     const run = await StudyRun.start(client, env, options({ mode: 'multiple_choice' }))
     const item = run.snapshot.item!
     if (item.mode === 'flashcard') throw new Error('expected a choice item')
+    env.advance(ITEM_SETTLE_MS)
     await Promise.all([run.choose(item.answerIndex), run.choose(item.answerIndex)])
     expect(run.snapshot.answered).toBe(1)
     expect(client.snapshot.states.get(item.wordId)?.reps).toBe(1)
@@ -91,6 +95,7 @@ describe('StudyRun', () => {
     expect(item.mode).toBe('flashcard')
     await run.rate(Grade.Easy)
     expect(run.snapshot.answered).toBe(0)
+    env.advance(ITEM_SETTLE_MS)
     run.reveal()
     expect(run.snapshot.phase).toBe('revealed')
     await run.rate(Grade.Easy)
@@ -104,7 +109,7 @@ describe('StudyRun', () => {
     await client.updateSettings({ newWordLimit: 1 })
     const run = await StudyRun.start(client, env, options({ mode: 'flashcard' }))
     const wordId = run.snapshot.item!.wordId
-    await playThrough(run, Grade.Again)
+    await playThrough(run, env, Grade.Again)
     expect(run.snapshot).toMatchObject({ phase: 'done', answered: 1 })
     env.advance(RELEARN_DELAY_MS)
     const again = await StudyRun.start(client, env, options({ mode: 'flashcard' }))
@@ -114,11 +119,11 @@ describe('StudyRun', () => {
   it('records practice with practice = true and leaves the schedule alone', async () => {
     const env = testEnv()
     const client = await openSampleClient(env)
-    await playThrough(await StudyRun.start(client, env, options()))
+    await playThrough(await StudyRun.start(client, env, options()), env)
     const states = client.snapshot.states
     const run = await StudyRun.start(client, env, options({ kind: 'practice' }))
     expect(run.snapshot.remaining).toBe(PRACTICE_RUN_SIZE)
-    await playThrough(run, Grade.Again)
+    await playThrough(run, env, Grade.Again)
     expect(run.snapshot).toMatchObject({ phase: 'done', answered: PRACTICE_RUN_SIZE })
     expect(client.snapshot.states).toEqual(states)
   })
@@ -141,6 +146,7 @@ describe('StudyRun', () => {
     const env = testEnv()
     const client = await openSampleClient(env)
     const run = await StudyRun.start(client, env, options({ mode: 'flashcard' }))
+    env.advance(ITEM_SETTLE_MS)
     run.reveal()
     await run.rate(Grade.Good)
     run.finish()
@@ -151,6 +157,7 @@ describe('StudyRun', () => {
     const env = testEnv()
     const client = await openSampleClient(env)
     const run = await StudyRun.start(client, env, options({ mode: 'flashcard' }))
+    env.advance(ITEM_SETTLE_MS)
     run.reveal()
     const pending = run.rate(Grade.Good)
     run.finish()
@@ -164,6 +171,7 @@ describe('StudyRun', () => {
     const run = await StudyRun.start(client, env, options({ mode: 'multiple_choice' }))
     const item = run.snapshot.item!
     if (item.mode === 'flashcard') throw new Error('expected a choice item')
+    env.advance(ITEM_SETTLE_MS)
     const pending = run.choose(item.answerIndex)
     run.finish()
     await pending
@@ -180,5 +188,58 @@ describe('StudyRun', () => {
     env.advance(1_000)
     await run.rate(Grade.Good)
     expect(spy).toHaveBeenCalledWith(expect.objectContaining({ latencyMs: 6_000 }))
+  })
+
+  it('ignores a reveal on the next item at the same instant as the previous rating, and takes it once settled', async () => {
+    const env = testEnv()
+    const client = await openSampleClient(env)
+    const run = await StudyRun.start(client, env, options({ mode: 'flashcard' }))
+    const first = run.snapshot.item!.wordId
+    env.advance(ITEM_SETTLE_MS)
+    run.reveal()
+    await run.rate(Grade.Good)
+    expect(run.snapshot.item!.wordId).not.toBe(first)
+    // Same clock as the item just shown: a stray reveal (a held or double Enter) must not open it early.
+    run.reveal()
+    expect(run.snapshot.phase).toBe('prompt')
+    env.advance(ITEM_SETTLE_MS)
+    run.reveal()
+    expect(run.snapshot.phase).toBe('revealed')
+  })
+
+  it('ignores a choice on the next item at the same instant as the previous answer, and takes it once settled', async () => {
+    const env = testEnv()
+    const client = await openSampleClient(env)
+    const run = await StudyRun.start(client, env, options({ mode: 'multiple_choice' }))
+    const first = run.snapshot.item!
+    if (first.mode === 'flashcard') throw new Error('expected a choice item')
+    env.advance(ITEM_SETTLE_MS)
+    await run.choose(first.answerIndex)
+    env.advance(ITEM_SETTLE_MS)
+    run.next()
+    const second = run.snapshot.item!
+    if (second.mode === 'flashcard') throw new Error('expected a choice item')
+    expect(second.wordId).not.toBe(first.wordId)
+    // Same clock as the new item: a double press (or a held key) must not answer it.
+    await run.choose(second.answerIndex)
+    expect(run.snapshot.answered).toBe(1)
+    env.advance(ITEM_SETTLE_MS)
+    await run.choose(second.answerIndex)
+    expect(run.snapshot.answered).toBe(2)
+  })
+
+  it('excludes the report dialog from a flashcard’s latency and does not re-block answering once it closes', async () => {
+    const env = testEnv()
+    const client = await openSampleClient(env)
+    const run = await StudyRun.start(client, env, options({ mode: 'flashcard' }))
+    const spy = vi.spyOn(client, 'answer')
+    env.advance(1_000)
+    run.reveal()
+    run.pause()
+    env.advance(10_000) // the report dialog is open
+    run.resume()
+    env.advance(1_000)
+    await run.rate(Grade.Good)
+    expect(spy).toHaveBeenCalledWith(expect.objectContaining({ latencyMs: 2_000 }))
   })
 })
