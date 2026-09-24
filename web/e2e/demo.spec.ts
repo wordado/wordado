@@ -63,7 +63,7 @@ for (const mode of ['flashcard', 'multiple_choice', 'listening_select']) {
   })
 }
 
-test('keeps progress, and works offline after the first visit', async ({ page, context }) => {
+test('keeps progress offline after the first visit, and after reconnecting', async ({ page, context }) => {
   await page.goto('/')
   await page.evaluate(async () => {
     await navigator.serviceWorker.ready
@@ -74,6 +74,15 @@ test('keeps progress, and works offline after the first visit', async ({ page, c
   await expect(heading(page)).toHaveText('7 new words')
   await page.goto('/path')
   await expect(page.getByText('3 of 20 started')).toBeVisible()
+
+  await page.goto('/study')
+  await answer(page)
+  await page.getByRole('button', { name: 'Stop for now' }).click()
+  await expect(page.locator('.done')).toBeVisible()
+
+  await context.setOffline(false)
+  await page.goto('/')
+  await expect(heading(page)).toHaveText('6 new words')
 })
 
 test('a second tab says Wordado is open elsewhere, and can take over', async ({ page, context }) => {
