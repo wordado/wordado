@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isAboveLevel } from './level'
+import { isAboveLevel } from './levels'
 
 describe('isAboveLevel', () => {
   it('is true when the entry is above the declared level', () => {
