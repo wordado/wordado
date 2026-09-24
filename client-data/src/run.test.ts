@@ -98,6 +98,7 @@ describe('StudyRun', () => {
     env.advance(ITEM_SETTLE_MS)
     run.reveal()
     expect(run.snapshot.phase).toBe('revealed')
+    env.advance(ITEM_SETTLE_MS)
     await run.rate(Grade.Easy)
     expect(client.snapshot.states.get(item.wordId)?.lastGrade).toBe(Grade.Easy)
     expect(run.snapshot).toMatchObject({ phase: 'prompt', answered: 1 })
@@ -148,6 +149,7 @@ describe('StudyRun', () => {
     const run = await StudyRun.start(client, env, options({ mode: 'flashcard' }))
     env.advance(ITEM_SETTLE_MS)
     run.reveal()
+    env.advance(ITEM_SETTLE_MS)
     await run.rate(Grade.Good)
     run.finish()
     expect(run.snapshot).toMatchObject({ phase: 'done', item: null, answered: 1 })
@@ -159,6 +161,7 @@ describe('StudyRun', () => {
     const run = await StudyRun.start(client, env, options({ mode: 'flashcard' }))
     env.advance(ITEM_SETTLE_MS)
     run.reveal()
+    env.advance(ITEM_SETTLE_MS)
     const pending = run.rate(Grade.Good)
     run.finish()
     await pending
@@ -197,6 +200,7 @@ describe('StudyRun', () => {
     const first = run.snapshot.item!.wordId
     env.advance(ITEM_SETTLE_MS)
     run.reveal()
+    env.advance(ITEM_SETTLE_MS)
     await run.rate(Grade.Good)
     expect(run.snapshot.item!.wordId).not.toBe(first)
     // Same clock as the item just shown: a stray reveal (a held or double Enter) must not open it early.
@@ -241,5 +245,69 @@ describe('StudyRun', () => {
     env.advance(1_000)
     await run.rate(Grade.Good)
     expect(spy).toHaveBeenCalledWith(expect.objectContaining({ latencyMs: 2_000 }))
+  })
+})
+
+describe('runs follow the settings and the learner (spec §7.4, §11.1)', () => {
+  it('grades a slow correct answer as Good when latency grading is off', async () => {
+    const env = testEnv()
+    const client = await openSampleClient(env)
+    await client.updateSettings({ latencyGrading: false })
+    const run = await StudyRun.start(client, env, options({ mode: 'multiple_choice' }))
+    const item = run.snapshot.item!
+    env.advance(60_000)
+    await run.choose(item.mode === 'flashcard' ? 0 : item.answerIndex)
+    expect(run.snapshot.feedback).toMatchObject({ correct: true, grade: Grade.Good })
+  })
+
+  it('still grades a slow correct answer as Hard by default', async () => {
+    const env = testEnv()
+    const client = await openSampleClient(env)
+    const run = await StudyRun.start(client, env, options({ mode: 'multiple_choice' }))
+    const item = run.snapshot.item!
+    env.advance(60_000)
+    await run.choose(item.mode === 'flashcard' ? 0 : item.answerIndex)
+    expect(run.snapshot.feedback).toMatchObject({ correct: true, grade: Grade.Hard })
+  })
+
+  it('sets the word on screen aside, records no answer for it, and moves on', async () => {
+    const env = testEnv()
+    const client = await openSampleClient(env)
+    const run = await StudyRun.start(client, env, options({ mode: 'flashcard' }))
+    const first = run.snapshot.item!.wordId
+    await run.setAside('known')
+    expect(client.snapshot.flags.get(first)).toBe('known')
+    expect(client.snapshot.states.has(first)).toBe(false)
+    expect(run.snapshot.item!.wordId).not.toBe(first)
+    expect(run.snapshot).toMatchObject({ answered: 0, setAside: 1, phase: 'prompt' })
+    expect(client.snapshot.plan!.newWords).not.toContain(first)
+  })
+
+  it('sets a practice word aside and drops it from the practice queue', async () => {
+    const env = testEnv()
+    const client = await openSampleClient(env)
+    for (const wordId of client.snapshot.plan!.newWords.slice(0, 3)) {
+      await client.answer({ wordId, mode: 'flashcard', direction: 'en_to_l1', grade: Grade.Good, latencyMs: 2_000, practice: false })
+    }
+    // An hour on: introduced today, not due, so practice may serve them.
+    env.advance(3_600_000)
+    const run = await StudyRun.start(client, env, options({ kind: 'practice', mode: 'flashcard' }))
+    const first = run.snapshot.item!.wordId
+    await run.setAside('suspended')
+    expect(client.snapshot.flags.get(first)).toBe('suspended')
+    expect(run.snapshot.item?.wordId ?? null).not.toBe(first)
+  })
+
+  it('ignores a rating that lands within the settle time of the reveal (a double tap on Show answer)', async () => {
+    const env = testEnv()
+    const client = await openSampleClient(env)
+    const run = await StudyRun.start(client, env, options({ mode: 'flashcard' }))
+    env.advance(2_000)
+    run.reveal()
+    await run.rate(Grade.Good)
+    expect(run.snapshot).toMatchObject({ phase: 'revealed', answered: 0 })
+    env.advance(ITEM_SETTLE_MS)
+    await run.rate(Grade.Good)
+    expect(run.snapshot.answered).toBe(1)
   })
 })

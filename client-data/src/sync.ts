@@ -229,3 +229,24 @@ export class SyncEngine {
     return 'ok'
   }
 }
+
+/** The server refused this build (spec §4.3): nothing can be synced until the app is updated. */
+export class UpgradeRequiredError extends Error {
+  constructor() {
+    super('This version of the app is too old to sync')
+    this.name = 'UpgradeRequiredError'
+  }
+}
+
+/**
+ * Whether an account holds no progress (spec §8.6): no review state, no
+ * completed day, no document the learner wrote. Server-owned documents (the
+ * entitlement every account gets) do not count. Only such an account takes a
+ * demo; any other would have to be merged, which the design rules out. One
+ * pull, from the asking device, changing nothing.
+ */
+export async function accountIsEmpty(transport: SyncTransport, deviceId: string): Promise<boolean> {
+  const response = await transport.pull({ protocolVersion: SYNC_PROTOCOL_VERSION, deviceId, documentsSince: 0 })
+  if (response.status === 'upgrade_required') throw new UpgradeRequiredError()
+  return response.reviewStates.length === 0 && response.dayComplete.length === 0 && response.documents.every((d) => d.class === 'server_owned')
+}

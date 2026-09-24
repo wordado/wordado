@@ -1,4 +1,4 @@
-import { buildItem, gradeAnswer, practiceWords, type Grade, type Mode, type StudyItem, type WordId } from '@wordado/core'
+import { buildItem, gradeAnswer, practiceWords, type Grade, type Mode, type StudyItem, type WordFlag, type WordId } from '@wordado/core'
 import type { Client } from './client'
 import type { ClientEnv } from './env'
 import { createStore, type Store } from './store'
@@ -46,6 +46,8 @@ export interface RunSnapshot {
   readonly item: StudyItem | null
   readonly feedback: RunFeedback | null
   readonly answered: number
+  /** Words set aside ("I know this", "Not now") in this run (spec §7.4). */
+  readonly setAside: number
   /** Items left as of now. A word answered Again comes back after the relearn delay and raises it. */
   readonly remaining: number
   /** True once an answer in this run completed the day (spec §8.4). */
@@ -61,6 +63,7 @@ const INITIAL: RunSnapshot = {
   item: null,
   feedback: null,
   answered: 0,
+  setAside: 0,
   remaining: 0,
   dayCompleted: false,
   unlocked: [],
@@ -82,6 +85,8 @@ export class StudyRun {
   private presentedAt: number | null = null
   /** When the current item's feedback phase began; `next()`'s own settle reference. */
   private feedbackAt: number | null = null
+  /** When the current flashcard's answer was revealed: `rate()`'s own settle reference. */
+  private revealedAt: number | null = null
   /** Set while the report dialog is open (spec §8.10); excluded from latency, not from the settle check. */
   private pausedAt: number | null = null
   /** Total time paused for the current item so far; subtracted from latency only. */
@@ -148,6 +153,7 @@ export class StudyRun {
       this.shownAt = this.env.now()
       this.presentedAt = null
       this.feedbackAt = null
+      this.revealedAt = null
       this.pausedAt = null
       this.pausedMs = 0
       this.set({ phase: 'prompt', item, feedback: null, remaining: queue.length })
@@ -174,20 +180,30 @@ export class StudyRun {
     return Math.max(0, this.env.now() - (this.presentedAt ?? this.shownAt) - this.pausedMs)
   }
 
+  /** The learner's setting (spec §11.1), read per answer so a change mid-run applies at once. */
+  private latencyGrading(): boolean {
+    return this.client.snapshot.settings.latencyGrading
+  }
+
   /** Shows a flashcard's answer. Latency keeps counting from the prompt, not from here (spec §7.3). */
   reveal(): void {
     const { phase, item } = this.snapshot
     if (phase !== 'prompt' || item?.mode !== 'flashcard') return
     if (!this.settled(this.shownAt)) return
+    this.revealedAt = this.env.now()
     this.set({ phase: 'revealed' })
   }
 
-  /** A flashcard's self-rating, passed through (spec §7.3). Moves straight on, unless `finish` ended the run meanwhile. */
+  /**
+   * A flashcard's self-rating, passed through (spec §7.3). Ignored within the
+   * settle time of the reveal, so a double tap on "Show answer" cannot land on
+   * a rating. Moves straight on, unless `finish` ended the run meanwhile.
+   */
   async rate(rating: Grade): Promise<void> {
     const { phase, item } = this.snapshot
     if (phase !== 'revealed' || item?.mode !== 'flashcard') return
-    if (!this.settled(this.shownAt)) return
-    const grade = gradeAnswer('flashcard', { kind: 'self_rated', rating }, { latencyGrading: true })
+    if (!this.settled(this.revealedAt ?? this.shownAt)) return
+    const grade = gradeAnswer('flashcard', { kind: 'self_rated', rating }, { latencyGrading: this.latencyGrading() })
     if ((await this.record(item, grade)) && !this.finished) this.advance()
   }
 
@@ -198,7 +214,7 @@ export class StudyRun {
     if (!Number.isInteger(index) || index < 0 || index >= item.options.length) return
     if (!this.settled(this.shownAt)) return
     const correct = index === item.answerIndex
-    const grade = gradeAnswer(item.mode, { kind: 'binary', correct, latencyMs: this.latency() }, { latencyGrading: true })
+    const grade = gradeAnswer(item.mode, { kind: 'binary', correct, latencyMs: this.latency() }, { latencyGrading: this.latencyGrading() })
     if ((await this.record(item, grade)) && !this.finished) {
       this.feedbackAt = this.env.now()
       this.set({ phase: 'feedback', feedback: { correct, chosen: index, grade } })
@@ -210,6 +226,30 @@ export class StudyRun {
     if (this.snapshot.phase !== 'feedback') return
     if (!this.settled(this.feedbackAt ?? this.shownAt)) return
     this.advance()
+  }
+
+  /**
+   * "I know this" or "Not now" for the word on screen (spec §7.4): flags it,
+   * records no answer, and moves on. The flag leaves the word out of every
+   * later plan and practice run until the learner brings it back.
+   */
+  async setAside(flag: WordFlag): Promise<void> {
+    const { phase, item } = this.snapshot
+    if (!item || (phase !== 'prompt' && phase !== 'revealed')) return
+    if (this.busy) return
+    this.busy = true
+    try {
+      await this.client.setFlag(item.wordId, flag)
+    } catch (err) {
+      this.set({ error: messageOf(err) })
+      return
+    } finally {
+      this.busy = false
+    }
+    this.skipped.add(item.wordId)
+    this.practiceQueue = this.practiceQueue.filter((w) => w !== item.wordId)
+    this.set({ setAside: this.snapshot.setAside + 1, error: null })
+    if (!this.finished) this.advance()
   }
 
   /**

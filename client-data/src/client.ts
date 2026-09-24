@@ -4,6 +4,7 @@ import {
   utcDay,
   type AudioClip,
   type Capability,
+  type CefrLevel,
   type Corpus,
   type CorpusEntry,
   type Entitlement,
@@ -17,15 +18,16 @@ import {
   type WordId,
 } from '@wordado/core'
 import { Database } from './database'
+import { pendingDocumentWrites } from './documents'
 import { addContentReport, addUnlocks, patchSettings, readAliases, readEntitlement, readFlags, readSettings, readUnlocks, setFlag, type ContentReportInput } from './documentTypes'
 import type { SqlDriver } from './driver'
 import type { ClientEnv } from './env'
-import { appendAnswer, loadLearner, provisionalXp, recordDayComplete, type AnswerInput, type Learner } from './learner'
+import { appendAnswer, loadLearner, pendingDayComplete, provisionalXp, recordDayComplete, unpushedEvents, type AnswerInput, type Learner } from './learner'
 import { ensureDevice, getUserId, setUserId } from './meta'
 import { activateStagedPacks, activePackVersion, installPacks, loadActiveCorpus, type InstallReport, type PackFetcher } from './packs'
 import { migrate } from './schema'
 import { createStore, type Store } from './store'
-import { availableModes, dayCompleteInput, entryOf, newUnlocks, pathView, progressView, sessionPlan, today, upcomingClips, type PathView, type ProgressView, type StudyContext } from './study'
+import { availableModes, dayCompleteInput, entryOf, levelClips, newUnlocks, pathView, progressView, sessionPlan, today, upcomingClips, type PathView, type ProgressView, type StudyContext } from './study'
 import { INITIAL_SYNC_STATUS, readPulledXp, SyncEngine, type PulledXp, type SyncOutcome, type SyncStatus, type SyncTransport } from './sync'
 
 export interface ClientOptions {
@@ -71,6 +73,14 @@ export interface AnswerResult {
   readonly unlocked: readonly string[]
 }
 
+/** Thrown by a Client that has been closed, or is closing, when asked for new work. */
+export class ClientClosed extends Error {
+  constructor() {
+    super('The database is closed')
+    this.name = 'ClientClosed'
+  }
+}
+
 /**
  * The one object `web/` talks to (spec §4.1). Every mutation ends in
  * `refresh`, which recomputes an immutable snapshot and publishes it.
@@ -85,7 +95,10 @@ export class Client {
   private entitlement: Entitlement | null = null
   private userId: string | null = null
   private xp: PulledXp | null = null
-  private readonly engine: SyncEngine | null
+  private engine: SyncEngine | null
+  /** Answers and document writes still running: `close` waits for them (spec §9.1). */
+  private readonly inFlight = new Set<Promise<unknown>>()
+  private closing = false
 
   private constructor(
     private readonly db: Database,
@@ -171,6 +184,29 @@ export class Client {
     this.store.set(this.buildSnapshot())
   }
 
+  /** Runs one piece of work that writes to the database, refusing it once the Client is closing. */
+  private async guarded<T>(work: () => Promise<T>): Promise<T> {
+    if (this.closing) throw new ClientClosed()
+    const running = work()
+    this.inFlight.add(running)
+    try {
+      return await running
+    } finally {
+      this.inFlight.delete(running)
+    }
+  }
+
+  /** Resolves once no answer or document write is in flight. A sync is not waited for: it is safe to cut short. */
+  async idle(): Promise<void> {
+    while (this.inFlight.size > 0) await Promise.allSettled([...this.inFlight])
+  }
+
+  /** Whether anything written here has not reached the server: answers, completed days, document patches. */
+  async hasUnsynced(): Promise<boolean> {
+    const driver = this.db.driver
+    return (await unpushedEvents(driver)).length > 0 || (await pendingDayComplete(driver)).length > 0 || (await pendingDocumentWrites(driver)).length > 0
+  }
+
   /** Fetches, verifies and stages newer packs for the learner's L1 (spec §5.1). Nothing changes until `startSession`. */
   installPacks(manifest: PackManifest, fetchPack: PackFetcher): Promise<InstallReport> {
     return installPacks(this.db, this.env, manifest, this.l1, fetchPack)
@@ -202,41 +238,57 @@ export class Client {
     return ctx ? upcomingClips(ctx, sessionPlan(ctx), horizonDays) : []
   }
 
-  /** Records one answer, persists any new unit unlock, and records the completed day when it first becomes complete. */
-  async answer(input: AnswerInput): Promise<AnswerResult> {
-    const event = await appendAnswer(this.db, this.env, this.learner, input)
-    const before = this.context()
-    if (!before) {
+  /**
+   * Records one answer, persists any new unit unlock, and records the completed
+   * day when it first becomes complete. Once the event is stored this never
+   * throws: a caller that saw an error would answer again and record the word
+   * twice. Unlocks and the completed day are recomputed at every answer, so a
+   * write that fails here is made at the next one.
+   */
+  answer(input: AnswerInput): Promise<AnswerResult> {
+    return this.guarded(async () => {
+      const event = await appendAnswer(this.db, this.env, this.learner, input)
+      let dayCompleted = false
+      let unlocked: string[] = []
+      try {
+        const before = this.context()
+        if (before) {
+          const owed = newUnlocks(before)
+          if (owed.length > 0) {
+            await this.db.transaction((tx) => addUnlocks(tx, owed))
+            this.unlocked = new Set([...this.unlocked, ...owed])
+            unlocked = owed
+          }
+          const ctx = this.context()!
+          dayCompleted = isDayComplete(dayCompleteInput(ctx, sessionPlan(ctx))) && (await recordDayComplete(this.db, this.learner, today(ctx), this.env.now()))
+        }
+      } catch {
+        // The answer itself is saved; what failed is owed and is made at the next answer.
+      }
       this.refresh()
-      return { event, dayCompleted: false, unlocked: [] }
-    }
-    const unlocked = newUnlocks(before)
-    if (unlocked.length > 0) {
-      await this.db.transaction((tx) => addUnlocks(tx, unlocked))
-      this.unlocked = new Set([...this.unlocked, ...unlocked])
-    }
-    const ctx = this.context()!
-    const plan = sessionPlan(ctx)
-    const dayCompleted = isDayComplete(dayCompleteInput(ctx, plan)) && (await recordDayComplete(this.db, this.learner, today(ctx), this.env.now()))
-    this.refresh()
-    return { event, dayCompleted, unlocked }
+      return { event, dayCompleted, unlocked }
+    })
   }
 
-  async updateSettings(patch: Record<string, unknown>): Promise<Settings> {
-    this.settings = await this.db.transaction((tx) => patchSettings(tx, patch))
-    this.refresh()
-    return this.settings
+  updateSettings(patch: Record<string, unknown>): Promise<Settings> {
+    return this.guarded(async () => {
+      this.settings = await this.db.transaction((tx) => patchSettings(tx, patch))
+      this.refresh()
+      return this.settings
+    })
   }
 
-  async setFlag(wordId: WordId, flag: WordFlag | null): Promise<void> {
-    await this.db.transaction((tx) => setFlag(tx, wordId, flag))
-    this.flags = await readFlags(this.db.driver)
-    this.refresh()
+  setFlag(wordId: WordId, flag: WordFlag | null): Promise<void> {
+    return this.guarded(async () => {
+      await this.db.transaction((tx) => setFlag(tx, wordId, flag))
+      this.flags = await readFlags(this.db.driver)
+      this.refresh()
+    })
   }
 
   /** Files a content report; it syncs like any document (spec §8.10). */
   report(input: ContentReportInput): Promise<string> {
-    return this.db.transaction((tx) => addContentReport(tx, this.env, input))
+    return this.guarded(() => this.db.transaction((tx) => addContentReport(tx, this.env, input)))
   }
 
   /** The one capability check (spec §8.8): the cached entitlement, honoured until its expiry. */
@@ -256,14 +308,37 @@ export class Client {
     return outcome
   }
 
-  /** Binds this database to an account (demo carry-over, spec §8.6). Every row stays. */
-  async attachUser(userId: string): Promise<void> {
-    await this.db.transaction((tx) => setUserId(tx, userId))
-    this.userId = userId
-    this.refresh()
+  /**
+   * Binds this database to an account (demo carry-over, spec §8.6). Every row
+   * stays. With a transport, the Client syncs through it from now on: the
+   * demo's answers then reach the account from the demo's own device.
+   */
+  attachUser(userId: string, transport?: SyncTransport): Promise<void> {
+    return this.guarded(async () => {
+      await this.db.transaction((tx) => setUserId(tx, userId))
+      this.userId = userId
+      if (transport && !this.engine) {
+        this.engine = new SyncEngine({ db: this.db, env: this.env, learner: this.learner, transport })
+        this.engine.onStatus = () => this.refresh()
+      }
+      this.refresh()
+    })
   }
 
-  close(): Promise<void> {
-    return this.db.close()
+  /** Clips of one level's live words, for the whole-level download (spec §9.3); empty before a pack is active. */
+  levelClips(level: CefrLevel): AudioClip[] {
+    const ctx = this.context()
+    return ctx ? levelClips(ctx, level) : []
+  }
+
+  /**
+   * Refuses new work, waits for what is in flight, then closes the database.
+   * Resolves only once the driver has let go of the file (spec §9.1: the tab
+   * that takes over may open it the moment this resolves).
+   */
+  async close(): Promise<void> {
+    this.closing = true
+    await this.idle()
+    await this.db.close()
   }
 }

@@ -196,3 +196,13 @@ export function upcomingClips(ctx: StudyContext, plan: SessionPlan, horizonDays:
   }
   return [...clips.values()]
 }
+
+/** Every clip of the live words of one level: the whole-level download over Wi-Fi (spec §9.3). */
+export function levelClips(ctx: StudyContext, level: CefrLevel): AudioClip[] {
+  const seen = new Map<string, AudioClip>()
+  for (const entry of ctx.corpus.entries.values()) {
+    if (entry.level !== level || entry.retired) continue
+    for (const clip of entryClips(ctx.corpus, entry)) seen.set(clip.clipId, clip)
+  }
+  return [...seen.values()]
+}
