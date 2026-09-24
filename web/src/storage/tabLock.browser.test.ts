@@ -90,10 +90,8 @@ describe('TabLock', () => {
   it('does not steal from a slow owner with an open channel', async () => {
     const name = unique()
     const log: string[] = []
-    const slow = (label: string) => ({
-      release: async () => new Promise<void>((resolve) => setTimeout(resolve, 600)),
-    })
-    const a = tab(name, log, 'a', slow('a').release)
+    const slow = async () => new Promise<void>((resolve) => setTimeout(resolve, 600))
+    const a = tab(name, log, 'a', slow)
     const b = tab(name, log, 'b')
     await a.acquire()
     await b.acquire()
@@ -143,9 +141,13 @@ describe('TabLock', () => {
     // Verify a's release only ran once
     const releaseCount = log.filter((x) => x === 'a releasing').length
     expect(releaseCount).toBe(1)
-    // Verify no steal happened
-    const stealLog = log.filter((x) => x.includes('steal')).length
-    expect(stealLog).toBe(0)
+    // Verify no self-steal: b never released (would show 'b releasing')
+    const bReleasing = log.filter((x) => x === 'b releasing').length
+    expect(bReleasing).toBe(0)
+    // Verify b never went elsewhere after becoming owner
+    const bOwnerIdx = log.indexOf('b owner')
+    const bElsewhereAfter = log.slice(bOwnerIdx + 1).indexOf('b elsewhere')
+    expect(bElsewhereAfter).toBe(-1)
     await a.dispose()
     await b.dispose()
   })
@@ -174,5 +176,9 @@ describe('TabLock', () => {
     await new Promise((resolve) => setTimeout(resolve, 600))
     // Now lock should be free
     await a.dispose()
+    // Verify lock is free: a fresh TabLock can acquire it
+    const fresh = tab(name, [], 'fresh')
+    expect(await fresh.acquire()).toBe(true)
+    await fresh.dispose()
   })
 })
