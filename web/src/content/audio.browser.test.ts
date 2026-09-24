@@ -34,6 +34,15 @@ function server(bodies: Record<string, string>): Fetch & { calls: string[] } {
   return fetchFn
 }
 
+/** A promise this test can resolve from outside, for deterministic synchronization without timers. */
+function deferred<T = void>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((r) => {
+    resolve = r
+  })
+  return { promise, resolve }
+}
+
 const store = (over: Partial<AudioStoreOptions> = {}) =>
   new AudioStore({ manifestUrl: MANIFEST, sha256: env.sha256, canPlay: () => true, online: () => true, fetch: server({}), ...over })
 
@@ -116,26 +125,61 @@ describe('AudioStore', () => {
     expect(s.cachedClips()).toEqual(new Set(['a']))
   })
 
-  it('a superseded play rejects and cleans up; the next play still resolves when its clip ends', async () => {
+  it('rejects a play that is already waiting for "ended" when a new one starts', async () => {
     const a = await clip('a', 'aaa')
     const b = await clip('b', 'bbb')
-    const never = fakePlayer('never')
+    const started = deferred<void>()
+    const never = fakePlayer('never', () => started.resolve())
     const ends = fakePlayer('ends')
     let calls = 0
     const s = store({ fetch: server({ a: 'aaa', b: 'bbb' }), player: () => (calls++ === 0 ? never : ends) })
     await s.prefetch([a, b])
     const firstPlay = s.play(a)
-    // Lets the first play() reach the 'waiting for ended' stage before the second supersedes it.
-    await new Promise((resolve) => setTimeout(resolve, 10))
+    // Waits for the first play() to actually reach the 'waiting for ended' stage — deterministic,
+    // no real-timer race — before starting the second, which must supersede it.
+    await started.promise
     const secondPlay = s.play(b)
     await expect(firstPlay).rejects.toThrow('Superseded')
     await expect(secondPlay).resolves.toBeUndefined()
     expect(never.played).toBe(1)
     expect(ends.played).toBe(1)
   })
+
+  it('the newest play wins even when an older, slower setup finishes last', async () => {
+    const a = await clip('a', 'aaa')
+    const b = await clip('b', 'bbb')
+    const fetchAStarted = deferred<void>()
+    const releaseA = deferred<void>()
+    const base = server({ a: 'aaa', b: 'bbb' })
+    const slow: Fetch = async (input) => {
+      if (input.includes('audio/a.m4a')) {
+        fetchAStarted.resolve()
+        await releaseA.promise
+      }
+      return base(input)
+    }
+    const player = fakePlayer('ends')
+    let playerCalls = 0
+    const s = store({
+      fetch: slow,
+      player: () => {
+        playerCalls += 1
+        return player
+      },
+    })
+    await s.prefetch([b]) // only b is cached; a stays uncached, and its fetch is gated
+    const firstPlay = s.play(a) // uncached and slow: blocks inside fetchVerifyAndCache
+    await fetchAStarted.promise // a's fetch has genuinely started before b's play() begins
+    const secondPlay = s.play(b) // cached: finishes its setup and starts playing well before a's fetch returns
+    await expect(secondPlay).resolves.toBeUndefined()
+    expect(player.played).toBe(1)
+    releaseA.resolve() // only now does a's slow fetch — and so its stale check — complete
+    await expect(firstPlay).rejects.toThrow('Superseded')
+    expect(playerCalls).toBe(1) // a's setup finished last, but it never touched a player at all
+  })
 })
 
-function fakePlayer(outcome: 'ends' | 'fails' | 'never'): PlayerLike & { played: number } {
+function fakePlayer(outcome: 'ends' | 'fails' | 'never', onPlay?: () => void): PlayerLike & { played: number } {
   const target = new EventTarget()
   const player = {
     src: '',
@@ -145,9 +189,10 @@ function fakePlayer(outcome: 'ends' | 'fails' | 'never'): PlayerLike & { played:
     pause: () => undefined,
     play: async () => {
       player.played += 1
+      onPlay?.()
       if (outcome === 'fails') throw new DOMException('no decoder', 'NotSupportedError')
       if (outcome === 'ends') setTimeout(() => target.dispatchEvent(new Event('ended')), 5)
-      // 'never': resolves but never dispatches 'ended' or 'error' — used to test a superseded play.
+      // 'never': resolves but never dispatches 'ended' or 'error' — the play stays pending until superseded.
     },
   }
   return player

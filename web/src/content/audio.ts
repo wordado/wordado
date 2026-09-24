@@ -53,6 +53,8 @@ export class AudioStore implements AudioPort {
   private formatsPlay = false
   private player: PlayerLike | null = null
   private pending: { reject: (err: Error) => void } | null = null
+  /** Bumped by every `play()`; a call whose value has moved on is superseded, whichever setup finishes last. */
+  private generation = 0
 
   constructor(private readonly options: AudioStoreOptions) {}
 
@@ -136,17 +138,35 @@ export class AudioStore implements AudioPort {
   /**
    * Plays a clip, verifying it first when it is not already cached (spec
    * §9.3 and plan 3's verify-before-use contract: streamed bytes are checked
-   * exactly like prefetched ones, never played unverified). Starting a new
-   * `play()` immediately rejects a still-pending one, so its listeners are
-   * removed and its object URL revoked instead of leaking.
+   * exactly like prefetched ones, never played unverified).
+   *
+   * Only the newest call ever touches `this.player`/`this.pending` or pauses
+   * a player: `generation` is claimed synchronously, before any await, so an
+   * older call started earlier can never win the race even if its own setup
+   * (a slow fetch, say) finishes after a newer call has already started
+   * playing. A call still waiting for `'ended'` is rejected immediately, via
+   * `this.pending`; a call still in its own setup notices at its next await
+   * and bails there instead, revoking whatever it had already created.
    */
   async play(clip: AudioClip): Promise<void> {
+    const generation = ++this.generation
+    const superseded = () => generation !== this.generation
     this.pending?.reject(new Error('Superseded by another clip'))
 
     const cache = await this.open()
+    if (superseded()) throw new Error('Superseded by another clip')
+
     const cached = await cache.match(this.url(clip))
+    if (superseded()) throw new Error('Superseded by another clip')
+
     const bytes = cached ? new Uint8Array(await cached.arrayBuffer()) : await this.fetchVerifyAndCache(clip)
+    if (superseded()) throw new Error('Superseded by another clip')
+
     const source = URL.createObjectURL(await new Response(bytes, { headers: { 'content-type': clip.mime } }).blob())
+    if (superseded()) {
+      URL.revokeObjectURL(source)
+      throw new Error('Superseded by another clip')
+    }
 
     this.player?.pause()
     const player = (this.options.player ?? (() => new Audio()))()
