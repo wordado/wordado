@@ -63,7 +63,7 @@ export const bg: Messages = {
   'signin.birthYearInvalid': 'Въведете годината, в която сте родени, с четири цифри.',
   'signin.continue': 'Напред',
   'signin.tooYoungTitle': 'За съжаление все още не можете да създадете профил',
-  'signin.tooYoung': 'Там, където живеете, трябва да сте поне на {age}, за да използвате Wordado с профил. Можете да продължите с пробата.',
+  'signin.tooYoung': 'Там, където живеете, трябва да сте поне на {age} години, за да използвате Wordado с профил. Можете да продължите с пробата.',
   'signin.backToDemo': 'Обратно към пробата',
   'signin.demoNote': 'Ако този имейл вече има профил в Wordado, думите, които учихте в пробата, се изтриват. Нов профил ги запазва.',
   'signin.email': 'Имейл',
@@ -85,7 +85,7 @@ export const bg: Messages = {
   'signin.googleFailed': 'Входът с Google не е достъпен в момента. Използвайте код по имейл.',
   'signin.failed': 'Нещо се обърка. Опитайте отново.',
   'signin.otherAccount': 'Това устройство пази напредъка на {email}. Излезте от този профил от настройките, преди да влезете с друг.',
-  'signin.working': 'Влизате…',
+  'signin.working': 'Влизане…',
 
   'home.reviews': { one: '{count} дума за преговор', other: '{count} думи за преговор' },
   'home.newWords': { one: '{count} нова дума', other: '{count} нови думи' },

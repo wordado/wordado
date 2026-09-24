@@ -60,6 +60,34 @@ describe('SignIn: the age gate (spec §11)', () => {
     await passGate('', THIS_YEAR - 15)
     expect(screen.getByText(/at least 16/)).toBeTruthy()
   })
+
+  it('keeps a country the learner already chose, even if the pre-fill arrives late', async () => {
+    const ctx = await setup()
+    let resolveCountry: (found: string | null) => void = () => undefined
+    const countryPromise = new Promise<string | null>((resolve) => {
+      resolveCountry = resolve
+    })
+    const api = fakeApi({ requestCountry: () => countryPromise })
+    const accounts = fakeAccounts()
+    renderWith(<SignIn redirect={() => undefined} pending={{ save: () => undefined }} />, { ...ctx, api, accounts })
+    fireEvent.change(screen.getByLabelText('Country where you live'), { target: { value: 'DE' } })
+    await act(async () => resolveCountry('BG'))
+    expect((screen.getByLabelText('Country where you live') as HTMLSelectElement).value).toBe('DE')
+  })
+
+  it('keeps "I’d rather not say" even if the pre-fill arrives late', async () => {
+    const ctx = await setup()
+    let resolveCountry: (found: string | null) => void = () => undefined
+    const countryPromise = new Promise<string | null>((resolve) => {
+      resolveCountry = resolve
+    })
+    const api = fakeApi({ requestCountry: () => countryPromise })
+    const accounts = fakeAccounts()
+    renderWith(<SignIn redirect={() => undefined} pending={{ save: () => undefined }} />, { ...ctx, api, accounts })
+    fireEvent.change(screen.getByLabelText('Country where you live'), { target: { value: '' } })
+    await act(async () => resolveCountry('BG'))
+    expect((screen.getByLabelText('Country where you live') as HTMLSelectElement).value).toBe('')
+  })
 })
 
 describe('SignIn: a code by email (spec §8.6)', () => {
@@ -112,15 +140,78 @@ describe('SignIn: a code by email (spec §8.6)', () => {
     expect(api.calls.some((c) => c.startsWith('sendCode'))).toBe(false)
   })
 
-  it('says a wrong code is wrong, and keeps the learner on the code', async () => {
+  it('says a wrong code is wrong, tied to the field, and keeps the learner on the code', async () => {
     const { accounts } = await render({}, { verifyCode: async () => Promise.reject(new ApiError(400, 'INVALID_OTP')) })
     await passGate('BG', 1990)
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'ana@example.com' } })
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Email me a code' })))
     fireEvent.change(screen.getByLabelText('Code'), { target: { value: '000000' } })
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Sign in' })))
-    expect(screen.getByRole('alert').textContent).toBe('That code is wrong or has expired.')
+    const field = screen.getByLabelText('Code')
+    const alert = screen.getByRole('alert')
+    expect(alert.textContent).toBe('That code is wrong or has expired.')
+    expect(field.getAttribute('aria-describedby')).toContain(alert.id)
+    expect(field.getAttribute('aria-invalid')).toBe('true')
     expect(accounts.calls).toEqual([])
+  })
+
+  it('shows a form error, not the field, when verify fails for a reason other than a wrong code', async () => {
+    const { accounts } = await render({}, { verifyCode: async () => Promise.reject(new ApiError(500, 'internal')) })
+    await passGate('BG', 1990)
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'ana@example.com' } })
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Email me a code' })))
+    fireEvent.change(screen.getByLabelText('Code'), { target: { value: '123456' } })
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Sign in' })))
+    expect(screen.getByRole('alert').textContent).toBe('Something went wrong. Try again.')
+    const field = screen.getByLabelText('Code')
+    expect(field.getAttribute('aria-invalid')).toBeNull()
+    expect(accounts.calls).toEqual([])
+  })
+
+  it('shows "Signing you in…" only while the code is being verified', async () => {
+    const ctx = await setup()
+    let resolveVerify: () => void = () => undefined
+    const verifyPromise = new Promise<void>((resolve) => {
+      resolveVerify = resolve
+    })
+    const api = fakeApi({ verifyCode: () => verifyPromise })
+    const accounts = fakeAccounts()
+    renderWith(<SignIn redirect={() => undefined} pending={{ save: () => undefined }} />, { ...ctx, api, accounts })
+    await act(async () => undefined)
+    await passGate('BG', 1990)
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'ana@example.com' } })
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Email me a code' })))
+    expect(screen.queryByText('Signing you in…')).toBeNull()
+    fireEvent.change(screen.getByLabelText('Code'), { target: { value: '123456' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+    await act(async () => undefined)
+    expect(screen.getByText('Signing you in…')).toBeTruthy()
+    await act(async () => resolveVerify())
+  })
+
+  it('does not show "Signing you in…" while a new code is being sent', async () => {
+    const ctx = await setup()
+    let resolveResend: () => void = () => undefined
+    let sends = 0
+    const api = fakeApi({
+      sendCode: async () => {
+        sends += 1
+        if (sends === 1) return
+        await new Promise<void>((resolve) => {
+          resolveResend = resolve
+        })
+      },
+    })
+    const accounts = fakeAccounts()
+    renderWith(<SignIn redirect={() => undefined} pending={{ save: () => undefined }} />, { ...ctx, api, accounts })
+    await act(async () => undefined)
+    await passGate('BG', 1990)
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'ana@example.com' } })
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Email me a code' })))
+    fireEvent.click(screen.getByRole('button', { name: 'Send a new code' }))
+    await act(async () => undefined)
+    expect(screen.queryByText('Signing you in…')).toBeNull()
+    await act(async () => resolveResend())
   })
 
   it('refuses a second account on a device that holds a learner’s progress', async () => {

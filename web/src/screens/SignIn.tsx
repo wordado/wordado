@@ -66,7 +66,6 @@ export function SignIn(props: { readonly redirect?: (url: string) => void; reado
   const online = useOnline()
   const [step, setStep] = useState<Step>({ kind: 'gate' })
   const [country, setCountry] = useState<string | null>(null)
-  const [countryTouched, setCountryTouched] = useState(false)
   const [year, setYear] = useState('')
   const [email, setEmail] = useState('')
   const [code, setCode] = useState('')
@@ -74,17 +73,21 @@ export function SignIn(props: { readonly redirect?: (url: string) => void; reado
   const [formError, setFormError] = useState<string | null>(null)
   const [info, setInfo] = useState<MessageKey | null>(null)
   const [busy, setBusy] = useState(false)
+  const [verifying, setVerifying] = useState(false)
   const heading = useRef<HTMLHeadingElement>(null)
   const countries = useMemo(() => countryOptions(locale), [locale])
   const redirect = props.redirect ?? ((url: string) => window.location.assign(url))
   const pending = props.pending ?? pendingSignIn()
+  // A ref, not state: the pre-fill effect below must see the learner's own choice made after
+  // this render started, not the `false` its closure was created with (fix round 1, #1).
+  const countryTouched = useRef(false)
 
   // Pre-filled from the request's country (spec §11), unless the learner has already chosen.
   useEffect(() => {
     let live = true
     api.requestCountry().then(
       (found) => {
-        if (live && !countryTouched && found !== null) setCountry(found)
+        if (live && !countryTouched.current && found !== null) setCountry(found)
       },
       () => undefined,
     )
@@ -165,11 +168,20 @@ export function SignIn(props: { readonly redirect?: (url: string) => void; reado
       return
     }
     setBusy(true)
+    setVerifying(true)
     try {
       await api.verifyCode(step.email, digits)
     } catch (err) {
-      setFormError(t(err instanceof ApiError && err.status !== 429 ? 'signin.codeWrong' : failureKey(err, 'signin.failed')))
+      // Only 400/401/403 mean the code itself was wrong; anything else (5xx, a
+      // malformed response) is a server fault, not the learner's mistake, and
+      // 429/offline keep their own messages (fix round 1, #2).
+      if (err instanceof ApiError && (err.status === 400 || err.status === 401 || err.status === 403)) {
+        setFieldError('signin.codeWrong')
+      } else {
+        setFormError(t(failureKey(err, 'signin.failed')))
+      }
       setBusy(false)
+      setVerifying(false)
       return
     }
     try {
@@ -177,12 +189,14 @@ export function SignIn(props: { readonly redirect?: (url: string) => void; reado
       if (outcome === 'other-account') {
         setFormError(t('signin.otherAccount', { email: account?.email ?? '' }))
         setBusy(false)
+        setVerifying(false)
         return
       }
       navigate({ name: 'home' }, { replace: true })
     } catch (err) {
       setFormError(t(failureKey(err, 'signin.failed')))
       setBusy(false)
+      setVerifying(false)
     }
   }
 
@@ -229,7 +243,7 @@ export function SignIn(props: { readonly redirect?: (url: string) => void; reado
                 id={id}
                 value={country ?? ''}
                 onChange={(e) => {
-                  setCountryTouched(true)
+                  countryTouched.current = true
                   setCountry(e.target.value === '' ? null : e.target.value)
                 }}
               >
@@ -294,7 +308,7 @@ export function SignIn(props: { readonly redirect?: (url: string) => void; reado
       {step.kind === 'code' && (
         <form onSubmit={(e) => void submitCode(e)} noValidate>
           <p>{t('signin.codeSent', { email: step.email })}</p>
-          <Field label={t('signin.code')} error={fieldError === 'signin.codeInvalid' ? t(fieldError) : null}>
+          <Field label={t('signin.code')} error={fieldError === 'signin.codeInvalid' || fieldError === 'signin.codeWrong' ? t(fieldError) : null}>
             {({ id, describedBy, invalid }) => (
               <input
                 id={id}
@@ -310,7 +324,7 @@ export function SignIn(props: { readonly redirect?: (url: string) => void; reado
           </Field>
           {formAlert}
           {info !== null && <p role="status">{t(info)}</p>}
-          {busy && <p role="status">{t('signin.working')}</p>}
+          {verifying && <p role="status">{t('signin.working')}</p>}
           <button type="submit" className="button primary" disabled={busy}>
             {t('signin.verify')}
           </button>
