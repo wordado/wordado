@@ -67,6 +67,7 @@ export const en = {
   'study.continue': 'Continue',
   'study.keysHint': 'Keys: 1 to 4 answer, Space continues.',
   'study.error': 'Your answer wasn’t saved: {message}',
+  'study.aboveLevel': 'Above your level ({level})',
   'done.session': 'Session complete',
   'done.practice': 'Practice complete',
   'done.answered': { one: 'You answered {count} word.', other: 'You answered {count} words.' },

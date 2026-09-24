@@ -62,6 +62,7 @@ export const bg: Messages = {
   'study.continue': 'Продължете',
   'study.keysHint': 'Клавиши: от 1 до 4 за отговор, интервал за продължаване.',
   'study.error': 'Отговорът ви не беше запазен: {message}',
+  'study.aboveLevel': 'Над вашето ниво ({level})',
   'done.session': 'Сесията приключи',
   'done.practice': 'Упражнението приключи',
   'done.answered': { one: 'Отговорихте на {count} дума.', other: 'Отговорихте на {count} думи.' },
