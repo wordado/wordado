@@ -30,6 +30,23 @@ describe('httpTransport (plan 5 contract)', () => {
     expect(onUnauthorized).toHaveBeenCalledTimes(1)
   })
 
+  it('names the learner it means to sync, and reports a 409 (another learner signed in) like an expired sign-in', async () => {
+    let user: string | null = 'u1'
+    const fetchFn = answering(200, { status: 'ok' })
+    const transport = httpTransport({ fetch: fetchFn, expectedUser: () => user })
+    await transport.pull(pull)
+    expect(new Headers(fetchFn.mock.calls[0]![1]?.headers).get('x-wordado-user')).toBe('u1')
+    user = null
+    await transport.pull(pull)
+    expect(new Headers(fetchFn.mock.calls[1]![1]?.headers).has('x-wordado-user')).toBe(false)
+    const onUnauthorized = vi.fn()
+    const wrong = httpTransport({ fetch: answering(409, { error: 'wrong_user' }), onUnauthorized, expectedUser: () => 'u1' })
+    const err = await wrong.pull(pull).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(SyncHttpError)
+    expect(err).toMatchObject({ status: 409 })
+    expect(onUnauthorized).toHaveBeenCalledTimes(1)
+  })
+
   it('names the status in the message, so the sync status can read it back', () => {
     expect(new SyncHttpError(400).message).toBe('HTTP 400')
     expect(httpStatusOf('HTTP 400')).toBe(400)

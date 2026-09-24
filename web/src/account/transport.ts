@@ -19,10 +19,22 @@ export function httpStatusOf(lastError: string | null): number | null {
   return match ? Number(match[1]) : null
 }
 
+/** Names the learner a request is meant for; the server refuses it with 409 when the session is someone else's. */
+export const EXPECTED_USER_HEADER = 'x-wordado-user'
+
+/** The header naming `userId`, or none when no learner is recorded. */
+export const expectedUserHeader = (userId: string | null): Record<string, string> => (userId === null ? {} : { [EXPECTED_USER_HEADER]: userId })
+
 export interface TransportOptions {
   readonly fetch?: Fetch
-  /** Called on a 401: the session has expired or was signed out elsewhere (spec §8.6). */
+  /**
+   * Called on a 401 (the session has expired or was signed out elsewhere) and
+   * on a 409 (the session is another learner's): either way the learner must
+   * sign in again before this device syncs (spec §8.6).
+   */
   readonly onUnauthorized?: () => void
+  /** The learner this device's file belongs to, sent with every request; null sends none. */
+  readonly expectedUser?: () => string | null
   readonly timeoutMs?: number
 }
 
@@ -38,11 +50,11 @@ export function httpTransport(options: TransportOptions = {}): SyncTransport {
     const response = await fetchFn(path, {
       method: 'POST',
       credentials: 'include',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', ...expectedUserHeader(options.expectedUser?.() ?? null) },
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(timeoutMs),
     })
-    if (response.status === 401) options.onUnauthorized?.()
+    if (response.status === 401 || response.status === 409) options.onUnauthorized?.()
     if (response.status !== 200) throw new SyncHttpError(response.status)
     return (await response.json()) as T
   }

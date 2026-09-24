@@ -78,6 +78,22 @@ describe('httpApi (plan 5 contract)', () => {
     expect(bodyOf(calls[3]!)).toEqual({ confirm: true })
   })
 
+  it('names the learner a push subscription is for, when one is known', async () => {
+    let user: string | null = 'u1'
+    const { fetchFn, calls } = fakeFetch({ 'PUT /v1/push/subscription': [200, { ok: true }], 'DELETE /v1/push/subscription': [200, { ok: true }] })
+    const api = httpApi(fetchFn, () => user)
+    const body = { endpoint: 'https://push.example/1', keys: { p256dh: 'p', auth: 'a' }, reminderMinute: 540, tzOffsetMin: 0, language: 'en' as const, streakNudge: false }
+    await api.putSubscription(body)
+    await api.deleteSubscription('https://push.example/1')
+    user = null
+    await api.putSubscription(body)
+    expect(new Headers(calls[0]!.init?.headers).get('x-wordado-user')).toBe('u1')
+    expect(new Headers(calls[1]!.init?.headers).get('x-wordado-user')).toBe('u1')
+    expect(new Headers(calls[2]!.init?.headers).has('x-wordado-user')).toBe(false)
+    const refused = fakeFetch({ 'PUT /v1/push/subscription': [409, { error: 'wrong_user' }] })
+    await expect(httpApi(refused.fetchFn, () => 'u1').putSubscription(body)).rejects.toMatchObject({ status: 409, code: 'wrong_user' })
+  })
+
   it('treats reminders as unavailable when the server has no key', async () => {
     expect(await httpApi(fakeFetch({ 'GET /v1/push/public-key': [404, { error: 'not_configured' }] }).fetchFn).pushPublicKey()).toBeNull()
     expect(await httpApi(fakeFetch({ 'GET /v1/push/public-key': [200, { publicKey: 'BPk' }] }).fetchFn).pushPublicKey()).toBe('BPk')

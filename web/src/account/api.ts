@@ -1,4 +1,5 @@
 import type { Fetch } from '../content/packs'
+import { expectedUserHeader } from './transport'
 
 /** The server answered, with something other than success. `code` is the body's `error` or Better Auth's `code`. */
 export class ApiError extends Error {
@@ -67,15 +68,19 @@ const codeOf = (body: unknown): string | null => {
   return typeof error === 'string' ? error : typeof code === 'string' ? code : null
 }
 
-/** The app's calls to its own origin: `/api/auth` (Better Auth) and `/v1` (plan 5), with the session cookie. */
-export function httpApi(fetchFn: Fetch = (input, init) => fetch(input, init)): Api {
-  async function call(method: string, path: string, body?: unknown): Promise<unknown> {
+/**
+ * The app's calls to its own origin: `/api/auth` (Better Auth) and `/v1` (plan 5), with the session cookie.
+ * `expectedUser` names the recorded learner on the push-subscription calls, so a session that is
+ * someone else's is refused (409) rather than handed this device's reminders.
+ */
+export function httpApi(fetchFn: Fetch = (input, init) => fetch(input, init), expectedUser: () => string | null = () => null): Api {
+  async function call(method: string, path: string, body?: unknown, extra: Record<string, string> = {}): Promise<unknown> {
     let response: Response
     try {
       response = await fetchFn(path, {
         method,
         credentials: 'include',
-        headers: body === undefined ? {} : { 'content-type': 'application/json' },
+        headers: { ...(body === undefined ? {} : { 'content-type': 'application/json' }), ...extra },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       })
     } catch (err) {
@@ -143,10 +148,10 @@ export function httpApi(fetchFn: Fetch = (input, init) => fetch(input, init)): A
       }
     },
     putSubscription: async (body) => {
-      await call('PUT', '/v1/push/subscription', body)
+      await call('PUT', '/v1/push/subscription', body, expectedUserHeader(expectedUser()))
     },
     deleteSubscription: async (endpoint) => {
-      await call('DELETE', '/v1/push/subscription', { endpoint })
+      await call('DELETE', '/v1/push/subscription', { endpoint }, expectedUserHeader(expectedUser()))
     },
   }
 }

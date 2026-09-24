@@ -26,7 +26,9 @@ import { openWorkerDriver } from './storage/workerDriver'
 const env = webEnv()
 const audio = new AudioStore({ manifestUrl: SAMPLE_MANIFEST_URL, sha256: env.sha256 })
 const accounts = accountStorage()
-const api = httpApi()
+/** The recorded learner: sync and reminders name them, so a session that is someone else's is refused (spec §8.6). */
+const expectedUser = () => accounts.read()?.userId ?? null
+const api = httpApi(undefined, expectedUser)
 const reminders = new ReminderService({
   api,
   platform: browserPushPlatform(),
@@ -35,8 +37,9 @@ const reminders = new ReminderService({
   language: () => (document.documentElement.lang === 'en' ? 'en' : 'bg'),
 })
 let controller: AccountController | null = null
-// A 401 from sync means the sign-in expired (spec §8.6): the controller shows it and the outbox waits.
-const transport = httpTransport({ onUnauthorized: () => controller?.sessionExpired() })
+// A 401 from sync means the sign-in expired, a 409 that the session is another learner's (spec §8.6):
+// either way the controller shows "sign in again" and the outbox waits.
+const transport = httpTransport({ onUnauthorized: () => controller?.sessionExpired(), expectedUser })
 
 const lifecycle = new AppLifecycle({ storage: browserStorage('localStorage'), reload: () => window.location.reload() })
 
