@@ -8,6 +8,7 @@ import type { Api } from '../account/api'
 import type { AccountActions, AccountState } from '../account/controller'
 import type { AccountRecord } from '../account/storage'
 import { AppProvider } from '../app/context'
+import { type LifecycleState, type LifecyclePort } from '../app/lifecycle'
 import type { AudioPort } from '../content/audio'
 import { I18nProvider, type Locale } from '../i18n/i18n'
 import type { ReminderActions, ReminderPrefs } from '../reminders/reminders'
@@ -52,6 +53,19 @@ export interface RenderContext {
   readonly accounts?: AccountActions
   readonly account?: AccountRecord | null
   readonly reminders?: ReminderActions
+  readonly lifecycle?: LifecyclePort
+}
+
+/** Installation and updates as the banners and settings see them; every call is logged. */
+export function fakeLifecycle(state: Partial<LifecycleState> = {}): LifecyclePort & { calls: string[] } {
+  const calls: string[] = []
+  return {
+    calls,
+    store: createStore<LifecycleState>({ updateReady: false, appTooOld: false, installable: null, installOffer: null, ...state }),
+    applyUpdate: () => void calls.push('applyUpdate'),
+    install: async () => void calls.push('install'),
+    dismissInstall: () => void calls.push('dismissInstall'),
+  }
 }
 
 /** The account controller as the screens see it: every call is logged, and each can be overridden. */
@@ -119,6 +133,7 @@ export function renderWith(ui: ReactElement, ctx: RenderContext): RenderResult {
             accounts: ctx.accounts ?? fakeAccounts(),
             account: ctx.account ?? null,
             reminders: ctx.reminders ?? fakeReminders(),
+            lifecycle: ctx.lifecycle ?? fakeLifecycle(),
           }}
         >
           {ui}

@@ -6,6 +6,7 @@ import type { AccountRecord } from '../account/storage'
 import type { AudioPort } from '../content/audio'
 import type { ReminderActions } from '../reminders/reminders'
 import type { Backend } from '../storage/protocol'
+import type { LifecyclePort } from './lifecycle'
 
 /** What the screens need beside the Client. */
 export interface AppServices {
@@ -21,6 +22,8 @@ export interface AppServices {
   readonly api: Api
   /** Opt-in reminders on this device (spec §8.11). */
   readonly reminders: ReminderActions
+  /** Installation and updates (spec §9.1). */
+  readonly lifecycle: LifecyclePort
   /**
    * Called when a run ends: fetches the clips of the words about to be met
    * (spec §9.3), flushes the outbox (spec §9.1), and asks once for persistent

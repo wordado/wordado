@@ -28,6 +28,8 @@ export function Banners() {
   const [leaving, setLeaving] = useState(false)
   return (
     <div className="banners">
+      <UpdateBanner />
+      <InstallBanner />
       {notice !== null && (
         <div className="banner notice-line" role="status">
           <p>{t(NOTICE[notice], { email: account?.email ?? '' })}</p>
@@ -66,6 +68,48 @@ export function Banners() {
           onClose={() => setLeaving(false)}
         />
       )}
+    </div>
+  )
+}
+
+/** A newer version is waiting, or this one is too old for the packs or the server (spec §4.3, §9.3). */
+function UpdateBanner() {
+  const { t } = useT()
+  const { lifecycle } = useApp()
+  const { updateReady, appTooOld } = useStore(lifecycle.store)
+  const { sync } = useClientSnapshot()
+  if (!updateReady && !appTooOld && !sync.upgradeRequired) return null
+  return (
+    <div className="banner warning">
+      <p>{t(updateReady ? 'update.ready' : 'update.needed')}</p>
+      <p className="banner-actions">
+        <button type="button" className="link-button" onClick={() => lifecycle.applyUpdate()}>
+          {t('update.now')}
+        </button>
+      </p>
+    </div>
+  )
+}
+
+/** The installation prompt, from the second day of use (spec §9.1). */
+function InstallBanner() {
+  const { t } = useT()
+  const { lifecycle } = useApp()
+  const { installOffer } = useStore(lifecycle.store)
+  if (installOffer === null) return null
+  return (
+    <div className="banner">
+      <p>{t(installOffer === 'ios' ? 'install.ios' : 'install.prompt')}</p>
+      <p className="banner-actions">
+        {installOffer === 'prompt' && (
+          <button type="button" className="link-button" onClick={() => void lifecycle.install()}>
+            {t('install.button')}
+          </button>
+        )}
+        <button type="button" className="link-button" onClick={() => lifecycle.dismissInstall()}>
+          {t('install.later')}
+        </button>
+      </p>
     </div>
   )
 }

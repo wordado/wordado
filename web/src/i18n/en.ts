@@ -59,6 +59,15 @@ export const en = {
   'sync.upgrade': 'Update Wordado to keep syncing. Your progress is kept on this device.',
   'sync.rejected': 'Your progress couldn’t be saved to your account because of a fault in Wordado. It is kept on this device.',
 
+  'update.ready': 'A new version of Wordado is ready.',
+  'update.needed': 'This version of Wordado is too old for the newest words or for syncing. Update to carry on.',
+  'update.now': 'Update now',
+  'install.prompt': 'Install Wordado: it opens like an app, works offline, and keeps your progress safer on this device.',
+  'install.ios': 'Install Wordado: tap Share, then Add to Home Screen. On iPhone and iPad this keeps your progress on the device.',
+  'install.button': 'Install',
+  'install.later': 'Not now',
+  'settings.app': 'The app',
+
   'settings.title': 'Settings',
   'settings.saved': 'Saved',
   'settings.study': 'Studying',

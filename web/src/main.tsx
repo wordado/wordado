@@ -3,11 +3,14 @@ import '@fontsource-variable/literata'
 import './styles.css'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { dayToIsoDate, localDay } from '@wordado/core'
 import { httpApi } from './account/api'
 import { AccountController } from './account/controller'
 import { accountStorage, browserStorage, pendingSignIn } from './account/storage'
 import { httpTransport } from './account/transport'
 import { Boot } from './app/boot'
+import { noteInstallReport, refreshAudioOnActivation, startPackChecks } from './app/content'
+import { AppLifecycle, watchUpdates, type InstallEvent } from './app/lifecycle'
 import { Root } from './app/Root'
 import { startSyncLoop } from './app/syncLoop'
 import { AudioStore } from './content/audio'
@@ -35,6 +38,8 @@ let controller: AccountController | null = null
 // A 401 from sync means the sign-in expired (spec §8.6): the controller shows it and the outbox waits.
 const transport = httpTransport({ onUnauthorized: () => controller?.sessionExpired() })
 
+const lifecycle = new AppLifecycle({ storage: browserStorage('localStorage'), reload: () => window.location.reload() })
+
 const boot = new Boot(
   {
     env,
@@ -51,11 +56,42 @@ const boot = new Boot(
       if (client.snapshot.corpus) await audio.refresh(client.snapshot.corpus)
     },
     onReady: async (client) => {
-      if (navigator.onLine) await audio.prefetch(client.upcomingClips())
+      // The bundled sample's clips are fetched into the one audio cache (decision of plan 6b). Plan 7 narrows
+      // this to the sample manifest once learners use the CDN's.
+      if (navigator.onLine && client.snapshot.corpus) await audio.prefetch([...client.snapshot.corpus.clips.values()])
     },
+    onInstallReport: (report) => noteInstallReport(report, lifecycle),
   },
   (release) => new TabLock({ release }),
 )
+
+// When a staged pack activates, re-read which clips are cached (6a contract).
+let stopAudioWatch: (() => void) | null = null
+boot.store.subscribe(() => {
+  const state = boot.store.get()
+  stopAudioWatch?.()
+  stopAudioWatch = state.status === 'ready' ? refreshAudioOnActivation(state.client, audio) : null
+  if (state.status === 'ready') lifecycle.recordVisit(dayToIsoDate(localDay(env.now(), env.tzOffsetMin())))
+})
+
+startPackChecks({
+  client: () => {
+    const state = boot.store.get()
+    return state.status === 'ready' ? state.client : null
+  },
+  fetchManifest: () => fetchManifest(SAMPLE_MANIFEST_URL),
+  fetchPack: packFetcher(SAMPLE_MANIFEST_URL),
+  online: () => navigator.onLine,
+  onReport: (report) => noteInstallReport(report, lifecycle),
+})
+
+window.addEventListener('beforeinstallprompt', (event) => {
+  event.preventDefault()
+  lifecycle.installAvailable(event as unknown as InstallEvent)
+})
+const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+const standalone = window.matchMedia?.('(display-mode: standalone)').matches || (navigator as { standalone?: boolean }).standalone === true
+if (ios && !standalone) lifecycle.iosInstallable()
 
 controller = new AccountController({ api, boot, accounts, pending: pendingSignIn(), transport: () => transport, reminders })
 
@@ -112,14 +148,17 @@ createRoot(document.getElementById('root')!).render(
         localeMounted = true
       }}
     >
-      <Root boot={boot} services={{ env, audio, afterRun, api, accounts: controller!, reminders }} />
+      <Root boot={boot} services={{ env, audio, afterRun, api, accounts: controller!, reminders, lifecycle }} />
     </I18nProvider>
   </StrictMode>,
 )
 
 void boot.start()
 
-// Offline after the first visit (spec §9.1). Not in development, where it would cache the dev server.
+// Offline after the first visit (spec §9.1), and "a new version is ready". Not in development, where it would cache the dev server.
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
-  void navigator.serviceWorker.register('/sw.js').catch(() => undefined)
+  navigator.serviceWorker.register('/sw.js').then(
+    (registration) => watchUpdates(registration, navigator.serviceWorker, lifecycle),
+    () => undefined,
+  )
 }

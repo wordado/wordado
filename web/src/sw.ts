@@ -37,3 +37,8 @@ sw.addEventListener('notificationclick', (event) => {
     })(),
   )
 })
+
+// "Update now" (spec §9.1): the waiting version takes over only when the learner asks.
+sw.addEventListener('message', (event) => {
+  if ((event.data as { type?: unknown } | null)?.type === 'SKIP_WAITING') void sw.skipWaiting()
+})

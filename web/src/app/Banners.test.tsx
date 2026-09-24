@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
-import { fakeAccounts, renderWith, setup } from '../test/fixtures'
+import { fakeAccounts, fakeLifecycle, renderWith, setup } from '../test/fixtures'
 import { Banners, SyncLine } from './Banners'
 
 afterEach(cleanup)
@@ -77,5 +77,38 @@ describe('Banners', () => {
     accounts.store.set({ expired: true, notice: null })
     renderWith(<SyncLine />, { ...ctx, accounts, account: ana })
     expect(screen.getByText('Sign in again to sync')).toBeTruthy()
+  })
+})
+
+describe('update and install banners (spec §9.1)', () => {
+  it('offers a waiting version', async () => {
+    const ctx = await setup()
+    const lifecycle = fakeLifecycle({ updateReady: true })
+    renderWith(<Banners />, { ...ctx, lifecycle })
+    expect(screen.getByText('A new version of Wordado is ready.')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Update now' }))
+    expect(lifecycle.calls).toEqual(['applyUpdate'])
+  })
+
+  it('says the app is too old when the server refuses this build', async () => {
+    const ctx = await setup()
+    renderWith(<Banners />, { ...ctx, lifecycle: fakeLifecycle({ appTooOld: true }) })
+    expect(screen.getByText(/too old for the newest words or for syncing/)).toBeTruthy()
+  })
+
+  it('offers installation, and "Not now"', async () => {
+    const ctx = await setup()
+    const lifecycle = fakeLifecycle({ installable: 'prompt', installOffer: 'prompt' })
+    renderWith(<Banners />, { ...ctx, lifecycle })
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Install' })))
+    fireEvent.click(screen.getByRole('button', { name: 'Not now' }))
+    expect(lifecycle.calls).toEqual(['install', 'dismissInstall'])
+  })
+
+  it('tells iOS how to install', async () => {
+    const ctx = await setup()
+    renderWith(<Banners />, { ...ctx, lifecycle: fakeLifecycle({ installable: 'ios', installOffer: 'ios' }) })
+    expect(screen.getByText(/tap Share, then Add to Home Screen/)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Install' })).toBeNull()
   })
 })

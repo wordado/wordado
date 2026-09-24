@@ -134,6 +134,13 @@ describe('Boot', () => {
     expect(ready(b).snapshot.corpus).not.toBeNull()
   })
 
+  it('hands the launch install’s report on', async () => {
+    const reports: unknown[] = []
+    const { boot: b } = boot({ onInstallReport: (r) => reports.push(r) })
+    await b.start()
+    expect(reports).toEqual([{ staged: ['corpus-bg'], appUpdateNeeded: [], rejected: [] }])
+  })
+
   it('does not become ready when the lock is lost while it is still opening', async () => {
     const other: { takeOver?: () => Promise<void> } = {}
     const { boot: b, release } = boot({

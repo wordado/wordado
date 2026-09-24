@@ -1,5 +1,6 @@
 import { useT } from '../i18n/i18n'
 import { AccountSettings } from '../settings/AccountSettings'
+import { AppSettings } from '../settings/AppSettings'
 import { AudioDownload } from '../settings/AudioDownload'
 import { LanguageSettings } from '../settings/LanguageSettings'
 import { ReminderSettings } from '../settings/ReminderSettings'
@@ -18,6 +19,7 @@ export function Settings() {
       <ReminderSettings />
       <LanguageSettings />
       <AccountSettings />
+      <AppSettings />
     </div>
   )
 }

@@ -28,12 +28,17 @@ export default defineConfig({
         display: 'standalone',
         background_color: '#f6f7fb',
         theme_color: '#1d2b53',
-        icons: [{ src: '/icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' }],
+        icons: [
+          { src: '/icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
+          { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+        ],
       },
       injectManifest: {
         // A classic script, so every browser can register it.
         rollupFormat: 'iife',
-        globPatterns: ['**/*.{js,css,html,wasm,woff2,svg,json,pack,m4a,webmanifest}'],
+        // Audio lives in one cache, AudioStore's (decision of plan 6b); the sample's clips are fetched into it on the first online visit.
+        globPatterns: ['**/*.{js,css,html,wasm,woff2,svg,png,json,pack,webmanifest}'],
         // The asynchronous SQLite build is about 2.3 MB.
         maximumFileSizeToCacheInBytes: 4_000_000,
       },
@@ -43,4 +48,5 @@ export default defineConfig({
   optimizeDeps: { exclude: ['@journeyapps/wa-sqlite'] },
   worker: { format: 'es' },
   server: { port: 5173, strictPort: true, proxy: { '/api': API, '/v1': API } },
+  preview: { port: 4173, strictPort: true, proxy: { '/api': API, '/v1': API } },
 })

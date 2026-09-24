@@ -1,4 +1,4 @@
-import { Client, createStore, type ClientEnv, type PackFetcher, type SqlDriver, type Store, type SyncTransport } from '@wordado/client-data'
+import { Client, createStore, type ClientEnv, type InstallReport, type PackFetcher, type SqlDriver, type Store, type SyncTransport } from '@wordado/client-data'
 import type { PackManifest } from '@wordado/core'
 import { DEMO_FILE, learnerFile, type AccountRecord, type AccountStorage } from '../account/storage'
 import type { Backend } from '../storage/protocol'
@@ -47,6 +47,8 @@ export interface BootDeps {
   prepare?(client: Client): Promise<void>
   /** Background work once ready, such as prefetching audio. Its failure never fails the boot. */
   onReady?(client: Client): Promise<void>
+  /** The launch install's report: a pack may need a newer app (spec §9.3). */
+  onInstallReport?(report: InstallReport): void
 }
 
 export interface SwitchOptions {
@@ -249,7 +251,8 @@ export class Boot {
       const client = this.client!
       let installFailure: unknown = null
       try {
-        await client.installPacks(await this.deps.fetchManifest(), this.deps.fetchPack)
+        const report = await client.installPacks(await this.deps.fetchManifest(), this.deps.fetchPack)
+        this.deps.onInstallReport?.(report)
       } catch (err) {
         installFailure = err
       }
