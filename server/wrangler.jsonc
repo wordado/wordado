@@ -9,7 +9,8 @@
   "vars": {
     "BASE_URL": "http://localhost:8787",
     "MIN_PROTOCOL_VERSION": "1",
-    "TRUSTED_ORIGINS": "http://localhost:5173"
+    // :5173 is the Vite dev server, :4173 the preview build the end-to-end runs use.
+    "TRUSTED_ORIGINS": "http://localhost:5173,http://localhost:4173"
   },
   // Locally, the CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE environment variable points
   // this at the database; the dev and smoke scripts set it to the Docker one by default (spec §4.4).

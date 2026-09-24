@@ -18,8 +18,8 @@ that it can use the real interfaces of the plans before it.
 | 4 | Client data layer | `client-data` | `SqlDriver` interface and in-memory driver; local schema and migrations; pack loader; repositories; outbox; sync engine (push, pull, retry, backoff, min-version gate); React hooks | 1–3 |
 | 5 | Server | `server` | Postgres schema and forward-only migrations; Better Auth (email OTP, Google); sync endpoints; server-side stamping, replay and XP; re-derivation through Queues; entitlement; content reports; account deletion and JSON export; Web Push reminders by Cron Trigger | 1–3 |
 | 6a | **Web client: platform and study loop** — `2026-09-24-web-platform-and-study.md` | `web`, `core`, `client-data` | Vite + React PWA; wa-sqlite over OPFS with IndexedDB and in-memory fallbacks; single-tab lock and take-over; the bundled sample and a verified audio cache; the shared study-run state machine; the four game modes; today, path, themes, progress, practice; report an error; Bulgarian and English interface; offline shell; the demo end to end in Chromium with an axe scan | 4 |
-| 6b | Web client: accounts and settings | `web` | Sign-in (emailed code, Google); the age gate; demo carry-over and discard; the transport, sync lifecycle and status; settings (level, retention, limits, goal, audio, latency grading); the placement test; known and suspended words; reminders; account deletion and export; installation and update prompts; the WCAG 2.2 AA pass over its screens | 5, 6a |
-| 7 | CI and deploy | repo | GitHub Actions: typecheck, lint, suites, server tests against a Postgres service; Wrangler deploy and preview deployments; end-to-end browser matrix | 5, 6a, 6b |
+| 6b | **Web client: accounts and settings** — `2026-09-24-web-accounts-and-settings.md` | `web` | Sign-in (emailed code, Google); the age gate; demo carry-over and discard; the transport, sync lifecycle and status; settings (level, retention, limits, goal, audio, latency grading); the placement test; known and suspended words; reminders; account deletion and export; installation and update prompts; the WCAG 2.2 AA pass over its screens | 5, 6a |
+| 7 | CI and deploy | repo | GitHub Actions: typecheck, lint, suites, server tests against a Postgres service; Wrangler deploy and preview deployments; end-to-end browser matrix; the CDN manifest for learners (`VITE_CONTENT_MANIFEST_URL`) beside the bundled sample for the demo, with an `AudioStore` per manifest (moved from 6b); both end-to-end suites (`e2e`, `e2e:accounts`) in the browser matrix | 5, 6a, 6b |
 | 8 | Corpus pipeline | `pipeline` | Frequency data → CEFR banding → translation → review queues → TTS → packs → R2; pipeline tests (§13); the manually started workflow | 3, **legal review** |
 
 Plans 4 and 5 are independent of each other and can run in parallel. Plan 8 can
@@ -30,6 +30,7 @@ against the sample pack.
 
 - **Legal review** (spec §15) gates plan 8: licences of candidate frequency
   lists, and the per-country age-of-consent table the age gate in plan 6 needs.
+  The age gate ships with a provisional table (`web/src/account/ageGate.ts`) that the review must confirm before the beta opens.
 - **Docker** — resolved 2026-09-23: Docker Desktop is installed, and plan 5 runs Postgres in it (spec §4.4).
 - **A name and domain.** Resend needs a verified sending domain before sign-in
   emails can be sent from a deployed beta (`docs/research/2026-09-21-app-name-research.md`).
