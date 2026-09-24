@@ -30,7 +30,7 @@ export function Placement(props: { readonly source?: PlacementSource }) {
       if (event.key === '0') {
         event.preventDefault()
         run.dontKnow()
-      } else if (/^[1-9]$/.test(event.key)) {
+      } else if (/^[1-4]$/.test(event.key)) {
         event.preventDefault()
         run.choose(Number(event.key) - 1)
       }
@@ -48,7 +48,9 @@ export function Placement(props: { readonly source?: PlacementSource }) {
   if (s.phase === 'unavailable') {
     return (
       <section aria-labelledby="placement-title">
-        <h1 id="placement-title">{t('placement.unavailableTitle')}</h1>
+        <h1 id="placement-title" ref={heading} tabIndex={-1}>
+          {t('placement.unavailableTitle')}
+        </h1>
         <p>{t('placement.unavailableNote')}</p>
         <Link className="button" to={{ name: 'settings' }}>
           {t('placement.back')}

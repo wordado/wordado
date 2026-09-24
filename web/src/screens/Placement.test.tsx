@@ -31,7 +31,9 @@ describe('Placement (spec §7.2)', () => {
   it('explains why it is not offered on the A1-only sample', async () => {
     const ctx = await setup()
     renderWith(<Placement />, ctx)
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('The placement test isn’t available yet')
+    const heading = screen.getByRole('heading', { level: 1 })
+    expect(heading.textContent).toBe('The placement test isn’t available yet')
+    expect(document.activeElement).toBe(heading)
     expect(screen.getByRole('link', { name: 'Back to settings' }).getAttribute('href')).toBe('/settings')
   })
 
@@ -70,5 +72,15 @@ describe('Placement (spec §7.2)', () => {
     env.advance(ITEM_SETTLE_MS + 1_000)
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'I don’t know' })))
     expect(document.activeElement?.classList.contains('card')).toBe(true)
+  })
+
+  it('moves focus to the result heading after the last answer', async () => {
+    const { env } = await withBands()
+    for (let i = 0; i < 40 && document.querySelector('.hw-word'); i += 1) {
+      env.advance(ITEM_SETTLE_MS + 1_000)
+      await act(async () => fireEvent.click(screen.getByRole('button', { name: 'I don’t know' })))
+    }
+    const heading = screen.getByRole('heading', { level: 1, name: /^Your level: / })
+    expect(document.activeElement).toBe(heading)
   })
 })
