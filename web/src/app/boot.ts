@@ -1,13 +1,17 @@
-import { Client, createStore, type ClientEnv, type PackFetcher, type SqlDriver, type Store } from '@wordado/client-data'
+import { Client, createStore, type ClientEnv, type PackFetcher, type SqlDriver, type Store, type SyncTransport } from '@wordado/client-data'
 import type { PackManifest } from '@wordado/core'
+import { DEMO_FILE, learnerFile, type AccountRecord, type AccountStorage } from '../account/storage'
 import type { Backend } from '../storage/protocol'
+
+/** How long letting go waits for a last sync before closing anyway (spec §9.1). Tuning (§15). */
+export const FLUSH_TIMEOUT_MS = 3_000
 
 export type BootState =
   | { readonly status: 'starting' }
   /** Another tab owns the database (spec §9.1). */
   | { readonly status: 'elsewhere' }
   /** `resumed` is true once the shell appears after a take-over or a retry, rather than the first load, so `App` knows to move focus itself. */
-  | { readonly status: 'ready'; readonly client: Client; readonly backend: Backend; readonly resumed: boolean }
+  | { readonly status: 'ready'; readonly client: Client; readonly backend: Backend; readonly resumed: boolean; readonly account: AccountRecord | null }
   /**
    * 'lock' — the tab lock could not be taken; 'storage' — opening the
    * database or the Client on it failed; 'content' — no pack could be
@@ -25,13 +29,29 @@ export interface BootDeps {
   readonly env: ClientEnv
   /** The learner's L1: which packs to install. Bulgarian in Phase 1a. */
   readonly l1: string
-  openDriver(): Promise<{ readonly driver: SqlDriver; readonly backend: Backend }>
+  /** Which account this device is signed in to, read at every open. Absent: always the demo. */
+  readonly accounts?: AccountStorage
+  /** Opens one database file: `demo`, or a learner's `user-<id>`. */
+  openDriver(file: string): Promise<{ readonly driver: SqlDriver; readonly backend: Backend }>
+  /** Deletes a closed file: the demo after a carry-over or when left, a learner's after sign-out. */
+  deleteDatabase?(file: string): Promise<void>
+  /** A signed-in learner's transport (spec §9.2). The demo has none. */
+  transport?(): SyncTransport
+  /** Starts syncing a learner's Client (`startSyncLoop`); returns how to stop it. */
+  startSync?(client: Client, backend: Backend): () => void
+  /** Tests shorten FLUSH_TIMEOUT_MS. */
+  readonly flushTimeoutMs?: number
   fetchManifest(): Promise<PackManifest>
   readonly fetchPack: PackFetcher
   /** Quick work before the app shows, such as reading the audio cache's index. Its failure never fails the boot. */
   prepare?(client: Client): Promise<void>
   /** Background work once ready, such as prefetching audio. Its failure never fails the boot. */
   onReady?(client: Client): Promise<void>
+}
+
+export interface SwitchOptions {
+  /** A file to delete once the open one is closed and before the next opens. */
+  readonly deleteFile?: string
 }
 
 const messageOf = (err: unknown): string => (err instanceof Error ? err.message : String(err))
@@ -46,6 +66,10 @@ export class Boot {
   private readonly lock: LockPort
   private client: Client | null = null
   private backend: Backend = 'memory'
+  private account: AccountRecord | null = null
+  private stopSync: (() => void) | null = null
+  /** The close in progress, if any; `closeClient` chains on it. */
+  private closing: Promise<void> = Promise.resolve()
   /** Bumped when the database is given up, so an open still in flight does not become ready. */
   private generation = 0
   /** Whether this tab currently holds the lock; cleared on `release()` and by a failed acquire or take-over. */
@@ -125,15 +149,67 @@ export class Boot {
     await this.open(true)
   }
 
-  /** Called by the lock when another tab takes over: close, and say so. 6b flushes the outbox first. */
+  /**
+   * Called by the lock when another tab takes over (spec §9.1): say so, let
+   * any answer being written finish, flush (for at most FLUSH_TIMEOUT_MS),
+   * then close. Resolves once the file is let go, and only then does the
+   * lock pass on.
+   */
   async release(): Promise<void> {
     this.generation += 1
     this.lockHeld = false
     if (this.opening) await this.opening.catch(() => undefined)
+    this.store.set({ status: 'elsewhere' })
+    await this.closeClient(true)
+  }
+
+  /**
+   * The account changed — sign-in, sign-out, deletion, leaving the demo
+   * (spec §8.6): close what is open, delete `deleteFile` once nothing holds
+   * it, and open the file of the account now recorded. Keeps the tab lock.
+   * Does not flush: the caller has synced what should be synced, and after a
+   * deletion there is no account to flush to.
+   */
+  async switchTo(options: SwitchOptions = {}): Promise<void> {
+    if (!this.lockHeld) return
+    this.generation += 1
+    if (this.opening) await this.opening.catch(() => undefined)
+    this.store.set({ status: 'starting' })
+    await this.closeClient(false)
+    if (options.deleteFile) await this.deps.deleteDatabase?.(options.deleteFile).catch(() => undefined)
+    if (!this.lockHeld) return
+    await this.open(true)
+  }
+
+  /**
+   * Closes the open Client, one close at a time: a release that lands while a
+   * switch is still closing waits for that close, so the lock never passes on
+   * while this tab still holds a file.
+   */
+  private closeClient(flush: boolean): Promise<void> {
+    const run = this.closing.then(() => this.closeNow(flush))
+    this.closing = run.catch(() => undefined)
+    return run
+  }
+
+  /** Stops syncing, waits for in-flight answers, optionally flushes, and closes the Client. */
+  private async closeNow(flush: boolean): Promise<void> {
+    this.stopSync?.()
+    this.stopSync = null
     const client = this.client
     this.client = null
-    this.store.set({ status: 'elsewhere' })
-    await client?.close()
+    if (!client) return
+    await client.idle()
+    if (flush) {
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const timeout = new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, this.deps.flushTimeoutMs ?? FLUSH_TIMEOUT_MS)
+      })
+      await Promise.race([client.sync().catch(() => undefined), timeout])
+      clearTimeout(timer)
+    }
+    // A sync cut short by the timeout fails on the closed database; its answers are pushed again next time, and the server drops duplicates.
+    await client.close().catch(() => undefined)
   }
 
   private async open(resumed: boolean): Promise<void> {
@@ -166,7 +242,8 @@ export class Boot {
       if (!client.snapshot.corpus) throw installFailure ?? new Error('No words are installed')
       await this.deps.prepare?.(client).catch(() => undefined)
       if (generation !== this.generation) return
-      this.store.set({ status: 'ready', client, backend: this.backend, resumed })
+      if (this.account && this.deps.startSync) this.stopSync = this.deps.startSync(client, this.backend)
+      this.store.set({ status: 'ready', client, backend: this.backend, resumed, account: this.account })
       void this.deps.onReady?.(client).catch(() => undefined)
     } catch (err) {
       if (generation === this.generation) this.store.set({ status: 'failed', message: messageOf(err), reason: 'content' })
@@ -174,14 +251,18 @@ export class Boot {
   }
 
   /**
-   * Opens the driver, then the Client on it. Sets `this.client` only when the
+   * Opens the recorded account's file (or the demo's), after finishing any
+   * owed carry-over, then the Client on it. Sets `this.client` only when the
    * lock is still held by the time each step finishes; otherwise closes
-   * whatever was opened (the bare driver, or the Client) and leaves
-   * `this.client` untouched, so `release()` need not know about either.
-   * Rethrows a `Client.open` failure after closing the driver it was given.
+   * whatever was opened and leaves `this.client` untouched, so `release()`
+   * need not know about either. Rethrows a `Client.open` failure after
+   * closing the driver it was given.
    */
   private async acquireClient(generation: number): Promise<void> {
-    const { driver, backend } = await this.deps.openDriver()
+    const account = this.deps.accounts?.read() ?? null
+    if (account?.carryOver) await this.carryOverDemo(account)
+    if (generation !== this.generation) return
+    const { driver, backend } = await this.deps.openDriver(account ? learnerFile(account.userId) : DEMO_FILE)
     if (generation !== this.generation) {
       await driver.close().catch(() => undefined)
       return
@@ -189,7 +270,8 @@ export class Boot {
     this.backend = backend
     let client: Client
     try {
-      client = await Client.open({ driver, env: this.deps.env, l1: this.deps.l1 })
+      const transport = account ? this.deps.transport?.() : undefined
+      client = await Client.open({ driver, env: this.deps.env, l1: this.deps.l1, ...(transport ? { transport } : {}) })
     } catch (err) {
       await driver.close().catch(() => undefined)
       throw err
@@ -199,5 +281,44 @@ export class Boot {
       return
     }
     this.client = client
+    this.account = account
+  }
+
+  /**
+   * Finishes a carry-over the last session could not (spec §8.6): a demo
+   * attached to this account is pushed from its own device and, once nothing
+   * is left unsynced, deleted. A demo attached to nobody (or someone else) is
+   * left alone. Never fails the boot: the flag stays, and the next open tries
+   * again.
+   */
+  private async carryOverDemo(account: AccountRecord): Promise<void> {
+    const transport = this.deps.transport?.()
+    if (!transport) return
+    let opened: { readonly driver: SqlDriver; readonly backend: Backend }
+    try {
+      opened = await this.deps.openDriver(DEMO_FILE)
+    } catch {
+      return
+    }
+    let demo: Client | null = null
+    let finished = opened.backend === 'memory'
+    let pushed = false
+    try {
+      if (!finished) {
+        demo = await Client.open({ driver: opened.driver, env: this.deps.env, l1: this.deps.l1, transport })
+        if (demo.snapshot.userId !== account.userId) finished = true
+        else {
+          await demo.sync({ force: true })
+          pushed = !(await demo.hasUnsynced())
+        }
+      }
+    } catch {
+      // Offline, or the demo cannot be read: the next open tries again.
+    } finally {
+      if (demo) await demo.close().catch(() => undefined)
+      else await opened.driver.close().catch(() => undefined)
+    }
+    if (pushed) await this.deps.deleteDatabase?.(DEMO_FILE).catch(() => undefined)
+    if (pushed || finished) this.deps.accounts?.save({ ...account, carryOver: false })
   }
 }

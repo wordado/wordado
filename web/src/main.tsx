@@ -3,24 +3,34 @@ import '@fontsource-variable/literata'
 import './styles.css'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { accountStorage } from './account/storage'
+import { httpTransport } from './account/transport'
 import { Boot } from './app/boot'
 import { Root } from './app/Root'
+import { startSyncLoop } from './app/syncLoop'
 import { AudioStore } from './content/audio'
 import { fetchManifest, packFetcher, SAMPLE_MANIFEST_URL } from './content/packs'
 import { webEnv } from './env'
 import { I18nProvider } from './i18n/i18n'
+import { deleteDatabase } from './storage/erase'
 import { TabLock } from './storage/tabLock'
 import { openWorkerDriver } from './storage/workerDriver'
 
 const env = webEnv()
 const audio = new AudioStore({ manifestUrl: SAMPLE_MANIFEST_URL, sha256: env.sha256 })
+const accounts = accountStorage()
+// Task 7 routes a 401 to the account controller; until then an expired sign-in only shows as a failed sync.
+const transport = httpTransport()
 
 const boot = new Boot(
   {
     env,
     l1: 'bg',
-    // The demo's own database (decision of 2026-09-24); 6b adds the learner's.
-    openDriver: () => openWorkerDriver('demo'),
+    accounts,
+    openDriver: (file) => openWorkerDriver(file),
+    deleteDatabase,
+    transport: () => transport,
+    startSync: (client, backend) => startSyncLoop(client, { everyAnswer: backend === 'memory', now: env.now }),
     fetchManifest: () => fetchManifest(SAMPLE_MANIFEST_URL),
     fetchPack: packFetcher(SAMPLE_MANIFEST_URL),
     // Before the app shows, so the first session already knows which clips can play (spec §9.3).
@@ -36,10 +46,12 @@ const boot = new Boot(
 
 let persistenceAsked = false
 
-/** After a run: fetch ahead (spec §9.3), and ask once to keep storage (spec §9.1). */
+/** After a run: fetch ahead (spec §9.3), flush (spec §9.1), and ask once to keep storage (spec §9.1). */
 function afterRun(): void {
   const state = boot.store.get()
   if (state.status === 'ready' && navigator.onLine) void audio.prefetch(state.client.upcomingClips()).catch(() => undefined)
+  // A run is over: flush now (spec §9.1). The demo's Client has no transport, so this is a no-op there.
+  if (state.status === 'ready') void state.client.sync().catch(() => undefined)
   if (!persistenceAsked) {
     persistenceAsked = true
     void navigator.storage?.persist?.().catch(() => false)

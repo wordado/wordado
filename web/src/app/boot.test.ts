@@ -1,12 +1,18 @@
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { Client, SqlDriver } from '@wordado/client-data'
+import type { Client, SqlDriver, SyncTransport } from '@wordado/client-data'
 import { nodeSqliteDriver } from '@wordado/client-data/src/drivers/nodeSqlite'
 import { sampleFetcher, sampleManifest } from '@wordado/client-data/src/testing/sample'
 import { testEnv } from '@wordado/client-data/src/testing/testEnv'
+import { FakeServer } from '@wordado/client-data/src/testing/fakeServer'
+import type { WordId } from '@wordado/core'
 import { describe, expect, it } from 'vitest'
+import { accountStorage, DEMO_FILE, learnerFile, memoryStorage } from '../account/storage'
+import { answerTo, disk, flaky } from '../test/disk'
 import { Boot, type BootDeps, type LockPort } from './boot'
+
+const hello = answerTo('c:hello-1')
 
 /** Wraps a driver so the test can see how many times it was closed. */
 function countingDriver(driver: SqlDriver): { readonly driver: SqlDriver; readonly closes: () => number } {
@@ -319,5 +325,216 @@ describe('Boot', () => {
     await b.retry()
     expect(takeOverCalls).toBe(2)
     expect(ready(b).snapshot.corpus).not.toBeNull()
+  })
+})
+
+describe('Boot with accounts (spec §8.6, §9.1)', () => {
+  it('opens the demo without an account, and the learner’s own file, with a transport, with one', async () => {
+    const d = disk()
+    const env = testEnv()
+    const server = new FakeServer({ now: env.now })
+    const accounts = accountStorage(memoryStorage())
+    const { boot: b } = boot({ env, accounts, openDriver: d.openDriver, deleteDatabase: d.deleteDatabase, transport: () => server })
+    await b.start()
+    expect(b.store.get()).toMatchObject({ status: 'ready', account: null })
+    expect(d.exists(DEMO_FILE)).toBe(true)
+    expect(await ready(b).sync()).toBe('skipped')
+
+    accounts.save({ userId: 'u1', email: 'ana@example.com' })
+    await b.switchTo({ deleteFile: DEMO_FILE })
+    expect(b.store.get()).toMatchObject({ status: 'ready', account: { userId: 'u1' } })
+    expect(d.exists(DEMO_FILE)).toBe(false)
+    expect(d.exists(learnerFile('u1'))).toBe(true)
+    const learner = ready(b)
+    await learner.answer(hello)
+    expect(await learner.sync()).toBe('synced')
+    expect(server.events.size).toBe(1)
+  })
+
+  it('finishes a carry-over the last session could not, then deletes the demo (spec §8.6)', async () => {
+    const d = disk()
+    const env = testEnv()
+    const server = new FakeServer({ now: env.now })
+    const transport = flaky(server)
+    const accounts = accountStorage(memoryStorage())
+    const { boot: b } = boot({ env, accounts, openDriver: d.openDriver, deleteDatabase: d.deleteDatabase, transport: () => transport })
+    await b.start()
+    const demo = ready(b)
+    await demo.answer(hello)
+    // Signed in, but the push did not get through: the demo stays attached and flagged.
+    await demo.attachUser('u1', transport)
+    expect(await demo.sync({ force: true })).toBe('failed')
+    accounts.save({ userId: 'u1', email: 'ana@example.com', carryOver: true })
+    await b.switchTo()
+    expect(d.exists(DEMO_FILE)).toBe(true)
+    expect(accounts.read()?.carryOver).toBe(true)
+    expect(server.events.size).toBe(0)
+
+    // The next open, online: the demo's answer reaches the account from the demo's device, once.
+    transport.online = true
+    await b.switchTo()
+    expect(server.events.size).toBe(1)
+    expect([...server.events.values()][0]!.deviceId).toBe(demo.snapshot.deviceId)
+    expect(d.exists(DEMO_FILE)).toBe(false)
+    expect(accounts.read()).toEqual({ userId: 'u1', email: 'ana@example.com', carryOver: false })
+    const learner = ready(b)
+    expect(await learner.sync()).toBe('synced')
+    expect(learner.snapshot.states.get('c:hello-1' as WordId)?.reps).toBe(1)
+    await b.switchTo()
+    expect(server.events.size).toBe(1)
+  })
+
+  it('leaves a demo attached to nobody alone, and does not open it when no carry-over is owed', async () => {
+    const d = disk()
+    const env = testEnv()
+    const server = new FakeServer({ now: env.now })
+    const accounts = accountStorage(memoryStorage())
+    const opened: string[] = []
+    const { boot: b } = boot({
+      env,
+      accounts,
+      openDriver: async (file) => {
+        opened.push(file)
+        return d.openDriver(file)
+      },
+      deleteDatabase: d.deleteDatabase,
+      transport: () => server,
+    })
+    await b.start()
+    await ready(b).answer(hello)
+    accounts.save({ userId: 'u1', email: 'ana@example.com', carryOver: true })
+    await b.switchTo()
+    expect(d.exists(DEMO_FILE)).toBe(true)
+    expect(server.events.size).toBe(0)
+    expect(accounts.read()?.carryOver).toBe(false)
+    opened.length = 0
+    await b.switchTo()
+    expect(opened).toEqual([learnerFile('u1')])
+  })
+
+  it('drains an answer being written and flushes it before letting go (spec §9.1)', async () => {
+    const d = disk()
+    const env = testEnv()
+    const server = new FakeServer({ now: env.now })
+    const accounts = accountStorage(memoryStorage())
+    accounts.save({ userId: 'u1', email: 'ana@example.com' })
+    const { boot: b, release } = boot({ env, accounts, openDriver: d.openDriver, deleteDatabase: d.deleteDatabase, transport: () => server })
+    await b.start()
+    const client = ready(b)
+    const answering = client.answer(hello)
+    await release()
+    await answering
+    expect(b.store.get().status).toBe('elsewhere')
+    expect(server.events.size).toBe(1)
+  })
+
+  it('lets go after the flush timeout when the server hangs', async () => {
+    const d = disk()
+    const env = testEnv()
+    const accounts = accountStorage(memoryStorage())
+    accounts.save({ userId: 'u1', email: 'ana@example.com' })
+    const hanging: SyncTransport = { push: () => new Promise(() => undefined), pull: () => new Promise(() => undefined) }
+    const { boot: b, release } = boot({ env, accounts, openDriver: d.openDriver, deleteDatabase: d.deleteDatabase, transport: () => hanging, flushTimeoutMs: 20 })
+    await b.start()
+    await ready(b).answer(hello)
+    const started = Date.now()
+    await release()
+    expect(Date.now() - started).toBeLessThan(1_000)
+    expect(b.store.get().status).toBe('elsewhere')
+  })
+
+  it('starts the sync loop for a learner only, and stops it on a switch and on release', async () => {
+    const d = disk()
+    const env = testEnv()
+    const server = new FakeServer({ now: env.now })
+    const accounts = accountStorage(memoryStorage())
+    const log: string[] = []
+    const { boot: b, release } = boot({
+      env,
+      accounts,
+      openDriver: d.openDriver,
+      deleteDatabase: d.deleteDatabase,
+      transport: () => server,
+      startSync: (_client, backend) => {
+        log.push(`start ${backend}`)
+        return () => log.push('stop')
+      },
+    })
+    await b.start()
+    expect(log).toEqual([])
+    accounts.save({ userId: 'u1', email: 'ana@example.com' })
+    await b.switchTo()
+    await b.switchTo()
+    await release()
+    expect(log).toEqual(['start opfs', 'stop', 'start opfs', 'stop'])
+  })
+
+  it('hands over cleanly when a take-over lands in the middle of a switch', async () => {
+    const d = disk()
+    const env = testEnv()
+    const accounts = accountStorage(memoryStorage())
+    const gate = deferred<void>()
+    const reached = deferred<void>()
+    const closes: string[] = []
+    const { boot: b, release } = boot({
+      env,
+      accounts,
+      openDriver: async (file) => {
+        if (file !== DEMO_FILE) {
+          reached.resolve()
+          await gate.promise
+        }
+        const { driver } = countingDriver(nodeSqliteDriver(d.path(file)))
+        return { driver: { ...driver, close: async () => (closes.push(file), driver.close()) }, backend: 'opfs' }
+      },
+      deleteDatabase: d.deleteDatabase,
+      transport: () => new FakeServer({ now: env.now }),
+    })
+    await b.start()
+    accounts.save({ userId: 'u1', email: 'ana@example.com' })
+    const switching = b.switchTo()
+    // The take-over lands while the learner's file is being opened: that open is closed again, never used.
+    await reached.promise
+    const releasing = release()
+    gate.resolve()
+    await Promise.all([switching, releasing])
+    expect(b.store.get().status).toBe('elsewhere')
+    expect(closes).toEqual([DEMO_FILE, learnerFile('u1')])
+  })
+
+  it('hands over only after a switch has closed the file it was closing', async () => {
+    const d = disk()
+    const env = testEnv()
+    const accounts = accountStorage(memoryStorage())
+    const closing = deferred<void>()
+    const log: string[] = []
+    const { boot: b, release } = boot({
+      env,
+      accounts,
+      openDriver: async (file) => {
+        const driver = nodeSqliteDriver(d.path(file))
+        return {
+          driver: {
+            ...driver,
+            close: async () => {
+              if (file === DEMO_FILE) await closing.promise
+              await driver.close()
+              log.push(`closed ${file}`)
+            },
+          },
+          backend: 'opfs',
+        }
+      },
+      deleteDatabase: d.deleteDatabase,
+    })
+    await b.start()
+    accounts.save({ userId: 'u1', email: 'ana@example.com' })
+    const switching = b.switchTo()
+    const releasing = release().then(() => log.push('released'))
+    await new Promise((r) => setTimeout(r, 10))
+    expect(log).toEqual([])
+    closing.resolve()
+    await Promise.all([switching, releasing])
+    expect(log).toEqual([`closed ${DEMO_FILE}`, 'released'])
   })
 })
