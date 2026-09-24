@@ -8,6 +8,9 @@ export type { MessageKey }
 export const LOCALES = ['bg', 'en'] as const
 export type Locale = (typeof LOCALES)[number]
 
+/** Each language named in itself, as language pickers do. The visible name is the accessible name (WCAG 2.5.3). */
+export const ENDONYM: Readonly<Record<Locale, string>> = { bg: 'Български', en: 'English' }
+
 /** The one localStorage key the app uses (spec §11.2: the interface language is the learner's choice). */
 export const LOCALE_KEY = 'wordado.locale'
 

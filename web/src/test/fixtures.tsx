@@ -13,15 +13,21 @@ import { I18nProvider, type Locale } from '../i18n/i18n'
 import type { Backend } from '../storage/protocol'
 import { fakeApi } from './fakeApi'
 
-/** Audio that is never available unless a test says so, and records what it was asked to play. */
-export function fakeAudio(over: Partial<AudioPort> = {}): AudioPort & { played: AudioClip[] } {
+/** Audio that is never available unless a test says so, and records what it was asked to play or fetch. */
+export function fakeAudio(over: Partial<AudioPort> = {}): AudioPort & { played: AudioClip[]; fetched: AudioClip[] } {
   const played: AudioClip[] = []
+  const fetched: AudioClip[] = []
   return {
     played,
+    fetched,
     cachedClips: () => new Set(),
     streamable: () => false,
     play: async (clip) => {
       played.push(clip)
+    },
+    prefetch: async (clips) => {
+      fetched.push(...clips)
+      return clips.length
     },
     ...over,
   }

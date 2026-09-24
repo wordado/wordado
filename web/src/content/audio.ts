@@ -20,6 +20,8 @@ export interface AudioPort {
   streamable(): boolean
   /** Plays a clip; resolves when it ends, rejects when it cannot be played. */
   play(clip: AudioClip): Promise<void>
+  /** Fetches, verifies and caches clips ahead of need (spec §9.3); resolves with how many were added. */
+  prefetch(clips: readonly AudioClip[]): Promise<number>
 }
 
 /** The part of HTMLAudioElement the store uses. */

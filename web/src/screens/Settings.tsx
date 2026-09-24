@@ -1,0 +1,19 @@
+import { useT } from '../i18n/i18n'
+import { AccountSettings } from '../settings/AccountSettings'
+import { AudioDownload } from '../settings/AudioDownload'
+import { LanguageSettings } from '../settings/LanguageSettings'
+import { StudySettings } from '../settings/StudySettings'
+
+/** Settings (spec §7, §9.3, §11): each section is its own component. */
+export function Settings() {
+  const { t } = useT()
+  return (
+    <div className="settings">
+      <h1>{t('settings.title')}</h1>
+      <StudySettings />
+      <AudioDownload />
+      <LanguageSettings />
+      <AccountSettings />
+    </div>
+  )
+}

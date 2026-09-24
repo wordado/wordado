@@ -1,11 +1,12 @@
 import { useEffect, useRef } from 'react'
-import { LOCALES, useT, type Locale, type MessageKey } from '../i18n/i18n'
+import { ENDONYM, LOCALES, useT, type MessageKey } from '../i18n/i18n'
 import { Link, useRoute, type Route } from '../router'
 import { Home } from '../screens/Home'
 import { Matching } from '../screens/Matching'
 import { Path } from '../screens/Path'
 import { Practice } from '../screens/Practice'
 import { Progress } from '../screens/Progress'
+import { Settings } from '../screens/Settings'
 import { SignIn } from '../screens/SignIn'
 import { Study } from '../screens/Study'
 import { Themes } from '../screens/Themes'
@@ -16,10 +17,8 @@ const NAV: readonly { readonly route: Route; readonly label: MessageKey }[] = [
   { route: { name: 'path' }, label: 'nav.path' },
   { route: { name: 'themes' }, label: 'nav.themes' },
   { route: { name: 'progress' }, label: 'nav.progress' },
+  { route: { name: 'settings' }, label: 'nav.settings' },
 ]
-
-/** Each language named in itself, as language pickers do. The visible name is the accessible name (WCAG 2.5.3). */
-const ENDONYM: Readonly<Record<Locale, string>> = { bg: 'Български', en: 'English' }
 
 function Screen(props: { readonly route: Route }) {
   const { route } = props
@@ -40,6 +39,8 @@ function Screen(props: { readonly route: Route }) {
       return <Progress />
     case 'signin':
       return <SignIn />
+    case 'settings':
+      return <Settings />
     default:
       return <Home />
   }
