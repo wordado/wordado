@@ -1,6 +1,6 @@
 import { MatchingRun, useClient, useClientSnapshot, type MatchingSide } from '@wordado/client-data'
 import type { CorpusEntry } from '@wordado/core'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useApp } from '../app/context'
 import { useT } from '../i18n/i18n'
 import { Link } from '../router'
@@ -34,6 +34,24 @@ function Board(props: { readonly run: MatchingRun; readonly onAgain: () => void 
   const s = useStore(run.store)
   const l1 = corpus?.l1 ?? 'bg'
   const byId = (entryId: string) => s.left.find((e) => e.entryId === entryId)
+  const leftRefs = useRef(new Map<string, HTMLButtonElement>())
+  const againRef = useRef<HTMLButtonElement>(null)
+  const mounted = useRef(false)
+
+  // A disabled button loses focus to the body (spec §11.1): follow every match with the
+  // next unmatched word, or "Play again" once the board is done. Not on the initial render.
+  useEffect(() => {
+    if (!mounted.current) {
+      mounted.current = true
+      return
+    }
+    if (s.done) {
+      againRef.current?.focus()
+    } else if (s.matched.size > 0) {
+      const next = s.left.find((e) => !s.matched.has(e.entryId))
+      if (next) leftRefs.current.get(next.entryId)?.focus()
+    }
+  }, [s.matched.size, s.done, s.left])
 
   const pair = (side: MatchingSide, entry: CorpusEntry) => {
     const selected = s.selected?.side === side && s.selected.entryId === entry.entryId
@@ -46,6 +64,14 @@ function Board(props: { readonly run: MatchingRun; readonly onAgain: () => void 
           aria-pressed={selected}
           disabled={matched}
           data-entry={entry.entryId}
+          ref={
+            side === 'left'
+              ? (el) => {
+                  if (el) leftRefs.current.set(entry.entryId, el)
+                  else leftRefs.current.delete(entry.entryId)
+                }
+              : undefined
+          }
           onClick={() => void run.select(side, entry.entryId)}
         >
           {side === 'left' ? <span lang="en">{entry.headword}</span> : <Translation entry={entry} lang={l1} />}
@@ -85,7 +111,7 @@ function Board(props: { readonly run: MatchingRun; readonly onAgain: () => void 
       </div>
       {s.done && (
         <div className="actions">
-          <button type="button" className="button primary" onClick={props.onAgain}>
+          <button type="button" className="button primary" ref={againRef} onClick={props.onAgain}>
             {t('matching.again')}
           </button>
           <Link className="button" to={{ name: 'home' }}>

@@ -42,4 +42,24 @@ describe('Matching', () => {
     await click(screen.getByRole('button', { name: 'Play again' }))
     expect(english().every((b) => !b.disabled)).toBe(true)
   })
+
+  it('moves focus to the next unmatched word after a match, and to Play again once the board is done', async () => {
+    const ctx = await setup()
+    await answerNew(ctx.client, ctx.env, 5)
+    renderWith(<Matching />, ctx)
+    const order = english()
+
+    for (const [i, button] of order.entries()) {
+      button.focus()
+      await click(button)
+      const translation = translationFor(button.dataset.entry!)
+      translation.focus()
+      await click(translation)
+      if (i < order.length - 1) {
+        expect(document.activeElement).toBe(english().find((b) => !b.disabled))
+      } else {
+        expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Play again' }))
+      }
+    }
+  })
 })
