@@ -5,7 +5,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { httpApi } from './account/api'
 import { AccountController } from './account/controller'
-import { accountStorage, pendingSignIn } from './account/storage'
+import { accountStorage, browserStorage, pendingSignIn } from './account/storage'
 import { httpTransport } from './account/transport'
 import { Boot } from './app/boot'
 import { Root } from './app/Root'
@@ -14,6 +14,8 @@ import { AudioStore } from './content/audio'
 import { fetchManifest, packFetcher, SAMPLE_MANIFEST_URL } from './content/packs'
 import { webEnv } from './env'
 import { I18nProvider } from './i18n/i18n'
+import { writeInterfaceLanguage } from './reminders/prefs'
+import { browserPushPlatform, ReminderService } from './reminders/reminders'
 import { deleteDatabase } from './storage/erase'
 import { TabLock } from './storage/tabLock'
 import { openWorkerDriver } from './storage/workerDriver'
@@ -22,6 +24,13 @@ const env = webEnv()
 const audio = new AudioStore({ manifestUrl: SAMPLE_MANIFEST_URL, sha256: env.sha256 })
 const accounts = accountStorage()
 const api = httpApi()
+const reminders = new ReminderService({
+  api,
+  platform: browserPushPlatform(),
+  storage: browserStorage('localStorage'),
+  tzOffsetMin: env.tzOffsetMin,
+  language: () => (document.documentElement.lang === 'en' ? 'en' : 'bg'),
+})
 let controller: AccountController | null = null
 // A 401 from sync means the sign-in expired (spec §8.6): the controller shows it and the outbox waits.
 const transport = httpTransport({ onUnauthorized: () => controller?.sessionExpired() })
@@ -48,7 +57,7 @@ const boot = new Boot(
   (release) => new TabLock({ release }),
 )
 
-controller = new AccountController({ api, boot, accounts, pending: pendingSignIn(), transport: () => transport })
+controller = new AccountController({ api, boot, accounts, pending: pendingSignIn(), transport: () => transport, reminders })
 
 // Back from Google (spec §8.6): finish the sign-in once the demo (or the learner's file) is open.
 const returnUrl = new URL(window.location.href)
@@ -82,10 +91,23 @@ window.addEventListener('online', () => {
   if (state.status === 'ready') void audio.prefetch(state.client.upcomingClips()).catch(() => undefined)
 })
 
+// At launch, once a signed-in learner is ready: resend the subscription (plan 5 contract).
+const unsubscribeReminders = boot.store.subscribe(() => {
+  const state = boot.store.get()
+  if (state.status !== 'ready') return
+  unsubscribeReminders()
+  if (state.account) void reminders.refresh().catch(() => undefined)
+})
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <I18nProvider>
-      <Root boot={boot} services={{ env, audio, afterRun, api, accounts: controller! }} />
+    <I18nProvider
+      onLocale={(locale) => {
+        void writeInterfaceLanguage(locale).catch(() => undefined)
+        void reminders.refresh().catch(() => undefined)
+      }}
+    >
+      <Root boot={boot} services={{ env, audio, afterRun, api, accounts: controller!, reminders }} />
     </I18nProvider>
   </StrictMode>,
 )

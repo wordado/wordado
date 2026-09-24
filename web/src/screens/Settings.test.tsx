@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, screen, within } from '@testing-library/react'
 import { MAX_NEW_WORD_LIMIT, type WordId } from '@wordado/core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { fakeAccounts, fakeAudio, renderWith, setup } from '../test/fixtures'
+import { fakeAccounts, fakeAudio, fakeReminders, renderWith, setup } from '../test/fixtures'
 import { Settings } from './Settings'
 
 beforeEach(() => window.history.replaceState(null, '', '/settings'))
@@ -160,5 +160,39 @@ describe('Settings: words set aside (spec §7.4)', () => {
     await act(async () => fireEvent.click(within(list).getByRole('button', { name: 'Bring back: hello' })))
     expect(ctx.client.snapshot.flags.size).toBe(0)
     expect(within(list).getByText('No words are set aside.')).toBeTruthy()
+  })
+})
+
+describe('Settings: reminders (spec §8.11)', () => {
+  const ana = { userId: 'u1', email: 'ana@example.com' }
+
+  it('needs an account', async () => {
+    const ctx = await setup()
+    renderWith(<Settings />, ctx)
+    expect(screen.getByText('Reminders come with an account.')).toBeTruthy()
+  })
+
+  it('turns on at 19:00, changes the time and the nudge, and turns off', async () => {
+    const ctx = await setup()
+    const reminders = fakeReminders()
+    renderWith(<Settings />, { ...ctx, account: ana, reminders })
+    await act(async () => fireEvent.click(screen.getByRole('checkbox', { name: 'Remind me to study' })))
+    expect((screen.getByLabelText('At') as HTMLInputElement).value).toBe('19:00')
+    await act(async () => fireEvent.change(screen.getByLabelText('At'), { target: { value: '07:30' } }))
+    await act(async () => fireEvent.click(screen.getByRole('checkbox', { name: /streak needs today/ })))
+    await act(async () => fireEvent.click(screen.getByRole('checkbox', { name: 'Remind me to study' })))
+    expect(reminders.calls).toEqual(['enable 1140 false', 'enable 450 false', 'enable 450 true', 'disable'])
+    expect(screen.getByText('Reminders are off.')).toBeTruthy()
+  })
+
+  it('says plainly why reminders cannot work here', async () => {
+    const ctx = await setup()
+    renderWith(<Settings />, { ...ctx, account: ana, reminders: fakeReminders({ support: () => 'needs-install' }) })
+    expect(screen.getByText(/once Wordado is on your home screen/)).toBeTruthy()
+    cleanup()
+    renderWith(<Settings />, { ...ctx, account: ana, reminders: fakeReminders({ enable: async () => 'denied' }) })
+    await act(async () => fireEvent.click(screen.getByRole('checkbox', { name: 'Remind me to study' })))
+    expect(screen.getByText(/Notifications are blocked/)).toBeTruthy()
+    expect((screen.getByRole('checkbox', { name: 'Remind me to study' }) as HTMLInputElement).checked).toBe(false)
   })
 })

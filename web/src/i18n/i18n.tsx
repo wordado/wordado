@@ -67,11 +67,12 @@ function defaultStorage(): LocaleStorage | null {
   }
 }
 
-export function I18nProvider(props: { readonly storage?: LocaleStorage | null; readonly children?: ReactNode }) {
+export function I18nProvider(props: { readonly storage?: LocaleStorage | null; readonly onLocale?: (locale: Locale) => void; readonly children?: ReactNode }) {
   const storage = props.storage === undefined ? defaultStorage() : props.storage
   const [locale, setState] = useState<Locale>(() => readLocale(storage))
   useEffect(() => {
     document.documentElement.lang = locale
+    props.onLocale?.(locale)
   }, [locale])
   const setLocale = useCallback(
     (next: Locale) => {

@@ -10,6 +10,7 @@ import type { AccountRecord } from '../account/storage'
 import { AppProvider } from '../app/context'
 import type { AudioPort } from '../content/audio'
 import { I18nProvider, type Locale } from '../i18n/i18n'
+import type { ReminderActions, ReminderPrefs } from '../reminders/reminders'
 import type { Backend } from '../storage/protocol'
 import { fakeApi } from './fakeApi'
 
@@ -50,6 +51,7 @@ export interface RenderContext {
   readonly api?: Api
   readonly accounts?: AccountActions
   readonly account?: AccountRecord | null
+  readonly reminders?: ReminderActions
 }
 
 /** The account controller as the screens see it: every call is logged, and each can be overridden. */
@@ -80,6 +82,27 @@ export function fakeAccounts(over: Partial<AccountActions> = {}): AccountActions
   }
 }
 
+/** Reminders as settings sees them; `support` and the answer to `enable` are the test's to choose. */
+export function fakeReminders(over: Partial<ReminderActions> = {}): ReminderActions & { calls: string[] } {
+  const calls: string[] = []
+  let prefs: ReminderPrefs | null = null
+  return {
+    calls,
+    prefs: () => prefs,
+    support: () => 'supported',
+    enable: async (p) => {
+      calls.push(`enable ${p.minute} ${p.streakNudge}`)
+      prefs = p
+      return 'on'
+    },
+    disable: async () => {
+      calls.push('disable')
+      prefs = null
+    },
+    ...over,
+  }
+}
+
 /** Renders inside every provider the app has, in English unless told otherwise. */
 export function renderWith(ui: ReactElement, ctx: RenderContext): RenderResult {
   const storage = { getItem: () => ctx.locale ?? 'en', setItem: () => undefined }
@@ -95,6 +118,7 @@ export function renderWith(ui: ReactElement, ctx: RenderContext): RenderResult {
             api: ctx.api ?? fakeApi(),
             accounts: ctx.accounts ?? fakeAccounts(),
             account: ctx.account ?? null,
+            reminders: ctx.reminders ?? fakeReminders(),
           }}
         >
           {ui}

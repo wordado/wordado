@@ -4,6 +4,7 @@ import type { Api } from '../account/api'
 import type { AccountActions } from '../account/controller'
 import type { AccountRecord } from '../account/storage'
 import type { AudioPort } from '../content/audio'
+import type { ReminderActions } from '../reminders/reminders'
 import type { Backend } from '../storage/protocol'
 
 /** What the screens need beside the Client. */
@@ -18,6 +19,8 @@ export interface AppServices {
   readonly accounts: AccountActions
   /** The server's endpoints beside sync. */
   readonly api: Api
+  /** Opt-in reminders on this device (spec §8.11). */
+  readonly reminders: ReminderActions
   /**
    * Called when a run ends: fetches the clips of the words about to be met
    * (spec §9.3), flushes the outbox (spec §9.1), and asks once for persistent

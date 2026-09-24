@@ -2,6 +2,7 @@ import { useT } from '../i18n/i18n'
 import { AccountSettings } from '../settings/AccountSettings'
 import { AudioDownload } from '../settings/AudioDownload'
 import { LanguageSettings } from '../settings/LanguageSettings'
+import { ReminderSettings } from '../settings/ReminderSettings'
 import { SetAsideWords } from '../settings/SetAsideWords'
 import { StudySettings } from '../settings/StudySettings'
 
@@ -14,6 +15,7 @@ export function Settings() {
       <StudySettings />
       <SetAsideWords />
       <AudioDownload />
+      <ReminderSettings />
       <LanguageSettings />
       <AccountSettings />
     </div>
