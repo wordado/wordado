@@ -169,47 +169,63 @@ export class Boot {
    * it, and open the file of the account now recorded. Keeps the tab lock.
    * Does not flush: the caller has synced what should be synced, and after a
    * deletion there is no account to flush to.
+   *
+   * Captures its own generation: two overlapping `switchTo()` calls (or a
+   * `switchTo()` racing a `release()`) must not both reach `open()`, or the
+   * learner's file opens twice, one `Client` leaks, and its sync loop is
+   * never stopped. Only the call that is still current once the close (and
+   * any delete) has finished goes on to open; the superseded one simply
+   * stops — `open()`'s own generation checks are the second line of defence
+   * once an open is actually under way.
    */
   async switchTo(options: SwitchOptions = {}): Promise<void> {
     if (!this.lockHeld) return
-    this.generation += 1
+    const generation = ++this.generation
     if (this.opening) await this.opening.catch(() => undefined)
     this.store.set({ status: 'starting' })
-    await this.closeClient(false)
-    if (options.deleteFile) await this.deps.deleteDatabase?.(options.deleteFile).catch(() => undefined)
-    if (!this.lockHeld) return
+    await this.closeClient(false, options.deleteFile)
+    if (generation !== this.generation) return
     await this.open(true)
   }
 
   /**
-   * Closes the open Client, one close at a time: a release that lands while a
-   * switch is still closing waits for that close, so the lock never passes on
-   * while this tab still holds a file.
+   * Closes the open Client, one close (and any delete) at a time: a release
+   * that lands while a switch is still closing — or deleting — waits for
+   * that step, so the lock never passes on while this tab still holds or is
+   * still erasing a file.
    */
-  private closeClient(flush: boolean): Promise<void> {
-    const run = this.closing.then(() => this.closeNow(flush))
+  private closeClient(flush: boolean, deleteFile?: string): Promise<void> {
+    const run = this.closing.then(() => this.closeNow(flush, deleteFile))
     this.closing = run.catch(() => undefined)
     return run
   }
 
-  /** Stops syncing, waits for in-flight answers, optionally flushes, and closes the Client. */
-  private async closeNow(flush: boolean): Promise<void> {
+  /**
+   * Stops syncing, waits for in-flight answers, optionally flushes, closes
+   * the Client, and only then — inside this same serialised step — deletes
+   * `deleteFile` if given, so a hand-over landing mid-switch waits for the
+   * delete too (spec §8.6, §9.1).
+   */
+  private async closeNow(flush: boolean, deleteFile?: string): Promise<void> {
     this.stopSync?.()
     this.stopSync = null
     const client = this.client
     this.client = null
-    if (!client) return
-    await client.idle()
-    if (flush) {
-      let timer: ReturnType<typeof setTimeout> | undefined
-      const timeout = new Promise<void>((resolve) => {
-        timer = setTimeout(resolve, this.deps.flushTimeoutMs ?? FLUSH_TIMEOUT_MS)
-      })
-      await Promise.race([client.sync().catch(() => undefined), timeout])
-      clearTimeout(timer)
+    if (client) {
+      await client.idle()
+      if (flush) {
+        let timer: ReturnType<typeof setTimeout> | undefined
+        const timeout = new Promise<void>((resolve) => {
+          timer = setTimeout(resolve, this.deps.flushTimeoutMs ?? FLUSH_TIMEOUT_MS)
+        })
+        // Force past any backoff: letting go must flush even mid-retry (spec §9.1).
+        await Promise.race([client.sync({ force: true }).catch(() => undefined), timeout])
+        clearTimeout(timer)
+      }
+      // A sync cut short by the timeout fails on the closed database; its answers are pushed again next time, and the server drops duplicates.
+      await client.close().catch(() => undefined)
     }
-    // A sync cut short by the timeout fails on the closed database; its answers are pushed again next time, and the server drops duplicates.
-    await client.close().catch(() => undefined)
+    if (deleteFile) await this.deps.deleteDatabase?.(deleteFile).catch(() => undefined)
   }
 
   private async open(resumed: boolean): Promise<void> {

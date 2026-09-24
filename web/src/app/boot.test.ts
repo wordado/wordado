@@ -537,4 +537,93 @@ describe('Boot with accounts (spec §8.6, §9.1)', () => {
     await Promise.all([switching, releasing])
     expect(log).toEqual([`closed ${DEMO_FILE}`, 'released'])
   })
+
+  it('two overlapping switchTo calls end with exactly one Client open, and its sync loop started once', async () => {
+    const d = disk()
+    const env = testEnv()
+    const server = new FakeServer({ now: env.now })
+    const accounts = accountStorage(memoryStorage())
+    const opened: string[] = []
+    const closed: string[] = []
+    const log: string[] = []
+    const { boot: b } = boot({
+      env,
+      accounts,
+      openDriver: async (file) => {
+        opened.push(file)
+        const { driver } = countingDriver(nodeSqliteDriver(d.path(file)))
+        return { driver: { ...driver, close: async () => (closed.push(file), driver.close()) }, backend: 'opfs' }
+      },
+      deleteDatabase: d.deleteDatabase,
+      transport: () => server,
+      startSync: (_client, backend) => {
+        log.push(`start ${backend}`)
+        return () => log.push('stop')
+      },
+    })
+    await b.start()
+    accounts.save({ userId: 'u1', email: 'ana@example.com' })
+    const p1 = b.switchTo()
+    const p2 = b.switchTo()
+    await Promise.all([p1, p2])
+    expect(b.store.get().status).toBe('ready')
+    const readyFile = learnerFile('u1')
+    // Every driver opened across the two switches is closed again, except the one `ready` holds.
+    const leaked = opened.filter((f) => f !== readyFile && !closed.includes(f))
+    expect(leaked).toEqual([])
+    expect(closed.includes(readyFile)).toBe(false)
+    expect(log.filter((l) => l === 'start opfs')).toHaveLength(1)
+    expect(log.filter((l) => l === 'stop')).toHaveLength(0)
+  })
+
+  it('a release mid-switch waits for the switch’s delete to finish before letting go', async () => {
+    const d = disk()
+    const env = testEnv()
+    const accounts = accountStorage(memoryStorage())
+    const deleting = deferred<void>()
+    const log: string[] = []
+    const { boot: b, release } = boot({
+      env,
+      accounts,
+      openDriver: d.openDriver,
+      deleteDatabase: async (file) => {
+        await deleting.promise
+        log.push(`deleted ${file}`)
+      },
+      transport: () => new FakeServer({ now: env.now }),
+    })
+    await b.start()
+    accounts.save({ userId: 'u1', email: 'ana@example.com' })
+    const switching = b.switchTo({ deleteFile: DEMO_FILE })
+    const releasing = release().then(() => log.push('released'))
+    await new Promise((r) => setTimeout(r, 10))
+    expect(log).toEqual([])
+    deleting.resolve()
+    await Promise.all([switching, releasing])
+    expect(log).toEqual([`deleted ${DEMO_FILE}`, 'released'])
+  })
+
+  it('flushes past a backoff on hand-over, so a pending answer still reaches the server (spec §9.1)', async () => {
+    const d = disk()
+    const env = testEnv()
+    const server = new FakeServer({ now: env.now })
+    const accounts = accountStorage(memoryStorage())
+    accounts.save({ userId: 'u1', email: 'ana@example.com' })
+    let fail = true
+    const transport: SyncTransport = {
+      push: (page) => (fail ? Promise.reject(new Error('offline')) : server.push(page)),
+      pull: (request) => (fail ? Promise.reject(new Error('offline')) : server.pull(request)),
+    }
+    const { boot: b, release } = boot({ env, accounts, openDriver: d.openDriver, deleteDatabase: d.deleteDatabase, transport: () => transport })
+    await b.start()
+    const client = ready(b)
+    // A failed sync sets a backoff the flush must ignore.
+    expect(await client.sync()).toBe('failed')
+    expect(client.snapshot.sync.nextAttemptAt).not.toBeNull()
+    await client.answer(hello)
+    fail = false
+    await release()
+    expect(b.store.get().status).toBe('elsewhere')
+    expect(server.events.size).toBe(1)
+  })
 })
