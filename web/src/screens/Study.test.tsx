@@ -1,5 +1,5 @@
 import { cleanup, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { renderWith, setup } from '../test/fixtures'
 import { Study } from './Study'
 
@@ -17,5 +17,13 @@ describe('Study', () => {
     await ctx.client.updateSettings({ newWordLimit: 0 })
     renderWith(<Study kind="session" mode={null} />, ctx)
     expect(await screen.findByText('Nothing to study right now.')).toBeTruthy()
+  })
+
+  it('shows the error instead of loading forever when the run cannot start', async () => {
+    const ctx = await setup()
+    vi.spyOn(ctx.client, 'startSession').mockRejectedValue(new Error('database is locked'))
+    renderWith(<Study kind="session" mode="flashcard" />, ctx)
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain('database is locked')
   })
 })

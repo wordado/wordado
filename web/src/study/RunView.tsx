@@ -1,7 +1,8 @@
 import { useClientSnapshot, type RunKind, type RunSnapshot, type StudyRun } from '@wordado/client-data'
 import { entryClips, Grade, type ChoiceItem, type CorpusEntry } from '@wordado/core'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { useApp } from '../app/context'
+import { ClipSuperseded } from '../content/audio'
 import { localized, useT } from '../i18n/i18n'
 import { GRADE_LABEL } from '../labels'
 import { Link } from '../router'
@@ -49,6 +50,13 @@ export function RunView(props: { readonly run: StudyRun; readonly kind: RunKind 
     if (item && snapshot.phase === 'prompt') card.current?.focus()
   }, [item, snapshot.phase])
 
+  // The dialog moves focus onto itself while open; once it closes, focus returns to the card.
+  const wasReporting = useRef(false)
+  useEffect(() => {
+    if (wasReporting.current && !reporting) card.current?.focus()
+    wasReporting.current = reporting
+  }, [reporting])
+
   if (snapshot.phase === 'done') return <Done snapshot={snapshot} kind={props.kind} />
   if (!item) return null
 
@@ -80,6 +88,13 @@ function Flashcard(props: { readonly run: StudyRun; readonly snapshot: RunSnapsh
   const { t } = useT()
   const { corpus } = useClientSnapshot()
   const { entry, snapshot, run } = props
+  const answerId = useId()
+  const rateLabelId = useId()
+  const answer = useRef<HTMLDivElement>(null)
+  // The "Show answer" button that had focus unmounts on reveal; the answer takes focus instead, so a screen reader reads it (spec §11.1).
+  useEffect(() => {
+    if (snapshot.phase === 'revealed') answer.current?.focus()
+  }, [snapshot.phase, entry])
   return (
     <>
       <Headword entry={entry} />
@@ -89,16 +104,18 @@ function Flashcard(props: { readonly run: StudyRun; readonly snapshot: RunSnapsh
         </button>
       ) : (
         <>
-          <p className="prompt-text">
-            <Translation entry={entry} lang={corpus?.l1 ?? 'bg'} />
-          </p>
-          {entry.examples[0] !== undefined && (
-            <p className="example" lang="en">
-              {entry.examples[0]}
+          <div className="revealed" ref={answer} tabIndex={-1} aria-labelledby={answerId}>
+            <p className="prompt-text" id={answerId}>
+              <Translation entry={entry} lang={corpus?.l1 ?? 'bg'} />
             </p>
-          )}
-          <div className="ratings" role="group" aria-labelledby="rate-label">
-            <p id="rate-label">{t('study.rateLabel')}</p>
+            {entry.examples[0] !== undefined && (
+              <p className="example" lang="en">
+                {entry.examples[0]}
+              </p>
+            )}
+          </div>
+          <div className="ratings" role="group" aria-labelledby={rateLabelId}>
+            <p id={rateLabelId}>{t('study.rateLabel')}</p>
             {GRADES.map((grade) => (
               <button key={grade} type="button" className={`rating rating-${grade}`} onClick={() => void run.rate(grade)}>
                 <span className="option-key" aria-hidden="true">
@@ -119,7 +136,12 @@ function useListening(item: ChoiceItem, run: StudyRun): { replay: () => void; fa
   const { corpus } = useClientSnapshot()
   const [failed, setFailed] = useState(false)
   const clip = corpus ? entryClips(corpus, item.entry)[0] : undefined
+  // Every play() claims a token; a result whose token has moved on is stale and ignored, whichever
+  // setup or playback finishes last (a superseding "Play again", or the learner moving to the next
+  // item while an old clip is still winding down) — mirrors AudioStore's own generation guard.
+  const token = useRef(0)
   const play = () => {
+    const mine = ++token.current
     if (!clip) {
       setFailed(true)
       run.presented()
@@ -127,8 +149,13 @@ function useListening(item: ChoiceItem, run: StudyRun): { replay: () => void; fa
     }
     setFailed(false)
     audio.play(clip).then(
-      () => run.presented(),
       () => {
+        if (token.current !== mine) return
+        run.presented()
+      },
+      (err: unknown) => {
+        if (token.current !== mine) return
+        if (err instanceof ClipSuperseded) return
         setFailed(true)
         run.presented()
       },
@@ -137,6 +164,10 @@ function useListening(item: ChoiceItem, run: StudyRun): { replay: () => void; fa
   useEffect(() => {
     // Once per item: `play` is rebuilt every render, and the item is what matters.
     if (item.mode === 'listening_select') play()
+    return () => {
+      // Moving to another item (or unmounting) invalidates any play still in flight for this one.
+      token.current += 1
+    }
   }, [item])
   return { replay: play, failed }
 }
@@ -208,9 +239,10 @@ function Choice(props: { readonly run: StudyRun; readonly snapshot: RunSnapshot;
       <div className="feedback" role="status">
         {feedback && (
           <p className={feedback.correct ? 'correct' : 'incorrect'}>
+            <span aria-hidden="true">{feedback.correct ? '✓' : '✗'}</span>{' '}
             {feedback.correct
-              ? `✓ ${t('study.correct')}${feedback.grade === Grade.Hard ? `. ${t('study.slow')}` : ''}`
-              : `✗ ${t('study.incorrect', { answer: answerText ?? '' })}`}
+              ? `${t('study.correct')}${feedback.grade === Grade.Hard ? `. ${t('study.slow')}` : ''}`
+              : t('study.incorrect', { answer: answerText ?? '' })}
           </p>
         )}
       </div>

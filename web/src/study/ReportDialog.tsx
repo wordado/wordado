@@ -11,6 +11,8 @@ const FIELD_LABEL: Readonly<Record<ReportField, MessageKey>> = {
   other: 'report.other',
 }
 
+const messageOf = (err: unknown): string => (err instanceof Error ? err.message : String(err))
+
 /** Report a problem with a card (spec §8.10). Works offline: the report is a document that syncs later. */
 export function ReportDialog(props: { readonly wordId: WordId; readonly entry: CorpusEntry; readonly onClose: () => void }) {
   const { t } = useT()
@@ -20,27 +22,50 @@ export function ReportDialog(props: { readonly wordId: WordId; readonly entry: C
   const titleId = useId()
   const [field, setField] = useState<ReportField>('translation')
   const [note, setNote] = useState('')
+  const [sending, setSending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [sent, setSent] = useState(false)
+  const submitting = useRef(false)
+  const continueButton = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     const element = dialog.current
     if (element && !element.open) element.showModal()
-    return () => element?.close()
   }, [])
+
+  // The Continue button is announced and takes focus once the report is saved (spec §11.1).
+  useEffect(() => {
+    if (sent) continueButton.current?.focus()
+  }, [sent])
+
+  // Cancel/Continue close the dialog themselves; its own 'close' event unmounts it, so focus
+  // never has to move off an element React is about to remove (unlike a cleanup calling close()).
+  const close = () => dialog.current?.close()
 
   const submit = async (event: FormEvent) => {
     event.preventDefault()
-    await client.report({ wordId: props.wordId, field, note: note.trim(), packVersion: packVersion ?? 0 })
-    setSent(true)
+    if (submitting.current) return
+    submitting.current = true
+    setSending(true)
+    setError(null)
+    try {
+      await client.report({ wordId: props.wordId, field, note: note.trim(), packVersion: packVersion ?? 0 })
+      setSent(true)
+    } catch (err) {
+      setError(messageOf(err))
+    } finally {
+      submitting.current = false
+      setSending(false)
+    }
   }
 
   return (
-    <dialog ref={dialog} className="report" aria-labelledby={titleId} onCancel={props.onClose}>
+    <dialog ref={dialog} className="report" aria-labelledby={titleId} onClose={props.onClose}>
       <h2 id={titleId}>{t('report.title', { word: props.entry.headword })}</h2>
       {sent ? (
         <>
           <p role="status">{t('report.sent')}</p>
-          <button type="button" className="button" onClick={props.onClose}>
+          <button type="button" ref={continueButton} className="button" onClick={close}>
             {t('study.continue')}
           </button>
         </>
@@ -59,11 +84,12 @@ export function ReportDialog(props: { readonly wordId: WordId; readonly entry: C
             {t('report.note')}
             <textarea value={note} maxLength={MAX_REPORT_NOTE_LENGTH} rows={3} onChange={(event) => setNote(event.target.value)} />
           </label>
+          {error !== null && <p role="alert">{t('study.error', { message: error })}</p>}
           <div className="actions">
-            <button type="submit" className="button primary">
+            <button type="submit" className="button primary" disabled={sending}>
               {t('report.send')}
             </button>
-            <button type="button" className="button" onClick={props.onClose}>
+            <button type="button" className="button" onClick={close}>
               {t('report.cancel')}
             </button>
           </div>

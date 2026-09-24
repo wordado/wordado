@@ -1,7 +1,7 @@
 import type { AudioClip, Corpus } from '@wordado/core'
 import { afterEach, describe, expect, it } from 'vitest'
 import { webEnv } from '../env'
-import { AUDIO_CACHE, AudioStore, type AudioStoreOptions, type PlayerLike } from './audio'
+import { AUDIO_CACHE, AudioStore, ClipSuperseded, type AudioStoreOptions, type PlayerLike } from './audio'
 import type { Fetch } from './packs'
 
 const env = webEnv()
@@ -139,7 +139,7 @@ describe('AudioStore', () => {
     // no real-timer race — before starting the second, which must supersede it.
     await started.promise
     const secondPlay = s.play(b)
-    await expect(firstPlay).rejects.toThrow('Superseded')
+    await expect(firstPlay).rejects.toBeInstanceOf(ClipSuperseded)
     await expect(secondPlay).resolves.toBeUndefined()
     expect(never.played).toBe(1)
     expect(ends.played).toBe(1)
@@ -174,7 +174,7 @@ describe('AudioStore', () => {
     await expect(secondPlay).resolves.toBeUndefined()
     expect(player.played).toBe(1)
     releaseA.resolve() // only now does a's slow fetch — and so its stale check — complete
-    await expect(firstPlay).rejects.toThrow('Superseded')
+    await expect(firstPlay).rejects.toBeInstanceOf(ClipSuperseded)
     expect(playerCalls).toBe(1) // a's setup finished last, but it never touched a player at all
   })
 })

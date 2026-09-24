@@ -4,6 +4,14 @@ import { clipUrl, type Fetch } from './packs'
 /** The one cache the app writes audio to (spec §9.3). Bump the suffix to drop every clip. */
 export const AUDIO_CACHE = 'wordado-audio-v1'
 
+/** Thrown by `play()` when a newer call has taken over; never a real playback failure (spec §7.5). */
+export class ClipSuperseded extends Error {
+  constructor(message = 'Superseded by another clip') {
+    super(message)
+    this.name = 'ClipSuperseded'
+  }
+}
+
 /** What the study views and runs need from audio. */
 export interface AudioPort {
   /** Clips that can be played offline: empty when this browser cannot play the pack's format (spec §7.5). */
@@ -151,21 +159,21 @@ export class AudioStore implements AudioPort {
   async play(clip: AudioClip): Promise<void> {
     const generation = ++this.generation
     const superseded = () => generation !== this.generation
-    this.pending?.reject(new Error('Superseded by another clip'))
+    this.pending?.reject(new ClipSuperseded())
 
     const cache = await this.open()
-    if (superseded()) throw new Error('Superseded by another clip')
+    if (superseded()) throw new ClipSuperseded()
 
     const cached = await cache.match(this.url(clip))
-    if (superseded()) throw new Error('Superseded by another clip')
+    if (superseded()) throw new ClipSuperseded()
 
     const bytes = cached ? new Uint8Array(await cached.arrayBuffer()) : await this.fetchVerifyAndCache(clip)
-    if (superseded()) throw new Error('Superseded by another clip')
+    if (superseded()) throw new ClipSuperseded()
 
     const source = URL.createObjectURL(await new Response(bytes, { headers: { 'content-type': clip.mime } }).blob())
     if (superseded()) {
       URL.revokeObjectURL(source)
-      throw new Error('Superseded by another clip')
+      throw new ClipSuperseded()
     }
 
     this.player?.pause()
