@@ -69,7 +69,8 @@ export function Placement(props: { readonly source?: PlacementSource }) {
         {s.phase === 'result' ? (
           <>
             <p>{t('placement.resultBody', { level })}</p>
-            {s.error !== null && <p role="alert">{t('settings.saveFailed', { message: s.error })}</p>}
+            {/* `s.error` is the failure's own English message: the learner sees a translated one (spec §11.2). */}
+            {s.error !== null && <p role="alert">{t('settings.saveFailed', { message: t('error.unknown') })}</p>}
             <div className="actions">
               <button type="button" className="button primary" onClick={() => void run.accept()}>
                 {t('placement.accept', { level })}

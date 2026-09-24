@@ -1,4 +1,4 @@
-import { useClientSnapshot } from '@wordado/client-data'
+import { useClient } from '@wordado/client-data'
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { ApiError, OfflineError } from '../account/api'
 import { checkBirthYear } from '../account/ageGate'
@@ -62,7 +62,7 @@ function Field(props: {
 export function SignIn(props: { readonly redirect?: (url: string) => void; readonly pending?: { save(p: PendingSignIn): void } }) {
   const { t, locale } = useT()
   const { api, accounts, account, env } = useApp()
-  const { states } = useClientSnapshot()
+  const client = useClient()
   const online = useOnline()
   const [step, setStep] = useState<Step>({ kind: 'gate' })
   const [country, setCountry] = useState<string | null>(null)
@@ -81,6 +81,22 @@ export function SignIn(props: { readonly redirect?: (url: string) => void; reado
   // A ref, not state: the pre-fill effect below must see the learner's own choice made after
   // this render started, not the `false` its closure was created with (fix round 1, #1).
   const countryTouched = useRef(false)
+  // Whether signing in to an account with progress would discard anything: the controller's own test
+  // (`Client.hasUnsynced`), so the warning shows exactly when the demo would be deleted with something in it.
+  const [demoHasProgress, setDemoHasProgress] = useState(false)
+  useEffect(() => {
+    if (account !== null) return
+    let live = true
+    client.hasUnsynced().then(
+      (unsynced) => {
+        if (live) setDemoHasProgress(unsynced)
+      },
+      () => undefined,
+    )
+    return () => {
+      live = false
+    }
+  }, [client, account])
 
   // Pre-filled from the request's country (spec §11), unless the learner has already chosen.
   useEffect(() => {
@@ -278,7 +294,7 @@ export function SignIn(props: { readonly redirect?: (url: string) => void; reado
 
       {step.kind === 'method' && (
         <>
-          {account === null && states.size > 0 && <p className="note demo-note">{t('signin.demoNote')}</p>}
+          {account === null && demoHasProgress && <p className="note demo-note">{t('signin.demoNote')}</p>}
           <form onSubmit={(e) => void submitEmail(e)} noValidate>
             <Field label={t('signin.email')} error={fieldError === 'signin.emailInvalid' ? t(fieldError) : null}>
               {({ id, describedBy, invalid }) => (

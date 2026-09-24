@@ -1,6 +1,7 @@
 import { placementAvailable, useClient, useClientSnapshot } from '@wordado/client-data'
 import { CEFR_LEVELS, MAX_NEW_WORD_LIMIT, MAX_REVIEW_CAP, RETENTION_TARGETS, type CefrLevel, type RetentionSetting, type Settings } from '@wordado/core'
 import { useEffect, useId, useState } from 'react'
+import { errorMessageKey } from '../errors'
 import { useT, type MessageKey } from '../i18n/i18n'
 import { Link } from '../router'
 import { parseWholeNumber } from './fields'
@@ -9,8 +10,6 @@ import { parseWholeNumber } from './fields'
 const MAX_DAILY_GOAL = 1000
 /** What "Set a daily goal" starts from. */
 const DEFAULT_DAILY_GOAL = 20
-
-const messageOf = (err: unknown): string => (err instanceof Error ? err.message : String(err))
 
 /** Saves one settings field, and says so or says why not (spec §11.1: the result is announced). */
 function useSave(): { save(patch: Partial<Settings>): Promise<void>; status: string | null } {
@@ -24,7 +23,7 @@ function useSave(): { save(patch: Partial<Settings>): Promise<void>; status: str
         await client.updateSettings(patch)
         setStatus(t('settings.saved'))
       } catch (err) {
-        setStatus(t('settings.saveFailed', { message: messageOf(err) }))
+        setStatus(t('settings.saveFailed', { message: t(errorMessageKey(err)) }))
       }
     },
   }
@@ -92,6 +91,8 @@ export function StudySettings() {
   const { t } = useT()
   const { settings, corpus } = useClientSnapshot()
   const { save, status } = useSave()
+  const goalHintId = useId()
+  const latencyHintId = useId()
   // The levels the installed words come in, and the learner's own: a level with no words would teach nothing.
   const shipped = new Set<CefrLevel>(corpus?.units.map((u) => u.level) ?? [])
   shipped.add(settings.declaredLevel)
@@ -150,11 +151,14 @@ export function StudySettings() {
           <input
             type="checkbox"
             checked={settings.dailyGoal !== null}
+            aria-describedby={goalHintId}
             onChange={(e) => void save({ dailyGoal: e.target.checked ? DEFAULT_DAILY_GOAL : null })}
           />
           {t('settings.goal')}
         </label>
-        <p className="note">{t('settings.goalHint')}</p>
+        <p className="note" id={goalHintId}>
+          {t('settings.goalHint')}
+        </p>
       </div>
       {settings.dailyGoal !== null && (
         <NumberSetting
@@ -175,10 +179,17 @@ export function StudySettings() {
       </div>
       <div className="field">
         <label className="check">
-          <input type="checkbox" checked={settings.latencyGrading} onChange={(e) => void save({ latencyGrading: e.target.checked })} />
+          <input
+            type="checkbox"
+            checked={settings.latencyGrading}
+            aria-describedby={latencyHintId}
+            onChange={(e) => void save({ latencyGrading: e.target.checked })}
+          />
           {t('settings.latency')}
         </label>
-        <p className="note">{t('settings.latencyHint')}</p>
+        <p className="note" id={latencyHintId}>
+          {t('settings.latencyHint')}
+        </p>
       </div>
       <p className="note" role="status">
         {status}

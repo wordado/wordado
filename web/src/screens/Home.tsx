@@ -1,15 +1,14 @@
 import { useClient, useClientSnapshot } from '@wordado/client-data'
 import { offeredThemes, type Mode } from '@wordado/core'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useApp } from '../app/context'
+import { errorMessageKey } from '../errors'
 import { localized, useT } from '../i18n/i18n'
 import { MODE_LABEL } from '../labels'
 import { Link } from '../router'
 import { useOnline } from '../useOnline'
 
 const ONE_WAY: readonly Mode[] = ['flashcard', 'multiple_choice', 'listening_select']
-
-const messageOf = (err: unknown): string => (err instanceof Error ? err.message : String(err))
 
 /** Today (spec §8.3): the capped due figure first, the backlog second, then the day's motivation. */
 export function Home() {
@@ -20,6 +19,15 @@ export function Home() {
   useOnline() // re-renders on every `online`/`offline` event, so `canListen` below is re-evaluated
   const [skipped, setSkipped] = useState(false)
   const [themeError, setThemeError] = useState<string | null>(null)
+  const today = useRef<HTMLHeadingElement>(null)
+  /** Set by a choice or Skip: the block, and the button pressed, go, so focus moves to Today's heading (spec §11.1). */
+  const leaving = useRef(false)
+  const onboarding = !skipped && states.size === 0 && settings.activeTheme === null && corpus !== null && offeredThemes(corpus).length > 0
+  useEffect(() => {
+    if (onboarding || !leaving.current) return
+    leaving.current = false
+    today.current?.focus()
+  }, [onboarding])
   if (!plan || !progress) return null
   const reviews = plan.reviews.length
   const fresh = plan.newWords.length
@@ -30,10 +38,10 @@ export function Home() {
   const { streak } = progress
   return (
     <section className="home" aria-labelledby="today">
-      <h1 id="today" className="today">
+      <h1 id="today" className="today" ref={today} tabIndex={-1}>
         {nothing ? t('home.allDone') : reviews > 0 ? t('home.reviews', { count: reviews }) : t('home.newWords', { count: fresh })}
       </h1>
-      {!skipped && states.size === 0 && settings.activeTheme === null && corpus && offeredThemes(corpus).length > 0 && (
+      {onboarding && corpus && (
         <div className="onboard" role="group" aria-labelledby="onboard-title">
           <h2 id="onboard-title">{t('onboard.title')}</h2>
           <p className="note">{t('onboard.hint')}</p>
@@ -44,9 +52,13 @@ export function Home() {
                   type="button"
                   className="button"
                   onClick={() => {
+                    leaving.current = true
                     client.updateSettings({ activeTheme: theme.themeId }).then(
                       () => setThemeError(null),
-                      (err: unknown) => setThemeError(t('settings.saveFailed', { message: messageOf(err) })),
+                      (err: unknown) => {
+                        leaving.current = false
+                        setThemeError(t('settings.saveFailed', { message: t(errorMessageKey(err)) }))
+                      },
                     )
                   }}
                 >
@@ -56,7 +68,14 @@ export function Home() {
             ))}
           </ul>
           {themeError && <p role="alert">{themeError}</p>}
-          <button type="button" className="link-button" onClick={() => setSkipped(true)}>
+          <button
+            type="button"
+            className="link-button"
+            onClick={() => {
+              leaving.current = true
+              setSkipped(true)
+            }}
+          >
             {t('onboard.skip')}
           </button>
         </div>

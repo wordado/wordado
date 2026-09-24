@@ -1,6 +1,7 @@
 import { useClient, useClientSnapshot } from '@wordado/client-data'
 import { MAX_REPORT_NOTE_LENGTH, REPORT_FIELDS, type CorpusEntry, type ReportField, type WordId } from '@wordado/core'
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
+import { errorMessageKey } from '../errors'
 import { useT, type MessageKey } from '../i18n/i18n'
 
 const FIELD_LABEL: Readonly<Record<ReportField, MessageKey>> = {
@@ -10,8 +11,6 @@ const FIELD_LABEL: Readonly<Record<ReportField, MessageKey>> = {
   level: 'report.level',
   other: 'report.other',
 }
-
-const messageOf = (err: unknown): string => (err instanceof Error ? err.message : String(err))
 
 /** Report a problem with a card (spec §8.10). Works offline: the report is a document that syncs later. */
 export function ReportDialog(props: { readonly wordId: WordId; readonly entry: CorpusEntry; readonly onClose: () => void }) {
@@ -52,7 +51,7 @@ export function ReportDialog(props: { readonly wordId: WordId; readonly entry: C
       await client.report({ wordId: props.wordId, field, note: note.trim(), packVersion: packVersion ?? 0 })
       setSent(true)
     } catch (err) {
-      setError(messageOf(err))
+      setError(t(errorMessageKey(err)))
     } finally {
       submitting.current = false
       setSending(false)

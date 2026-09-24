@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, screen, within } from '@testing-library/react'
 import { MAX_NEW_WORD_LIMIT, type WordId } from '@wordado/core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { SignOutOffline } from '../account/controller'
 import { fakeAccounts, fakeAudio, fakeReminders, renderWith, setup } from '../test/fixtures'
 import { Settings } from './Settings'
 
@@ -69,6 +70,17 @@ describe('Settings: studying (spec §7.1, §7.4, §11.1)', () => {
     expect(ctx.client.snapshot.settings.dailyGoal).toBeNull()
   })
 
+  it('ties the goal’s and the latency setting’s hints to their checkboxes', async () => {
+    const ctx = await setup()
+    renderWith(<Settings />, ctx)
+    const goal = screen.getByRole('checkbox', { name: 'Set a daily goal' })
+    expect(document.getElementById(goal.getAttribute('aria-describedby')!)?.textContent).toBe('A day also counts toward your streak once you answer this many.')
+    const latency = screen.getByRole('checkbox', { name: 'Count slow answers as “hard”' })
+    expect(document.getElementById(latency.getAttribute('aria-describedby')!)?.textContent).toBe(
+      'Switch this off to be graded on whether you are right, not how quickly.',
+    )
+  })
+
   it('offers only the levels the words come in', async () => {
     const ctx = await setup()
     renderWith(<Settings />, ctx)
@@ -126,6 +138,26 @@ describe('Settings: the account (spec §11)', () => {
     expect(accounts.calls).toEqual(['signOut', 'signOut force'])
   })
 
+  it('says signing out needs a connection, and disables the button with a status while it runs', async () => {
+    const ctx = await setup()
+    let fail: (err: unknown) => void = () => undefined
+    const accounts = fakeAccounts({
+      signOut: () =>
+        new Promise((_, reject) => {
+          fail = reject
+        }),
+    })
+    renderWith(<Settings />, { ...ctx, account: ana, accounts })
+    const button = screen.getByRole('button', { name: 'Sign out' }) as HTMLButtonElement
+    await act(async () => fireEvent.click(button))
+    expect(button.disabled).toBe(true)
+    expect(screen.getByText('Signing out…').getAttribute('role')).toBe('status')
+    await act(async () => fail(new SignOutOffline(new Error('offline'))))
+    expect(button.disabled).toBe(false)
+    expect(screen.queryByText('Signing out…')).toBeNull()
+    expect(screen.getByRole('alert').textContent).toBe('Signing out needs a connection. Your progress stays on this device.')
+  })
+
   it('deletes the account only once the learner says they understand', async () => {
     const ctx = await setup()
     const accounts = fakeAccounts()
@@ -160,6 +192,8 @@ describe('Settings: words set aside (spec §7.4)', () => {
     await act(async () => fireEvent.click(within(list).getByRole('button', { name: 'Bring back: hello' })))
     expect(ctx.client.snapshot.flags.size).toBe(0)
     expect(within(list).getByText('No words are set aside.')).toBeTruthy()
+    // The row went with the button pressed: focus moves to the section's heading (spec §11.1).
+    expect(document.activeElement).toBe(within(list).getByRole('heading', { name: 'Words set aside' }))
   })
 })
 

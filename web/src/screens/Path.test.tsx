@@ -57,9 +57,12 @@ describe('Path', () => {
     expect(within(first).getByText('Not started')).toBeTruthy()
     await act(async () => fireEvent.click(within(first).getByRole('button', { name: `I know it: ${headword}` })))
     expect(within(first).getByText('Known')).toBeTruthy()
+    // The pressed button is gone: its replacement has focus (spec §11.1).
+    expect(document.activeElement).toBe(within(first).getByRole('button', { name: `Bring back: ${headword}` }))
     expect([...ctx.client.snapshot.flags.values()]).toEqual(['known'])
     await act(async () => fireEvent.click(within(first).getByRole('button', { name: `Bring back: ${headword}` })))
     expect(ctx.client.snapshot.flags.size).toBe(0)
+    expect(document.activeElement).toBe(within(first).getByRole('button', { name: `I know it: ${headword}` }))
   })
 
   it('shows a saved-failed alert beside the word when setting it aside fails (spec §11.1)', async () => {
@@ -71,7 +74,7 @@ describe('Path', () => {
     const first = within(food).getAllByRole('listitem')[0]!
     const headword = first.querySelector('[lang="en"]')!.textContent!
     await act(async () => fireEvent.click(within(first).getByRole('button', { name: `I know it: ${headword}` })))
-    expect(within(first).getByRole('alert').textContent).toBe('Your change wasn’t saved: disk full')
+    expect(within(first).getByRole('alert').textContent).toBe('Your change wasn’t saved: Something went wrong. Try again.')
     expect(ctx.client.snapshot.flags.size).toBe(0)
   })
 })

@@ -24,6 +24,6 @@ describe('Study', () => {
     vi.spyOn(ctx.client, 'startSession').mockRejectedValue(new Error('database is locked'))
     renderWith(<Study kind="session" mode="flashcard" />, ctx)
     const alert = await screen.findByRole('alert')
-    expect(alert.textContent).toContain('database is locked')
+    expect(alert.textContent).toBe('Your answer wasn’t saved: Something went wrong. Try again.')
   })
 })

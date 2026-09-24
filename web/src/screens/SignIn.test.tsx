@@ -117,6 +117,22 @@ describe('SignIn: a code by email (spec §8.6)', () => {
     expect(screen.getByText(/the words you studied in the demo are deleted. A new account keeps them/)).toBeTruthy()
   })
 
+  it('warns whenever the demo holds anything unsynced, not only answers, and not when it holds nothing', async () => {
+    const ctx = await setup()
+    renderWith(<SignIn redirect={() => undefined} pending={{ save: () => undefined }} />, { ...ctx, api: fakeApi(), accounts: fakeAccounts() })
+    await act(async () => undefined)
+    await passGate('BG', 1990)
+    expect(screen.queryByText(/the words you studied in the demo are deleted/)).toBeNull()
+    cleanup()
+    const withSettings = await setup()
+    await withSettings.client.updateSettings({ activeTheme: 'daily-life' })
+    expect(withSettings.client.snapshot.states.size).toBe(0)
+    renderWith(<SignIn redirect={() => undefined} pending={{ save: () => undefined }} />, { ...withSettings, api: fakeApi(), accounts: fakeAccounts() })
+    await act(async () => undefined)
+    await passGate('BG', 1990)
+    expect(screen.getByText(/the words you studied in the demo are deleted/)).toBeTruthy()
+  })
+
   it.each([
     ['the address limit', new ApiError(429, 'sign_in_email_limit'), 'No code was sent: this address has had too many codes. Try again in an hour.'],
     ['too many requests', new ApiError(429, null), 'Too many attempts. Wait a minute and try again.'],

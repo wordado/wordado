@@ -285,7 +285,7 @@ describe('RunView: reporting a problem', () => {
     vi.spyOn(client, 'report').mockRejectedValueOnce(new Error('offline'))
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Report a problem' })))
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Send report' })))
-    expect(screen.getByRole('alert').textContent).toContain('offline')
+    expect(screen.getByRole('alert').textContent).toBe('Your answer wasn’t saved: Something went wrong. Try again.')
     expect((screen.getByRole('button', { name: 'Send report' }) as HTMLButtonElement).disabled).toBe(false)
   })
 })

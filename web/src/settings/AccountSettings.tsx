@@ -2,11 +2,10 @@ import { useState } from 'react'
 import { EXPORT_URL } from '../account/api'
 import { ConfirmDialog } from '../app/Confirm'
 import { useApp } from '../app/context'
+import { errorMessageKey } from '../errors'
 import { useT } from '../i18n/i18n'
 import { Link, navigate } from '../router'
 import { useOnline } from '../useOnline'
-
-const messageOf = (err: unknown): string => (err instanceof Error ? err.message : String(err))
 
 /** The account (spec §11): the export, signing out, and self-service deletion. The demo gets the way in. */
 export function AccountSettings() {
@@ -16,6 +15,7 @@ export function AccountSettings() {
   const [dialog, setDialog] = useState<'unsynced' | 'delete' | null>(null)
   const [understood, setUnderstood] = useState(false)
   const [signOutError, setSignOutError] = useState<string | null>(null)
+  const [signingOut, setSigningOut] = useState(false)
 
   if (account === null) {
     return (
@@ -37,10 +37,13 @@ export function AccountSettings() {
 
   const signOutFromButton = async () => {
     setSignOutError(null)
+    setSigningOut(true)
     try {
       await signOut(false)
     } catch (err) {
-      setSignOutError(messageOf(err))
+      setSignOutError(t(errorMessageKey(err)))
+    } finally {
+      setSigningOut(false)
     }
   }
 
@@ -59,12 +62,15 @@ export function AccountSettings() {
           )}
         </li>
         <li>
-          <button type="button" className="button" onClick={() => void signOutFromButton()}>
+          <button type="button" className="button" disabled={signingOut} onClick={() => void signOutFromButton()}>
             {t('settings.signOut')}
           </button>
+          <p className="note" role="status">
+            {signingOut ? t('settings.signingOut') : ''}
+          </p>
           {signOutError !== null && (
             <p className="field-error" role="alert">
-              {t('confirm.failed', { message: signOutError })}
+              {signOutError}
             </p>
           )}
         </li>

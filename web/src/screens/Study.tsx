@@ -2,10 +2,9 @@ import { StudyRun, useClient, type RunKind } from '@wordado/client-data'
 import type { Mode } from '@wordado/core'
 import { useEffect, useState } from 'react'
 import { useApp } from '../app/context'
+import { errorMessageKey } from '../errors'
 import { useT } from '../i18n/i18n'
 import { RunView } from '../study/RunView'
-
-const messageOf = (err: unknown): string => (err instanceof Error ? err.message : String(err))
 
 /** A session or a practice run (spec §7.4), in one mode or mixed. */
 export function Study(props: { readonly kind: RunKind; readonly mode: Mode | null }) {
@@ -30,7 +29,7 @@ export function Study(props: { readonly kind: RunKind; readonly mode: Mode | nul
         if (live) setRun(started)
       },
       (err: unknown) => {
-        if (live) setError(messageOf(err))
+        if (live) setError(t(errorMessageKey(err)))
       },
     )
     return () => {

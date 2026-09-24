@@ -1,5 +1,6 @@
 import { act, cleanup, fireEvent, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
+import { NotReady } from '../account/controller'
 import { fakeAccounts, fakeLifecycle, renderWith, setup } from '../test/fixtures'
 import { Banners, SyncLine } from './Banners'
 
@@ -33,7 +34,16 @@ describe('Banners', () => {
     renderWith(<Banners />, { ...ctx, accounts })
     fireEvent.click(screen.getByRole('button', { name: 'Leave the demo' }))
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Delete the demo' })))
-    expect(screen.getByRole('alert').textContent).toBe('That didn’t work: disk full')
+    expect(screen.getByRole('alert').textContent).toBe('That didn’t work: Something went wrong. Try again.')
+  })
+
+  it('says Wordado is still opening, in the learner’s words, when the controller is not ready', async () => {
+    const ctx = await setup()
+    const accounts = fakeAccounts({ leaveDemo: async () => Promise.reject(new NotReady()) })
+    renderWith(<Banners />, { ...ctx, accounts })
+    fireEvent.click(screen.getByRole('button', { name: 'Leave the demo' }))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Delete the demo' })))
+    expect(screen.getByRole('alert').textContent).toBe('That didn’t work: Wordado is still opening. Try again in a moment.')
   })
 
   it('says a learner on the in-memory fallback must stay online (spec §9.1)', async () => {

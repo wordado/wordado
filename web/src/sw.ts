@@ -7,7 +7,8 @@ import { readInterfaceLanguage } from './reminders/prefs'
 const manifest = (self as unknown as { __WB_MANIFEST: (string | PrecacheEntry)[] }).__WB_MANIFEST
 
 cleanupOutdatedCaches()
-// The shell, both SQLite builds, the fonts and the bundled sample with its audio (spec §8.6, §9.1).
+// The shell, both SQLite builds, the fonts and the bundled sample's manifest and pack (spec §8.6, §9.1). Its audio
+// is not precached: the app fetches the clips into the one audio cache, `wordado-audio-v1` (decision of plan 6b).
 precacheAndRoute(manifest)
 // Every in-app URL is the shell; the router takes it from there. The API is never the shell.
 registerRoute(new NavigationRoute(createHandlerBoundToURL('/index.html'), { denylist: [/^\/api\//, /^\/v1\//] }))

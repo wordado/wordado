@@ -1,7 +1,6 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { errorMessageKey } from '../errors'
 import { useT } from '../i18n/i18n'
-
-const messageOf = (err: unknown): string => (err instanceof Error ? err.message : String(err))
 
 export interface ConfirmDialogProps {
   readonly title: string
@@ -45,7 +44,7 @@ export function ConfirmDialog(props: ConfirmDialogProps) {
       dialog.current?.close()
       props.onClose()
     } catch (err) {
-      setError(messageOf(err))
+      setError(t(errorMessageKey(err)))
     } finally {
       setBusy(false)
     }

@@ -64,6 +64,8 @@ describe('Home: the onboarding question (spec §8.6)', () => {
     await act(async () => fireEvent.click(within(question).getByRole('button', { name: 'Daily life' })))
     expect(ctx.client.snapshot.settings.activeTheme).toBe('daily-life')
     expect(screen.queryByRole('group', { name: 'What do you want English for?' })).toBeNull()
+    // The block went with the button pressed: focus moves to Today's heading (spec §11.1).
+    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1 }))
   })
 
   it('can be skipped, and is gone once a word is studied', async () => {
@@ -71,6 +73,7 @@ describe('Home: the onboarding question (spec §8.6)', () => {
     const { unmount } = renderWith(<Home />, ctx)
     fireEvent.click(screen.getByRole('button', { name: 'Skip' }))
     expect(screen.queryByRole('group', { name: 'What do you want English for?' })).toBeNull()
+    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1 }))
     expect(ctx.client.snapshot.settings.activeTheme).toBeNull()
     unmount()
     await answerNew(ctx.client, ctx.env, 1)
@@ -84,7 +87,7 @@ describe('Home: the onboarding question (spec §8.6)', () => {
     renderWith(<Home />, ctx)
     const question = screen.getByRole('group', { name: 'What do you want English for?' })
     await act(async () => fireEvent.click(within(question).getByRole('button', { name: 'Daily life' })))
-    expect(within(question).getByRole('alert').textContent).toBe('Your change wasn’t saved: disk full')
+    expect(within(question).getByRole('alert').textContent).toBe('Your change wasn’t saved: Something went wrong. Try again.')
     expect(ctx.client.snapshot.settings.activeTheme).toBeNull()
   })
 })
