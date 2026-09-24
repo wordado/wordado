@@ -332,6 +332,7 @@ main:focus,
   margin: 0;
   font: 500 clamp(2.5rem, 10vw, 4rem) / 1 var(--font-entry);
   letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
 }
 
 .hw-meta {
@@ -669,7 +670,7 @@ dialog.report textarea {
 
 .board {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: var(--space-3);
 }
 
@@ -689,6 +690,7 @@ dialog.report textarea {
 
 .pair {
   font-size: var(--step-0);
+  overflow-wrap: anywhere;
 }
 
 .pair.is-selected {

@@ -56,17 +56,20 @@ function LanguageSwitch() {
 }
 
 /** The shell: wordmark, navigation, language, banner, and the routed screen. */
-export function App() {
+export function App(props: { readonly resumed: boolean }) {
   const { t } = useT()
   const { backend } = useApp()
   const route = useRoute()
   const main = useRef<HTMLElement>(null)
   const first = useRef(true)
 
-  // After an in-app navigation, focus the new screen, as a page load would (spec §11.1).
+  // After an in-app navigation, focus the new screen, as a page load would
+  // (spec §11.1). The shell itself also mounts fresh after a take-over or a
+  // retry — not on the first load — so it focuses itself right away then too.
   useEffect(() => {
     if (first.current) {
       first.current = false
+      if (props.resumed) main.current?.focus()
       return
     }
     main.current?.focus()

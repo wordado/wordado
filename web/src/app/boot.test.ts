@@ -1,12 +1,36 @@
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { Client } from '@wordado/client-data'
+import type { Client, SqlDriver } from '@wordado/client-data'
 import { nodeSqliteDriver } from '@wordado/client-data/src/drivers/nodeSqlite'
 import { sampleFetcher, sampleManifest } from '@wordado/client-data/src/testing/sample'
 import { testEnv } from '@wordado/client-data/src/testing/testEnv'
 import { describe, expect, it } from 'vitest'
 import { Boot, type BootDeps, type LockPort } from './boot'
+
+/** Wraps a driver so the test can see how many times it was closed. */
+function countingDriver(driver: SqlDriver): { readonly driver: SqlDriver; readonly closes: () => number } {
+  let closes = 0
+  return {
+    driver: {
+      ...driver,
+      close: async () => {
+        closes += 1
+        await driver.close()
+      },
+    },
+    closes: () => closes,
+  }
+}
+
+/** A deferred promise, so a test can hold `openDriver()` open and resolve it on request. */
+function deferred<T>(): { readonly promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((r) => {
+    resolve = r
+  })
+  return { promise, resolve }
+}
 
 /** A boot over an in-memory database and the sample; `release` plays another tab taking over. */
 function boot(over: Partial<BootDeps> = {}, free = true) {
@@ -115,5 +139,95 @@ describe('Boot', () => {
     other.takeOver = release
     await b.start()
     expect(b.store.get().status).toBe('elsewhere')
+  })
+
+  it('closes the driver and only hands over the lock once it has, when release lands during openDriver', async () => {
+    const opened = deferred<{ driver: SqlDriver; backend: 'opfs' }>()
+    const { driver, closes } = countingDriver(nodeSqliteDriver())
+    const { boot: b, release } = boot({ openDriver: () => opened.promise })
+
+    const startPromise = b.start()
+    // Let start() reach the point where it is awaiting openDriver().
+    await Promise.resolve()
+    await Promise.resolve()
+
+    let released = false
+    const releasePromise = release().then(() => {
+      released = true
+    })
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(released).toBe(false)
+    expect(closes()).toBe(0)
+
+    opened.resolve({ driver, backend: 'opfs' })
+    await releasePromise
+    await startPromise
+
+    expect(released).toBe(true)
+    expect(closes()).toBe(1)
+    expect(b.store.get().status).toBe('elsewhere')
+  })
+
+  it('closes the driver when Client.open fails, and retry succeeds with a fresh one', async () => {
+    const failing = countingDriver({
+      ...nodeSqliteDriver(),
+      exec: async () => {
+        throw new Error('The disk is unavailable')
+      },
+    })
+    let attempt = 0
+    const { boot: b } = boot({
+      openDriver: async () => {
+        attempt += 1
+        return attempt === 1 ? { driver: failing.driver, backend: 'opfs' } : { driver: nodeSqliteDriver(), backend: 'opfs' }
+      },
+    })
+    await b.start()
+    expect(b.store.get()).toEqual({ status: 'failed', message: 'The disk is unavailable' })
+    expect(failing.closes()).toBe(1)
+
+    await b.retry()
+    expect(ready(b).snapshot.corpus).not.toBeNull()
+  })
+
+  it('fails when the lock cannot be acquired', async () => {
+    const deps: BootDeps = {
+      env: testEnv(),
+      l1: 'bg',
+      openDriver: async () => ({ driver: nodeSqliteDriver(), backend: 'opfs' }),
+      fetchManifest: async () => sampleManifest,
+      fetchPack: sampleFetcher,
+    }
+    const lock: LockPort = {
+      acquire: async () => {
+        throw new Error('Locks are not available in this context')
+      },
+      takeOver: async () => undefined,
+    }
+    const b = new Boot(deps, () => lock)
+    await b.start()
+    expect(b.store.get()).toEqual({ status: 'failed', message: 'Locks are not available in this context' })
+  })
+
+  it('fails when a take-over cannot get the lock', async () => {
+    const deps: BootDeps = {
+      env: testEnv(),
+      l1: 'bg',
+      openDriver: async () => ({ driver: nodeSqliteDriver(), backend: 'opfs' }),
+      fetchManifest: async () => sampleManifest,
+      fetchPack: sampleFetcher,
+    }
+    const lock: LockPort = {
+      acquire: async () => false,
+      takeOver: async () => {
+        throw new Error('The owner never answered')
+      },
+    }
+    const b = new Boot(deps, () => lock)
+    await b.start()
+    expect(b.store.get().status).toBe('elsewhere')
+    await b.takeOver()
+    expect(b.store.get()).toEqual({ status: 'failed', message: 'The owner never answered' })
   })
 })

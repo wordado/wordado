@@ -53,6 +53,7 @@ describe('Root', () => {
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Wordado is open in another tab.')
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Use Wordado here' })))
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('10 new words')
+    expect(document.activeElement?.tagName).toBe('MAIN')
   })
 
   it('warns that nothing will be kept on the in-memory fallback (spec §9.1)', async () => {
