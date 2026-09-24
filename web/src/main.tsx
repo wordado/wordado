@@ -60,3 +60,8 @@ createRoot(document.getElementById('root')!).render(
 )
 
 void boot.start()
+
+// Offline after the first visit (spec §9.1). Not in development, where it would cache the dev server.
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  void navigator.serviceWorker.register('/sw.js').catch(() => undefined)
+}

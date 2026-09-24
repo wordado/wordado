@@ -909,11 +909,13 @@ provider's daily free allowance (§17).
 
 A **demo mode** offers a small
 sample session so a prospective user can study before committing. Demo events
-are held in memory only. If the learner then **creates an account** from the
-demo, those events are attached to the new account — there is nothing to
-merge, because a new account has no prior data. If they instead sign in to an
-existing account, or leave, demo progress is discarded, and this is stated
-plainly.
+are kept on the device in a database of their own, apart from any learner's,
+and are never uploaded unless an account is created; the demo survives a reload
+and the redirect of a Google sign-in. If the learner then **creates an account**
+from the demo, those events are attached to the new account — there is nothing
+to merge, because a new account has no prior data. If they instead sign in to
+an existing account, or choose to leave the demo, the demo database is deleted,
+and this is stated plainly.
 
 Every persisted record therefore carries a `user_id` from creation, and no
 anonymous-profile claim or merge path is needed.
@@ -1741,6 +1743,15 @@ addressed here.
   that it is a heavy MVP, and names what can be cut first.
 - **Housekeeping:** the MVP label added on 2026-09-20 had no log entry; this
   is it.
+
+**2026-09-24 — demo storage.** Decided by the product owner while planning the
+web client (plan 6a).
+
+- **Demo mode (§8.6):** demo answers are kept in a separate on-device database
+  instead of in memory only, so that a reload or a Google sign-in redirect does
+  not lose them before they can carry over. They are still never uploaded
+  unless an account is created, and the database is deleted when the demo is
+  discarded.
 
 ### Approval status
 

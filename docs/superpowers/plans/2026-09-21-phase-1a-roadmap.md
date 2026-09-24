@@ -3,7 +3,8 @@
 **Spec:** `docs/superpowers/specs/2026-09-20-vocabulary-learning-app-design.md`
 
 The spec covers six packages and is too large for one implementation plan.
-Phase 1a (the MVP, spec §14) is split into eight plans. Each produces working,
+Phase 1a (the MVP, spec §14) is split into eight plans; plan 6 was split again into 6a and 6b
+when it was written (2026-09-24), because it was as large as plan 5. Each produces working,
 tested software on its own, and each is written just before it is executed, so
 that it can use the real interfaces of the plans before it.
 
@@ -16,8 +17,9 @@ that it can use the real interfaces of the plans before it.
 | 3 | Pack format and sample pack | `core`, `pipeline` | Pack schema (`schema_version`, entries, units, themes, audio manifest), validator, checksum, manifest-as-list; a hand-made ~60-entry A1 Bulgarian sample pack with audio, used by demo mode and by every later test | 1 |
 | 4 | Client data layer | `client-data` | `SqlDriver` interface and in-memory driver; local schema and migrations; pack loader; repositories; outbox; sync engine (push, pull, retry, backoff, min-version gate); React hooks | 1–3 |
 | 5 | Server | `server` | Postgres schema and forward-only migrations; Better Auth (email OTP, Google); sync endpoints; server-side stamping, replay and XP; re-derivation through Queues; entitlement; content reports; account deletion and JSON export; Web Push reminders by Cron Trigger | 1–3 |
-| 6 | Web client | `web` | Vite + React PWA; wa-sqlite over OPFS with IndexedDB and in-memory fallbacks; single-tab lock; the four game modes; onboarding, demo carry-over and age gate; path, themes, dashboard and settings; Bulgarian and English interface; WCAG 2.2 AA | 4, 5 |
-| 7 | CI and deploy | repo | GitHub Actions: typecheck, lint, suites, server tests against a Postgres service; Wrangler deploy and preview deployments; end-to-end browser matrix | 5, 6 |
+| 6a | **Web client: platform and study loop** — `2026-09-24-web-platform-and-study.md` | `web`, `core`, `client-data` | Vite + React PWA; wa-sqlite over OPFS with IndexedDB and in-memory fallbacks; single-tab lock and take-over; the bundled sample and a verified audio cache; the shared study-run state machine; the four game modes; today, path, themes, progress, practice; report an error; Bulgarian and English interface; offline shell; the demo end to end in Chromium with an axe scan | 4 |
+| 6b | Web client: accounts and settings | `web` | Sign-in (emailed code, Google); the age gate; demo carry-over and discard; the transport, sync lifecycle and status; settings (level, retention, limits, goal, audio, latency grading); the placement test; known and suspended words; reminders; account deletion and export; installation and update prompts; the WCAG 2.2 AA pass over its screens | 5, 6a |
+| 7 | CI and deploy | repo | GitHub Actions: typecheck, lint, suites, server tests against a Postgres service; Wrangler deploy and preview deployments; end-to-end browser matrix | 5, 6a, 6b |
 | 8 | Corpus pipeline | `pipeline` | Frequency data → CEFR banding → translation → review queues → TTS → packs → R2; pipeline tests (§13); the manually started workflow | 3, **legal review** |
 
 Plans 4 and 5 are independent of each other and can run in parallel. Plan 8 can
