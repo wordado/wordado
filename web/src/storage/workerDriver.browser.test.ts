@@ -72,4 +72,28 @@ describe('openWorkerDriver', () => {
     expect(second.snapshot.deviceId).toBe(deviceId)
     await second.close()
   })
+
+  it('has let go of the OPFS file once close resolves: another opener gets it at once (6a contract)', async () => {
+    const file = unique('handover')
+    const first = await openWorkerDriver(file, ['opfs'])
+    await first.driver.exec('CREATE TABLE t (v TEXT)')
+    await first.driver.run('INSERT INTO t VALUES (?)', ['mine'])
+    await first.driver.close()
+    // No retry and no wait: if the access handles were still held, this open would fail.
+    const second = await openWorkerDriver(file, ['opfs'])
+    expect(second.backend).toBe('opfs')
+    expect(await second.driver.all('SELECT v FROM t')).toEqual([{ v: 'mine' }])
+    await second.driver.close()
+  })
+
+  it('opens two files at once, as a carry-over does (the demo and the learner’s)', async () => {
+    const demo = await openWorkerDriver(unique('demo'), ['opfs'])
+    const learner = await openWorkerDriver(unique('user'), ['opfs'])
+    await demo.driver.exec('CREATE TABLE d (v TEXT)')
+    await learner.driver.exec('CREATE TABLE l (v TEXT)')
+    expect(await demo.driver.all("SELECT name FROM sqlite_master WHERE type = 'table'")).toEqual([{ name: 'd' }])
+    expect(await learner.driver.all("SELECT name FROM sqlite_master WHERE type = 'table'")).toEqual([{ name: 'l' }])
+    await demo.driver.close()
+    await learner.driver.close()
+  })
 })
