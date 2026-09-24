@@ -6,9 +6,10 @@ import { Matching } from '../screens/Matching'
 import { Path } from '../screens/Path'
 import { Practice } from '../screens/Practice'
 import { Progress } from '../screens/Progress'
+import { SignIn } from '../screens/SignIn'
 import { Study } from '../screens/Study'
 import { Themes } from '../screens/Themes'
-import { useApp } from './context'
+import { Banners, SyncLine } from './Banners'
 
 const NAV: readonly { readonly route: Route; readonly label: MessageKey }[] = [
   { route: { name: 'home' }, label: 'nav.home' },
@@ -37,6 +38,8 @@ function Screen(props: { readonly route: Route }) {
       return <Themes />
     case 'progress':
       return <Progress />
+    case 'signin':
+      return <SignIn />
     default:
       return <Home />
   }
@@ -58,7 +61,6 @@ function LanguageSwitch() {
 /** The shell: wordmark, navigation, language, banner, and the routed screen. */
 export function App(props: { readonly resumed: boolean }) {
   const { t } = useT()
-  const { backend } = useApp()
   const route = useRoute()
   const main = useRef<HTMLElement>(null)
   const first = useRef(true)
@@ -96,8 +98,11 @@ export function App(props: { readonly resumed: boolean }) {
           </ul>
         </nav>
         <LanguageSwitch />
+        <SyncLine />
       </header>
-      {backend === 'memory' ? <p className="banner warning">{t('banner.memory')}</p> : <p className="banner">{t('banner.demo')}</p>}
+      <aside aria-label={t('banner.label')}>
+        <Banners />
+      </aside>
       <main id="main" ref={main} tabIndex={-1}>
         <Screen route={route} />
       </main>

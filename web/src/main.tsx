@@ -85,7 +85,7 @@ window.addEventListener('online', () => {
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <I18nProvider>
-      <Root boot={boot} services={{ env, audio, afterRun }} />
+      <Root boot={boot} services={{ env, audio, afterRun, api, accounts: controller! }} />
     </I18nProvider>
   </StrictMode>,
 )

@@ -32,6 +32,11 @@ describe('routes', () => {
     expect(parseRoute('/study', '?mode=matching')).toEqual({ name: 'study', mode: null })
     expect(parseRoute('/study/', '')).toEqual({ name: 'study', mode: null })
   })
+
+  it('routes the sign-in screen', () => {
+    expect(parseRoute('/signin', '')).toEqual({ name: 'signin' })
+    expect(routeHref({ name: 'signin' })).toBe('/signin')
+  })
 })
 
 function Where() {

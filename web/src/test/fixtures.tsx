@@ -1,13 +1,17 @@
 import { render, type RenderResult } from '@testing-library/react'
-import { ClientProvider, type Client } from '@wordado/client-data'
+import { ClientProvider, createStore, type Client } from '@wordado/client-data'
 import { openSampleClient } from '@wordado/client-data/src/testing/sample'
 import { testEnv, type TestEnv } from '@wordado/client-data/src/testing/testEnv'
 import { Grade, type AudioClip } from '@wordado/core'
 import type { ReactElement } from 'react'
+import type { Api } from '../account/api'
+import type { AccountActions, AccountState } from '../account/controller'
+import type { AccountRecord } from '../account/storage'
 import { AppProvider } from '../app/context'
 import type { AudioPort } from '../content/audio'
 import { I18nProvider, type Locale } from '../i18n/i18n'
 import type { Backend } from '../storage/protocol'
+import { fakeApi } from './fakeApi'
 
 /** Audio that is never available unless a test says so, and records what it was asked to play. */
 export function fakeAudio(over: Partial<AudioPort> = {}): AudioPort & { played: AudioClip[] } {
@@ -37,6 +41,37 @@ export interface RenderContext {
   readonly backend?: Backend
   readonly locale?: Locale
   readonly afterRun?: () => void
+  readonly api?: Api
+  readonly accounts?: AccountActions
+  readonly account?: AccountRecord | null
+}
+
+/** The account controller as the screens see it: every call is logged, and each can be overridden. */
+export function fakeAccounts(over: Partial<AccountActions> = {}): AccountActions & { calls: string[] } {
+  const calls: string[] = []
+  return {
+    calls,
+    store: createStore<AccountState>({ expired: false, notice: null }),
+    completeSignIn: async (country) => {
+      calls.push(`completeSignIn ${country}`)
+      return 'signed-in'
+    },
+    resumeGoogle: async () => null,
+    signOut: async (options) => {
+      calls.push(`signOut${options?.force ? ' force' : ''}`)
+      return 'signed-out'
+    },
+    deleteAccount: async () => {
+      calls.push('deleteAccount')
+    },
+    leaveDemo: async () => {
+      calls.push('leaveDemo')
+    },
+    dismissNotice: () => {
+      calls.push('dismissNotice')
+    },
+    ...over,
+  }
 }
 
 /** Renders inside every provider the app has, in English unless told otherwise. */
@@ -45,7 +80,19 @@ export function renderWith(ui: ReactElement, ctx: RenderContext): RenderResult {
   return render(
     <I18nProvider storage={storage}>
       <ClientProvider client={ctx.client}>
-        <AppProvider value={{ env: ctx.env, audio: ctx.audio, backend: ctx.backend ?? 'opfs', afterRun: ctx.afterRun ?? (() => undefined) }}>{ui}</AppProvider>
+        <AppProvider
+          value={{
+            env: ctx.env,
+            audio: ctx.audio,
+            backend: ctx.backend ?? 'opfs',
+            afterRun: ctx.afterRun ?? (() => undefined),
+            api: ctx.api ?? fakeApi(),
+            accounts: ctx.accounts ?? fakeAccounts(),
+            account: ctx.account ?? null,
+          }}
+        >
+          {ui}
+        </AppProvider>
       </ClientProvider>
     </I18nProvider>,
   )

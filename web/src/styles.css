@@ -701,3 +701,122 @@ dialog.report textarea {
 .pair.is-matched {
   color: var(--ink-soft);
 }
+
+/* Forms (spec §11.1: every field labelled, errors tied to it) */
+
+.field {
+  display: grid;
+  gap: var(--space-1);
+  margin-bottom: var(--space-4);
+}
+
+.field label {
+  font-weight: 600;
+}
+
+.field input,
+.field select {
+  min-height: 2.75rem;
+  max-width: 24rem;
+  padding: var(--space-2) var(--space-3);
+  font: inherit;
+  color: var(--ink);
+  background: var(--paper-raised);
+  border: 1px solid var(--ink-soft);
+  border-radius: var(--radius);
+}
+
+.field input[aria-invalid='true'] {
+  border-color: var(--rose);
+  border-width: 2px;
+}
+
+.field-error,
+.form-error {
+  margin: 0;
+  color: var(--rose);
+  font-weight: 600;
+}
+
+.field-error::before,
+.form-error::before {
+  content: '⚠ ';
+}
+
+.signin {
+  max-width: var(--measure);
+}
+
+.signin h1:focus {
+  outline: none;
+}
+
+.signin .or {
+  margin: var(--space-4) 0 var(--space-2);
+  color: var(--ink-soft);
+}
+
+.demo-note {
+  padding: var(--space-3);
+  background: var(--amber-soft);
+  color: var(--ink);
+  border-radius: var(--radius);
+}
+
+.button.danger {
+  color: var(--rose-ink);
+  background: var(--rose);
+  border-color: var(--rose);
+}
+
+.button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Banners and the sync line */
+
+.banners .banner p {
+  margin: 0;
+}
+
+.banner-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin-top: var(--space-1);
+}
+
+.notice-line {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  color: var(--ink);
+  background: var(--leaf-soft);
+  border-radius: var(--radius);
+}
+
+.sync-line {
+  margin: 0;
+  font-size: var(--step--1);
+  color: var(--ink-soft);
+}
+
+.sync-line.warning {
+  color: var(--amber);
+}
+
+dialog.confirm {
+  max-width: min(32rem, calc(100vw - 2rem));
+  padding: var(--space-5);
+  color: var(--ink);
+  background: var(--paper-raised);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+}
+
+dialog.confirm::backdrop {
+  background: rgb(20 28 51 / 0.45);
+}

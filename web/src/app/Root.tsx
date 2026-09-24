@@ -6,14 +6,14 @@ import type { Boot } from './boot'
 import { AppProvider, type AppServices } from './context'
 
 /** Renders the boot state: starting, open in another tab, failed, or the app. */
-export function Root(props: { readonly boot: Boot; readonly services: Omit<AppServices, 'backend'> }) {
+export function Root(props: { readonly boot: Boot; readonly services: Omit<AppServices, 'backend' | 'account'> }) {
   const { t } = useT()
   const state = useStore(props.boot.store)
   switch (state.status) {
     case 'ready':
       return (
         <ClientProvider client={state.client}>
-          <AppProvider value={{ ...props.services, backend: state.backend }}>
+          <AppProvider value={{ ...props.services, backend: state.backend, account: state.account }}>
             <App resumed={state.resumed} />
           </AppProvider>
         </ClientProvider>

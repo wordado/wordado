@@ -10,6 +10,7 @@ export type Route =
   | { readonly name: 'path' }
   | { readonly name: 'themes' }
   | { readonly name: 'progress' }
+  | { readonly name: 'signin' }
 
 /** Modes a learner can choose for a run; matching has its own route. */
 const RUN_MODES: readonly Mode[] = ['flashcard', 'multiple_choice', 'listening_select']
@@ -36,6 +37,8 @@ export function parseRoute(pathname: string, search: string): Route {
       return { name: 'themes' }
     case '/progress':
       return { name: 'progress' }
+    case '/signin':
+      return { name: 'signin' }
     default:
       return { name: 'home' }
   }

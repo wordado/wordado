@@ -4,7 +4,8 @@ import { sampleFetcher, sampleManifest } from '@wordado/client-data/src/testing/
 import { testEnv } from '@wordado/client-data/src/testing/testEnv'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { I18nProvider } from '../i18n/i18n'
-import { fakeAudio } from '../test/fixtures'
+import { fakeAccounts, fakeAudio } from '../test/fixtures'
+import { fakeApi } from '../test/fakeApi'
 import type { Backend } from '../storage/protocol'
 import { Boot, type LockPort } from './boot'
 import { Root } from './Root'
@@ -33,7 +34,7 @@ async function renderRoot(options: { free?: boolean; backend?: Backend } = {}) {
   )
   render(
     <I18nProvider storage={{ getItem: () => 'en', setItem: () => undefined }}>
-      <Root boot={boot} services={{ env, audio: fakeAudio(), afterRun: () => undefined }} />
+      <Root boot={boot} services={{ env, audio: fakeAudio(), afterRun: () => undefined, api: fakeApi(), accounts: fakeAccounts() }} />
     </I18nProvider>,
   )
   await act(() => boot.start())
@@ -95,7 +96,7 @@ describe('Root', () => {
     )
     render(
       <I18nProvider storage={{ getItem: () => 'en', setItem: () => undefined }}>
-        <Root boot={boot} services={{ env, audio: fakeAudio(), afterRun: () => undefined }} />
+        <Root boot={boot} services={{ env, audio: fakeAudio(), afterRun: () => undefined, api: fakeApi(), accounts: fakeAccounts() }} />
       </I18nProvider>,
     )
     await act(() => boot.start())
@@ -118,7 +119,7 @@ describe('Root', () => {
     )
     render(
       <I18nProvider storage={{ getItem: () => 'en', setItem: () => undefined }}>
-        <Root boot={boot} services={{ env, audio: fakeAudio(), afterRun: () => undefined }} />
+        <Root boot={boot} services={{ env, audio: fakeAudio(), afterRun: () => undefined, api: fakeApi(), accounts: fakeAccounts() }} />
       </I18nProvider>,
     )
     await act(() => boot.start())
