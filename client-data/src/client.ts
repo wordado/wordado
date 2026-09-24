@@ -212,12 +212,24 @@ export class Client {
     return installPacks(this.db, this.env, manifest, this.l1, fetchPack)
   }
 
-  /** Swaps staged packs in and reloads the corpus. Call at the start of a session, never mid-session. */
+  /**
+   * Swaps staged packs in and reloads the corpus. Call at the start of a
+   * session, never mid-session. Also makes a completed day owed from a
+   * previous answer (spec §8.4): unlike an unlock, a failed day-complete
+   * write is not retried by the next answer once the day that completed it
+   * is over, so this is the other place it is made.
+   */
   async startSession(): Promise<string[]> {
     const activated = await activateStagedPacks(this.db)
     if (activated.length > 0 || !this.corpus) {
       this.corpus = await loadActiveCorpus(this.db)
       this.packVersion = await activePackVersion(this.db)
+    }
+    try {
+      const ctx = this.context()
+      if (ctx && isDayComplete(dayCompleteInput(ctx, sessionPlan(ctx)))) await recordDayComplete(this.db, this.learner, today(ctx), this.env.now())
+    } catch {
+      // Made again at the next answer or the next session start.
     }
     this.refresh()
     return activated
@@ -242,8 +254,9 @@ export class Client {
    * Records one answer, persists any new unit unlock, and records the completed
    * day when it first becomes complete. Once the event is stored this never
    * throws: a caller that saw an error would answer again and record the word
-   * twice. Unlocks and the completed day are recomputed at every answer, so a
-   * write that fails here is made at the next one.
+   * twice. A failed unlock is made at the next answer; a failed completed day
+   * is made at the next answer or at the next `startSession` (spec §8.4),
+   * whichever comes first.
    */
   answer(input: AnswerInput): Promise<AnswerResult> {
     return this.guarded(async () => {

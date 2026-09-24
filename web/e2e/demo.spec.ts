@@ -19,6 +19,9 @@ async function answer(page: Page): Promise<string> {
   if (mode === 'flashcard') {
     await page.keyboard.press('Space')
     await expect(page.locator('.card[data-phase="revealed"]')).toBeVisible()
+    // rate() ignores a rating within ITEM_SETTLE_MS (250) of the reveal (client-data/src/run.ts):
+    // a real double tap on Show answer must not land on the rating, so wait past it here too.
+    await page.waitForTimeout(300)
     await page.keyboard.press('3')
   } else {
     await page.keyboard.press('1')

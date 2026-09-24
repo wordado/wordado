@@ -137,6 +137,21 @@ function failingDocuments(driver: SqlDriver): { driver: SqlDriver; fail: { on: b
   }
 }
 
+/** A driver whose day-complete write (what `recordDayComplete` issues) can be made to fail. */
+function failingDayComplete(driver: SqlDriver): { driver: SqlDriver; fail: { on: boolean } } {
+  const fail = { on: false }
+  return {
+    fail,
+    driver: {
+      ...driver,
+      run: async (sql, params) => {
+        if (fail.on && /INSERT OR IGNORE INTO day_complete/.test(sql)) throw new Error('disk full')
+        await driver.run(sql, params)
+      },
+    },
+  }
+}
+
 describe('Client hand-over (spec §9.1)', () => {
   it('never throws once the answer is saved, so a retry cannot record it twice', async () => {
     const { driver, fail } = failingDocuments(nodeSqliteDriver())
@@ -154,6 +169,22 @@ describe('Client hand-over (spec §9.1)', () => {
     const next = await client.answer(answer('c:goodbye-1'))
     expect(next.unlocked).toEqual(['a1-01'])
     expect(client.snapshot.sync.pendingEvents).toBe(2)
+  })
+
+  it('a completed day a failed write dropped is not lost either: startSession makes it, unlike a retried answer (spec §8.4)', async () => {
+    const { driver, fail } = failingDayComplete(nodeSqliteDriver())
+    const client = await Client.open({ driver, env: testEnv(), l1: 'bg' })
+    await client.installPacks(manifest, fromDisk)
+    await client.startSession()
+    fail.on = true
+    // The first answer of the day completes it: the day-complete write, which fails here.
+    const result = await client.answer(answer('c:hello-1'))
+    expect(result.dayCompleted).toBe(false)
+    expect(client.snapshot.progress?.streak.todayComplete).toBe(false)
+    fail.on = false
+    // Not lost: the next session start finds it still owed and records it.
+    await client.startSession()
+    expect(client.snapshot.progress?.streak.todayComplete).toBe(true)
   })
 
   it('close waits for an answer being written, then refuses new work', async () => {
