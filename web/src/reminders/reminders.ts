@@ -97,13 +97,24 @@ export class ReminderService implements ReminderPort {
     })
   }
 
-  /** Turns reminders on, or changes their time or nudge. Needs a gesture: it may ask for permission. */
-  async enable(prefs: ReminderPrefs): Promise<'on' | 'denied' | 'unavailable'> {
+  /**
+   * Turns reminders on, or changes their time or nudge. Needs a gesture: a
+   * default permission is asked first, before the server is asked for a key,
+   * so the request stays inside the browser's user-activation window (iOS
+   * WebKit, Firefox refuse a prompt raised after an `await` of something
+   * else). A dismissed prompt (still 'default' afterwards) is neither
+   * granted nor refused, so it is reported as 'dismissed', not 'denied'.
+   */
+  async enable(prefs: ReminderPrefs): Promise<'on' | 'denied' | 'dismissed' | 'unavailable'> {
     const { api, platform } = this.deps
+    let permission = platform.permission()
+    if (permission === 'default') {
+      permission = await platform.requestPermission()
+      if (permission === 'default') return 'dismissed'
+    }
+    if (permission !== 'granted') return 'denied'
     const key = await api.pushPublicKey()
     if (key === null) return 'unavailable'
-    const permission = platform.permission() === 'granted' ? 'granted' : await platform.requestPermission()
-    if (permission !== 'granted') return 'denied'
     const sub = (await platform.subscription()) ?? (await platform.subscribe(key))
     await this.send(sub, prefs)
     this.save(prefs)

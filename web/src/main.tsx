@@ -99,12 +99,17 @@ const unsubscribeReminders = boot.store.subscribe(() => {
   if (state.account) void reminders.refresh().catch(() => undefined)
 })
 
+// The provider calls this once on mount, with the language it just read: nothing changed yet, so
+// nothing is resent then — boot may not even be ready, and `state.account` hasn't been checked.
+let localeMounted = false
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <I18nProvider
       onLocale={(locale) => {
         void writeInterfaceLanguage(locale).catch(() => undefined)
-        void reminders.refresh().catch(() => undefined)
+        if (localeMounted) void reminders.refresh().catch(() => undefined)
+        localeMounted = true
       }}
     >
       <Root boot={boot} services={{ env, audio, afterRun, api, accounts: controller!, reminders }} />

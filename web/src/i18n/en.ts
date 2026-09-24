@@ -132,6 +132,7 @@ export const en = {
   'reminders.hint': 'One reminder a day, skipped once you have studied. They stop by themselves if you ignore several in a row.',
   'reminders.saved': 'Reminders are on.',
   'reminders.off': 'Reminders are off.',
+  'reminders.dismissed': 'Reminders stay off: notifications weren’t allowed.',
 
   'placement.link': 'Find your level with a short test',
   'placement.unavailableNote': 'A placement test opens once words of more than one level are installed.',

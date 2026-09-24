@@ -1,4 +1,4 @@
-import { useId, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { useApp } from '../app/context'
 import { useT, type MessageKey } from '../i18n/i18n'
 import { DEFAULT_REMINDER_MINUTE, type ReminderPrefs } from '../reminders/reminders'
@@ -17,9 +17,15 @@ export function ReminderSettings() {
   const { account, reminders } = useApp()
   const timeId = useId()
   const [prefs, setPrefs] = useState<ReminderPrefs | null>(() => reminders.prefs())
+  const [draft, setDraft] = useState(() => toTime((reminders.prefs() ?? { minute: DEFAULT_REMINDER_MINUTE }).minute))
   const [status, setStatus] = useState<MessageKey | null>(null)
   const [busy, setBusy] = useState(false)
   const support = reminders.support()
+
+  // The saved minute is the source of truth; the draft only diverges from it while the learner is mid-edit.
+  useEffect(() => {
+    if (prefs) setDraft(toTime(prefs.minute))
+  }, [prefs?.minute])
 
   const blocked: MessageKey | null =
     account === null
@@ -44,7 +50,7 @@ export function ReminderSettings() {
         if (outcome === 'on') {
           setPrefs(next)
           setStatus('reminders.saved')
-        } else setStatus(outcome === 'denied' ? 'reminders.denied' : 'reminders.unavailable')
+        } else setStatus(outcome === 'denied' ? 'reminders.denied' : outcome === 'dismissed' ? 'reminders.dismissed' : 'reminders.unavailable')
       }
     } catch {
       setStatus('reminders.unavailable')
@@ -57,7 +63,7 @@ export function ReminderSettings() {
     <section aria-labelledby="settings-reminders">
       <h2 id="settings-reminders">{t('reminders.title')}</h2>
       {blocked !== null ? (
-        <p>{t(blocked)}</p>
+        <p role="status">{t(blocked)}</p>
       ) : (
         <>
           <p className="note">{t('reminders.hint')}</p>
@@ -79,11 +85,12 @@ export function ReminderSettings() {
                 <input
                   id={timeId}
                   type="time"
-                  value={toTime(prefs.minute)}
-                  disabled={busy}
-                  onChange={(e) => {
-                    const minute = fromTime(e.target.value)
-                    if (minute !== null) void apply({ ...prefs, minute })
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  onBlur={() => {
+                    const minute = fromTime(draft)
+                    if (minute !== null && minute !== prefs.minute) void apply({ ...prefs, minute })
+                    else setDraft(toTime(prefs.minute))
                   }}
                 />
               </div>

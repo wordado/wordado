@@ -76,6 +76,36 @@ describe('ReminderService (spec §8.11, plan 5 contract)', () => {
     expect(s.prefs()).toEqual({ minute: 450, streakNudge: true })
   })
 
+  it('asks for permission before asking the server for a key, so the request stays inside the gesture (iOS WebKit, Firefox)', async () => {
+    const order: string[] = []
+    const p = platform({
+      requestPermission: async () => {
+        order.push('requestPermission')
+        return 'granted'
+      },
+    })
+    const puts: unknown[] = []
+    const api = fakeApi({
+      pushPublicKey: async () => {
+        order.push('pushPublicKey')
+        return 'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U'
+      },
+      putSubscription: async (body) => {
+        puts.push(body)
+      },
+    })
+    const s = new ReminderService({ api, platform: p, storage: memoryStorage(), tzOffsetMin: () => 0, language: () => 'bg' })
+    expect(await s.enable({ minute: DEFAULT_REMINDER_MINUTE, streakNudge: false })).toBe('on')
+    expect(order).toEqual(['requestPermission', 'pushPublicKey'])
+  })
+
+  it('leaves the toggle off, without blaming the browser, when the prompt is dismissed rather than answered', async () => {
+    const { s, puts } = service({ platform: platform({ requestPermission: async () => 'default' }) })
+    expect(await s.enable({ minute: DEFAULT_REMINDER_MINUTE, streakNudge: false })).toBe('dismissed')
+    expect(puts).toEqual([])
+    expect(s.prefs()).toBeNull()
+  })
+
   it('says so and keeps nothing when permission is refused', async () => {
     const { s, puts } = service({ platform: platform({ requestPermission: async () => 'denied' }) })
     expect(await s.enable({ minute: DEFAULT_REMINDER_MINUTE, streakNudge: false })).toBe('denied')
