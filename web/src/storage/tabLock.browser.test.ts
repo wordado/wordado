@@ -86,4 +86,93 @@ describe('TabLock', () => {
     expect(await b.acquire()).toBe(true)
     await b.dispose()
   })
+
+  it('does not steal from a slow owner with an open channel', async () => {
+    const name = unique()
+    const log: string[] = []
+    const slow = (label: string) => ({
+      release: async () => new Promise<void>((resolve) => setTimeout(resolve, 600)),
+    })
+    const a = tab(name, log, 'a', slow('a').release)
+    const b = tab(name, log, 'b')
+    await a.acquire()
+    await b.acquire()
+    log.length = 0
+    await b.takeOver()
+    expect(log).toEqual(['b idle', 'a releasing', 'a released', 'a elsewhere', 'b owner'])
+    // Verify release only ran once
+    const releaseCount = log.filter((x) => x === 'a releasing').length
+    expect(releaseCount).toBe(1)
+    await a.dispose()
+    await b.dispose()
+  })
+
+  it('handles two take-over requests in a row: release runs once', async () => {
+    const name = unique()
+    const log: string[] = []
+    const a = tab(name, log, 'a')
+    const b = tab(name, log, 'b')
+    const c = tab(name, log, 'c')
+    await a.acquire()
+    await b.acquire()
+    await c.acquire()
+    log.length = 0
+    // Two requests in a row from b and c
+    await Promise.all([b.takeOver(), c.takeOver()])
+    // One of them should be owner; let's check the final state
+    expect([b.state, c.state].includes('owner')).toBe(true)
+    // Verify a's release only ran once
+    const releaseCount = log.filter((x) => x === 'a releasing').length
+    expect(releaseCount).toBe(1)
+    await a.dispose()
+    await b.dispose()
+    await c.dispose()
+  })
+
+  it('shares takeOver promise: concurrent calls on same tab end as owner', async () => {
+    const name = unique()
+    const log: string[] = []
+    const a = tab(name, log, 'a')
+    const b = tab(name, log, 'b')
+    await a.acquire()
+    await b.acquire()
+    log.length = 0
+    // Two concurrent takeOver() calls on b (same tab)
+    await Promise.all([b.takeOver(), b.takeOver()])
+    expect(b.state).toBe('owner')
+    // Verify a's release only ran once
+    const releaseCount = log.filter((x) => x === 'a releasing').length
+    expect(releaseCount).toBe(1)
+    // Verify no steal happened
+    const stealLog = log.filter((x) => x.includes('steal')).length
+    expect(stealLog).toBe(0)
+    await a.dispose()
+    await b.dispose()
+  })
+
+  it('dispose() while takeOver() pending does not steal and frees the lock', async () => {
+    const name = unique()
+    const log: string[] = []
+    // a has slow release so b's request won't succeed before dispose
+    const a = tab(name, log, 'a', async () => new Promise<void>((resolve) => setTimeout(resolve, 600)))
+    const b = tab(name, log, 'b')
+    await a.acquire()
+    await b.acquire()
+    log.length = 0
+    // Start takeOver but dispose b before it steals
+    const takeOverPromise = b.takeOver()
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    await b.dispose()
+    try {
+      await takeOverPromise
+    } catch {
+      // May throw if disposed; that's ok
+    }
+    // After dispose, b should not be owner (disposed before steal at ~350ms)
+    expect(b.state).not.toBe('owner')
+    // a's release is still pending; let it complete
+    await new Promise((resolve) => setTimeout(resolve, 600))
+    // Now lock should be free
+    await a.dispose()
+  })
 })

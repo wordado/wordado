@@ -9,6 +9,7 @@ export const TAKE_OVER_WAIT_MS = 5_000
 export const DEFAULT_LOCK_NAME = 'wordado-db'
 
 const TAKE_OVER = 'take-over'
+const TAKE_OVER_ACK = 'take-over-ack'
 
 export interface TabLockOptions {
   readonly name?: string
@@ -33,6 +34,9 @@ export class TabLock {
   private letGo: (() => void) | null = null
   /** Settles once the lock this tab holds has been released. */
   private holding: Promise<unknown> = Promise.resolve()
+  private handingOver = false
+  private disposed = false
+  private takeOverPromise: Promise<void> | null = null
 
   constructor(private readonly options: TabLockOptions) {
     this.name = options.name ?? DEFAULT_LOCK_NAME
@@ -40,7 +44,13 @@ export class TabLock {
     this.locks = options.locks ?? navigator.locks
     this.channel = options.channel ?? new BroadcastChannel(this.name)
     this.channel.onmessage = (event: MessageEvent<unknown>) => {
-      if (event.data === TAKE_OVER && this.state === 'owner') void this.handOver()
+      if (event.data === TAKE_OVER && this.state === 'owner') {
+        if (!this.handingOver) {
+          this.handingOver = true
+          void this.handOver()
+        }
+        this.channel.postMessage(TAKE_OVER_ACK)
+      }
     }
   }
 
@@ -62,15 +72,17 @@ export class TabLock {
     this.store.set('elsewhere')
     const letGo = this.letGo
     this.letGo = null
+    this.handingOver = false
     letGo?.()
   }
 
   /** The lock was stolen: the other tab already has it. Close, and say so. */
   private async stolen(): Promise<void> {
-    this.letGo = null
     if (this.state !== 'owner') return
+    this.letGo = null
     this.store.set('elsewhere')
-    await this.giveUp()
+    // If hand-over is in progress, skip release (handOver is handling it)
+    if (!this.handingOver) await this.giveUp()
   }
 
   /** Resolves true once held, false when `ifAvailable` found it taken; rejects if the request fails. */
@@ -84,6 +96,11 @@ export class TabLock {
             return
           }
           held = true
+          if (this.disposed) {
+            this.letGo = null
+            resolve(false)
+            return
+          }
           this.store.set('owner')
           resolve(true)
           await new Promise<void>((release) => {
@@ -108,14 +125,48 @@ export class TabLock {
 
   /** Asks the owner to let go and waits for the lock; steals it if the owner does not answer in time. */
   async takeOver(): Promise<void> {
+    if (this.takeOverPromise) return this.takeOverPromise
     if (this.state === 'owner') return
-    this.store.set('idle')
-    this.channel.postMessage(TAKE_OVER)
-    try {
-      await this.request({ signal: AbortSignal.timeout(this.waitMs) })
-    } catch {
-      await this.request({ steal: true })
-    }
+    if (this.disposed) return
+
+    const promise = (async () => {
+      this.store.set('idle')
+      this.channel.postMessage(TAKE_OVER)
+      let ackReceived = false
+      const ackHandler = (event: MessageEvent<unknown>) => {
+        if (event.data === TAKE_OVER_ACK) ackReceived = true
+      }
+      this.channel.addEventListener('message', ackHandler)
+      try {
+        // First try: wait up to waitMs for the owner to release
+        try {
+          await this.request({ signal: AbortSignal.timeout(this.waitMs) })
+          return
+        } catch {
+          // Timeout or error
+        }
+        // Check if owner responded with ack
+        if (ackReceived && !this.disposed) {
+          // Owner heard us but is slow: wait up to 6 × waitMs total (5 × more)
+          try {
+            await this.request({ signal: AbortSignal.timeout(5 * this.waitMs) })
+            return
+          } catch {
+            // Still slow: steal
+          }
+        }
+        // Owner didn't respond (frozen tab) or too slow: steal
+        if (!this.disposed) {
+          await this.request({ steal: true })
+        }
+      } finally {
+        this.channel.removeEventListener('message', ackHandler)
+        this.takeOverPromise = null
+      }
+    })()
+
+    this.takeOverPromise = promise
+    return promise
   }
 
   /**
@@ -123,6 +174,7 @@ export class TabLock {
    * released it. `keepLock` keeps holding it (tests use it to play a frozen tab).
    */
   async dispose(options: { readonly keepLock?: boolean } = {}): Promise<void> {
+    this.disposed = true
     this.channel.close()
     if (options.keepLock) return
     const letGo = this.letGo
