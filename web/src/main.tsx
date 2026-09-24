@@ -3,7 +3,9 @@ import '@fontsource-variable/literata'
 import './styles.css'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { accountStorage } from './account/storage'
+import { httpApi } from './account/api'
+import { AccountController } from './account/controller'
+import { accountStorage, pendingSignIn } from './account/storage'
 import { httpTransport } from './account/transport'
 import { Boot } from './app/boot'
 import { Root } from './app/Root'
@@ -19,8 +21,10 @@ import { openWorkerDriver } from './storage/workerDriver'
 const env = webEnv()
 const audio = new AudioStore({ manifestUrl: SAMPLE_MANIFEST_URL, sha256: env.sha256 })
 const accounts = accountStorage()
-// Task 7 routes a 401 to the account controller; until then an expired sign-in only shows as a failed sync.
-const transport = httpTransport()
+const api = httpApi()
+let controller: AccountController | null = null
+// A 401 from sync means the sign-in expired (spec §8.6): the controller shows it and the outbox waits.
+const transport = httpTransport({ onUnauthorized: () => controller?.sessionExpired() })
 
 const boot = new Boot(
   {
@@ -43,6 +47,19 @@ const boot = new Boot(
   },
   (release) => new TabLock({ release }),
 )
+
+controller = new AccountController({ api, boot, accounts, pending: pendingSignIn(), transport: () => transport })
+
+// Back from Google (spec §8.6): finish the sign-in once the demo (or the learner's file) is open.
+const signinResult = new URLSearchParams(window.location.search).get('signin')
+if (signinResult === 'google' || signinResult === 'google-error') {
+  window.history.replaceState(null, '', window.location.pathname)
+  const unsubscribe = boot.store.subscribe(() => {
+    if (boot.store.get().status !== 'ready') return
+    unsubscribe()
+    void controller?.resumeGoogle(signinResult === 'google' ? 'ok' : 'error').catch(() => undefined)
+  })
+}
 
 let persistenceAsked = false
 
