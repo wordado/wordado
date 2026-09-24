@@ -8,7 +8,7 @@ let clientIp = 0
 // e.g. /email-otp/send-verification-otp) lives in Postgres, not this run's memory, and a
 // position-only address (10.77.0.N) is identical run to run — a second run started within
 // that 60s window inherits the first run's count on the same key and can be refused (fix
-// round 1, deviation #2: the brief's `context` reused addresses across runs; each run now
+// round 1, deviation #3: the brief's `context` reused addresses across runs; each run now
 // gets its own octet, so "run it a second time" — spec's own requirement — cannot collide).
 const RUN = Math.floor(Math.random() * 250)
 
