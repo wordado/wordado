@@ -19,7 +19,7 @@ import { webEnv } from './env'
 import { I18nProvider } from './i18n/i18n'
 import { writeInterfaceLanguage } from './reminders/prefs'
 import { browserPushPlatform, ReminderService } from './reminders/reminders'
-import { deleteDatabase } from './storage/erase'
+import { deleteDatabase, listDatabases } from './storage/erase'
 import { TabLock } from './storage/tabLock'
 import { openWorkerDriver } from './storage/workerDriver'
 
@@ -50,6 +50,7 @@ const boot = new Boot(
     accounts,
     openDriver: (file) => openWorkerDriver(file),
     deleteDatabase,
+    listDatabases,
     transport: () => transport,
     startSync: (client, backend) => startSyncLoop(client, { everyAnswer: backend === 'memory', now: env.now }),
     fetchManifest: () => fetchManifest(SAMPLE_MANIFEST_URL),

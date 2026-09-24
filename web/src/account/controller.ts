@@ -1,7 +1,7 @@
 import { accountIsEmpty, createStore, type Client, type Store, type SyncTransport } from '@wordado/client-data'
 import type { BootState, SwitchOptions } from '../app/boot'
 import type { Api } from './api'
-import { DEMO_FILE, learnerFile, type AccountStorage, type PendingSignIn } from './storage'
+import { DEMO_FILE, learnerFile, type AccountRecord, type AccountStorage, type PendingSignIn } from './storage'
 
 /** What the shell tells the learner after an account change (spec §8.6: the demo's fate is stated plainly). */
 export type AccountNotice = 'carried-over' | 'demo-discarded' | 'signed-in' | 'signed-out' | 'deleted' | 'other-account' | 'google-failed' | 'demo-left'
@@ -12,10 +12,26 @@ export interface AccountState {
   readonly notice: AccountNotice | null
 }
 
-/** What the controller needs of `Boot`. */
+/** What the controller needs of `Boot`. `switchTo` resolves false when it did not run (another tab has the database). */
 export interface BootPort {
   readonly store: Store<BootState>
-  switchTo(options?: SwitchOptions): Promise<void>
+  switchTo(options?: SwitchOptions): Promise<boolean>
+}
+
+/** An account change asked for while `Boot` is not `'ready'` (spec §9.1). */
+export class NotReady extends Error {
+  constructor() {
+    super('Wordado is still opening; try again')
+    this.name = 'NotReady'
+  }
+}
+
+/** Signing out needs the server, so the session cookie cannot outlive it; nothing on the device changed. */
+export class SignOutOffline extends Error {
+  constructor(cause: unknown) {
+    super('Signing out needs a connection', { cause })
+    this.name = 'SignOutOffline'
+  }
 }
 
 /** Reminders on this device (Task 12): stopped when the account goes, on the server too unless it is already gone. */
@@ -53,12 +69,32 @@ export class AccountController {
   /** The open Client — the demo's or a learner's, whichever `Boot` currently holds. Throws while it is not `'ready'`: an account change must never guess at a database it cannot see. */
   private readyClient(): Client {
     const state = this.deps.boot.store.get()
-    if (state.status !== 'ready') throw new Error('Wordado is still opening; try again')
+    if (state.status !== 'ready') throw new NotReady()
     return state.client
   }
 
   private set(patch: Partial<AccountState>): void {
     this.store.set({ ...this.store.get(), ...patch })
+  }
+
+  /** The notice after a switch, only when the switch ran: another tab holding the database changed nothing here. */
+  private announce(ran: boolean, patch: Partial<AccountState>): void {
+    if (ran) this.set(patch)
+  }
+
+  /**
+   * Attaches the demo to `userId` and records the carry-over before pushing
+   * it, so a tab closed mid-push leaves a record that says the push is owed
+   * (spec §8.6); then pushes, records whether it finished, and switches.
+   */
+  private async carryOver(client: Client, record: AccountRecord): Promise<void> {
+    const { accounts, boot } = this.deps
+    await client.attachUser(record.userId, this.deps.transport())
+    accounts.save({ ...record, carryOver: true })
+    await client.sync({ force: true })
+    const carryOver = await client.hasUnsynced()
+    accounts.save({ ...record, carryOver })
+    this.announce(await boot.switchTo(carryOver ? {} : { deleteFiles: [DEMO_FILE] }), { expired: false, notice: 'carried-over' })
   }
 
   /** From the transport: the server answered 401. Only a signed-in learner can have an expired sign-in. */
@@ -85,7 +121,8 @@ export class AccountController {
    *   already this learner's, so `accountIsEmpty` is never consulted.
    * - A demo already attached to a different learner (an owed carry-over this
    *   device never finished, e.g. after a forced sign-out): it is not this
-   *   sign-in's to push or discard, so it is left exactly as it is.
+   *   sign-in's to push; `Boot`'s sweep deletes it before the learner's file
+   *   opens, as a device keeps one learner's data.
    * - From the demo into an account with no progress: attach the demo, push it
    *   from its own device, delete it once everything is up (spec §8.6).
    * - From the demo into an account with progress: delete the demo.
@@ -120,39 +157,24 @@ export class AccountController {
 
     if (demoUserId !== null && demoUserId !== me.userId) {
       accounts.save(record)
-      await boot.switchTo()
-      this.set({ expired: false, notice: 'signed-in' })
+      this.announce(await boot.switchTo(), { expired: false, notice: 'signed-in' })
       return 'signed-in'
     }
 
     if (demoUserId === me.userId) {
-      const transport = this.deps.transport()
-      await client.attachUser(me.userId, transport)
-      await client.sync({ force: true })
-      const carryOver = await client.hasUnsynced()
-      accounts.save({ ...record, carryOver })
-      await boot.switchTo(carryOver ? {} : { deleteFiles: [DEMO_FILE] })
-      this.set({ expired: false, notice: 'carried-over' })
+      await this.carryOver(client, record)
       return 'carried-over'
     }
 
     const hasProgress = await client.hasUnsynced()
-    if (hasProgress) {
-      const transport = this.deps.transport()
-      if (await accountIsEmpty(transport, client.snapshot.deviceId)) {
-        await client.attachUser(me.userId, transport)
-        await client.sync({ force: true })
-        const carryOver = await client.hasUnsynced()
-        accounts.save({ ...record, carryOver })
-        await boot.switchTo(carryOver ? {} : { deleteFiles: [DEMO_FILE] })
-        this.set({ expired: false, notice: 'carried-over' })
-        return 'carried-over'
-      }
+    // Read-only, before any record names this learner: the pull carries no expected user.
+    if (hasProgress && (await accountIsEmpty(this.deps.transport(), client.snapshot.deviceId))) {
+      await this.carryOver(client, record)
+      return 'carried-over'
     }
     accounts.save(record)
-    await boot.switchTo({ deleteFiles: [DEMO_FILE] })
     const outcome: SignInOutcome = hasProgress ? 'demo-discarded' : 'signed-in'
-    this.set({ expired: false, notice: outcome })
+    this.announce(await boot.switchTo({ deleteFiles: [DEMO_FILE] }), { expired: false, notice: outcome })
     return outcome
   }
 
@@ -185,7 +207,10 @@ export class AccountController {
    * as unsynced too — the demo holds this learner's only copy of it, so
    * `force` deletes that file alongside the learner's own. Throws while
    * `Boot` is not `'ready'` (spec §9.1): a sign-out mid-switch must never
-   * delete a file it has not confirmed is safe to lose.
+   * delete a file it has not confirmed is safe to lose. Signing out needs
+   * the server: when it cannot be reached, throws `SignOutOffline` and
+   * changes nothing, or the session cookie would stay valid on a device that
+   * shows no account. Reminders stop only once the server has let go.
    */
   async signOut(options: { readonly force?: boolean } = {}): Promise<'signed-out' | 'unsynced'> {
     const { api, accounts, boot } = this.deps
@@ -196,12 +221,17 @@ export class AccountController {
     if (!options.force) {
       if ((await client.hasUnsynced()) || account.carryOver) return 'unsynced'
     }
-    await this.deps.reminders?.stop({ server: true }).catch(() => undefined)
-    await api.signOut().catch(() => undefined)
+    try {
+      await api.signOut()
+    } catch (err) {
+      throw new SignOutOffline(err)
+    }
+    // The session is gone, so the server's copy cannot be deleted; unsubscribing the browser ends it
+    // (the push service answers "gone" to the next send, and the server forgets it).
+    await this.deps.reminders?.stop({ server: false }).catch(() => undefined)
     accounts.clear()
     const deleteFiles = account.carryOver ? [learnerFile(account.userId), DEMO_FILE] : [learnerFile(account.userId)]
-    await boot.switchTo({ deleteFiles })
-    this.set({ expired: false, notice: 'signed-out' })
+    this.announce(await boot.switchTo({ deleteFiles }), { expired: false, notice: 'signed-out' })
     return 'signed-out'
   }
 
@@ -218,15 +248,13 @@ export class AccountController {
     await api.deleteAccount()
     await this.deps.reminders?.stop({ server: false }).catch(() => undefined)
     accounts.clear()
-    await boot.switchTo({ deleteFiles: [learnerFile(account.userId), DEMO_FILE] })
-    this.set({ expired: false, notice: 'deleted' })
+    this.announce(await boot.switchTo({ deleteFiles: [learnerFile(account.userId), DEMO_FILE] }), { expired: false, notice: 'deleted' })
   }
 
   /** Leaving the demo deletes it (spec §8.6); a fresh one opens. */
   async leaveDemo(): Promise<void> {
     if (this.deps.accounts.read() !== null) return
-    await this.deps.boot.switchTo({ deleteFiles: [DEMO_FILE] })
-    this.set({ notice: 'demo-left' })
+    this.announce(await this.deps.boot.switchTo({ deleteFiles: [DEMO_FILE] }), { notice: 'demo-left' })
   }
 }
 

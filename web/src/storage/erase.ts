@@ -29,13 +29,61 @@ function removeFromIdb(name: string): Promise<void> {
   })
 }
 
+/** The IndexedDB name 6a's `openIdb` gives a file. */
+const IDB_PREFIX = 'wordado-'
+const SQLITE_SUFFIX = '.sqlite'
+
 /**
  * Deletes a database file wherever it may live (spec §8.6): OPFS and
  * IndexedDB (6a's `openIdb` names it `wordado-<file>`). Run it only with
  * the file closed: an open access handle makes OPFS refuse. Deleting a file
- * that does not exist does nothing.
+ * that does not exist does nothing. IndexedDB is tried even when OPFS
+ * fails; the first failure is then rethrown.
  */
 export async function deleteDatabase(file: string): Promise<void> {
-  await removeFromOpfs(file)
-  await removeFromIdb(`wordado-${file}`)
+  let failure: { readonly err: unknown } | null = null
+  try {
+    await removeFromOpfs(file)
+  } catch (err) {
+    failure = { err }
+  }
+  try {
+    await removeFromIdb(`${IDB_PREFIX}${file}`)
+  } catch (err) {
+    failure ??= { err }
+  }
+  if (failure) throw failure.err
+}
+
+async function opfsFiles(): Promise<string[]> {
+  if (typeof navigator.storage?.getDirectory !== 'function') return []
+  try {
+    const root = await navigator.storage.getDirectory()
+    const files: string[] = []
+    for await (const name of (root as unknown as { keys(): AsyncIterable<string> }).keys()) {
+      if (name.endsWith(SQLITE_SUFFIX)) files.push(name.slice(0, -SQLITE_SUFFIX.length))
+    }
+    return files
+  } catch {
+    return []
+  }
+}
+
+async function idbFiles(): Promise<string[]> {
+  if (typeof indexedDB === 'undefined' || typeof indexedDB.databases !== 'function') return []
+  try {
+    return (await indexedDB.databases()).flatMap(({ name }) => (name?.startsWith(IDB_PREFIX) ? [name.slice(IDB_PREFIX.length)] : []))
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Every database file this origin keeps, by the name `deleteDatabase` and
+ * `openDriver` take (`demo`, `user-<id>`), from OPFS and IndexedDB alike.
+ * A storage the browser does not offer, or refuses to list, adds nothing.
+ */
+export async function listDatabases(): Promise<string[]> {
+  const [opfs, idb] = await Promise.all([opfsFiles(), idbFiles()])
+  return [...new Set([...opfs, ...idb])].sort()
 }

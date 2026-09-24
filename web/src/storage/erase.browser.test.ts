@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { deleteDatabase } from './erase'
+import { describe, expect, it, vi } from 'vitest'
+import { deleteDatabase, listDatabases } from './erase'
 import { openWorkerDriver } from './workerDriver'
 
 const unique = (prefix: string) => `${prefix}-${crypto.randomUUID().slice(0, 8)}`
@@ -35,5 +35,32 @@ describe('deleteDatabase (spec §8.6: leaving the demo deletes it)', () => {
 
   it('does nothing for a file that was never written', async () => {
     await expect(deleteDatabase(unique('never'))).resolves.toBeUndefined()
+  })
+})
+
+describe('listDatabases (the sweep of files no account owns)', () => {
+  for (const backend of ['opfs', 'idb'] as const) {
+    it(`names a file kept on ${backend} as openDriver takes it, until it is deleted`, async () => {
+      const file = unique('list')
+      await write(file, backend, 'here')
+      expect(await listDatabases()).toContain(file)
+      await deleteDatabase(file)
+      expect(await listDatabases()).not.toContain(file)
+    })
+  }
+})
+
+describe('deleteDatabase when OPFS fails', () => {
+  it('still deletes the IndexedDB copy, then reports the failure', async () => {
+    const file = unique('half')
+    await write(file, 'idb', 'gone')
+    const refused = new Error('OPFS is broken')
+    const spy = vi.spyOn(navigator.storage, 'getDirectory').mockRejectedValue(refused)
+    try {
+      await expect(deleteDatabase(file)).rejects.toBe(refused)
+    } finally {
+      spy.mockRestore()
+    }
+    expect(await tables(file, 'idb')).toEqual([])
   })
 })

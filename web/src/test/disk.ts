@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { SyncTransport } from '@wordado/client-data'
@@ -15,6 +15,12 @@ export function disk() {
     exists: (file: string) => existsSync(path(file)),
     openDriver: async (file: string) => ({ driver: nodeSqliteDriver(path(file)), backend: 'opfs' as const }),
     deleteDatabase: async (file: string) => rmSync(path(file), { force: true }),
+    /** Every file kept, by the name `openDriver` takes, as `listDatabases` reads OPFS. */
+    listDatabases: async () =>
+      readdirSync(dir)
+        .filter((name) => name.endsWith('.sqlite'))
+        .map((name) => name.slice(0, -'.sqlite'.length))
+        .sort(),
   }
 }
 

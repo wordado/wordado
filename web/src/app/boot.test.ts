@@ -391,7 +391,7 @@ describe('Boot with accounts (spec §8.6, §9.1)', () => {
     expect(server.events.size).toBe(1)
   })
 
-  it('leaves a demo attached to nobody alone, and does not open it when no carry-over is owed', async () => {
+  it('deletes a flagged demo attached to nobody (it is not the account’s), clears the flag, and opens only the learner’s file after', async () => {
     const d = disk()
     const env = testEnv()
     const server = new FakeServer({ now: env.now })
@@ -411,7 +411,7 @@ describe('Boot with accounts (spec §8.6, §9.1)', () => {
     await ready(b).answer(hello)
     accounts.save({ userId: 'u1', email: 'ana@example.com', carryOver: true })
     await b.switchTo()
-    expect(d.exists(DEMO_FILE)).toBe(true)
+    expect(d.exists(DEMO_FILE)).toBe(false)
     expect(server.events.size).toBe(0)
     expect(accounts.read()?.carryOver).toBe(false)
     opened.length = 0
@@ -652,5 +652,96 @@ describe('Boot with accounts (spec §8.6, §9.1)', () => {
     await release()
     expect(b.store.get().status).toBe('elsewhere')
     expect(server.events.size).toBe(1)
+  })
+
+  it('says whether a switch ran: not once the lock has passed to another tab', async () => {
+    const d = disk()
+    const accounts = accountStorage(memoryStorage())
+    const { boot: b, release } = boot({ accounts, openDriver: d.openDriver, deleteDatabase: d.deleteDatabase })
+    await b.start()
+    expect(await b.switchTo()).toBe(true)
+    await release()
+    expect(await b.switchTo({ deleteFiles: [DEMO_FILE] })).toBe(false)
+    expect(d.exists(DEMO_FILE)).toBe(true)
+  })
+
+  it('bounds an owed carry-over by the flush timeout, so a hung server never holds the launch; the flag stays', async () => {
+    const d = disk()
+    const env = testEnv()
+    const accounts = accountStorage(memoryStorage())
+    const hanging: SyncTransport = { push: () => new Promise(() => undefined), pull: () => new Promise(() => undefined) }
+    const { boot: b } = boot({ env, accounts, openDriver: d.openDriver, deleteDatabase: d.deleteDatabase, transport: () => hanging, flushTimeoutMs: 20 })
+    await b.start()
+    await ready(b).answer(hello)
+    await ready(b).attachUser('u1')
+    accounts.save({ userId: 'u1', email: 'ana@example.com', carryOver: true })
+    const started = Date.now()
+    await b.switchTo()
+    expect(Date.now() - started).toBeLessThan(1_000)
+    expect(b.store.get()).toMatchObject({ status: 'ready', account: { userId: 'u1' } })
+    expect(accounts.read()?.carryOver).toBe(true)
+    expect(d.exists(DEMO_FILE)).toBe(true)
+  })
+})
+
+describe('Boot sweeps files no account owns (spec §8.6)', () => {
+  /** A boot over `d` that lists and deletes files, with a record in `accounts`. */
+  function sweeping(d: ReturnType<typeof disk>, accounts: ReturnType<typeof accountStorage>, server: SyncTransport) {
+    return boot({
+      env: testEnv(),
+      accounts,
+      openDriver: d.openDriver,
+      deleteDatabase: d.deleteDatabase,
+      listDatabases: d.listDatabases,
+      transport: () => server,
+    })
+  }
+
+  /** Leaves a database file behind, as a learner's file or a demo from earlier would be. */
+  async function leave(d: ReturnType<typeof disk>, file: string, attachedTo: string | null = null): Promise<void> {
+    const { boot: b } = boot({ openDriver: async () => d.openDriver(file) })
+    await b.start()
+    await ready(b).answer(hello)
+    if (attachedTo) await ready(b).attachUser(attachedTo)
+    await ready(b).close()
+  }
+
+  it('deletes other learners’ files and a demo not attached to the recorded learner before opening', async () => {
+    const d = disk()
+    const env = testEnv()
+    const server = new FakeServer({ now: env.now })
+    await leave(d, learnerFile('u2'))
+    await leave(d, DEMO_FILE)
+    const accounts = accountStorage(memoryStorage())
+    accounts.save({ userId: 'u1', email: 'ana@example.com' })
+    const { boot: b } = sweeping(d, accounts, server)
+    await b.start()
+    expect(b.store.get()).toMatchObject({ status: 'ready', account: { userId: 'u1' } })
+    expect(await d.listDatabases()).toEqual([learnerFile('u1')])
+  })
+
+  it('keeps the demo, and deletes every learner’s file, without an account', async () => {
+    const d = disk()
+    const env = testEnv()
+    await leave(d, learnerFile('u2'))
+    await leave(d, DEMO_FILE)
+    const { boot: b } = sweeping(d, accountStorage(memoryStorage()), new FakeServer({ now: env.now }))
+    await b.start()
+    expect(await d.listDatabases()).toEqual([DEMO_FILE])
+    expect(ready(b).snapshot.states.size).toBe(1)
+  })
+
+  it('carries over a demo attached to the recorded learner even when the record lost its flag', async () => {
+    const d = disk()
+    const env = testEnv()
+    const server = new FakeServer({ now: env.now })
+    await leave(d, DEMO_FILE, 'u1')
+    const accounts = accountStorage(memoryStorage())
+    accounts.save({ userId: 'u1', email: 'ana@example.com' })
+    const { boot: b } = sweeping(d, accounts, server)
+    await b.start()
+    expect(server.events.size).toBe(1)
+    expect(await d.listDatabases()).toEqual([learnerFile('u1')])
+    expect(accounts.read()).toEqual({ userId: 'u1', email: 'ana@example.com', carryOver: false })
   })
 })

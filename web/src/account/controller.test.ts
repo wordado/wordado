@@ -4,12 +4,12 @@ import { testEnv, type TestEnv } from '@wordado/client-data/src/testing/testEnv'
 import { nodeSqliteDriver } from '@wordado/client-data/src/drivers/nodeSqlite'
 import { Client, type SyncTransport } from '@wordado/client-data'
 import type { WordId } from '@wordado/core'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { Boot, type LockPort } from '../app/boot'
 import { answerTo, disk, flaky } from '../test/disk'
 import { fakeApi } from '../test/fakeApi'
-import type { Me } from './api'
-import { AccountController } from './controller'
+import { OfflineError, type Me } from './api'
+import { AccountController, NotReady, SignOutOffline } from './controller'
 import { accountStorage, DEMO_FILE, learnerFile, memoryStorage, pendingSignIn } from './storage'
 
 const ANA: Me = { userId: 'u1', email: 'ana@example.com', country: null, createdAt: 0 }
@@ -26,7 +26,17 @@ async function app(options: { env?: TestEnv; server?: FakeServer; transport?: Sy
   const stops: boolean[] = []
   const lock: LockPort = { acquire: async () => true, takeOver: async () => undefined }
   const boot = new Boot(
-    { env, l1: 'bg', accounts, openDriver: d.openDriver, deleteDatabase: d.deleteDatabase, transport: () => transport, fetchManifest: async () => sampleManifest, fetchPack: sampleFetcher },
+    {
+      env,
+      l1: 'bg',
+      accounts,
+      openDriver: d.openDriver,
+      deleteDatabase: d.deleteDatabase,
+      listDatabases: d.listDatabases,
+      transport: () => transport,
+      fetchManifest: async () => sampleManifest,
+      fetchPack: sampleFetcher,
+    },
     () => lock,
   )
   await boot.start()
@@ -130,6 +140,32 @@ describe('signing in from the demo (spec §8.6)', () => {
     expect(a.d.exists(DEMO_FILE)).toBe(false)
   })
 
+  it('records the carry-over before pushing, so a tab closed mid-push still owes it', async () => {
+    const env = testEnv()
+    const server = new FakeServer({ now: env.now })
+    const transport = flaky(server)
+    transport.online = true
+    const a = await app({ env, server, transport })
+    await a.client().answer(answerTo('c:hello-1'))
+    transport.push = () => new Promise(() => undefined)
+    void a.controller.completeSignIn('BG')
+    await vi.waitFor(() => expect(a.accounts.read()).toEqual({ userId: 'u1', email: 'ana@example.com', carryOver: true }))
+    expect(a.client().snapshot.userId).toBe('u1')
+  })
+
+  it('records a resumed carry-over before pushing it too', async () => {
+    const env = testEnv()
+    const server = new FakeServer({ now: env.now })
+    const transport = flaky(server)
+    transport.online = true
+    const a = await app({ env, server, transport })
+    await a.client().answer(answerTo('c:hello-1'))
+    await a.client().attachUser('u1')
+    transport.push = () => new Promise(() => undefined)
+    void a.controller.completeSignIn('BG')
+    await vi.waitFor(() => expect(a.accounts.read()).toEqual({ userId: 'u1', email: 'ana@example.com', carryOver: true }))
+  })
+
   it('changes nothing when the account cannot be checked (offline)', async () => {
     const env = testEnv()
     const server = new FakeServer({ now: env.now })
@@ -220,8 +256,43 @@ describe('signing out, deleting, leaving the demo (spec §8.6, §11)', () => {
     expect(a.d.exists(learnerFile('u1'))).toBe(false)
     expect(a.boot.store.get()).toMatchObject({ status: 'ready', account: null })
     expect(a.client().snapshot.states.size).toBe(0)
-    expect(a.stops).toEqual([true])
+    // Signed out first: the server's copy of the subscription can no longer be deleted, and dies with the browser's.
+    expect(a.stops).toEqual([false])
     expect(a.api.calls).toContain('signOut')
+  })
+
+  it('needs the server to sign out: offline, it throws and changes nothing here', async () => {
+    const a = await app()
+    await a.controller.completeSignIn('BG')
+    a.api.signOut = async () => Promise.reject(new OfflineError(new TypeError('Failed to fetch')))
+    await expect(a.controller.signOut()).rejects.toBeInstanceOf(SignOutOffline)
+    await expect(a.controller.signOut({ force: true })).rejects.toBeInstanceOf(SignOutOffline)
+    expect(a.accounts.read()?.userId).toBe('u1')
+    expect(a.d.exists(learnerFile('u1'))).toBe(true)
+    expect(a.stops).toEqual([])
+    expect(a.boot.store.get()).toMatchObject({ status: 'ready', account: { userId: 'u1' } })
+    expect(a.controller.store.get().notice).not.toBe('signed-out')
+  })
+
+  it('announces no change when the switch did not run (another tab has the database)', async () => {
+    const a = await app()
+    await a.controller.completeSignIn('BG')
+    a.controller.dismissNotice()
+    const controller = new AccountController({
+      api: a.api,
+      boot: { store: a.boot.store, switchTo: async () => false },
+      accounts: a.accounts,
+      pending: a.pending,
+      transport: () => a.server,
+    })
+    expect(await controller.signOut()).toBe('signed-out')
+    expect(controller.store.get().notice).toBeNull()
+    a.accounts.save({ userId: 'u1', email: 'ana@example.com' })
+    await controller.deleteAccount()
+    expect(controller.store.get().notice).toBeNull()
+    a.accounts.clear()
+    await controller.leaveDemo()
+    expect(controller.store.get().notice).toBeNull()
   })
 
   it('signs out without asking when everything is synced', async () => {
@@ -307,14 +378,15 @@ describe('signing out, deleting, leaving the demo (spec §8.6, §11)', () => {
     expect(a.client().snapshot.userId).toBeNull()
   })
 
-  it('leaves a demo already attached to another learner alone on a sign-in as someone else', async () => {
+  it('neither pushes nor keeps a demo attached to another learner on a sign-in as someone else', async () => {
     const a = await app({ session: { ...ANA, userId: 'u2', email: 'bo@example.com' } })
     await a.client().answer(answerTo('c:hello-1'))
     // Simulates a stuck carry-over: the demo is attached to u1 on disk, but no account record points to it.
     await a.client().attachUser('u1')
     expect(await a.controller.completeSignIn('BG')).toBe('signed-in')
     expect(a.server.events.size).toBe(0)
-    expect(a.d.exists(DEMO_FILE)).toBe(true)
+    // Not u2's: the sweep before u2's file opens deletes it (a device keeps one learner's data).
+    expect(a.d.exists(DEMO_FILE)).toBe(false)
     expect(a.accounts.read()?.userId).toBe('u2')
     expect(a.client().snapshot.states.size).toBe(0)
   })
@@ -365,7 +437,7 @@ describe('Boot must be ready before an account changes (spec §9.1)', () => {
 
   it('completeSignIn rejects and saves no record while Boot is not ready', async () => {
     const { controller, accounts } = notReady()
-    await expect(controller.completeSignIn('BG')).rejects.toThrow('Wordado is still opening')
+    await expect(controller.completeSignIn('BG')).rejects.toBeInstanceOf(NotReady)
     expect(accounts.read()).toBeNull()
   })
 
@@ -373,7 +445,7 @@ describe('Boot must be ready before an account changes (spec §9.1)', () => {
     const accounts = accountStorage(memoryStorage())
     accounts.save({ userId: 'u1', email: 'ana@example.com' })
     const { controller, deletes } = notReady({ accounts })
-    await expect(controller.signOut()).rejects.toThrow('Wordado is still opening')
+    await expect(controller.signOut()).rejects.toBeInstanceOf(NotReady)
     expect(accounts.read()?.userId).toBe('u1')
     expect(deletes).toEqual([])
   })
