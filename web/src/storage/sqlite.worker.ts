@@ -44,13 +44,21 @@ let queue: Promise<void> = Promise.resolve()
 
 scope.onmessage = (event: MessageEvent<WorkerRequest>) => {
   const { id, ...call } = event.data
-  queue = queue.then(async () => {
-    let response: WorkerResponse
-    try {
-      response = { id, ok: true, value: await handle(call as WorkerCall) }
-    } catch (err) {
-      response = { id, ok: false, error: err instanceof Error ? err.message : String(err) }
-    }
-    scope.postMessage(response)
-  })
+  queue = queue
+    .then(async () => {
+      let response: WorkerResponse
+      try {
+        response = { id, ok: true, value: await handle(call as WorkerCall) }
+      } catch (err) {
+        response = { id, ok: false, error: err instanceof Error ? err.message : String(err) }
+      }
+      try {
+        scope.postMessage(response)
+      } catch (err) {
+        // e.g. a DataCloneError on the reply itself: the caller still gets an answer, and the queue keeps going.
+        scope.postMessage({ id, ok: false, error: err instanceof Error ? err.message : String(err) })
+      }
+    })
+    // A request must never leave the queue chain rejected: that would hang every later request.
+    .catch(() => undefined)
 }

@@ -4,7 +4,7 @@ import SQLiteSyncFactory from '@journeyapps/wa-sqlite/dist/wa-sqlite.mjs'
 import { IDBBatchAtomicVFS } from '@journeyapps/wa-sqlite/src/examples/IDBBatchAtomicVFS.js'
 import { OPFSCoopSyncVFS } from '@journeyapps/wa-sqlite/src/examples/OPFSCoopSyncVFS.js'
 import type { SqlValue } from '@wordado/client-data'
-import { StorageUnavailable } from './open'
+import { isUnsupportedError, StorageUnavailable } from './open'
 
 /** One open database. Runs inside the Worker only. */
 export interface Connection {
@@ -17,18 +17,30 @@ const IdbVfs = IDBBatchAtomicVFS as unknown as { create(name: string, module: un
 
 const messageOf = (err: unknown): string => (err instanceof Error ? err.message : String(err))
 
-/** Creating the VFS is where an unsupported storage shows itself; anything after that is a real error. */
+/**
+ * Creating the VFS touches the real storage (OPFS lists the root directory,
+ * takes a Web Lock and opens sync access handles; IndexedDB opens and can
+ * upgrade the learner's database), so most of its errors are real failures
+ * to open, not an unsupported browser. Only `isUnsupportedError` becomes a
+ * `StorageUnavailable`; everything else — quota, corruption, a held lock —
+ * propagates and stops `openFirst` from falling back onto an empty database.
+ */
 async function vfs(what: string, create: () => Promise<SQLiteVFS>): Promise<SQLiteVFS> {
   try {
     return await create()
   } catch (err) {
-    throw new StorageUnavailable(`${what}: ${messageOf(err)}`)
+    if (isUnsupportedError(err)) throw new StorageUnavailable(`${what}: ${messageOf(err)}`)
+    throw err
   }
 }
 
 /** OPFS with synchronous access handles: the fastest, and Worker-only (spec §9.1). */
 export async function openOpfs(file: string): Promise<Connection> {
   if (typeof navigator.storage?.getDirectory !== 'function') throw new StorageUnavailable('OPFS is not available')
+  if (typeof navigator.locks === 'undefined') throw new StorageUnavailable('Web Locks are not available')
+  if (typeof FileSystemFileHandle === 'undefined' || !('createSyncAccessHandle' in FileSystemFileHandle.prototype)) {
+    throw new StorageUnavailable('OPFS sync access handles are not available')
+  }
   const module = await SQLiteSyncFactory()
   const api = SQLite.Factory(module)
   api.vfs_register(await vfs('OPFS', () => OPFSCoopSyncVFS.create('opfs', module)), true)

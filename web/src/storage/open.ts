@@ -4,6 +4,17 @@ import type { Backend } from './protocol'
 export class StorageUnavailable extends Error {}
 
 /**
+ * Whether `err` means this browser cannot support the storage at all — never
+ * that opening it merely failed (a quota, corruption or lock error). Only
+ * `SecurityError` (e.g. OPFS in a private/partitioned context) and
+ * `NotSupportedError` are unsupported storage; everything else, including
+ * `QuotaExceededError` and `UnknownError`, is a real failure to open.
+ */
+export function isUnsupportedError(err: unknown): boolean {
+  return err instanceof Error && (err.name === 'SecurityError' || err.name === 'NotSupportedError')
+}
+
+/**
  * Opens `file` on the first supported storage of `backends`. A storage that
  * is supported but fails to open is an error: falling back would open an
  * empty second database beside the learner's real one.

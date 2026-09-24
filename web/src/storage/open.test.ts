@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { openFirst, StorageUnavailable } from './open'
+import { isUnsupportedError, openFirst, StorageUnavailable } from './open'
 
 const unsupported = (why: string) => async () => {
   throw new StorageUnavailable(why)
@@ -41,5 +41,21 @@ describe('openFirst', () => {
     await expect(openFirst('demo', ['opfs'], { opfs: unsupported('no OPFS'), idb: unsupported('x'), memory: unsupported('x') })).rejects.toThrow(
       'No storage could be opened (opfs: no OPFS)',
     )
+  })
+})
+
+describe('isUnsupportedError', () => {
+  it('treats a quota or corruption error as a real failure to open, never as unsupported', () => {
+    expect(isUnsupportedError(new DOMException('quota exceeded', 'QuotaExceededError'))).toBe(false)
+    expect(isUnsupportedError(new DOMException('corrupt', 'UnknownError'))).toBe(false)
+  })
+
+  it('treats SecurityError and NotSupportedError as unsupported', () => {
+    expect(isUnsupportedError(new DOMException('blocked in this context', 'SecurityError'))).toBe(true)
+    expect(isUnsupportedError(new DOMException('not supported', 'NotSupportedError'))).toBe(true)
+  })
+
+  it('treats a plain Error as a real failure, not unsupported', () => {
+    expect(isUnsupportedError(new Error('database disk image is malformed'))).toBe(false)
   })
 })
