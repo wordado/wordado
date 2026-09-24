@@ -9,6 +9,8 @@ import { useOnline } from '../useOnline'
 
 const ONE_WAY: readonly Mode[] = ['flashcard', 'multiple_choice', 'listening_select']
 
+const messageOf = (err: unknown): string => (err instanceof Error ? err.message : String(err))
+
 /** Today (spec §8.3): the capped due figure first, the backlog second, then the day's motivation. */
 export function Home() {
   const { t, locale } = useT()
@@ -17,6 +19,7 @@ export function Home() {
   const { plan, progress, xp, states, settings, corpus } = useClientSnapshot()
   useOnline() // re-renders on every `online`/`offline` event, so `canListen` below is re-evaluated
   const [skipped, setSkipped] = useState(false)
+  const [themeError, setThemeError] = useState<string | null>(null)
   if (!plan || !progress) return null
   const reviews = plan.reviews.length
   const fresh = plan.newWords.length
@@ -37,12 +40,22 @@ export function Home() {
           <ul className="onboard-themes">
             {offeredThemes(corpus).map((theme) => (
               <li key={theme.themeId}>
-                <button type="button" className="button" onClick={() => void client.updateSettings({ activeTheme: theme.themeId })}>
+                <button
+                  type="button"
+                  className="button"
+                  onClick={() => {
+                    client.updateSettings({ activeTheme: theme.themeId }).then(
+                      () => setThemeError(null),
+                      (err: unknown) => setThemeError(t('settings.saveFailed', { message: messageOf(err) })),
+                    )
+                  }}
+                >
                   {localized(theme.name, locale)}
                 </button>
               </li>
             ))}
           </ul>
+          {themeError && <p role="alert">{themeError}</p>}
           <button type="button" className="link-button" onClick={() => setSkipped(true)}>
             {t('onboard.skip')}
           </button>

@@ -1,5 +1,6 @@
 import { useClient, useClientSnapshot, type PathView } from '@wordado/client-data'
 import type { UnitProgress, Unit } from '@wordado/core'
+import { useState } from 'react'
 import { localized, useT } from '../i18n/i18n'
 import { FlagControls } from '../study/FlagControls'
 
@@ -21,6 +22,9 @@ export function Path() {
   const { t, locale } = useT()
   const client = useClient()
   const { corpus, progress, path } = useClientSnapshot()
+  // A unit's word list mounts (and subscribes to the snapshot) only while its <details> is open,
+  // so a path with many units and words stays cheap to render.
+  const [openUnits, setOpenUnits] = useState<ReadonlySet<string>>(new Set())
   if (!corpus || !progress || !path) return null
   const levels = [...new Set(corpus.units.map((u) => u.level))]
   return (
@@ -58,22 +62,35 @@ export function Path() {
                       {status !== 'locked' && unitProgress && (
                         <p className="note">{t('path.introduced', { introduced: unitProgress.introduced, live: unitProgress.live })}</p>
                       )}
-                      <details className="unit-words">
+                      <details
+                        className="unit-words"
+                        onToggle={(e) => {
+                          const isOpen = e.currentTarget.open
+                          setOpenUnits((prev) => {
+                            const next = new Set(prev)
+                            if (isOpen) next.add(unit.unitId)
+                            else next.delete(unit.unitId)
+                            return next
+                          })
+                        }}
+                      >
                         <summary>{t('path.words', { count: unit.wordIds.length })}</summary>
-                        <ul>
-                          {unit.wordIds.map((wordId) => {
-                            const entry = client.entry(wordId)
-                            if (!entry) return null
-                            return (
-                              <li key={wordId}>
-                                <span lang="en" className="word-head">
-                                  {entry.headword}
-                                </span>
-                                <FlagControls wordId={wordId} headword={entry.headword} />
-                              </li>
-                            )
-                          })}
-                        </ul>
+                        {openUnits.has(unit.unitId) && (
+                          <ul>
+                            {unit.wordIds.map((wordId) => {
+                              const entry = client.entry(wordId)
+                              if (!entry) return null
+                              return (
+                                <li key={wordId}>
+                                  <span lang="en" className="word-head">
+                                    {entry.headword}
+                                  </span>
+                                  <FlagControls wordId={wordId} headword={entry.headword} />
+                                </li>
+                              )
+                            })}
+                          </ul>
+                        )}
                       </details>
                     </li>
                   )

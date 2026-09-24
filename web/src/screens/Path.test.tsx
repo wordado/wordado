@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, screen, within } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { answerNew, renderWith, setup } from '../test/fixtures'
 import { Path } from './Path'
 
@@ -42,11 +42,14 @@ describe('Path', () => {
     expect(screen.getByRole('heading', { name: 'Хора и поздрави' })).toBeTruthy()
   })
 
-  it('lists a unit’s words, and sets one aside before it is ever taught (spec §7.4)', async () => {
+  it('lists a unit’s words only once opened, and sets one aside before it is ever taught (spec §7.4)', async () => {
     const ctx = await setup()
     renderWith(<Path />, ctx)
     const food = unit('Food and drink')
-    food.querySelector('details')!.open = true
+    // Closed by default: a unit's word list is not rendered (and does not subscribe to the snapshot) until opened.
+    expect(within(food).queryAllByRole('listitem')).toHaveLength(0)
+    // happy-dom toggles a <details> open on a click of its <summary>, firing the native `toggle` event.
+    await act(async () => fireEvent.click(food.querySelector('summary')!))
     const words = within(food).getAllByRole('listitem')
     expect(words).toHaveLength(20)
     const first = words[0]!
@@ -56,6 +59,19 @@ describe('Path', () => {
     expect(within(first).getByText('Known')).toBeTruthy()
     expect([...ctx.client.snapshot.flags.values()]).toEqual(['known'])
     await act(async () => fireEvent.click(within(first).getByRole('button', { name: `Bring back: ${headword}` })))
+    expect(ctx.client.snapshot.flags.size).toBe(0)
+  })
+
+  it('shows a saved-failed alert beside the word when setting it aside fails (spec §11.1)', async () => {
+    const ctx = await setup()
+    vi.spyOn(ctx.client, 'setFlag').mockRejectedValue(new Error('disk full'))
+    renderWith(<Path />, ctx)
+    const food = unit('Food and drink')
+    await act(async () => fireEvent.click(food.querySelector('summary')!))
+    const first = within(food).getAllByRole('listitem')[0]!
+    const headword = first.querySelector('[lang="en"]')!.textContent!
+    await act(async () => fireEvent.click(within(first).getByRole('button', { name: `I know it: ${headword}` })))
+    expect(within(first).getByRole('alert').textContent).toBe('Your change wasn’t saved: disk full')
     expect(ctx.client.snapshot.flags.size).toBe(0)
   })
 })

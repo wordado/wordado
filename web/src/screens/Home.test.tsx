@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, screen, within } from '@testing-library/react'
 import { DAY_MS } from '@wordado/core'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { answerNew, fakeAudio, renderWith, setup } from '../test/fixtures'
 import { Home } from './Home'
 
@@ -76,6 +76,16 @@ describe('Home: the onboarding question (spec §8.6)', () => {
     await answerNew(ctx.client, ctx.env, 1)
     renderWith(<Home />, ctx)
     expect(screen.queryByRole('group', { name: 'What do you want English for?' })).toBeNull()
+  })
+
+  it('shows a saved-failed alert in the onboarding block when choosing a theme fails (spec §11.1)', async () => {
+    const ctx = await setup()
+    vi.spyOn(ctx.client, 'updateSettings').mockRejectedValue(new Error('disk full'))
+    renderWith(<Home />, ctx)
+    const question = screen.getByRole('group', { name: 'What do you want English for?' })
+    await act(async () => fireEvent.click(within(question).getByRole('button', { name: 'Daily life' })))
+    expect(within(question).getByRole('alert').textContent).toBe('Your change wasn’t saved: disk full')
+    expect(ctx.client.snapshot.settings.activeTheme).toBeNull()
   })
 })
 
