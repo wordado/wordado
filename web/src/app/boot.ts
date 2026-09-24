@@ -50,8 +50,8 @@ export interface BootDeps {
 }
 
 export interface SwitchOptions {
-  /** A file to delete once the open one is closed and before the next opens. */
-  readonly deleteFile?: string
+  /** Files to delete, in order, once the open one is closed and before the next opens. */
+  readonly deleteFiles?: readonly string[]
 }
 
 const messageOf = (err: unknown): string => (err instanceof Error ? err.message : String(err))
@@ -183,7 +183,7 @@ export class Boot {
     const generation = ++this.generation
     if (this.opening) await this.opening.catch(() => undefined)
     this.store.set({ status: 'starting' })
-    await this.closeClient(false, options.deleteFile)
+    await this.closeClient(false, options.deleteFiles)
     if (generation !== this.generation) return
     await this.open(true)
   }
@@ -194,8 +194,8 @@ export class Boot {
    * that step, so the lock never passes on while this tab still holds or is
    * still erasing a file.
    */
-  private closeClient(flush: boolean, deleteFile?: string): Promise<void> {
-    const run = this.closing.then(() => this.closeNow(flush, deleteFile))
+  private closeClient(flush: boolean, deleteFiles?: readonly string[]): Promise<void> {
+    const run = this.closing.then(() => this.closeNow(flush, deleteFiles))
     this.closing = run.catch(() => undefined)
     return run
   }
@@ -203,10 +203,10 @@ export class Boot {
   /**
    * Stops syncing, waits for in-flight answers, optionally flushes, closes
    * the Client, and only then — inside this same serialised step — deletes
-   * `deleteFile` if given, so a hand-over landing mid-switch waits for the
-   * delete too (spec §8.6, §9.1).
+   * `deleteFiles`, in order, if given, so a hand-over landing mid-switch
+   * waits for the deletes too (spec §8.6, §9.1).
    */
-  private async closeNow(flush: boolean, deleteFile?: string): Promise<void> {
+  private async closeNow(flush: boolean, deleteFiles?: readonly string[]): Promise<void> {
     this.stopSync?.()
     this.stopSync = null
     const client = this.client
@@ -225,7 +225,7 @@ export class Boot {
       // A sync cut short by the timeout fails on the closed database; its answers are pushed again next time, and the server drops duplicates.
       await client.close().catch(() => undefined)
     }
-    if (deleteFile) await this.deps.deleteDatabase?.(deleteFile).catch(() => undefined)
+    if (deleteFiles) for (const file of deleteFiles) await this.deps.deleteDatabase?.(file).catch(() => undefined)
   }
 
   private async open(resumed: boolean): Promise<void> {

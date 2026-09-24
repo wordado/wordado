@@ -73,9 +73,13 @@ export class AccountController {
    * code, or back from Google. `country` is the age gate's (spec §11), the
    * only thing kept of it.
    *
-   * - Already signed in as the same learner (an expired sign-in): resume syncing.
    * - Signed in as someone else: refuse, and sign the new session out — this
-   *   device's answers belong to its learner, and are neither pushed nor deleted.
+   *   device's answers belong to its learner, and are neither pushed nor
+   *   deleted. Checked first, so a refused session's country is never saved.
+   * - Already signed in as the same learner (an expired sign-in): resume syncing.
+   * - A demo already attached to a different learner (an owed carry-over this
+   *   device never finished, e.g. after a forced sign-out): it is not this
+   *   sign-in's to push or discard, so it is left exactly as it is.
    * - From the demo into an account with no progress: attach the demo, push it
    *   from its own device, delete it once everything is up (spec §8.6).
    * - From the demo into an account with progress: delete the demo.
@@ -86,22 +90,32 @@ export class AccountController {
     const { api, accounts, boot } = this.deps
     const me = await api.me()
     if (!me) throw new Error('The sign-in did not complete')
-    if (country !== null && me.country !== country) await api.setCountry(country).catch(() => undefined)
 
     const current = accounts.read()
-    if (current) {
-      if (current.userId === me.userId) {
-        this.set({ expired: false, notice: 'signed-in' })
-        void this.client()?.sync({ force: true }).catch(() => undefined)
-        return 'signed-in'
-      }
+    if (current && current.userId !== me.userId) {
       await api.signOut().catch(() => undefined)
       this.set({ notice: 'other-account' })
       return 'other-account'
     }
 
+    if (country !== null && me.country !== country) await api.setCountry(country).catch(() => undefined)
+
+    if (current) {
+      this.set({ expired: false, notice: 'signed-in' })
+      void this.client()?.sync({ force: true }).catch(() => undefined)
+      return 'signed-in'
+    }
+
     const demo = this.client()
     const record = { userId: me.userId, email: me.email }
+    const demoUserId = demo?.snapshot.userId ?? null
+    if (demo !== null && demoUserId !== null && demoUserId !== me.userId) {
+      accounts.save(record)
+      await boot.switchTo()
+      this.set({ expired: false, notice: 'signed-in' })
+      return 'signed-in'
+    }
+
     const hasProgress = demo !== null && (await demo.hasUnsynced())
     if (demo && hasProgress) {
       const transport = this.deps.transport()
@@ -110,13 +124,13 @@ export class AccountController {
         await demo.sync({ force: true })
         const carryOver = await demo.hasUnsynced()
         accounts.save({ ...record, carryOver })
-        await boot.switchTo(carryOver ? {} : { deleteFile: DEMO_FILE })
+        await boot.switchTo(carryOver ? {} : { deleteFiles: [DEMO_FILE] })
         this.set({ expired: false, notice: 'carried-over' })
         return 'carried-over'
       }
     }
     accounts.save(record)
-    await boot.switchTo({ deleteFile: DEMO_FILE })
+    await boot.switchTo({ deleteFiles: [DEMO_FILE] })
     const outcome: SignInOutcome = hasProgress ? 'demo-discarded' : 'signed-in'
     this.set({ expired: false, notice: outcome })
     return outcome
@@ -135,32 +149,47 @@ export class AccountController {
       this.set({ notice: 'google-failed' })
       return null
     }
-    return this.completeSignIn(pending.country)
+    try {
+      return await this.completeSignIn(pending.country)
+    } catch (err) {
+      this.set({ notice: 'google-failed' })
+      throw err
+    }
   }
 
   /**
    * Flushes, then signs out and deletes this learner's file (a shared browser
    * keeps nothing). Answers that could not be flushed are lost by signing
-   * out, so without `force` it returns 'unsynced' and changes nothing.
+   * out, so without `force` it returns 'unsynced' and changes nothing. A
+   * carry-over this device still owes (its push never got through) counts
+   * as unsynced too — the demo holds this learner's only copy of it, so
+   * `force` deletes that file alongside the learner's own.
    */
   async signOut(options: { readonly force?: boolean } = {}): Promise<'signed-out' | 'unsynced'> {
     const { api, accounts, boot } = this.deps
     const account = accounts.read()
     if (!account) return 'signed-out'
     const client = this.client()
-    if (client) {
-      await client.sync({ force: true }).catch(() => undefined)
-      if (!options.force && (await client.hasUnsynced())) return 'unsynced'
+    if (client) await client.sync({ force: true }).catch(() => undefined)
+    if (!options.force) {
+      const clientUnsynced = client !== null && (await client.hasUnsynced())
+      if (clientUnsynced || account.carryOver) return 'unsynced'
     }
     await this.deps.reminders?.stop({ server: true }).catch(() => undefined)
     await api.signOut().catch(() => undefined)
     accounts.clear()
-    await boot.switchTo({ deleteFile: learnerFile(account.userId) })
+    const deleteFiles = account.carryOver ? [learnerFile(account.userId), DEMO_FILE] : [learnerFile(account.userId)]
+    await boot.switchTo({ deleteFiles })
     this.set({ expired: false, notice: 'signed-out' })
     return 'signed-out'
   }
 
-  /** Self-service erasure (spec §11): the server first — if that fails, nothing here changes — then this device. */
+  /**
+   * Self-service erasure (spec §11): the server first — if that fails,
+   * nothing here changes — then this device. Both files go, whether or not a
+   * carry-over was still owed: no trace of the account survives on the
+   * device it deleted itself from. A fresh demo opens either way.
+   */
   async deleteAccount(): Promise<void> {
     const { api, accounts, boot } = this.deps
     const account = accounts.read()
@@ -168,14 +197,14 @@ export class AccountController {
     await api.deleteAccount()
     await this.deps.reminders?.stop({ server: false }).catch(() => undefined)
     accounts.clear()
-    await boot.switchTo({ deleteFile: learnerFile(account.userId) })
+    await boot.switchTo({ deleteFiles: [learnerFile(account.userId), DEMO_FILE] })
     this.set({ expired: false, notice: 'deleted' })
   }
 
   /** Leaving the demo deletes it (spec §8.6); a fresh one opens. */
   async leaveDemo(): Promise<void> {
     if (this.deps.accounts.read() !== null) return
-    await this.deps.boot.switchTo({ deleteFile: DEMO_FILE })
+    await this.deps.boot.switchTo({ deleteFiles: [DEMO_FILE] })
     this.set({ notice: 'demo-left' })
   }
 }

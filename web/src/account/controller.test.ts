@@ -243,6 +243,76 @@ describe('signing out, deleting, leaving the demo (spec §8.6, §11)', () => {
     await a.client().answer(answerTo('c:hello-1'))
     await a.controller.leaveDemo()
     expect(a.client().snapshot.states.size).toBe(0)
+    expect(a.d.exists(DEMO_FILE)).toBe(true)
     expect(a.controller.store.get().notice).toBe('demo-left')
+  })
+
+  it('treats an owed carry-over as unsynced too, and a forced sign-out deletes both files', async () => {
+    const env = testEnv()
+    const server = new FakeServer({ now: env.now })
+    const transport = flaky(server)
+    const a = await app({ env, server, transport })
+    await a.client().answer(answerTo('c:hello-1'))
+    transport.online = true
+    const push = transport.push
+    transport.push = () => Promise.reject(new Error('offline'))
+    expect(await a.controller.completeSignIn('BG')).toBe('carried-over')
+    expect(a.accounts.read()?.carryOver).toBe(true)
+    transport.push = push
+
+    expect(await a.controller.signOut()).toBe('unsynced')
+    expect(a.accounts.read()?.userId).toBe('u1')
+    expect(a.d.exists(DEMO_FILE)).toBe(true)
+
+    expect(await a.controller.signOut({ force: true })).toBe('signed-out')
+    expect(a.accounts.read()).toBeNull()
+    expect(a.boot.store.get()).toMatchObject({ status: 'ready', account: null })
+    // The demo that opens now is a fresh one, not the one still carrying u1's answer.
+    expect(a.client().snapshot.states.size).toBe(0)
+    expect(a.client().snapshot.userId).toBeNull()
+  })
+
+  it('deletes an owed carry-over demo too when the account is deleted', async () => {
+    const env = testEnv()
+    const server = new FakeServer({ now: env.now })
+    const transport = flaky(server)
+    const a = await app({ env, server, transport })
+    await a.client().answer(answerTo('c:hello-1'))
+    transport.online = true
+    const push = transport.push
+    transport.push = () => Promise.reject(new Error('offline'))
+    expect(await a.controller.completeSignIn('BG')).toBe('carried-over')
+    transport.push = push
+
+    await a.controller.deleteAccount()
+    expect(a.accounts.read()).toBeNull()
+    expect(a.d.exists(learnerFile('u1'))).toBe(false)
+    // A fresh demo, not the one that still carried u1's unpushed answer.
+    expect(a.client().snapshot.states.size).toBe(0)
+    expect(a.client().snapshot.userId).toBeNull()
+  })
+
+  it('leaves a demo already attached to another learner alone on a sign-in as someone else', async () => {
+    const a = await app({ session: { ...ANA, userId: 'u2', email: 'bo@example.com' } })
+    await a.client().answer(answerTo('c:hello-1'))
+    // Simulates a stuck carry-over: the demo is attached to u1 on disk, but no account record points to it.
+    await a.client().attachUser('u1')
+    expect(await a.controller.completeSignIn('BG')).toBe('signed-in')
+    expect(a.server.events.size).toBe(0)
+    expect(a.d.exists(DEMO_FILE)).toBe(true)
+    expect(a.accounts.read()?.userId).toBe('u2')
+    expect(a.client().snapshot.states.size).toBe(0)
+  })
+})
+
+describe('resumeGoogle reports a failed completion (spec §8.6)', () => {
+  it('sets the notice to google-failed, and rethrows, when completeSignIn fails', async () => {
+    const env = testEnv()
+    const server = new FakeServer({ now: env.now })
+    const a = await app({ env, server, transport: flaky(server) })
+    await a.client().answer(answerTo('c:hello-1'))
+    a.pending.save({ country: 'BG' })
+    await expect(a.controller.resumeGoogle('ok')).rejects.toThrow('offline')
+    expect(a.controller.store.get().notice).toBe('google-failed')
   })
 })

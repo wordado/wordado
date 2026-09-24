@@ -51,9 +51,11 @@ const boot = new Boot(
 controller = new AccountController({ api, boot, accounts, pending: pendingSignIn(), transport: () => transport })
 
 // Back from Google (spec §8.6): finish the sign-in once the demo (or the learner's file) is open.
-const signinResult = new URLSearchParams(window.location.search).get('signin')
+const returnUrl = new URL(window.location.href)
+const signinResult = returnUrl.searchParams.get('signin')
 if (signinResult === 'google' || signinResult === 'google-error') {
-  window.history.replaceState(null, '', window.location.pathname)
+  returnUrl.searchParams.delete('signin')
+  window.history.replaceState(null, '', `${returnUrl.pathname}${returnUrl.search}${returnUrl.hash}`)
   const unsubscribe = boot.store.subscribe(() => {
     if (boot.store.get().status !== 'ready') return
     unsubscribe()

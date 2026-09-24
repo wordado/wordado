@@ -341,7 +341,7 @@ describe('Boot with accounts (spec §8.6, §9.1)', () => {
     expect(await ready(b).sync()).toBe('skipped')
 
     accounts.save({ userId: 'u1', email: 'ana@example.com' })
-    await b.switchTo({ deleteFile: DEMO_FILE })
+    await b.switchTo({ deleteFiles: [DEMO_FILE] })
     expect(b.store.get()).toMatchObject({ status: 'ready', account: { userId: 'u1' } })
     expect(d.exists(DEMO_FILE)).toBe(false)
     expect(d.exists(learnerFile('u1'))).toBe(true)
@@ -594,13 +594,33 @@ describe('Boot with accounts (spec §8.6, §9.1)', () => {
     })
     await b.start()
     accounts.save({ userId: 'u1', email: 'ana@example.com' })
-    const switching = b.switchTo({ deleteFile: DEMO_FILE })
+    const switching = b.switchTo({ deleteFiles: [DEMO_FILE] })
     const releasing = release().then(() => log.push('released'))
     await new Promise((r) => setTimeout(r, 10))
     expect(log).toEqual([])
     deleting.resolve()
     await Promise.all([switching, releasing])
     expect(log).toEqual([`deleted ${DEMO_FILE}`, 'released'])
+  })
+
+  it('deletes several files, in order, inside the same serialised close step', async () => {
+    const d = disk()
+    const env = testEnv()
+    const accounts = accountStorage(memoryStorage())
+    const deleted: string[] = []
+    const { boot: b } = boot({
+      env,
+      accounts,
+      openDriver: d.openDriver,
+      deleteDatabase: async (file) => {
+        deleted.push(file)
+      },
+      transport: () => new FakeServer({ now: env.now }),
+    })
+    await b.start()
+    accounts.save({ userId: 'u1', email: 'ana@example.com' })
+    await b.switchTo({ deleteFiles: [DEMO_FILE, learnerFile('u0')] })
+    expect(deleted).toEqual([DEMO_FILE, learnerFile('u0')])
   })
 
   it('flushes past a backoff on hand-over, so a pending answer still reaches the server (spec §9.1)', async () => {
