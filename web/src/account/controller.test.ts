@@ -116,6 +116,20 @@ describe('signing in from the demo (spec §8.6)', () => {
     expect(a.d.exists(DEMO_FILE)).toBe(false)
   })
 
+  it('pushes a demo already attached to the signing-in learner, even though the account already has other progress', async () => {
+    const env = testEnv()
+    const server = new FakeServer({ now: env.now })
+    await progressElsewhere(env, server)
+    const a = await app({ env, server })
+    await a.client().answer(answerTo('c:hello-1'))
+    // The demo already carries u1's unpushed answer (an interrupted carry-over), with no account record left.
+    await a.client().attachUser('u1')
+    expect(await a.controller.completeSignIn('BG')).toBe('carried-over')
+    expect([...a.server.events.values()].map((e) => e.wordId).sort()).toEqual(['c:goodbye-1', 'c:hello-1'])
+    expect(a.accounts.read()).toEqual({ userId: 'u1', email: 'ana@example.com', carryOver: false })
+    expect(a.d.exists(DEMO_FILE)).toBe(false)
+  })
+
   it('changes nothing when the account cannot be checked (offline)', async () => {
     const env = testEnv()
     const server = new FakeServer({ now: env.now })
@@ -266,6 +280,7 @@ describe('signing out, deleting, leaving the demo (spec §8.6, §11)', () => {
 
     expect(await a.controller.signOut({ force: true })).toBe('signed-out')
     expect(a.accounts.read()).toBeNull()
+    expect(a.d.exists(learnerFile('u1'))).toBe(false)
     expect(a.boot.store.get()).toMatchObject({ status: 'ready', account: null })
     // The demo that opens now is a fresh one, not the one still carrying u1's answer.
     expect(a.client().snapshot.states.size).toBe(0)
@@ -314,5 +329,52 @@ describe('resumeGoogle reports a failed completion (spec §8.6)', () => {
     a.pending.save({ country: 'BG' })
     await expect(a.controller.resumeGoogle('ok')).rejects.toThrow('offline')
     expect(a.controller.store.get().notice).toBe('google-failed')
+  })
+})
+
+describe('Boot must be ready before an account changes (spec §9.1)', () => {
+  /** A controller whose `Boot` is left at its initial 'starting' status: `start()` is never called. */
+  function notReady(options: { accounts?: ReturnType<typeof accountStorage> } = {}) {
+    const env = testEnv()
+    const server = new FakeServer({ now: env.now })
+    const d = disk()
+    const accounts = options.accounts ?? accountStorage(memoryStorage())
+    const pending = pendingSignIn(memoryStorage())
+    const api = fakeApi({}, ANA)
+    const deletes: string[] = []
+    const lock: LockPort = { acquire: async () => true, takeOver: async () => undefined }
+    const boot = new Boot(
+      {
+        env,
+        l1: 'bg',
+        accounts,
+        openDriver: d.openDriver,
+        deleteDatabase: async (file) => {
+          deletes.push(file)
+          await d.deleteDatabase(file)
+        },
+        transport: () => server,
+        fetchManifest: async () => sampleManifest,
+        fetchPack: sampleFetcher,
+      },
+      () => lock,
+    )
+    const controller = new AccountController({ api, boot, accounts, pending, transport: () => server })
+    return { controller, accounts, deletes }
+  }
+
+  it('completeSignIn rejects and saves no record while Boot is not ready', async () => {
+    const { controller, accounts } = notReady()
+    await expect(controller.completeSignIn('BG')).rejects.toThrow('Wordado is still opening')
+    expect(accounts.read()).toBeNull()
+  })
+
+  it('signOut rejects and deletes nothing while Boot is not ready', async () => {
+    const accounts = accountStorage(memoryStorage())
+    accounts.save({ userId: 'u1', email: 'ana@example.com' })
+    const { controller, deletes } = notReady({ accounts })
+    await expect(controller.signOut()).rejects.toThrow('Wordado is still opening')
+    expect(accounts.read()?.userId).toBe('u1')
+    expect(deletes).toEqual([])
   })
 })

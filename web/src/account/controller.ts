@@ -50,9 +50,11 @@ export class AccountController {
 
   constructor(private readonly deps: AccountDeps) {}
 
-  private client(): Client | null {
+  /** The open Client — the demo's or a learner's, whichever `Boot` currently holds. Throws while it is not `'ready'`: an account change must never guess at a database it cannot see. */
+  private readyClient(): Client {
     const state = this.deps.boot.store.get()
-    return state.status === 'ready' ? state.client : null
+    if (state.status !== 'ready') throw new Error('Wordado is still opening; try again')
+    return state.client
   }
 
   private set(patch: Partial<AccountState>): void {
@@ -77,6 +79,10 @@ export class AccountController {
    *   device's answers belong to its learner, and are neither pushed nor
    *   deleted. Checked first, so a refused session's country is never saved.
    * - Already signed in as the same learner (an expired sign-in): resume syncing.
+   * - A demo already attached to this same learner (a carry-over this device
+   *   started but never finished, e.g. an interrupted push, with no account
+   *   record left to remember it): push it again, unconditionally — it is
+   *   already this learner's, so `accountIsEmpty` is never consulted.
    * - A demo already attached to a different learner (an owed carry-over this
    *   device never finished, e.g. after a forced sign-out): it is not this
    *   sign-in's to push or discard, so it is left exactly as it is.
@@ -84,12 +90,15 @@ export class AccountController {
    *   from its own device, delete it once everything is up (spec §8.6).
    * - From the demo into an account with progress: delete the demo.
    *
-   * Throws, changing nothing, when the account cannot be checked (offline).
+   * Throws, changing nothing, when the account cannot be checked (offline),
+   * or while `Boot` is not `'ready'` (spec §9.1): a sign-in landing mid-open
+   * must never guess whether the database it cannot yet see holds progress.
    */
   async completeSignIn(country: string | null): Promise<SignInOutcome> {
     const { api, accounts, boot } = this.deps
     const me = await api.me()
     if (!me) throw new Error('The sign-in did not complete')
+    const client = this.readyClient()
 
     const current = accounts.read()
     if (current && current.userId !== me.userId) {
@@ -102,27 +111,38 @@ export class AccountController {
 
     if (current) {
       this.set({ expired: false, notice: 'signed-in' })
-      void this.client()?.sync({ force: true }).catch(() => undefined)
+      void client.sync({ force: true }).catch(() => undefined)
       return 'signed-in'
     }
 
-    const demo = this.client()
     const record = { userId: me.userId, email: me.email }
-    const demoUserId = demo?.snapshot.userId ?? null
-    if (demo !== null && demoUserId !== null && demoUserId !== me.userId) {
+    const demoUserId = client.snapshot.userId
+
+    if (demoUserId !== null && demoUserId !== me.userId) {
       accounts.save(record)
       await boot.switchTo()
       this.set({ expired: false, notice: 'signed-in' })
       return 'signed-in'
     }
 
-    const hasProgress = demo !== null && (await demo.hasUnsynced())
-    if (demo && hasProgress) {
+    if (demoUserId === me.userId) {
       const transport = this.deps.transport()
-      if (await accountIsEmpty(transport, demo.snapshot.deviceId)) {
-        await demo.attachUser(me.userId, transport)
-        await demo.sync({ force: true })
-        const carryOver = await demo.hasUnsynced()
+      await client.attachUser(me.userId, transport)
+      await client.sync({ force: true })
+      const carryOver = await client.hasUnsynced()
+      accounts.save({ ...record, carryOver })
+      await boot.switchTo(carryOver ? {} : { deleteFiles: [DEMO_FILE] })
+      this.set({ expired: false, notice: 'carried-over' })
+      return 'carried-over'
+    }
+
+    const hasProgress = await client.hasUnsynced()
+    if (hasProgress) {
+      const transport = this.deps.transport()
+      if (await accountIsEmpty(transport, client.snapshot.deviceId)) {
+        await client.attachUser(me.userId, transport)
+        await client.sync({ force: true })
+        const carryOver = await client.hasUnsynced()
         accounts.save({ ...record, carryOver })
         await boot.switchTo(carryOver ? {} : { deleteFiles: [DEMO_FILE] })
         this.set({ expired: false, notice: 'carried-over' })
@@ -163,17 +183,18 @@ export class AccountController {
    * out, so without `force` it returns 'unsynced' and changes nothing. A
    * carry-over this device still owes (its push never got through) counts
    * as unsynced too — the demo holds this learner's only copy of it, so
-   * `force` deletes that file alongside the learner's own.
+   * `force` deletes that file alongside the learner's own. Throws while
+   * `Boot` is not `'ready'` (spec §9.1): a sign-out mid-switch must never
+   * delete a file it has not confirmed is safe to lose.
    */
   async signOut(options: { readonly force?: boolean } = {}): Promise<'signed-out' | 'unsynced'> {
     const { api, accounts, boot } = this.deps
     const account = accounts.read()
     if (!account) return 'signed-out'
-    const client = this.client()
-    if (client) await client.sync({ force: true }).catch(() => undefined)
+    const client = this.readyClient()
+    await client.sync({ force: true }).catch(() => undefined)
     if (!options.force) {
-      const clientUnsynced = client !== null && (await client.hasUnsynced())
-      if (clientUnsynced || account.carryOver) return 'unsynced'
+      if ((await client.hasUnsynced()) || account.carryOver) return 'unsynced'
     }
     await this.deps.reminders?.stop({ server: true }).catch(() => undefined)
     await api.signOut().catch(() => undefined)
