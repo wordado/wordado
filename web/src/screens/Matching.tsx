@@ -30,8 +30,14 @@ export function Matching() {
 function Board(props: { readonly run: MatchingRun; readonly onAgain: () => void }) {
   const { t } = useT()
   const { corpus } = useClientSnapshot()
+  const { afterRun } = useApp()
   const { run } = props
   const s = useStore(run.store)
+
+  // Fetches the clips of the words about to be met and asks for persistent storage (spec §9.1, §9.3), once per board.
+  useEffect(() => {
+    if (s.done) afterRun()
+  }, [s.done, afterRun])
   const l1 = corpus?.l1 ?? 'bg'
   const byId = (entryId: string) => s.left.find((e) => e.entryId === entryId)
   const leftRefs = useRef(new Map<string, HTMLButtonElement>())

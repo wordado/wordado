@@ -32,6 +32,8 @@ describe('Path', () => {
     await ctx.client.updateSettings({ declaredLevel: 'A2' })
     renderWith(<Path />, ctx)
     expect(screen.getByText('Skipped: you placed above this level.')).toBeTruthy()
+    // A1 is unlocked outright once A2 is declared, but is neither current nor complete/mastered.
+    expect(within(unit('People and greetings')).getByText('Open')).toBeTruthy()
   })
 
   it('uses the pack’s own unit titles in Bulgarian', async () => {

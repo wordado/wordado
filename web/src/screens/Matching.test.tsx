@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { answerNew, renderWith, setup } from '../test/fixtures'
 import { Matching } from './Matching'
 
@@ -41,6 +41,19 @@ describe('Matching', () => {
     expect(ctx.client.snapshot.states).toEqual(states)
     await click(screen.getByRole('button', { name: 'Play again' }))
     expect(english().every((b) => !b.disabled)).toBe(true)
+  })
+
+  it('fetches what comes next once the board is done, and not before (spec §9.3)', async () => {
+    const ctx = await setup()
+    await answerNew(ctx.client, ctx.env, 5)
+    const afterRun = vi.fn()
+    renderWith(<Matching />, { ...ctx, afterRun })
+    for (const button of english()) {
+      await click(button)
+      expect(afterRun).not.toHaveBeenCalled()
+      await click(translationFor(button.dataset.entry!))
+    }
+    expect(afterRun).toHaveBeenCalledTimes(1)
   })
 
   it('moves focus to the next unmatched word after a match, and to Play again once the board is done', async () => {

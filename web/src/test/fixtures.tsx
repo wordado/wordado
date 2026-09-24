@@ -36,6 +36,7 @@ export interface RenderContext {
   readonly audio: AudioPort
   readonly backend?: Backend
   readonly locale?: Locale
+  readonly afterRun?: () => void
 }
 
 /** Renders inside every provider the app has, in English unless told otherwise. */
@@ -44,7 +45,7 @@ export function renderWith(ui: ReactElement, ctx: RenderContext): RenderResult {
   return render(
     <I18nProvider storage={storage}>
       <ClientProvider client={ctx.client}>
-        <AppProvider value={{ env: ctx.env, audio: ctx.audio, backend: ctx.backend ?? 'opfs', afterRun: () => undefined }}>{ui}</AppProvider>
+        <AppProvider value={{ env: ctx.env, audio: ctx.audio, backend: ctx.backend ?? 'opfs', afterRun: ctx.afterRun ?? (() => undefined) }}>{ui}</AppProvider>
       </ClientProvider>
     </I18nProvider>,
   )

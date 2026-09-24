@@ -51,6 +51,7 @@ export function Path() {
                         {status === 'current' && t('path.current')}
                         {status === 'complete' && t('path.complete')}
                         {status === 'mastered' && t('path.mastered')}
+                        {status === 'open' && t('path.open')}
                       </p>
                       {status !== 'locked' && unitProgress && (
                         <p className="note">{t('path.introduced', { introduced: unitProgress.introduced, live: unitProgress.live })}</p>
