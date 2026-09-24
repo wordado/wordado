@@ -96,3 +96,26 @@ describe('Client', () => {
     await client.close()
   })
 })
+
+describe('Client views for the screens', () => {
+  it('shows the first unit unlocked and current before any answer', async () => {
+    const client = await openClient()
+    expect(client.snapshot.path).toEqual({ unlocked: new Set(['a1-01']), currentUnitId: 'a1-01' })
+    expect(client.snapshot.packVersion).toBe(0)
+  })
+
+  it('lists the clips of the words about to be met, once each', async () => {
+    const client = await openClient()
+    const clips = client.upcomingClips()
+    expect(clips).toHaveLength(10)
+    expect(new Set(clips.map((c) => c.clipId)).size).toBe(10)
+    expect(clips[0]?.url).toMatch(/^audio\/.+\.m4a$/)
+  })
+
+  it('has no path, pack version or clips before a pack is active', async () => {
+    const client = await Client.open({ driver: nodeSqliteDriver(), env: testEnv(), l1: 'bg' })
+    expect(client.snapshot.path).toBeNull()
+    expect(client.snapshot.packVersion).toBeNull()
+    expect(client.upcomingClips()).toEqual([])
+  })
+})

@@ -2,6 +2,8 @@ import {
   composeSession,
   computeUnlocks,
   corpusWordId,
+  currentUnit,
+  dueDay,
   entryClips,
   isLive,
   levelCompletion,
@@ -15,6 +17,7 @@ import {
   streakStatus,
   themeEntries,
   unitProgress,
+  type AudioClip,
   type CefrLevel,
   type Corpus,
   type CorpusEntry,
@@ -157,4 +160,39 @@ export function availableModes(ctx: StudyContext, wordId: WordId, cachedClips: R
   const clips = entryClips(ctx.corpus, entry)
   if (clips.length > 0 && (online || clips.some((c) => cachedClips.has(c.clipId)))) modes.add('listening_select')
   return modes
+}
+
+/** What the path screen draws (spec §7.2): every unit open to the learner, and where new words come from. */
+export interface PathView {
+  /** The persisted grow-only set plus what the rules unlock now, so the first unit shows before any answer. */
+  readonly unlocked: ReadonlySet<string>
+  /** Null once every live word on the path has been introduced. */
+  readonly currentUnitId: string | null
+}
+
+export function pathView(ctx: StudyContext): PathView {
+  const path = pathContext(ctx)
+  return { unlocked: new Set([...ctx.unlocked, ...computeUnlocks(path)]), currentUnitId: currentUnit(path)?.unitId ?? null }
+}
+
+/** Days of upcoming reviews whose audio is fetched ahead (spec §9.3). Tuning (§15). */
+export const AUDIO_PREFETCH_DAYS = 3
+
+/**
+ * The clips of the words the learner is about to meet (spec §9.3): today's
+ * session, and every unflagged word due within the horizon. Each clip once.
+ */
+export function upcomingClips(ctx: StudyContext, plan: SessionPlan, horizonDays: number = AUDIO_PREFETCH_DAYS): AudioClip[] {
+  const day = today(ctx)
+  const retention = RETENTION_TARGETS[ctx.settings.retention]
+  const words = new Set<WordId>([...plan.reviews, ...plan.newWords])
+  for (const [wordId, state] of ctx.learner.states) {
+    if (!ctx.flags.has(wordId) && dueDay(state, retention) <= day + horizonDays) words.add(wordId)
+  }
+  const clips = new Map<string, AudioClip>()
+  for (const wordId of words) {
+    const entry = entryOf(ctx.corpus, wordId)
+    if (entry) for (const clip of entryClips(ctx.corpus, entry)) clips.set(clip.clipId, clip)
+  }
+  return [...clips.values()]
 }

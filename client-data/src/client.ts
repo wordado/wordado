@@ -2,6 +2,7 @@ import {
   canUse,
   isDayComplete,
   utcDay,
+  type AudioClip,
   type Capability,
   type Corpus,
   type CorpusEntry,
@@ -21,10 +22,10 @@ import type { SqlDriver } from './driver'
 import type { ClientEnv } from './env'
 import { appendAnswer, loadLearner, provisionalXp, recordDayComplete, type AnswerInput, type Learner } from './learner'
 import { ensureDevice, getUserId, setUserId } from './meta'
-import { activateStagedPacks, installPacks, loadActiveCorpus, type InstallReport, type PackFetcher } from './packs'
+import { activateStagedPacks, activePackVersion, installPacks, loadActiveCorpus, type InstallReport, type PackFetcher } from './packs'
 import { migrate } from './schema'
 import { createStore, type Store } from './store'
-import { availableModes, dayCompleteInput, entryOf, newUnlocks, progressView, sessionPlan, today, type ProgressView, type StudyContext } from './study'
+import { availableModes, dayCompleteInput, entryOf, newUnlocks, pathView, progressView, sessionPlan, today, upcomingClips, type PathView, type ProgressView, type StudyContext } from './study'
 import { INITIAL_SYNC_STATUS, readPulledXp, SyncEngine, type PulledXp, type SyncOutcome, type SyncStatus, type SyncTransport } from './sync'
 
 export interface ClientOptions {
@@ -54,6 +55,10 @@ export interface ClientSnapshot {
   readonly unlocked: ReadonlySet<string>
   readonly plan: SessionPlan | null
   readonly progress: ProgressView | null
+  /** Unlocked units and the current unit; null before a pack is active (spec §7.2). */
+  readonly path: PathView | null
+  /** The active corpus version, cited by content reports (spec §8.10); null before a pack is active. */
+  readonly packVersion: number | null
   readonly entitlement: Entitlement | null
   readonly xp: ClientXp
   readonly sync: SyncStatus
@@ -73,6 +78,7 @@ export interface AnswerResult {
 export class Client {
   readonly store: Store<ClientSnapshot>
   private corpus: Corpus | null = null
+  private packVersion: number | null = null
   private settings!: Settings
   private flags: Map<WordId, WordFlag> = new Map()
   private unlocked: Set<string> = new Set()
@@ -100,6 +106,7 @@ export class Client {
     const learner = await loadLearner(db, deviceId, { aliases: await readAliases(db.driver) })
     const client = new Client(db, options.env, options.l1, learner, options.transport)
     client.corpus = await loadActiveCorpus(db)
+    client.packVersion = await activePackVersion(db)
     client.userId = await getUserId(db)
     client.xp = await readPulledXp(db.driver)
     await client.reloadDocuments()
@@ -151,6 +158,8 @@ export class Client {
       unlocked: this.unlocked,
       plan,
       progress: ctx && plan ? progressView(ctx, plan) : null,
+      path: ctx ? pathView(ctx) : null,
+      packVersion: this.packVersion,
       entitlement: this.entitlement,
       xp: { total: (this.xp?.total ?? 0) + provisional, today: pulledToday + provisionalToday, provisional },
       // The outbox size is known from memory at all times, not only after a push.
@@ -170,7 +179,10 @@ export class Client {
   /** Swaps staged packs in and reloads the corpus. Call at the start of a session, never mid-session. */
   async startSession(): Promise<string[]> {
     const activated = await activateStagedPacks(this.db)
-    if (activated.length > 0 || !this.corpus) this.corpus = await loadActiveCorpus(this.db)
+    if (activated.length > 0 || !this.corpus) {
+      this.corpus = await loadActiveCorpus(this.db)
+      this.packVersion = await activePackVersion(this.db)
+    }
     this.refresh()
     return activated
   }
@@ -182,6 +194,12 @@ export class Client {
   availableModes(wordId: WordId, cachedClips: ReadonlySet<string>, online: boolean): Set<Mode> {
     const ctx = this.context()
     return ctx ? availableModes(ctx, wordId, cachedClips, online) : new Set<Mode>(['flashcard', 'multiple_choice'])
+  }
+
+  /** Clips worth fetching ahead (spec §9.3); empty before a pack is active. */
+  upcomingClips(horizonDays?: number): AudioClip[] {
+    const ctx = this.context()
+    return ctx ? upcomingClips(ctx, sessionPlan(ctx), horizonDays) : []
   }
 
   /** Records one answer, persists any new unit unlock, and records the completed day when it first becomes complete. */

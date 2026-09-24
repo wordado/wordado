@@ -137,3 +137,9 @@ export async function loadActiveCorpus(db: Database): Promise<Corpus | null> {
   const packs = await activePacks(db.driver)
   return packs.length === 0 ? null : loadCorpus(packs)
 }
+
+/** The corpus version of the active packs (the highest, when there are several): what a content report cites (spec §8.10). */
+export async function activePackVersion(db: Database): Promise<number | null> {
+  const rows = await db.all<{ v: number | null }>("SELECT MAX(corpus_version) AS v FROM pack WHERE status = 'active'")
+  return rows[0]?.v ?? null
+}
