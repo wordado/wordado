@@ -97,9 +97,11 @@ describe('RunView: flashcards', () => {
   })
 
   it('moves focus to the revealed answer, since the button that had it just unmounted', async () => {
-    await start('flashcard')
+    const { run } = await start('flashcard')
+    const item = run.snapshot.item!
     await press(' ')
-    expect(document.activeElement).toBe(document.querySelector('.revealed'))
+    const region = screen.getByRole('region', { name: item.entry.translations[0]! })
+    expect(document.activeElement).toBe(region)
   })
 })
 
@@ -236,7 +238,10 @@ describe('RunView: reporting a problem', () => {
   it('returns focus to the card when the dialog is cancelled', async () => {
     await start('flashcard')
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Report a problem' })))
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Cancel' })))
+    const cancel = screen.getByRole('button', { name: 'Cancel' })
+    cancel.focus()
+    expect(document.activeElement).toBe(cancel)
+    await act(async () => fireEvent.click(cancel))
     expect(document.activeElement?.classList.contains('card')).toBe(true)
   })
 

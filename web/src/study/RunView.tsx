@@ -104,7 +104,7 @@ function Flashcard(props: { readonly run: StudyRun; readonly snapshot: RunSnapsh
         </button>
       ) : (
         <>
-          <div className="revealed" ref={answer} tabIndex={-1} aria-labelledby={answerId}>
+          <div className="revealed" role="region" ref={answer} tabIndex={-1} aria-labelledby={answerId}>
             <p className="prompt-text" id={answerId}>
               <Translation entry={entry} lang={corpus?.l1 ?? 'bg'} />
             </p>
