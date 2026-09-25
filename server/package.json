@@ -9,6 +9,7 @@
     "migrate": "tsx scripts/migrate.ts",
     "dev": "[ -f .dev.vars ] || cp .dev.vars.example .dev.vars; pnpm db:up && pnpm migrate && CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE=${CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE:-postgres://wordado:wordado@localhost:54329/wordado} wrangler dev",
     "smoke": "pnpm db:up && pnpm migrate && tsx scripts/smoke.ts",
+    "smoke:remote": "tsx scripts/smoke-remote.ts",
     "vapid-keys": "tsx scripts/vapid-keys.ts",
     "test": "pnpm db:up && vitest run",
     "typecheck": "tsc -p tsconfig.json",
