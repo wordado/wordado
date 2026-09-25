@@ -7,10 +7,10 @@ import { sampleFetcher, sampleManifest } from '@wordado/client-data/src/testing/
 import { testEnv } from '@wordado/client-data/src/testing/testEnv'
 import { FakeServer } from '@wordado/client-data/src/testing/fakeServer'
 import type { WordId } from '@wordado/core'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { accountStorage, DEMO_FILE, learnerFile, memoryStorage } from '../account/storage'
 import { answerTo, disk, flaky } from '../test/disk'
-import { Boot, type BootDeps, type LockPort } from './boot'
+import { Boot, type BootDeps, FLUSH_TIMEOUT_MS, type LockPort } from './boot'
 
 const hello = answerTo('c:hello-1')
 
@@ -73,6 +73,16 @@ function hangingServer(when: () => string = () => ''): { readonly transport: Syn
     return new Promise<T>(() => undefined)
   }
   return { transport: { push: () => never('push'), pull: () => never('pull') }, calls }
+}
+
+/**
+ * Watches `setTimeout` until the test ends, the timers still running as
+ * usual; the returned function lists the delay of every timer armed so far.
+ */
+function timerDelays(): () => (number | undefined)[] {
+  const spy = vi.spyOn(globalThis, 'setTimeout')
+  onTestFinished(() => spy.mockRestore())
+  return () => spy.mock.calls.map(([, delay]) => delay)
 }
 
 const ready = (b: Boot): Client => {
@@ -457,9 +467,13 @@ describe('Boot with accounts (spec §8.6, §9.1)', () => {
     await b.start()
     await ready(b).answer(hello)
     hung.calls.length = 0
+    const delays = timerDelays()
     // Without the race against the flush timeout this never resolves, and the test times out.
     await release()
     expect(hung.calls).toContain('push')
+    // The race was armed with the timeout this Boot was given, not the default.
+    expect(delays()).toContain(20)
+    expect(delays()).not.toContain(FLUSH_TIMEOUT_MS)
     expect(b.store.get().status).toBe('elsewhere')
   })
 
@@ -734,10 +748,14 @@ describe('Boot with accounts (spec §8.6, §9.1)', () => {
     await ready(b).attachUser('u1')
     accounts.save({ userId: 'u1', email: 'ana@example.com', carryOver: true })
     hung.calls.length = 0
+    const delays = timerDelays()
     // Without the race against the flush timeout this never resolves, and the test times out.
     await b.switchTo()
     // The carry-over's push reached the server before Boot was ready, and Boot became ready while it still hangs.
     expect(hung.calls).toContain('push while starting')
+    // The race was armed with the timeout this Boot was given, not the default.
+    expect(delays()).toContain(20)
+    expect(delays()).not.toContain(FLUSH_TIMEOUT_MS)
     expect(b.store.get()).toMatchObject({ status: 'ready', account: { userId: 'u1' } })
     expect(accounts.read()?.carryOver).toBe(true)
     expect(d.exists(DEMO_FILE)).toBe(true)
