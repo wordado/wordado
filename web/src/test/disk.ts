@@ -1,10 +1,28 @@
 import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { SyncTransport } from '@wordado/client-data'
+import type { SqlDriver, SyncTransport } from '@wordado/client-data'
 import { nodeSqliteDriver } from '@wordado/client-data/src/drivers/nodeSqlite'
 import type { FakeServer } from '@wordado/client-data/src/testing/fakeServer'
 import { Grade, type WordId } from '@wordado/core'
+
+/**
+ * A SQLite file on disk without the durability a real device needs. With
+ * SQLite's defaults every commit creates, fsyncs and unlinks a rollback
+ * journal and fsyncs the file, and a test over `disk()` makes up to 25
+ * commits: those tests were the slow ones on a loaded CI runner (one timed out
+ * at 5 s while a Postgres image was being extracted beside the suite), and
+ * under local load their journal files made them far slower than the same
+ * work in memory. The suites close a file before reopening it and never crash a
+ * process mid-write, so neither the journal on disk nor the fsyncs are part of
+ * what they prove: a commit is in the file for the next open either way, and
+ * a rollback still undoes a failed transaction.
+ */
+export async function fileDriver(path: string): Promise<SqlDriver> {
+  const driver = nodeSqliteDriver(path)
+  await driver.exec('PRAGMA synchronous = OFF; PRAGMA journal_mode = MEMORY')
+  return driver
+}
 
 /** Database files on disk, one per name, as OPFS would keep them: they survive a close and a reopen. */
 export function disk() {
@@ -13,7 +31,7 @@ export function disk() {
   return {
     path,
     exists: (file: string) => existsSync(path(file)),
-    openDriver: async (file: string) => ({ driver: nodeSqliteDriver(path(file)), backend: 'opfs' as const }),
+    openDriver: async (file: string) => ({ driver: await fileDriver(path(file)), backend: 'opfs' as const }),
     deleteDatabase: async (file: string) => rmSync(path(file), { force: true }),
     /** Every file kept, by the name `openDriver` takes, as `listDatabases` reads OPFS. */
     listDatabases: async () =>
