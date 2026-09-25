@@ -1,6 +1,7 @@
 import { Client, Database } from '@wordado/client-data'
 import { describe, expect, it } from 'vitest'
 import { webEnv } from '../env'
+import { IDB_PREFIX } from './erase'
 import { openWorkerDriver } from './workerDriver'
 
 const unique = (prefix: string) => `${prefix}-${crypto.randomUUID()}`
@@ -84,6 +85,34 @@ describe('openWorkerDriver', () => {
     expect(second.backend).toBe('opfs')
     expect(await second.driver.all('SELECT v FROM t')).toEqual([{ v: 'mine' }])
     await second.driver.close()
+  })
+
+  it('has let go of the IndexedDB file once close resolves, before the browser tears the Worker down: deleting it is not blocked', async () => {
+    // WebKit (IndexedDB) frees a terminated Worker's connection only once it gets round to it — on a
+    // loaded CI runner, seconds after sign-out asked to delete the learner's file. Close must not lean
+    // on that: here the Worker is kept alive, as a slow teardown would, and the delete must still go through.
+    const file = unique('idb-handover')
+    let worker: Worker | null = null
+    const lingering = () => {
+      worker = new Worker(new URL('./sqlite.worker.ts', import.meta.url), { type: 'module', name: 'wordado-sqlite' })
+      worker.terminate = () => undefined
+      return worker
+    }
+    const { driver, backend } = await openWorkerDriver(file, ['idb'], lingering)
+    expect(backend).toBe('idb')
+    await driver.exec('CREATE TABLE t (v TEXT)')
+    await driver.close()
+    try {
+      const outcome = await new Promise<string>((resolve) => {
+        const request = indexedDB.deleteDatabase(`${IDB_PREFIX}${file}`)
+        request.onsuccess = () => resolve('deleted')
+        request.onerror = () => resolve('failed')
+        request.onblocked = () => resolve('blocked')
+      })
+      expect(outcome).toBe('deleted')
+    } finally {
+      Worker.prototype.terminate.call(worker!)
+    }
   })
 
   it('opens two files at once, as a carry-over does (the demo and the learner’s)', async () => {

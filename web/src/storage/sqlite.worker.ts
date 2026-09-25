@@ -33,7 +33,11 @@ async function handle(call: WorkerCall): Promise<unknown> {
     case 'close': {
       const c = open()
       connection = null
-      await c.api.close(c.db)
+      try {
+        await c.api.close(c.db)
+      } finally {
+        c.release?.()
+      }
       return null
     }
   }
