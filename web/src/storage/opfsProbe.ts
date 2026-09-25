@@ -5,10 +5,22 @@ import { StorageUnavailable } from './open'
 export interface ProbeDirectory {
   getFileHandle(name: string, options?: { readonly create?: boolean }): Promise<{ createSyncAccessHandle(): Promise<{ close(): void }> }>
   removeEntry(name: string): Promise<void>
+  keys(): AsyncIterable<string>
 }
 
-/** Created and removed again by every probe; not a `.sqlite` name, so `listDatabases` never sees it. */
-export const PROBE_FILE = '.wordado-probe'
+/** The part of the Web Locks API the probe uses (`navigator.locks`). */
+export interface ProbeLocks {
+  request<T>(name: string, options: { readonly ifAvailable?: boolean }, task: (lock: unknown) => Promise<T>): Promise<T>
+}
+
+/**
+ * Every probe creates, and removes again, a file of its own: `PROBE_PREFIX` and a random UUID.
+ * Not a `.sqlite` name, so `listDatabases` and the sweep never see it. One shared name would
+ * let two probes at once (two tabs launching, or two test files) collide: the second's
+ * `createSyncAccessHandle` fails while the first holds the file, or the first removes the file
+ * the second is about to open, and the second then falls back to IndexedDB for good.
+ */
+export const PROBE_PREFIX = '.wordado-probe-'
 
 const nameOf = (err: unknown): string => (err instanceof Error ? `${err.name}: ${err.message}` : String(err))
 
@@ -50,7 +62,12 @@ const isNotFound = (err: unknown): boolean => err instanceof Error && err.name =
  * one that holds their progress, so this reports OPFS as unavailable before
  * probing and `openFirst` moves on to IndexedDB.
  */
-export async function checkOpfs(root: ProbeDirectory, file: string, idbHas: IdbHas = async () => false): Promise<void> {
+export async function checkOpfs(
+  root: ProbeDirectory,
+  file: string,
+  idbHas: IdbHas = async () => false,
+  locks: ProbeLocks | undefined = globalThis.navigator?.locks as ProbeLocks | undefined,
+): Promise<void> {
   try {
     await root.getFileHandle(`${file}.sqlite`)
     return
@@ -58,13 +75,39 @@ export async function checkOpfs(root: ProbeDirectory, file: string, idbHas: IdbH
     if (!isNotFound(err)) throw err
   }
   if (await idbHas(`${IDB_PREFIX}${file}`)) throw new StorageUnavailable(`OPFS: ${file} is already kept in IndexedDB`)
+  const probe = `${PROBE_PREFIX}${crypto.randomUUID()}`
+  if (!locks) return probeWith(root, probe)
+  await sweepProbes(root, locks)
+  // Held while the probe file exists, so another context's sweep never removes it mid-probe.
+  await locks.request(probe, {}, () => probeWith(root, probe))
+}
+
+async function probeWith(root: ProbeDirectory, probe: string): Promise<void> {
   try {
-    const handle = await root.getFileHandle(PROBE_FILE, { create: true })
+    const handle = await root.getFileHandle(probe, { create: true })
     const access = await handle.createSyncAccessHandle()
     access.close()
   } catch (err) {
     throw new StorageUnavailable(`OPFS cannot open files here (${nameOf(err)})`)
   } finally {
-    await root.removeEntry(PROBE_FILE).catch(() => undefined)
+    await root.removeEntry(probe).catch(() => undefined)
+  }
+}
+
+/**
+ * Removes the probe files a tab left when it closed or crashed mid-probe, best effort. A probe
+ * whose Web Lock is taken belongs to a context probing right now, and is left alone.
+ */
+async function sweepProbes(root: ProbeDirectory, locks: ProbeLocks): Promise<void> {
+  try {
+    const stale: string[] = []
+    for await (const name of root.keys()) if (name.startsWith(PROBE_PREFIX)) stale.push(name)
+    for (const name of stale) {
+      await locks.request(name, { ifAvailable: true }, async (lock) => {
+        if (lock) await root.removeEntry(name).catch(() => undefined)
+      })
+    }
+  } catch {
+    // Only tidying: a probe left behind costs an empty file, and never stops this one.
   }
 }
