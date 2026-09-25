@@ -1,11 +1,12 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "wordado",
+  // The top level is local development only (`pnpm dev`, `smoke`, the e2e runs). Its own name means a
+  // `wrangler deploy` without --env can never overwrite a deployed Worker (docs/deploy.md).
+  "name": "wordado-local",
   "main": "src/worker.ts",
   "compatibility_date": "2026-09-01",
   // pg needs Node's net, tls and crypto shims: Cloudflare's supported path for Hyperdrive.
   "compatibility_flags": ["nodejs_compat"],
-  // Local values; plan 7 sets the deployed ones.
   "vars": {
     "BASE_URL": "http://localhost:8787",
     "MIN_PROTOCOL_VERSION": "1",
@@ -14,7 +15,6 @@
   },
   // Locally, the CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE environment variable points
   // this at the database; the dev and smoke scripts set it to the Docker one by default (spec §4.4).
-  // Plan 7 creates the real Hyperdrive and puts its id here.
   "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "00000000000000000000000000000000" }],
   "queues": {
     "producers": [{ "binding": "JOBS", "queue": "wordado-jobs" }],
@@ -22,5 +22,45 @@
     "consumers": [{ "queue": "wordado-jobs", "max_batch_size": 1, "max_batch_timeout": 5, "max_retries": 5 }]
   },
   "triggers": { "crons": ["*/15 * * * *"] },
-  "observability": { "enabled": true }
+  "observability": { "enabled": true },
+
+  // Deployed environments (plan 7). One Worker serves the API and the web app's build, so a deploy
+  // replaces both at once and they share one origin (plan 5: no CORS). BASE_URL and TRUSTED_ORIGINS
+  // come from the GitHub environment's APP_ORIGIN through --var (.github/workflows/deploy.yml).
+  // The Hyperdrive ids are the operator's (docs/deploy.md, step 3); the deploy refuses the zero id.
+  "env": {
+    "preview": {
+      "name": "wordado-preview",
+      "workers_dev": true,
+      "assets": {
+        "directory": "../web/dist",
+        "not_found_handling": "single-page-application",
+        "run_worker_first": ["/api/*", "/v1/*", "/health"]
+      },
+      "vars": { "MIN_PROTOCOL_VERSION": "1" },
+      "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "00000000000000000000000000000000" }],
+      "queues": {
+        "producers": [{ "binding": "JOBS", "queue": "wordado-jobs-preview" }],
+        "consumers": [{ "queue": "wordado-jobs-preview", "max_batch_size": 1, "max_batch_timeout": 5, "max_retries": 5 }]
+      },
+      "triggers": { "crons": ["*/15 * * * *"] }
+    },
+    "production": {
+      "name": "wordado",
+      "workers_dev": false,
+      "routes": [{ "pattern": "wordado.com", "custom_domain": true }],
+      "assets": {
+        "directory": "../web/dist",
+        "not_found_handling": "single-page-application",
+        "run_worker_first": ["/api/*", "/v1/*", "/health"]
+      },
+      "vars": { "MIN_PROTOCOL_VERSION": "1" },
+      "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "00000000000000000000000000000000" }],
+      "queues": {
+        "producers": [{ "binding": "JOBS", "queue": "wordado-jobs" }],
+        "consumers": [{ "queue": "wordado-jobs", "max_batch_size": 1, "max_batch_timeout": 5, "max_retries": 5 }]
+      },
+      "triggers": { "crons": ["*/15 * * * *"] }
+    }
+  }
 }
