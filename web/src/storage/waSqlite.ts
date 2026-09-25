@@ -12,6 +12,13 @@ import { checkOpfs, opfsRoot, type ProbeDirectory } from './opfsProbe'
 export interface Connection {
   readonly api: SQLiteAPI
   readonly db: number
+  /**
+   * Lets go of what the VFS holds beyond the database itself, once it is closed: the IndexedDB
+   * VFS keeps its own IDBDatabase open, and a Worker's termination alone frees it only when the
+   * browser gets round to it, blocking a delete of the file until then (WebKit on CI: sign-out
+   * waited past 5s on deleting the learner's file).
+   */
+  readonly release?: () => void
 }
 
 // The package's declaration of IDBBatchAtomicVFS predates its async `create`.
@@ -71,8 +78,9 @@ export async function openIdb(file: string): Promise<Connection> {
   if (typeof indexedDB === 'undefined') throw new StorageUnavailable('IndexedDB is not available')
   const module = await SQLiteAsyncFactory()
   const api = SQLite.Factory(module)
-  api.vfs_register(await vfs('IndexedDB', () => IdbVfs.create(`${IDB_PREFIX}${file}`, module)), true)
-  return { api, db: await api.open_v2(`${file}.sqlite`) }
+  const idb = await vfs('IndexedDB', () => IdbVfs.create(`${IDB_PREFIX}${file}`, module))
+  api.vfs_register(idb, true)
+  return { api, db: await api.open_v2(`${file}.sqlite`), release: () => void idb.close() }
 }
 
 /** The last resort: nothing survives the tab (spec §9.1). */
