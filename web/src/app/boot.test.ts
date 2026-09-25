@@ -9,7 +9,7 @@ import { FakeServer } from '@wordado/client-data/src/testing/fakeServer'
 import type { WordId } from '@wordado/core'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { accountStorage, DEMO_FILE, learnerFile, memoryStorage } from '../account/storage'
-import { answerTo, disk, flaky } from '../test/disk'
+import { answerTo, disk, fileDriver, flaky } from '../test/disk'
 import { Boot, type BootDeps, FLUSH_TIMEOUT_MS, type LockPort } from './boot'
 
 const hello = answerTo('c:hello-1')
@@ -128,11 +128,11 @@ describe('Boot', () => {
 
   it('starts offline from the pack it already has', async () => {
     const file = join(mkdtempSync(join(tmpdir(), 'wordado-boot-')), 'demo.sqlite')
-    const first = boot({ openDriver: async () => ({ driver: nodeSqliteDriver(file), backend: 'opfs' }) })
+    const first = boot({ openDriver: async () => ({ driver: await fileDriver(file), backend: 'opfs' }) })
     await first.boot.start()
     await first.release()
     const offline = boot({
-      openDriver: async () => ({ driver: nodeSqliteDriver(file), backend: 'opfs' }),
+      openDriver: async () => ({ driver: await fileDriver(file), backend: 'opfs' }),
       fetchManifest: async () => {
         throw new TypeError('Failed to fetch')
       },
@@ -518,7 +518,7 @@ describe('Boot with accounts (spec §8.6, §9.1)', () => {
           reached.resolve()
           await gate.promise
         }
-        const { driver } = countingDriver(nodeSqliteDriver(d.path(file)))
+        const { driver } = countingDriver(await fileDriver(d.path(file)))
         return { driver: { ...driver, close: async () => (closes.push(file), driver.close()) }, backend: 'opfs' }
       },
       deleteDatabase: d.deleteDatabase,
@@ -546,7 +546,7 @@ describe('Boot with accounts (spec §8.6, §9.1)', () => {
       env,
       accounts,
       openDriver: async (file) => {
-        const driver = nodeSqliteDriver(d.path(file))
+        const driver = await fileDriver(d.path(file))
         return {
           driver: {
             ...driver,
@@ -585,7 +585,7 @@ describe('Boot with accounts (spec §8.6, §9.1)', () => {
       accounts,
       openDriver: async (file) => {
         opened.push(file)
-        const { driver } = countingDriver(nodeSqliteDriver(d.path(file)))
+        const { driver } = countingDriver(await fileDriver(d.path(file)))
         return { driver: { ...driver, close: async () => (closed.push(file), driver.close()) }, backend: 'opfs' }
       },
       deleteDatabase: d.deleteDatabase,
