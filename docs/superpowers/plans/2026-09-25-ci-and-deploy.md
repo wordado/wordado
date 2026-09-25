@@ -2337,7 +2337,7 @@ repository deploys the preview and runs one learner's life against it (`smoke:re
 and audio) lives in the R2 bucket `wordado-content`, served at `https://content.wordado.com`, and is
 published by the manual **Publish content** workflow.
 
-Nothing deploys until the repository variable `DEPLOY_ENABLED` is `true` (step 9).
+Nothing deploys until the repository variable `DEPLOY_ENABLED` is `true` (step 10).
 
 ## Provisioning, once
 
@@ -2479,13 +2479,13 @@ Note the green run's URL in the task report. Merging is the human's decision (su
 
 ### Task 12 (operator): Provision, then the first preview and production deploys
 
-This task is done by the human, with an agent assisting where a command needs no credentials of the agent's own. Follow `docs/deploy.md`'s provisioning steps 1–9.
+This task is done by the human, with an agent assisting where a command needs no credentials of the agent's own. Follow `docs/deploy.md`'s provisioning steps 1–10.
 
 - [ ] **Step 1:** Steps 1–2 of the runbook (Cloudflare token, Neon project and branches).
-- [ ] **Step 2:** Step 3: create both Hyperdrives, then open a pull request that puts their ids in `server/wrangler.jsonc`. Its CI runs, and the preview deploy stays skipped until step 9.
-- [ ] **Step 3:** Steps 4–7 (queues, R2 with its domain, CORS and token, secrets and variables, the rate-limit rule).
-- [ ] **Step 4:** Step 8. Run **Publish content** with `pipeline/samples/a1-bg`. Expected: its last step prints `corpus version: published 0, served 0`.
-- [ ] **Step 5:** Step 9. Set `DEPLOY_ENABLED`, then push any commit to the pull request from Step 2 (or re-run its workflow). Expected: **Preview deployment** runs the migrations and deploys. `/health` answers, and `smoke:remote` prints its two timings and `smoke: ok`. Record the timings in the pull request.
+- [ ] **Step 2:** Step 3: create both Hyperdrives, then open a pull request that puts their ids in `server/wrangler.jsonc`. Its CI runs, and the preview deploy stays skipped until step 10.
+- [ ] **Step 3:** Steps 4–8 (queues, R2 with its domain, CORS and token, secrets and variables, **Protect `main`** — GitHub only offers a required check after it has run once, so this step can wait until the first pull request's CI has run — and the rate-limit rule).
+- [ ] **Step 4:** Step 9. Run **Publish content** with `pipeline/samples/a1-bg`. Expected: its last step prints `corpus version: published 0, served 0`.
+- [ ] **Step 5:** Step 10. Set `DEPLOY_ENABLED`, then push any commit to the pull request from Step 2 (or re-run its workflow). Expected: **Preview deployment** runs the migrations and deploys. `/health` answers, and `smoke:remote` prints its two timings and `smoke: ok`. Record the timings in the pull request.
 - [ ] **Step 6:** Open the preview in a browser. The demo loads from `/content/sample/`. A sign-in whose code is read from `pnpm --filter @wordado/server exec wrangler tail --env preview` installs the pack from `https://content.wordado.com/manifest.json` (Network panel).
 - [ ] **Step 7:** Merge the pull request. Expected: **Production deployment** passes, and `https://wordado.com/health` answers `{"ok":true}`.
 
