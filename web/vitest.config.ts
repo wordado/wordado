@@ -13,6 +13,14 @@ export default defineConfig({
           include: ['src/**/*.test.{ts,tsx}', 'vite/**/*.test.ts', 'e2e/**/*.test.ts'],
           exclude: ['src/**/*.browser.test.ts'],
           environment: 'happy-dom',
+          // A limit for a hang, not a speed requirement. Many of these tests open
+          // real SQLite files, install the sample pack and sync against a fake
+          // server; idle the slowest takes under 0.1 s, and under local load
+          // (every core busy, four workers) about 1 s. On a CI runner running the
+          // browser project and a Docker pull beside it, one ran out the 5 s
+          // default (5.5 s), before the files skipped their fsyncs. 20 s is about
+          // four times that worst case.
+          testTimeout: 20_000,
         },
       },
       {
