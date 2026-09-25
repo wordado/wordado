@@ -607,6 +607,51 @@ describe('Boot with accounts (spec §8.6, §9.1)', () => {
     expect(log).toEqual([`deleted ${DEMO_FILE}`, 'released'])
   })
 
+  it('installs from the demo’s manifest for the demo and the learner’s for a learner, and says whose it prepares (plan 7)', async () => {
+    const d = disk()
+    const env = testEnv()
+    const server = new FakeServer({ now: env.now })
+    const accounts = accountStorage(memoryStorage())
+    const asked: (string | null)[] = []
+    const prepared: (string | null)[] = []
+    const { boot: b } = boot({
+      env,
+      accounts,
+      openDriver: d.openDriver,
+      deleteDatabase: d.deleteDatabase,
+      transport: () => server,
+      fetchManifest: async (account) => {
+        asked.push(account?.userId ?? null)
+        return sampleManifest
+      },
+      prepare: async (_client, account) => void prepared.push(account?.userId ?? null),
+    })
+    await b.start()
+    accounts.save({ userId: 'u1', email: 'ana@example.com' })
+    await b.switchTo({ deleteFiles: [DEMO_FILE] })
+    expect(asked).toEqual([null, 'u1'])
+    expect(prepared).toEqual([null, 'u1'])
+  })
+
+  it('fails with the content reason, and recovers on retry, when a new learner’s manifest cannot be fetched', async () => {
+    const accounts = accountStorage(memoryStorage())
+    accounts.save({ userId: 'u1', email: 'ana@example.com' })
+    let online = false
+    const { boot: b } = boot({
+      accounts,
+      transport: () => new FakeServer({ now: () => Date.now() }),
+      fetchManifest: async () => {
+        if (!online) throw new TypeError('Failed to fetch')
+        return sampleManifest
+      },
+    })
+    await b.start()
+    expect(b.store.get()).toEqual({ status: 'failed', message: 'Failed to fetch', reason: 'content' })
+    online = true
+    await b.retry()
+    expect(ready(b).snapshot.corpus).not.toBeNull()
+  })
+
   it('deletes several files, in order, inside the same serialised close step', async () => {
     const d = disk()
     const env = testEnv()

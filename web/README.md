@@ -39,3 +39,10 @@ The demo run, `pnpm --filter @wordado/web e2e`, needs no server: it never reache
 
 For local development with accounts, run `pnpm --filter @wordado/server dev` beside
 `pnpm --filter @wordado/web dev`, and copy sign-in codes from the Worker's terminal.
+
+## Content
+
+The demo always studies the bundled sample (`/content/sample/`). A signed-in learner installs
+from `VITE_CONTENT_MANIFEST_URL`, the CDN's manifest, which the deploy sets at build time
+(`docs/deploy.md`). It falls back to the sample when the variable is unset, as it is in
+development and in both end-to-end suites.
