@@ -40,6 +40,12 @@ export interface PushSubscriptionBody {
   readonly streakNudge: boolean
 }
 
+/** `GET /v1/export` (spec §11): the learner's data, and the name the server gave the file. */
+export interface ExportFile {
+  readonly name: string
+  readonly json: string
+}
+
 /** Everything the app asks of the server beside sync (spec §8.6, §8.11, §11). */
 export interface Api {
   sendCode(email: string): Promise<void>
@@ -53,14 +59,13 @@ export interface Api {
   setCountry(country: string | null): Promise<void>
   signOut(): Promise<void>
   deleteAccount(): Promise<void>
+  /** The data export, for the recorded learner only (409 when the session is someone else's). */
+  exportData(): Promise<ExportFile>
   /** The VAPID key, or null when this server sends no reminders. */
   pushPublicKey(): Promise<string | null>
   putSubscription(body: PushSubscriptionBody): Promise<void>
   deleteSubscription(endpoint: string): Promise<void>
 }
-
-/** The data export: a download the browser makes with the session cookie (spec §11). */
-export const EXPORT_URL = '/v1/export'
 
 const codeOf = (body: unknown): string | null => {
   if (typeof body !== 'object' || body === null) return null
@@ -70,11 +75,16 @@ const codeOf = (body: unknown): string | null => {
 
 /**
  * The app's calls to its own origin: `/api/auth` (Better Auth) and `/v1` (plan 5), with the session cookie.
- * `expectedUser` names the recorded learner on the push-subscription calls, so a session that is
- * someone else's is refused (409) rather than handed this device's reminders.
+ * `expectedUser` names the recorded learner on the push-subscription calls, the account deletion and
+ * the export, so a session that is someone else's is refused (409) rather than acted on.
  */
 export function httpApi(fetchFn: Fetch = (input, init) => fetch(input, init), expectedUser: () => string | null = () => null): Api {
-  async function call(method: string, path: string, body?: unknown, extra: Record<string, string> = {}): Promise<unknown> {
+  async function request(
+    method: string,
+    path: string,
+    body?: unknown,
+    extra: Record<string, string> = {},
+  ): Promise<{ readonly response: Response; readonly text: string; readonly parsed: unknown }> {
     let response: Response
     try {
       response = await fetchFn(path, {
@@ -94,8 +104,11 @@ export function httpApi(fetchFn: Fetch = (input, init) => fetch(input, init), ex
       parsed = null
     }
     if (!response.ok) throw new ApiError(response.status, codeOf(parsed))
-    return parsed
+    return { response, text, parsed }
   }
+
+  const call = async (method: string, path: string, body?: unknown, extra: Record<string, string> = {}): Promise<unknown> =>
+    (await request(method, path, body, extra)).parsed
 
   const unauthorizedAsNull = async <T>(work: Promise<T>): Promise<T | null> => {
     try {
@@ -136,7 +149,12 @@ export function httpApi(fetchFn: Fetch = (input, init) => fetch(input, init), ex
       await call('POST', '/api/auth/sign-out', {})
     },
     deleteAccount: async () => {
-      await call('DELETE', '/v1/account', { confirm: true })
+      await call('DELETE', '/v1/account', { confirm: true }, expectedUserHeader(expectedUser()))
+    },
+    exportData: async () => {
+      const { response, text } = await request('GET', '/v1/export', undefined, expectedUserHeader(expectedUser()))
+      const name = /filename="([^"]+)"/.exec(response.headers.get('content-disposition') ?? '')?.[1] ?? 'wordado-export.json'
+      return { name, json: text }
     },
     pushPublicKey: async () => {
       try {

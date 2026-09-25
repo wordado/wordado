@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { EXPORT_URL } from '../account/api'
 import { ConfirmDialog } from '../app/Confirm'
 import { useApp } from '../app/context'
+import { saveFile } from '../download'
 import { errorMessageKey } from '../errors'
 import { useT } from '../i18n/i18n'
 import { Link, navigate } from '../router'
@@ -10,12 +10,14 @@ import { useOnline } from '../useOnline'
 /** The account (spec §11): the export, signing out, and self-service deletion. The demo gets the way in. */
 export function AccountSettings() {
   const { t } = useT()
-  const { account, accounts } = useApp()
+  const { account, accounts, api } = useApp()
   const online = useOnline()
   const [dialog, setDialog] = useState<'unsynced' | 'delete' | null>(null)
   const [understood, setUnderstood] = useState(false)
   const [signOutError, setSignOutError] = useState<string | null>(null)
   const [signingOut, setSigningOut] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState<string | null>(null)
 
   if (account === null) {
     return (
@@ -47,6 +49,20 @@ export function AccountSettings() {
     }
   }
 
+  /** The export names the recorded learner (x-wordado-user), so a session that is someone else's is refused (spec §11). */
+  const exportData = async () => {
+    setExportError(null)
+    setExporting(true)
+    try {
+      const file = await api.exportData()
+      saveFile(file.name, file.json)
+    } catch (err) {
+      setExportError(t(errorMessageKey(err)))
+    } finally {
+      setExporting(false)
+    }
+  }
+
   return (
     <section aria-labelledby="settings-account">
       <h2 id="settings-account">{t('settings.account')}</h2>
@@ -54,9 +70,19 @@ export function AccountSettings() {
       <ul className="settings-actions">
         <li>
           {online ? (
-            <a href={EXPORT_URL} download>
-              {t('settings.export')}
-            </a>
+            <>
+              <button type="button" className="button" disabled={exporting} onClick={() => void exportData()}>
+                {t('settings.export')}
+              </button>
+              <p className="note" role="status">
+                {exporting ? t('settings.exporting') : ''}
+              </p>
+              {exportError !== null && (
+                <p className="field-error" role="alert">
+                  {exportError}
+                </p>
+              )}
+            </>
           ) : (
             <span className="note">{t('settings.exportOffline')}</span>
           )}

@@ -198,7 +198,7 @@ export class Client {
 
   /** Resolves once no answer or document write is in flight. A sync is not waited for: it is safe to cut short. */
   async idle(): Promise<void> {
-    while (this.inFlight.size > 0) await Promise.allSettled([...this.inFlight])
+    while (this.inFlight.size > 0) await Promise.allSettled(this.inFlight)
   }
 
   /** Whether anything written here has not reached the server: answers, completed days, document patches. */

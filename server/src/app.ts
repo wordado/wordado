@@ -19,7 +19,7 @@ export const AUTH_MAX_BODY_BYTES = 16_384
 export function createApp(deps: ServerDeps): Hono<AppEnv> {
   const auth = createAuth(deps)
   const user = requireUser(auth)
-  /** Sync and push subscriptions: the session user, who must be the one the client names. */
+  /** Sync, push subscriptions, deletion and export: the session user, who must be the one the client names. */
   const owner = every(user, sameUser())
   const app = new Hono<AppEnv>()
 
@@ -38,7 +38,7 @@ export function createApp(deps: ServerDeps): Hono<AppEnv> {
   app.use('/v1/*', csrf({ origin: [deps.config.baseUrl, ...deps.config.trustedOrigins] }))
   app.use('/v1/*', bodyLimit({ maxSize: MAX_BODY_BYTES, onError: tooLarge }))
 
-  accountRoutes(app, deps, user)
+  accountRoutes(app, deps, user, owner)
   syncRoutes(app, deps, owner)
   reminderRoutes(app, deps, user, owner)
 

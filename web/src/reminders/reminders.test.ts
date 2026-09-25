@@ -158,6 +158,16 @@ describe('ReminderService (spec §8.11, plan 5 contract)', () => {
     expect(p.log).toContain('unsubscribe')
   })
 
+  it('stops without asking the push manager when permission was never granted (it can hang in WebKit)', async () => {
+    const p = platform({
+      subscription: () => new Promise<never>(() => undefined),
+    })
+    const { s, storage } = service({ platform: p })
+    storage.setItem('wordado.reminder', JSON.stringify({ minute: 540, streakNudge: false }))
+    await s.stop({ server: true })
+    expect(s.prefs()).toBeNull()
+  })
+
   it('names what stands in the way', () => {
     expect(service({ platform: platform({ supported: () => false }) }).s.support()).toBe('unsupported')
     expect(service({ platform: platform({ needsInstall: () => true }) }).s.support()).toBe('needs-install')

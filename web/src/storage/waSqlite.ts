@@ -4,7 +4,9 @@ import SQLiteSyncFactory from '@journeyapps/wa-sqlite/dist/wa-sqlite.mjs'
 import { IDBBatchAtomicVFS } from '@journeyapps/wa-sqlite/src/examples/IDBBatchAtomicVFS.js'
 import { OPFSCoopSyncVFS } from '@journeyapps/wa-sqlite/src/examples/OPFSCoopSyncVFS.js'
 import type { SqlValue } from '@wordado/client-data'
+import { IDB_PREFIX } from './erase'
 import { isUnsupportedError, StorageUnavailable } from './open'
+import { checkOpfs, opfsRoot, type ProbeDirectory } from './opfsProbe'
 
 /** One open database. Runs inside the Worker only. */
 export interface Connection {
@@ -34,6 +36,20 @@ async function vfs(what: string, create: () => Promise<SQLiteVFS>): Promise<SQLi
   }
 }
 
+/**
+ * Whether IndexedDB holds a database by this name. A browser without
+ * `indexedDB.databases()`, or one that refuses to list, answers no, as
+ * erase.ts's `idbFiles` does: the probe then decides, as it did before.
+ */
+async function idbHas(name: string): Promise<boolean> {
+  if (typeof indexedDB === 'undefined' || typeof indexedDB.databases !== 'function') return false
+  try {
+    return (await indexedDB.databases()).some((db) => db.name === name)
+  } catch {
+    return false
+  }
+}
+
 /** OPFS with synchronous access handles: the fastest, and Worker-only (spec §9.1). */
 export async function openOpfs(file: string): Promise<Connection> {
   if (typeof navigator.storage?.getDirectory !== 'function') throw new StorageUnavailable('OPFS is not available')
@@ -41,6 +57,9 @@ export async function openOpfs(file: string): Promise<Connection> {
   if (typeof FileSystemFileHandle === 'undefined' || !('createSyncAccessHandle' in FileSystemFileHandle.prototype)) {
     throw new StorageUnavailable('OPFS sync access handles are not available')
   }
+  // The DOM lib in use does not type createSyncAccessHandle on the handle getFileHandle returns.
+  const root = await opfsRoot(() => navigator.storage.getDirectory() as unknown as Promise<ProbeDirectory>)
+  await checkOpfs(root, file, idbHas)
   const module = await SQLiteSyncFactory()
   const api = SQLite.Factory(module)
   api.vfs_register(await vfs('OPFS', () => OPFSCoopSyncVFS.create('opfs', module)), true)
@@ -52,7 +71,7 @@ export async function openIdb(file: string): Promise<Connection> {
   if (typeof indexedDB === 'undefined') throw new StorageUnavailable('IndexedDB is not available')
   const module = await SQLiteAsyncFactory()
   const api = SQLite.Factory(module)
-  api.vfs_register(await vfs('IndexedDB', () => IdbVfs.create(`wordado-${file}`, module)), true)
+  api.vfs_register(await vfs('IndexedDB', () => IdbVfs.create(`${IDB_PREFIX}${file}`, module)), true)
   return { api, db: await api.open_v2(`${file}.sqlite`) }
 }
 

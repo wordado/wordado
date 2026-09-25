@@ -31,3 +31,14 @@ VAPID pair in `.dev.vars` (`pnpm --filter @wordado/server vapid-keys`).
   are core's derivation kept for speed; `sync/derive.test.ts` holds them equal
   to core's full derivation.
 - Migrations in `migrations/` are forward-only: add a file, never edit one.
+
+## Deploying
+
+`wrangler.jsonc`'s top level is local only (`wordado-local`). `env.preview` and `env.production`
+are the deployed Workers, which also serve the web build (`../web/dist`). CI deploys them
+(`.github/workflows/deploy.yml`). Provisioning and secrets are in `docs/deploy.md`.
+
+```bash
+pnpm --filter @wordado/server deploy:check    # dry-runs both environments; needs a web build
+pnpm --filter @wordado/server smoke:remote https://wordado-preview.<subdomain>.workers.dev preview
+```

@@ -30,7 +30,10 @@ export class MatchingRun {
   readonly store: Store<MatchingSnapshot>
   private readonly missed = new Set<string>()
   private lastAt: number
-  private busy = false
+  // The UI's onClick never awaits `select` (spec §8.1: a game, kept snappy); a pairing's grading
+  // write can still be in flight when the next one is clicked, so calls are queued, not dropped,
+  // or a fast learner's (or e2e automation's) click on the next pair would be silently lost.
+  private queue: Promise<void> = Promise.resolve()
 
   private constructor(
     private readonly client: Client,
@@ -65,10 +68,21 @@ export class MatchingRun {
     this.store.set({ ...this.store.get(), ...patch })
   }
 
-  /** Selects a word on one side; a selection on the other side completes a pairing. */
-  async select(side: MatchingSide, entryId: string): Promise<void> {
+  /**
+   * Selects a word on one side; a selection on the other side completes a pairing. Queued behind
+   * any pairing still saving, so two selections made close together are both applied, in order.
+   */
+  select(side: MatchingSide, entryId: string): Promise<void> {
+    const run = this.queue.then(() => this.selectNow(side, entryId))
+    // A grading write's own failure already becomes `snapshot.error` inside `selectNow`; the
+    // queue itself must never reject, or every pairing after a failed one would be dropped too.
+    this.queue = run.catch(() => undefined)
+    return run
+  }
+
+  private async selectNow(side: MatchingSide, entryId: string): Promise<void> {
     const s = this.snapshot
-    if (s.done || this.busy || s.matched.has(entryId)) return
+    if (s.done || s.matched.has(entryId)) return
     if (!s.left.some((e) => e.entryId === entryId)) return
     if (s.selected === null || s.selected.side === side) {
       this.set({ selected: { side, entryId }, miss: null })
@@ -82,7 +96,6 @@ export class MatchingRun {
       this.set({ selected: null, miss: { left, right } })
       return
     }
-    this.busy = true
     try {
       const now = this.env.now()
       const latencyMs = Math.max(0, now - this.lastAt)
@@ -93,8 +106,6 @@ export class MatchingRun {
       this.set({ matched, selected: null, miss: null, done: matched.size === this.snapshot.left.length, error: null })
     } catch (err) {
       this.set({ selected: null, error: messageOf(err) })
-    } finally {
-      this.busy = false
     }
   }
 }

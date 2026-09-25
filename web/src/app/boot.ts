@@ -43,12 +43,13 @@ export interface BootDeps {
   startSync?(client: Client, backend: Backend): () => void
   /** Tests shorten FLUSH_TIMEOUT_MS. */
   readonly flushTimeoutMs?: number
-  fetchManifest(): Promise<PackManifest>
+  /** The manifest to install from: the demo's (the bundled sample) or a learner's (the CDN, plan 7). */
+  fetchManifest(account: AccountRecord | null): Promise<PackManifest>
   readonly fetchPack: PackFetcher
   /** Quick work before the app shows, such as reading the audio cache's index. Its failure never fails the boot. */
-  prepare?(client: Client): Promise<void>
+  prepare?(client: Client, account: AccountRecord | null): Promise<void>
   /** Background work once ready, such as prefetching audio. Its failure never fails the boot. */
-  onReady?(client: Client): Promise<void>
+  onReady?(client: Client, account: AccountRecord | null): Promise<void>
   /** The launch install's report: a pack may need a newer app (spec §9.3). */
   onInstallReport?(report: InstallReport): void
 }
@@ -259,7 +260,7 @@ export class Boot {
       const client = this.client!
       let installFailure: unknown = null
       try {
-        const report = await client.installPacks(await this.deps.fetchManifest(), this.deps.fetchPack)
+        const report = await client.installPacks(await this.deps.fetchManifest(this.account), this.deps.fetchPack)
         this.deps.onInstallReport?.(report)
       } catch (err) {
         installFailure = err
@@ -267,11 +268,11 @@ export class Boot {
       await client.startSession()
       if (generation !== this.generation) return
       if (!client.snapshot.corpus) throw installFailure ?? new Error('No words are installed')
-      await this.deps.prepare?.(client).catch(() => undefined)
+      await this.deps.prepare?.(client, this.account).catch(() => undefined)
       if (generation !== this.generation) return
       if (this.account && this.deps.startSync) this.stopSync = this.deps.startSync(client, this.backend)
       this.store.set({ status: 'ready', client, backend: this.backend, resumed, account: this.account })
-      void this.deps.onReady?.(client).catch(() => undefined)
+      void this.deps.onReady?.(client, this.account).catch(() => undefined)
     } catch (err) {
       if (generation === this.generation) this.store.set({ status: 'failed', message: messageOf(err), reason: 'content' })
     }

@@ -19,7 +19,7 @@ that it can use the real interfaces of the plans before it.
 | 5 | Server | `server` | Postgres schema and forward-only migrations; Better Auth (email OTP, Google); sync endpoints; server-side stamping, replay and XP; re-derivation through Queues; entitlement; content reports; account deletion and JSON export; Web Push reminders by Cron Trigger | 1–3 |
 | 6a | **Web client: platform and study loop** — `2026-09-24-web-platform-and-study.md` | `web`, `core`, `client-data` | Vite + React PWA; wa-sqlite over OPFS with IndexedDB and in-memory fallbacks; single-tab lock and take-over; the bundled sample and a verified audio cache; the shared study-run state machine; the four game modes; today, path, themes, progress, practice; report an error; Bulgarian and English interface; offline shell; the demo end to end in Chromium with an axe scan | 4 |
 | 6b | **Web client: accounts and settings** — `2026-09-24-web-accounts-and-settings.md` | `web` | Sign-in (emailed code, Google); the age gate; demo carry-over and discard; the transport, sync lifecycle and status; settings (level, retention, limits, goal, audio, latency grading); the placement test; known and suspended words; reminders; account deletion and export; installation and update prompts; the WCAG 2.2 AA pass over its screens | 5, 6a |
-| 7 | CI and deploy | repo | GitHub Actions: typecheck, lint, suites, server tests against a Postgres service; Wrangler deploy and preview deployments; end-to-end browser matrix; the CDN manifest for learners (`VITE_CONTENT_MANIFEST_URL`) beside the bundled sample for the demo, with an `AudioStore` per manifest (moved from 6b); both end-to-end suites (`e2e`, `e2e:accounts`) in the browser matrix | 5, 6a, 6b |
+| 7 | **CI and deploy** — `2026-09-25-ci-and-deploy.md` | repo | GitHub Actions: typecheck, lint, suites, server tests against a Postgres service; Wrangler deploy and preview deployments; end-to-end browser matrix; the CDN manifest for learners (`VITE_CONTENT_MANIFEST_URL`) beside the bundled sample for the demo, with an `AudioStore` per manifest (moved from 6b); both end-to-end suites (`e2e`, `e2e:accounts`) in the browser matrix; oxlint; one Worker serving the app and the API; preview deployments with a remote smoke run; `corpus publishable` and the content publish workflow; the identity check on deletion and export (from 6b); WebKit's IndexedDB fallback | 5, 6a, 6b |
 | 8 | Corpus pipeline | `pipeline` | Frequency data → CEFR banding → translation → review queues → TTS → packs → R2; pipeline tests (§13); the manually started workflow | 3, **legal review** |
 
 Plans 4 and 5 are independent of each other and can run in parallel. Plan 8 can
@@ -37,6 +37,7 @@ against the sample pack.
   Local development prints codes to the console and is not blocked.
 - **Spec approval table (§16).** Several † rows still read "Pending". The plans
   follow the spec as written; update the table when the sign-off is formal.
+- **Provisioning** (plan 7, `docs/deploy.md`). Cloudflare, Neon and R2 are created by hand once; deploys stay off until `DEPLOY_ENABLED` is set.
 
 ## Contracts `core` hands to the later plans
 

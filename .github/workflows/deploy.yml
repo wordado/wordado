@@ -1,0 +1,112 @@
+name: Deploy
+
+# Called by CI once every check is green (spec §4.4): migrations first (forward-only), then the Worker
+# with the web app's build, through the Wrangler action. Secrets come from the GitHub environment.
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: preview or production (the Wrangler environment and the GitHub one)
+        type: string
+        required: true
+      smoke:
+        description: Drive one learner's life against the deployment (preview only; production mails real codes)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy (${{ inputs.environment }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment:
+      name: ${{ inputs.environment }}
+      url: ${{ vars.APP_ORIGIN }}
+    concurrency:
+      group: deploy-${{ inputs.environment }}
+      cancel-in-progress: false
+    env:
+      DEPLOY_ENV: ${{ inputs.environment }}
+      APP_ORIGIN: ${{ vars.APP_ORIGIN }}
+      # The API token is not here: only the steps that call Cloudflare get it (docs/deploy.md, step 2).
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      WRANGLER_SEND_METRICS: 'false'
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Refuse an environment without its variables
+        # An empty APP_ORIGIN would deploy a Worker whose BASE_URL fails at configFromEnv, and an empty
+        # manifest URL would build a web app that finds no content: stop before either is built.
+        env:
+          CONTENT_MANIFEST_URL: ${{ vars.CONTENT_MANIFEST_URL }}
+        run: |
+          missing=0
+          for name in APP_ORIGIN CONTENT_MANIFEST_URL; do
+            if [ -z "${!name}" ]; then
+              echo "::error::the $DEPLOY_ENV environment has no $name variable (docs/deploy.md, step 6)"
+              missing=1
+            fi
+          done
+          exit "$missing"
+      - name: Build the web app, with the learners' manifest
+        run: pnpm --filter @wordado/web build
+        env:
+          VITE_CONTENT_MANIFEST_URL: ${{ vars.CONTENT_MANIFEST_URL }}
+      - name: Refuse a Hyperdrive that was never created
+        working-directory: server
+        # Fails closed: a dry run that fails is an error, never a pass for want of the zero id.
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          out=$(pnpm exec wrangler deploy --dry-run --env "$DEPLOY_ENV" --outdir "$RUNNER_TEMP/dry-run" --var "BASE_URL:$APP_ORIGIN" --var "TRUSTED_ORIGINS:$APP_ORIGIN" 2>&1) || {
+            echo "$out"
+            echo "::error::the dry run for $DEPLOY_ENV failed"
+            exit 1
+          }
+          if grep -q '(00000000000000000000000000000000)' <<<"$out"; then
+            echo "::error::server/wrangler.jsonc still has the zero Hyperdrive id for $DEPLOY_ENV (docs/deploy.md, step 3)"
+            exit 1
+          fi
+      - name: Migrate the database (forward-only, before the Worker)
+        run: pnpm --filter @wordado/server migrate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      - name: Gather the Worker's secrets
+        run: pnpm --filter @wordado/server exec tsx scripts/write-secrets.ts "$RUNNER_TEMP/worker-secrets.json"
+        env:
+          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}
+      - name: Deploy the Worker and the web app
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: server
+          packageManager: pnpm
+          command: deploy --env ${{ inputs.environment }} --secrets-file ${{ runner.temp }}/worker-secrets.json --var BASE_URL:${{ vars.APP_ORIGIN }} --var TRUSTED_ORIGINS:${{ vars.APP_ORIGIN }}
+      - name: Forget the secrets file
+        if: always()
+        run: rm -f "$RUNNER_TEMP/worker-secrets.json"
+      - name: The deployment answers
+        # Up to two and a half minutes: a first deploy to a custom domain waits for its certificate.
+        run: curl --fail --silent --show-error --retry 30 --retry-delay 5 --retry-all-errors "$APP_ORIGIN/health"
+      - name: One learner's life against the deployment
+        if: inputs.smoke
+        run: pnpm --filter @wordado/server smoke:remote "$APP_ORIGIN" "$DEPLOY_ENV"
+        env:
+          # wrangler tail reads the sign-in codes from the Worker's logs.
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

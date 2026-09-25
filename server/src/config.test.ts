@@ -48,4 +48,8 @@ describe('configFromEnv', () => {
     expect(() => configFromEnv(env({ MIN_PROTOCOL_VERSION: 'two' }))).toThrow('MIN_PROTOCOL_VERSION')
     expect(() => configFromEnv(env({ MIN_PROTOCOL_VERSION: '0' }))).toThrow('MIN_PROTOCOL_VERSION')
   })
+
+  it('refuses an empty BASE_URL: a deploy that forgot --var BASE_URL must fail, not run with undefined', () => {
+    expect(() => configFromEnv(env({ BASE_URL: '' }))).toThrow('BASE_URL must be set')
+  })
 })

@@ -12,6 +12,21 @@ pnpm --filter @wordado/web e2e:accounts   # accounts end to end, against plan 5'
 pnpm --filter @wordado/web exec playwright install chromium   # once per machine
 ```
 
+## The browser matrix (spec §13)
+
+Both suites run in Chromium by default. `E2E_PROJECTS` picks others: `chromium`, `firefox`,
+`webkit`, `mobile-chrome`, `mobile-safari`, several separated by commas, or `all`. Install a
+browser once with `pnpm --filter @wordado/web exec playwright install <chromium|firefox|webkit>`.
+
+```bash
+E2E_PROJECTS=all pnpm --filter @wordado/web e2e
+E2E_PROJECTS=webkit pnpm --filter @wordado/web e2e:accounts
+```
+
+WebKit's contexts cannot open OPFS files, so the WebKit projects run the IndexedDB
+fallback. Playwright's WebKit cannot load a page while offline, so the offline tests skip there,
+and Safari offline is checked by hand before a release (`docs/deploy.md`).
+
 The service worker exists only in a build (`pnpm build && pnpm preview`, on :4173).
 
 ## Accounts end to end
@@ -24,3 +39,10 @@ The demo run, `pnpm --filter @wordado/web e2e`, needs no server: it never reache
 
 For local development with accounts, run `pnpm --filter @wordado/server dev` beside
 `pnpm --filter @wordado/web dev`, and copy sign-in codes from the Worker's terminal.
+
+## Content
+
+The demo always studies the bundled sample (`/content/sample/`). A signed-in learner installs
+from `VITE_CONTENT_MANIFEST_URL`, the CDN's manifest, which the deploy sets at build time
+(`docs/deploy.md`). It falls back to the sample when the variable is unset, as it is in
+development and in both end-to-end suites.

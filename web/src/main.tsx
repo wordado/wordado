@@ -14,7 +14,8 @@ import { AppLifecycle, watchUpdates, type InstallEvent } from './app/lifecycle'
 import { Root } from './app/Root'
 import { startSyncLoop } from './app/syncLoop'
 import { AudioStore } from './content/audio'
-import { fetchManifest, packFetcher, SAMPLE_MANIFEST_URL } from './content/packs'
+import { AudioSwitch } from './content/audioSwitch'
+import { fetchManifest, manifestUrlFor, packFetcher, SAMPLE_MANIFEST_URL } from './content/packs'
 import { webEnv } from './env'
 import { I18nProvider } from './i18n/i18n'
 import { writeInterfaceLanguage } from './reminders/prefs'
@@ -24,7 +25,8 @@ import { TabLock } from './storage/tabLock'
 import { openWorkerDriver } from './storage/workerDriver'
 
 const env = webEnv()
-const audio = new AudioStore({ manifestUrl: SAMPLE_MANIFEST_URL, sha256: env.sha256 })
+/** One AudioStore per manifest (a clip's URL is relative to it): the demo's sample and a learner's CDN manifest (plan 7). */
+const audio = new AudioSwitch((manifestUrl) => new AudioStore({ manifestUrl, sha256: env.sha256 }), SAMPLE_MANIFEST_URL)
 const accounts = accountStorage()
 /** The recorded learner: sync and reminders name them, so a session that is someone else's is refused (spec §8.6). */
 const expectedUser = () => accounts.read()?.userId ?? null
@@ -53,16 +55,19 @@ const boot = new Boot(
     listDatabases,
     transport: () => transport,
     startSync: (client, backend) => startSyncLoop(client, { everyAnswer: backend === 'memory', now: env.now }),
-    fetchManifest: () => fetchManifest(SAMPLE_MANIFEST_URL),
-    fetchPack: packFetcher(SAMPLE_MANIFEST_URL),
+    fetchManifest: (account) => fetchManifest(manifestUrlFor(account)),
+    fetchPack: packFetcher(),
     // Before the app shows, so the first session already knows which clips can play (spec §9.3).
-    prepare: async (client) => {
+    prepare: async (client, account) => {
+      audio.use(manifestUrlFor(account))
       if (client.snapshot.corpus) await audio.refresh(client.snapshot.corpus)
     },
     onReady: async (client) => {
-      // The bundled sample's clips are fetched into the one audio cache (decision of plan 6b). Plan 7 narrows
-      // this to the sample manifest once learners use the CDN's.
-      if (navigator.onLine && client.snapshot.corpus) await audio.prefetch([...client.snapshot.corpus.clips.values()])
+      // The bundled sample's ~60 clips are fetched into the audio cache at once (decision of plan 6b), so the
+      // demo listens offline from the first online visit; a CDN pack's clips come ahead of need (spec §9.3).
+      if (audio.manifestUrl === SAMPLE_MANIFEST_URL && navigator.onLine && client.snapshot.corpus) {
+        await audio.prefetch([...client.snapshot.corpus.clips.values()])
+      }
     },
     onInstallReport: (report) => noteInstallReport(report, lifecycle),
   },
@@ -83,8 +88,12 @@ startPackChecks({
     const state = boot.store.get()
     return state.status === 'ready' ? state.client : null
   },
-  fetchManifest: () => fetchManifest(SAMPLE_MANIFEST_URL),
-  fetchPack: packFetcher(SAMPLE_MANIFEST_URL),
+  // Whoever is studying now: the demo's sample, or the learner's CDN manifest.
+  fetchManifest: () => {
+    const state = boot.store.get()
+    return fetchManifest(manifestUrlFor(state.status === 'ready' ? state.account : null))
+  },
+  fetchPack: packFetcher(),
   online: () => navigator.onLine,
   onReport: (report) => noteInstallReport(report, lifecycle),
 })

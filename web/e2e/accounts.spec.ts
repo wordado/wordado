@@ -89,7 +89,8 @@ test('carries the demo into a new account, from the demo’s own device, and syn
   await ctx.close()
 })
 
-test('studies offline, then syncs on reconnecting (spec §13)', async ({ browser }) => {
+test('studies offline, then syncs on reconnecting (spec §13)', async ({ browser, browserName }) => {
+  test.skip(browserName === 'webkit', 'Playwright’s WebKit fails page.goto while offline ("WebKit encountered an internal error"); Safari offline is on the release checklist (docs/deploy.md)')
   const ctx = await context(browser)
   const page = await ctx.newPage()
   await page.goto('/')
@@ -225,4 +226,26 @@ test('meets WCAG 2.2 A and AA on the account screens, light and dark (spec §11.
   await page.locator('details.unit-words').first().evaluate((d) => ((d as HTMLDetailsElement).open = true))
   await expectAccessible(page, { dark: true })
   await ctx.close()
+})
+
+test('brings a learner’s progress back after the browser’s storage was cleared (spec §13)', async ({ browser }) => {
+  const email = address('cleared')
+  const first = await context(browser)
+  const page = await first.newPage()
+  await signIn(page, email)
+  await studyNew(page, 3)
+  await page.goto('/')
+  await synced(page)
+  await first.close()
+
+  // A new context is a browser with nothing kept: no database, no account record, no cookie.
+  const cleared = await context(browser)
+  const again = await cleared.newPage()
+  await again.goto('/')
+  await expect(heading(again)).toHaveText('10 new words')
+  await signIn(again, email)
+  await expect(heading(again)).toHaveText('7 new words', { timeout: 15_000 })
+  await again.goto('/path')
+  await expect(again.getByText('3 of 20 started')).toBeVisible()
+  await cleared.close()
 })

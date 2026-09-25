@@ -2,8 +2,8 @@ import type { Job, ServerConfig } from './deps'
 
 /**
  * The Worker's bindings and variables (server/wrangler.jsonc; secrets from
- * server/.dev.vars locally, from the deploy in plan 7). Written by hand: only
- * what the server reads.
+ * server/.dev.vars locally, from the deploy's `--secrets-file` (docs/deploy.md)).
+ * Written by hand: only what the server reads.
  */
 export interface Env {
   readonly HYPERDRIVE: { readonly connectionString: string }
@@ -28,6 +28,7 @@ export interface Env {
 export const DEFAULT_MIN_PROTOCOL_VERSION = 1
 
 export function configFromEnv(env: Env): ServerConfig {
+  if (!env.BASE_URL) throw new Error('BASE_URL must be set')
   if (!env.BETTER_AUTH_SECRET || env.BETTER_AUTH_SECRET.length < 32) throw new Error('BETTER_AUTH_SECRET must be at least 32 characters')
   const min = env.MIN_PROTOCOL_VERSION ? Number(env.MIN_PROTOCOL_VERSION) : DEFAULT_MIN_PROTOCOL_VERSION
   if (!Number.isInteger(min) || min < 1) throw new Error('MIN_PROTOCOL_VERSION must be a positive integer')
