@@ -60,6 +60,21 @@ function boot(over: Partial<BootDeps> = {}, free = true) {
   return { boot: b, release: () => release() }
 }
 
+/**
+ * A server that never answers: every push and pull it is asked for stays
+ * pending for good, since nothing holds a way to settle it. `calls` records
+ * each request, tagged with `when()` at the time it was made, so a test can
+ * show a request was made, and when, and is still hanging.
+ */
+function hangingServer(when: () => string = () => ''): { readonly transport: SyncTransport; readonly calls: string[] } {
+  const calls: string[] = []
+  const never = <T>(kind: string): Promise<T> => {
+    calls.push(`${kind}${when() ? ` while ${when()}` : ''}`)
+    return new Promise<T>(() => undefined)
+  }
+  return { transport: { push: () => never('push'), pull: () => never('pull') }, calls }
+}
+
 const ready = (b: Boot): Client => {
   const state = b.store.get()
   if (state.status !== 'ready') throw new Error(`not ready: ${state.status}`)
@@ -437,13 +452,14 @@ describe('Boot with accounts (spec §8.6, §9.1)', () => {
     const env = testEnv()
     const accounts = accountStorage(memoryStorage())
     accounts.save({ userId: 'u1', email: 'ana@example.com' })
-    const hanging: SyncTransport = { push: () => new Promise(() => undefined), pull: () => new Promise(() => undefined) }
-    const { boot: b, release } = boot({ env, accounts, openDriver: d.openDriver, deleteDatabase: d.deleteDatabase, transport: () => hanging, flushTimeoutMs: 20 })
+    const hung = hangingServer()
+    const { boot: b, release } = boot({ env, accounts, openDriver: d.openDriver, deleteDatabase: d.deleteDatabase, transport: () => hung.transport, flushTimeoutMs: 20 })
     await b.start()
     await ready(b).answer(hello)
-    const started = Date.now()
+    hung.calls.length = 0
+    // Without the race against the flush timeout this never resolves, and the test times out.
     await release()
-    expect(Date.now() - started).toBeLessThan(1_000)
+    expect(hung.calls).toContain('push')
     expect(b.store.get().status).toBe('elsewhere')
   })
 
@@ -711,15 +727,17 @@ describe('Boot with accounts (spec §8.6, §9.1)', () => {
     const d = disk()
     const env = testEnv()
     const accounts = accountStorage(memoryStorage())
-    const hanging: SyncTransport = { push: () => new Promise(() => undefined), pull: () => new Promise(() => undefined) }
-    const { boot: b } = boot({ env, accounts, openDriver: d.openDriver, deleteDatabase: d.deleteDatabase, transport: () => hanging, flushTimeoutMs: 20 })
+    const hung = hangingServer(() => b.store.get().status)
+    const { boot: b } = boot({ env, accounts, openDriver: d.openDriver, deleteDatabase: d.deleteDatabase, transport: () => hung.transport, flushTimeoutMs: 20 })
     await b.start()
     await ready(b).answer(hello)
     await ready(b).attachUser('u1')
     accounts.save({ userId: 'u1', email: 'ana@example.com', carryOver: true })
-    const started = Date.now()
+    hung.calls.length = 0
+    // Without the race against the flush timeout this never resolves, and the test times out.
     await b.switchTo()
-    expect(Date.now() - started).toBeLessThan(1_000)
+    // The carry-over's push reached the server before Boot was ready, and Boot became ready while it still hangs.
+    expect(hung.calls).toContain('push while starting')
     expect(b.store.get()).toMatchObject({ status: 'ready', account: { userId: 'u1' } })
     expect(accounts.read()?.carryOver).toBe(true)
     expect(d.exists(DEMO_FILE)).toBe(true)
