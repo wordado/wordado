@@ -8,7 +8,8 @@ on:
 
 concurrency:
   group: ci-${{ github.ref }}
-  # A newer push to a pull request replaces its run; runs on main (which deploy) always finish.
+  # A newer push to a pull request cancels its running checks. On main nothing is cancelled, so a
+  # deploy that has started always finishes; a run still pending is replaced by a newer one.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:

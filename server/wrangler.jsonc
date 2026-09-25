@@ -37,7 +37,9 @@
         "not_found_handling": "single-page-application",
         "run_worker_first": ["/api/*", "/v1/*", "/health"]
       },
-      "vars": { "MIN_PROTOCOL_VERSION": "1" },
+      // Empty on purpose: --var supplies both from APP_ORIGIN. An empty BASE_URL fails at configFromEnv;
+      // an empty TRUSTED_ORIGINS trusts no origin beyond BASE_URL.
+      "vars": { "MIN_PROTOCOL_VERSION": "1", "BASE_URL": "", "TRUSTED_ORIGINS": "" },
       "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "00000000000000000000000000000000" }],
       "queues": {
         "producers": [{ "binding": "JOBS", "queue": "wordado-jobs-preview" }],
@@ -54,7 +56,9 @@
         "not_found_handling": "single-page-application",
         "run_worker_first": ["/api/*", "/v1/*", "/health"]
       },
-      "vars": { "MIN_PROTOCOL_VERSION": "1" },
+      // Empty on purpose: --var supplies both from APP_ORIGIN. An empty BASE_URL fails at configFromEnv;
+      // an empty TRUSTED_ORIGINS trusts no origin beyond BASE_URL.
+      "vars": { "MIN_PROTOCOL_VERSION": "1", "BASE_URL": "", "TRUSTED_ORIGINS": "" },
       "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "00000000000000000000000000000000" }],
       "queues": {
         "producers": [{ "binding": "JOBS", "queue": "wordado-jobs" }],
