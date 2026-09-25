@@ -26,7 +26,9 @@ mono, 48 kbit/s) are made by [`pipeline/scripts/tts-audio.sh`](../scripts/tts-au
   Its [model card](https://huggingface.co/rhasspy/piper-voices/blob/main/en/en_GB/cori/high/MODEL_CARD)
   and its [author's page](https://brycebeattie.com/files/tts/) give its licence as **public
   domain**. It was trained from scratch, not fine-tuned from another voice, on recordings
-  from [LibriVox](https://librivox.org/pages/public-domain/), which are in the public domain.
+  from [LibriVox](https://librivox.org/pages/public-domain/). LibriVox states its recordings
+  are in the public domain in the USA, and notes that this is not necessarily so in other
+  countries.
 
 Neither the voice nor its training data places conditions on the audio made with it, so no
 attribution is required; we credit Bryce Beattie and LibriVox as a courtesy. The Terms above

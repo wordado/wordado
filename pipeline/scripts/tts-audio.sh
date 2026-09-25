@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One-off, macOS only (afconvert). Placeholder clips for the sample pack from
+# One-off, macOS only (afconvert, afinfo). Placeholder clips for the sample pack from
 # Piper TTS with the en_GB "cori" (high) voice, whose licence is public domain
 # (see pipeline/samples/README.md): below the quality bar of spec §5.4,
 # replaced by plan 8's TTS. Skips clips that already exist, so it is safe to
