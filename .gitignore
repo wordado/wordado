@@ -9,3 +9,4 @@ coverage/
 .env.*
 .wrangler/
 .dev.vars
+graphify-out/

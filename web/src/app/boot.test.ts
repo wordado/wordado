@@ -48,13 +48,10 @@ function boot(over: Partial<BootDeps> = {}, free = true) {
     fetchPack: sampleFetcher,
     ...over,
   }
-  let owner = false
   let release: () => Promise<void> = async () => undefined
   const lock: LockPort = {
-    acquire: async () => (owner = free),
-    takeOver: async () => {
-      owner = true
-    },
+    acquire: async () => free,
+    takeOver: async () => undefined,
   }
   const b = new Boot(deps, (r) => {
     release = r

@@ -1,5 +1,4 @@
 import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { DEFAULT_SETTINGS, Grade, loadCorpus, validatePack, type Corpus, type WordFlag, type WordId } from '@wordado/core'
 import { describe, expect, it } from 'vitest'
