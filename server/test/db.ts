@@ -32,6 +32,32 @@ export async function resetDb(db: Db = testDb()): Promise<void> {
   if (tables.length > 0) await db.query(`truncate ${tables.map((t) => `"${t.name}"`).join(', ')} restart identity cascade`)
 }
 
+/**
+ * Tracks the pool's connections, for `closeAll`: ends the pool and waits until the server has
+ * closed every socket. `pool.end()` alone resolves once each idle client has only been *asked* to
+ * end, its socket still open; a `drop database … with (force)` in that window terminates the
+ * backend, and its FATAL 57P01 reaches a client nobody listens to any more: an unhandled pool
+ * 'error'. pg-pool emits 'remove' from `client.end`'s callback, after the socket has closed.
+ */
+function trackConnections(db: Db): { closeAll: () => Promise<void> } {
+  let open = 0
+  let allClosed: (() => void) | null = null
+  db.pool.on('connect', () => {
+    open += 1
+  })
+  db.pool.on('remove', () => {
+    open -= 1
+    if (open === 0) allClosed?.()
+  })
+  return {
+    async closeAll() {
+      const closed = open === 0 ? Promise.resolve() : new Promise<void>((resolve) => (allClosed = resolve))
+      await db.end()
+      await closed
+    },
+  }
+}
+
 /** A fresh, empty database for the length of `fn`. */
 export async function withScratchDatabase(fn: (db: Db) => Promise<void>): Promise<void> {
   const name = `wordado_scratch_${Date.now()}_${Math.floor(Math.random() * 1_000_000)}`
@@ -40,10 +66,11 @@ export async function withScratchDatabase(fn: (db: Db) => Promise<void>): Promis
   const url = new URL(TEST_DATABASE_URL)
   url.pathname = `/${name}`
   const db = pgDb(createPool(url.toString(), 2))
+  const connections = trackConnections(db)
   try {
     await fn(db)
   } finally {
-    await db.end()
+    await connections.closeAll()
     await admin.query(`drop database ${name} with (force)`)
     await admin.end()
   }
