@@ -1,0 +1,63 @@
+name: Publish content
+
+# Spec §4.4: packs and audio go up first, and the manifest only once every file it names is in place,
+# so a client never sees a version whose files are missing. Plan 8 builds the corpus into a directory
+# of this shape; until then the source is the A1 sample.
+on:
+  workflow_dispatch:
+    inputs:
+      source:
+        description: A directory holding manifest.json, the packs it lists and their audio/
+        required: true
+        default: pipeline/samples/a1-bg
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-content
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish ${{ inputs.source }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: production
+    env:
+      SOURCE: ${{ inputs.source }}
+      BUCKET: s3://${{ vars.CONTENT_BUCKET }}
+      R2: https://${{ vars.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
+      MANIFEST_URL: ${{ vars.CONTENT_MANIFEST_URL }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: auto
+      # R2 does not take the AWS CLI's default integrity headers.
+      AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+      AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Every file the manifest reaches is present, with its checksum
+        run: pnpm --filter @wordado/pipeline corpus publishable "$GITHUB_WORKSPACE/$SOURCE"
+      - name: Upload the packs and the audio (not the manifest)
+        run: |
+          aws s3 sync "$SOURCE" "$BUCKET" --endpoint-url "$R2" --exclude '*' --include '*.pack' \
+            --content-type application/json --cache-control 'public, max-age=31536000, immutable'
+          aws s3 sync "$SOURCE/audio" "$BUCKET/audio" --endpoint-url "$R2" \
+            --content-type audio/mp4 --cache-control 'public, max-age=86400'
+      - name: Publish the manifest, last
+        run: |
+          aws s3 cp "$SOURCE/manifest.json" "$BUCKET/manifest.json" --endpoint-url "$R2" \
+            --content-type application/json --cache-control no-cache
+      - name: The CDN serves the new manifest
+        run: |
+          expected=$(node -e "console.log(JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8')).corpus_version)" "$SOURCE/manifest.json")
+          served=$(curl --fail --silent --show-error -H 'cache-control: no-cache' "$MANIFEST_URL" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>console.log(JSON.parse(s).corpus_version))")
+          echo "corpus version: published $expected, served $served"
+          test "$expected" = "$served"

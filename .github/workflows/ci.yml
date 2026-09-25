@@ -1,0 +1,120 @@
+name: CI
+
+# Spec §4.4: every pull request is checked, and nothing merges red; a merge to main deploys.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  # A newer push to a pull request replaces its run; runs on main (which deploy) always finish.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  CI: 'true'
+  WRANGLER_SEND_METRICS: 'false'
+
+jobs:
+  static:
+    name: Typecheck, lint, workflows, deploy config
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - name: Lint the workflows
+        run: docker run --rm -v "$PWD:/repo" --workdir /repo rhysd/actionlint:1.7.7 -color
+      - name: Build the web app
+        run: pnpm --filter @wordado/web build
+      - name: Dry-run both deployments
+        run: pnpm --filter @wordado/server deploy:check
+
+  test:
+    name: Suites and the Worker smoke run
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Chromium, for the web suite's storage tests
+        run: pnpm --filter @wordado/web exec playwright install --with-deps chromium
+      # The server's scripts start plan 5's Postgres 18 container with Docker Compose, as they do locally.
+      - run: pnpm test
+      - run: pnpm --filter @wordado/server smoke
+
+  e2e:
+    name: End to end (${{ matrix.project }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        # Spec §13's matrix. Pull requests run the three engines; main adds both mobile projects (Actions minutes, §17.2).
+        project: ${{ fromJSON(github.event_name == 'pull_request' && '["chromium","firefox","webkit"]' || '["chromium","firefox","webkit","mobile-chrome","mobile-safari"]') }}
+    env:
+      E2E_PROJECTS: ${{ matrix.project }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Install the project's browser
+        run: |
+          case "$E2E_PROJECTS" in
+            chromium|mobile-chrome) browser=chromium ;;
+            firefox) browser=firefox ;;
+            webkit|mobile-safari) browser=webkit ;;
+            *) echo "::error::no browser for $E2E_PROJECTS"; exit 1 ;;
+          esac
+          pnpm --filter @wordado/web exec playwright install --with-deps "$browser"
+      - name: The demo
+        run: pnpm --filter @wordado/web e2e
+      - name: Accounts, against the Worker and Postgres
+        run: pnpm --filter @wordado/web e2e:accounts
+      - name: Keep the traces of a failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-${{ matrix.project }}
+          path: web/test-results/
+          retention-days: 7
+
+  deploy-preview:
+    name: Preview deployment
+    needs: [static, test, e2e]
+    # Only once the operator has provisioned Cloudflare and Neon (docs/deploy.md), and never for a fork.
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && vars.DEPLOY_ENABLED == 'true'
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: preview
+      smoke: true
+    secrets: inherit
+
+  deploy-production:
+    name: Production deployment
+    needs: [static, test, e2e]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.DEPLOY_ENABLED == 'true'
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: production
+      smoke: false
+    secrets: inherit
