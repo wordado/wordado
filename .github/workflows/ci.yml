@@ -56,6 +56,14 @@ jobs:
       - name: Chromium, for the web suite's storage tests
         run: pnpm --filter @wordado/web exec playwright install --with-deps chromium
       # The server's scripts start plan 5's Postgres 18 container with Docker Compose, as they do locally.
+      # Here it is started before the suites, not by the server's `test` script beside them: creating
+      # its network and container adds interfaces to the runner, and Chromium fails every request it
+      # has queued when an address appears (ERR_NETWORK_CHANGED). The web suite's browser tests, which
+      # load their modules and the database Worker from Vite as they run, then fail at random: "Failed
+      # to fetch dynamically imported module", or "The database worker failed: unknown error". With the
+      # container already up, the server's `db:up` changes nothing.
+      - name: Postgres, before any browser runs
+        run: pnpm --filter @wordado/server db:up
       - run: pnpm test
       - run: pnpm --filter @wordado/server smoke
 
