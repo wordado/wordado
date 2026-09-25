@@ -24,8 +24,9 @@ function removeFromIdb(name: string): Promise<void> {
     const request = indexedDB.deleteDatabase(name)
     request.onsuccess = () => resolve()
     request.onerror = () => reject(request.error ?? new Error(`${name} could not be deleted`))
-    // `blocked` means a connection is still open. The Worker closes its own connection before it is
-    // terminated (sqlite.worker.ts), so this is another opener; the deletion goes on once it lets go.
+    // `blocked` means a connection is not closed yet: another opener, or the Worker's own, which close
+    // has closed (sqlite.worker.ts) while its last transaction still commits. Either way the deletion
+    // goes on to `success` once the connection lets go; nothing to do but wait.
   })
 }
 
