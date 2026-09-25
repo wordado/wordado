@@ -72,6 +72,33 @@ describe('MatchingRun', () => {
     expect(spy.mock.calls.every(([input]) => input.mode === 'matching' && input.practice === true)).toBe(true)
   })
 
+  it('keeps a pairing clicked while the previous one is still saving, not lost (a fast learner, or automation)', async () => {
+    const { env, client } = await clientWithWords(MATCHING_PAIRS)
+    const run = MatchingRun.start(client, env)!
+    const [a, b] = run.snapshot.left.map((e) => e.entryId)
+    const realAnswer = client.answer.bind(client)
+    let release: (() => void) | undefined
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    // The first grading write (pair a) is slow, as a real write can be under load; the UI's
+    // onClick never awaits `select`, so a learner (or e2e automation) can select pair b before
+    // it settles.
+    vi.spyOn(client, 'answer').mockImplementationOnce(async (input) => {
+      await gate
+      return realAnswer(input)
+    })
+
+    await run.select('left', a!)
+    const pairA = run.select('right', a!)
+    const pairBLeft = run.select('left', b!)
+    const pairBRight = run.select('right', b!)
+    release!()
+    await Promise.all([pairA, pairBLeft, pairBRight])
+
+    expect(run.snapshot.matched).toEqual(new Set([a, b]))
+  })
+
   it('ignores a matched word and a second selection on the same side replaces the first', async () => {
     const { env, client } = await clientWithWords(MATCHING_PAIRS)
     const run = MatchingRun.start(client, env)!
