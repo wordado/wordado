@@ -10,3 +10,6 @@ coverage/
 .wrangler/
 .dev.vars
 graphify-out/
+
+# Product research lives in the private repo wordado/wordado-research, cloned here.
+docs/research/
