@@ -52,6 +52,60 @@ describe('checkOpfs (spec §9.1: OPFS, then IndexedDB)', () => {
     const d = directory(['demo.sqlite'], 'UnknownError')
     await expect(checkOpfs(d.root, 'user-u1')).rejects.toBeInstanceOf(StorageUnavailable)
   })
+
+  it('rethrows a lookup that fails for another reason than NotFoundError, so an existing OPFS database is never abandoned', async () => {
+    const d = directory([])
+    const failure = new DOMException('The operation failed for an unknown transient reason', 'UnknownError')
+    const root: ProbeDirectory = {
+      getFileHandle: async (name, options) => {
+        if (name === 'demo.sqlite') throw failure
+        return d.root.getFileHandle(name, options)
+      },
+      removeEntry: d.root.removeEntry,
+    }
+    const err = await checkOpfs(root, 'demo').catch((e: unknown) => e)
+    expect(err).toBe(failure)
+    expect(err).not.toBeInstanceOf(StorageUnavailable)
+    expect(d.present.has(PROBE_FILE)).toBe(false)
+    expect(d.removed).toEqual([])
+  })
+})
+
+describe('checkOpfs stays on IndexedDB once the learner’s file lives there', () => {
+  /** An IndexedDB lookup that holds `names` and records what it was asked. */
+  function idb(names: string[]) {
+    const asked: string[] = []
+    const has = async (name: string) => {
+      asked.push(name)
+      return names.includes(name)
+    }
+    return { has, asked }
+  }
+
+  it('reports OPFS as unavailable when IndexedDB holds the file and OPFS does not', async () => {
+    const d = directory([])
+    const i = idb(['wordado-demo'])
+    const err = await checkOpfs(d.root, 'demo', i.has).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(StorageUnavailable)
+    expect((err as Error).message).toContain('already kept in IndexedDB')
+    expect(i.asked).toEqual(['wordado-demo'])
+    expect(d.removed).toEqual([])
+  })
+
+  it('probes as before when neither holds the file', async () => {
+    const d = directory([])
+    const i = idb(['wordado-other'])
+    await expect(checkOpfs(d.root, 'demo', i.has)).resolves.toBeUndefined()
+    expect(i.asked).toEqual(['wordado-demo'])
+    expect(d.removed).toEqual([PROBE_FILE])
+  })
+
+  it('opens OPFS without asking IndexedDB when OPFS holds the file', async () => {
+    const d = directory(['demo.sqlite'])
+    const i = idb(['wordado-demo'])
+    await expect(checkOpfs(d.root, 'demo', i.has)).resolves.toBeUndefined()
+    expect(i.asked).toEqual([])
+  })
 })
 
 describe('opfsRoot (WebKit can reject navigator.storage.getDirectory() itself, not only createSyncAccessHandle)', () => {

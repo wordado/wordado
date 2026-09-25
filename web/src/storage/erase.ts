@@ -30,7 +30,7 @@ function removeFromIdb(name: string): Promise<void> {
 }
 
 /** The IndexedDB name 6a's `openIdb` gives a file. */
-const IDB_PREFIX = 'wordado-'
+export const IDB_PREFIX = 'wordado-'
 const SQLITE_SUFFIX = '.sqlite'
 
 /**
