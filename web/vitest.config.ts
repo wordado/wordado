@@ -10,7 +10,7 @@ export default defineConfig({
         extends: true,
         test: {
           name: 'unit',
-          include: ['src/**/*.test.{ts,tsx}', 'vite/**/*.test.ts'],
+          include: ['src/**/*.test.{ts,tsx}', 'vite/**/*.test.ts', 'e2e/**/*.test.ts'],
           exclude: ['src/**/*.browser.test.ts'],
           environment: 'happy-dom',
         },

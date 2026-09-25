@@ -12,6 +12,21 @@ pnpm --filter @wordado/web e2e:accounts   # accounts end to end, against plan 5'
 pnpm --filter @wordado/web exec playwright install chromium   # once per machine
 ```
 
+## The browser matrix (spec §13)
+
+Both suites run in Chromium by default. `E2E_PROJECTS` picks others: `chromium`, `firefox`,
+`webkit`, `mobile-chrome`, `mobile-safari`, several separated by commas, or `all`. Install a
+browser once with `pnpm --filter @wordado/web exec playwright install <chromium|firefox|webkit>`.
+
+```bash
+E2E_PROJECTS=all pnpm --filter @wordado/web e2e
+E2E_PROJECTS=webkit pnpm --filter @wordado/web e2e:accounts
+```
+
+WebKit's contexts cannot open OPFS files, so the WebKit projects run the IndexedDB
+fallback. Playwright's WebKit cannot load a page while offline, so the offline tests skip there,
+and Safari offline is checked by hand before a release (`docs/deploy.md`).
+
 The service worker exists only in a build (`pnpm build && pnpm preview`, on :4173).
 
 ## Accounts end to end
