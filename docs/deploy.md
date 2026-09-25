@@ -11,10 +11,28 @@ Nothing deploys until the repository variable `DEPLOY_ENABLED` is `true` (step 1
 
 ## Provisioning, once
 
+### Before you start
+
+Checked 2026-09-25: the `wordado` organisation is on GitHub Free, and the repository is private. On
+Free, a private repository gets no environment secrets, no deployment branch policies (the
+environments of step 6) and no branch protection (step 7). There are three ways forward:
+
+- **GitHub Team** for the organisation.
+- **Make the repository public.** Actions minutes then become free as well.
+- **Repository-level secrets**, with preview and production told apart by name, accepting that `main`
+  is unprotected.
+
+The workflows as written assume the first or the second.
+
+### Steps
+
 1. **Cloudflare.** `pnpm --filter @wordado/server exec wrangler login`, then `… wrangler whoami` for
    the account id. Create an API token from the "Edit Cloudflare Workers" template. Add
    *Account › Hyperdrive › Edit* and *Account › Queues › Edit*, and limit its zone to `wordado.com`.
    The workers.dev subdomain is on the dashboard's Workers overview.
+   *Accepted risk:* this one account-wide token sits in both environments, so any branch in this
+   repository that can run the preview deploy could deploy production with it. That is accepted for a
+   solo private repository. The remedy is a separate Cloudflare account for the preview.
 2. **Neon.** Create the project `wordado` in *AWS Europe Central 1 (Frankfurt)* (spec §17.1), on
    Postgres 18 (or 17 if 18 is not offered; the schema uses nothing 18-only). Keep the default branch
    for production. Create a branch `preview` from it. Copy each branch's **direct** connection
@@ -59,12 +77,17 @@ Nothing deploys until the repository variable `DEPLOY_ENABLED` is `true` (step 1
    A week offline is a few 500-event pages and a pull, far below it. Sign-in has its own limits (plan 5).
 9. **Content first.** Run **Publish content** (Actions › Publish content › Run workflow, source
    `pipeline/samples/a1-bg`). Then the first production build finds a manifest at `CONTENT_MANIFEST_URL`.
-10. **Enable deploys.** `gh variable set DEPLOY_ENABLED --body true`. The next pull request deploys the
-    preview, and the next merge deploys production.
+10. **Enable deploys.** First confirm that `cloudflare/wrangler-action@v4` exists (its releases on
+    GitHub): the first real deploy is its first use. Then `gh variable set DEPLOY_ENABLED --body true`.
+    The next pull request deploys the preview, and the next merge deploys production. Once deploys are
+    on, consider adding "Preview deployment / Deploy (preview)" to `main`'s required checks (step 7).
 
 ## Everyday
 
 - **Deploy:** merge a green pull request. CI migrates `DATABASE_URL`, then deploys the Worker with the web build.
+  Migrations run while the previous Worker still serves, and `wrangler rollback` restores a Worker that
+  runs against the new schema, so every migration must work with the previous Worker too: expand first,
+  contract in a later release.
 - **Rollback:** `pnpm --filter @wordado/server exec wrangler rollback --env production` restores the previous
   Worker and its assets together. Migrations are forward-only: never roll the schema back; write a new migration.
 - **The preview's database** gets every pull request's migrations. After closing a pull request whose
