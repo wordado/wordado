@@ -31,7 +31,7 @@ export function publishProblems(read: (path: string) => Uint8Array | null): stri
     return null
   }
 
-  manifest.manifest.packs.forEach((descriptor, _i) => {
+  manifest.manifest.packs.forEach((descriptor) => {
     const bytes = check(descriptor.url, descriptor, 'the manifest')
     if (bytes === null) return
     const pack = validatePack(JSON.parse(new TextDecoder().decode(bytes)))
@@ -39,7 +39,7 @@ export function publishProblems(read: (path: string) => Uint8Array | null): stri
       problems.push(`${descriptor.url}: ${pack.status === 'invalid' ? pack.errors.map((e) => `${e.path}: ${e.message}`).join('; ') : `schema ${pack.schemaVersion} is not supported`}`)
       return
     }
-    pack.pack.audio.forEach((clip, _j) => check(clip.url, clip, 'the pack'))
+    pack.pack.audio.forEach((clip) => check(clip.url, clip, 'the pack'))
   })
   return problems
 }
