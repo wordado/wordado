@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
 import { copyFileSync, existsSync } from 'node:fs'
-import { codeIn, runSmoke } from './smokeRun'
+import { codeIn, processGroup, runSmoke } from './smokeRun'
 
 /**
  * Drives the real Worker under `wrangler dev` (workerd, Hyperdrive's local
@@ -27,29 +27,11 @@ const wrangler = spawn('pnpm', ['exec', 'wrangler', 'dev', '--port', String(PORT
 })
 wrangler.stdout.on('data', (chunk) => output.push(String(chunk)))
 wrangler.stderr.on('data', (chunk) => output.push(String(chunk)))
-const exited = new Promise<void>((resolve) => wrangler.once('exit', () => resolve()))
-
-function signalGroup(signal: NodeJS.Signals): void {
-  try {
-    if (wrangler.pid !== undefined) process.kill(-wrangler.pid, signal)
-  } catch {
-    // The group is already gone.
-  }
-}
-
-/** Stops wrangler and everything it started, forcibly if it has not exited within 10 seconds. */
-async function stop(): Promise<void> {
-  signalGroup('SIGTERM')
-  const timer = setTimeout(() => signalGroup('SIGKILL'), 10_000)
-  await exited
-  clearTimeout(timer)
-  // workerd may outlive the pnpm process that led the group; make sure nothing is left.
-  signalGroup('SIGKILL')
-}
+const group = processGroup(wrangler)
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.once(signal, () => {
-    signalGroup('SIGKILL')
+    group.signal('SIGKILL')
     process.exit(130)
   })
 }
@@ -62,5 +44,5 @@ try {
   console.error('smoke: failed —', error)
   process.exitCode = 1
 } finally {
-  await stop()
+  await group.stop()
 }

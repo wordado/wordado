@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { codeIn, runSmoke, until } from './smokeRun'
+import { codeIn, processGroup, runSmoke, until } from './smokeRun'
 
 /**
  * `runSmoke` against a deployment (spec §4.4: CPU-sensitive paths run on the
@@ -17,18 +17,20 @@ if (!origin || !env) {
 const output: string[] = []
 const tail = spawn('pnpm', ['exec', 'wrangler', 'tail', '--env', env, '--format', 'pretty'], {
   stdio: ['ignore', 'pipe', 'pipe'],
+  // Its own process group: `pnpm exec` leaves wrangler and the tail connection as
+  // grandchildren that a signal to pnpm alone does not reach, so group.stop() signals the whole group.
   detached: true,
   env: { ...process.env, FORCE_COLOR: '0' },
 })
 tail.stdout.on('data', (chunk) => output.push(String(chunk)))
 tail.stderr.on('data', (chunk) => output.push(String(chunk)))
+const group = processGroup(tail)
 
-const stop = () => {
-  try {
-    if (tail.pid !== undefined) process.kill(-tail.pid, 'SIGTERM')
-  } catch {
-    // Already gone.
-  }
+for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+  process.once(signal, () => {
+    group.signal('SIGKILL')
+    process.exit(130)
+  })
 }
 
 try {
@@ -40,5 +42,5 @@ try {
   console.error('smoke: failed —', error)
   process.exitCode = 1
 } finally {
-  stop()
+  await group.stop()
 }

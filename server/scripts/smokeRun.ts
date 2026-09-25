@@ -1,3 +1,4 @@
+import type { ChildProcess } from 'node:child_process'
 import { SCHEDULER_VERSION, SYNC_PAGE_SIZE, SYNC_PROTOCOL_VERSION } from '@wordado/core'
 
 export interface SmokeOptions {
@@ -7,6 +8,38 @@ export interface SmokeOptions {
   readCode(email: string): Promise<string>
   /** Only `wrangler dev --test-scheduled` has /__scheduled; a deployment's cron runs on its own. */
   readonly runCron: boolean
+}
+
+export interface ProcessGroup {
+  /** Sends `signal` to the whole process group `child` leads (it must be spawned `detached: true`). */
+  signal(signal: NodeJS.Signals): void
+  /** SIGTERM, then SIGKILL after 10 seconds if `child` has not exited, then a final SIGKILL once it has — workerd/wrangler may outlive the pnpm process that led the group. */
+  stop(): Promise<void>
+}
+
+/**
+ * Wraps a `detached: true` child (`pnpm exec wrangler …`) so both runners can
+ * stop it and everything it spawned without hanging CI: `pnpm exec` leaves
+ * wrangler and workerd as grandchildren that a signal to the child alone does
+ * not reach, and a single SIGTERM is not guaranteed to be honoured.
+ */
+export function processGroup(child: ChildProcess): ProcessGroup {
+  const exited = new Promise<void>((resolve) => child.once('exit', () => resolve()))
+  const signal = (sig: NodeJS.Signals): void => {
+    try {
+      if (child.pid !== undefined) process.kill(-child.pid, sig)
+    } catch {
+      // The group is already gone.
+    }
+  }
+  const stop = async (): Promise<void> => {
+    signal('SIGTERM')
+    const timer = setTimeout(() => signal('SIGKILL'), 10_000)
+    await exited
+    clearTimeout(timer)
+    signal('SIGKILL')
+  }
+  return { signal, stop }
 }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
