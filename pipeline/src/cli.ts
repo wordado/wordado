@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import {
   checkPackSuccession,
   loadCorpus,
@@ -10,6 +11,7 @@ import {
 } from '@wordado/core'
 import { BuildError, buildPack, type BuildOutput, type ClipFile } from './build'
 import { readSourceDir, writeArtifacts } from './fs'
+import { publishProblems } from './publishable'
 
 function fail(errors: readonly PackError[]): never {
   for (const e of errors) console.error(`${e.path || '(pack)'}: ${e.message}`)
@@ -17,7 +19,7 @@ function fail(errors: readonly PackError[]): never {
 }
 
 function usage(): never {
-  console.error('usage: corpus build <source-dir> | validate <pack-file> | check <previous-pack> <next-pack>')
+  console.error('usage: corpus build <source-dir> | validate <pack-file> | check <previous-pack> <next-pack> | publishable <dir>')
   process.exit(2)
 }
 
@@ -69,6 +71,17 @@ switch (command) {
     if (!first || !second) usage()
     const errors = checkPackSuccession(readPack(first), readPack(second))
     if (errors.length > 0) fail(errors)
+    console.log('ok')
+    break
+  }
+  case 'publishable': {
+    if (!first) usage()
+    const problems = publishProblems((path) => {
+      const full = join(first, path)
+      return existsSync(full) ? new Uint8Array(readFileSync(full)) : null
+    })
+    for (const problem of problems) console.error(problem)
+    if (problems.length > 0) process.exit(1)
     console.log('ok')
     break
   }
