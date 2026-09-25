@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { StorageUnavailable } from './open'
-import { checkOpfs, PROBE_FILE, type ProbeDirectory } from './opfsProbe'
+import { checkOpfs, opfsRoot, PROBE_FILE, type ProbeDirectory } from './opfsProbe'
 
 /** An OPFS root holding `files`, whose sync access handles fail with `failure` when given. */
 function directory(files: string[], failure?: string) {
@@ -51,5 +51,24 @@ describe('checkOpfs (spec §9.1: OPFS, then IndexedDB)', () => {
   it('probes for the learner’s own file, not another one', async () => {
     const d = directory(['demo.sqlite'], 'UnknownError')
     await expect(checkOpfs(d.root, 'user-u1')).rejects.toBeInstanceOf(StorageUnavailable)
+  })
+})
+
+describe('opfsRoot (WebKit can reject navigator.storage.getDirectory() itself, not only createSyncAccessHandle)', () => {
+  it('passes a resolved directory through', async () => {
+    const d = directory([])
+    await expect(opfsRoot(async () => d.root)).resolves.toBe(d.root)
+  })
+
+  it('turns a rejection with UnknownError into StorageUnavailable', async () => {
+    const err = await opfsRoot(() => Promise.reject(new DOMException('nope', 'UnknownError'))).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(StorageUnavailable)
+    expect((err as Error).message).toContain('UnknownError')
+  })
+
+  it('turns a SecurityError into StorageUnavailable too', async () => {
+    const err = await opfsRoot(() => Promise.reject(new DOMException('nope', 'SecurityError'))).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(StorageUnavailable)
+    expect((err as Error).message).toContain('SecurityError')
   })
 })

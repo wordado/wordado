@@ -12,6 +12,23 @@ export const PROBE_FILE = '.wordado-probe'
 const describe = (err: unknown): string => (err instanceof Error ? `${err.name}: ${err.message}` : String(err))
 
 /**
+ * Reaches the OPFS root, or reports it as unavailable. Safari's private
+ * windows, and Playwright's WebKit, can reject `navigator.storage.getDirectory()`
+ * itself with `UnknownError` — not only `createSyncAccessHandle` — and a
+ * `SecurityError` there means the same thing the rest of this file already
+ * treats it as. Either way, a directory that cannot be reached holds no OPFS
+ * database of the learner's to abandon, so this always falls back to
+ * IndexedDB rather than only for the errors `isUnsupportedError` recognises.
+ */
+export async function opfsRoot(getDirectory: () => Promise<ProbeDirectory>): Promise<ProbeDirectory> {
+  try {
+    return await getDirectory()
+  } catch (err) {
+    throw new StorageUnavailable(`OPFS: ${describe(err)}`)
+  }
+}
+
+/**
  * Whether OPFS can open a file here at all. Safari's private windows (and
  * Playwright's WebKit) offer OPFS but fail every `createSyncAccessHandle`
  * with `UnknownError`, which would otherwise read as a real failure and stop
