@@ -45,13 +45,13 @@ describe('publishProblems (spec §4.4: never a manifest whose files are not all 
   it('refuses a URL that is not relative to the manifest', () => {
     const m = manifest()
     m.packs[0].url = 'https://elsewhere.example/corpus-v0-bg.pack'
-    const result = publishProblems(sample({ 'manifest.json': bytes(m) }))
-    expect(result.length).toBeGreaterThan(0)
-    expect(result[0]).toMatch(/packs\[0\]\.url/)
+    expect(publishProblems(sample({ 'manifest.json': bytes(m) }))).toEqual([
+      'manifest.json packs[0].url: must be a relative path without ".."',
+    ])
     m.packs[0].url = '../corpus-v0-bg.pack'
-    const result2 = publishProblems(sample({ 'manifest.json': bytes(m) }))
-    expect(result2.length).toBeGreaterThan(0)
-    expect(result2[0]).toMatch(/packs\[0\]\.url/)
+    expect(publishProblems(sample({ 'manifest.json': bytes(m) }))).toEqual([
+      'manifest.json packs[0].url: must be a relative path without ".."',
+    ])
   })
 
   it("names an invalid manifest by its validator's errors", () => {
