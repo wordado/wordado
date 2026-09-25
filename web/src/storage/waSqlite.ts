@@ -5,6 +5,7 @@ import { IDBBatchAtomicVFS } from '@journeyapps/wa-sqlite/src/examples/IDBBatchA
 import { OPFSCoopSyncVFS } from '@journeyapps/wa-sqlite/src/examples/OPFSCoopSyncVFS.js'
 import type { SqlValue } from '@wordado/client-data'
 import { isUnsupportedError, StorageUnavailable } from './open'
+import { checkOpfs, type ProbeDirectory } from './opfsProbe'
 
 /** One open database. Runs inside the Worker only. */
 export interface Connection {
@@ -41,6 +42,15 @@ export async function openOpfs(file: string): Promise<Connection> {
   if (typeof FileSystemFileHandle === 'undefined' || !('createSyncAccessHandle' in FileSystemFileHandle.prototype)) {
     throw new StorageUnavailable('OPFS sync access handles are not available')
   }
+  let root: FileSystemDirectoryHandle
+  try {
+    root = await navigator.storage.getDirectory()
+  } catch (err) {
+    if (isUnsupportedError(err)) throw new StorageUnavailable(`OPFS: ${messageOf(err)}`)
+    throw err
+  }
+  // The DOM lib in use does not type createSyncAccessHandle on the handle getFileHandle returns.
+  await checkOpfs(root as unknown as ProbeDirectory, file)
   const module = await SQLiteSyncFactory()
   const api = SQLite.Factory(module)
   api.vfs_register(await vfs('OPFS', () => OPFSCoopSyncVFS.create('opfs', module)), true)

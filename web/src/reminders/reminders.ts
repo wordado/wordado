@@ -135,6 +135,13 @@ export class ReminderService implements ReminderPort {
 
   /** Task 7's ReminderPort: on sign-out the server is told; after deletion it has nothing left to forget. */
   async stop(options: { readonly server: boolean }): Promise<void> {
+    // A push subscription exists only with permission granted, and WebKit's
+    // getSubscription() can hang forever: without permission there is nothing
+    // to end, so sign-out and deletion must not wait on it.
+    if (this.deps.platform.permission() !== 'granted') {
+      this.save(null)
+      return
+    }
     const sub = await this.deps.platform.subscription().catch(() => null)
     if (sub) {
       if (options.server) await this.deps.api.deleteSubscription(sub.endpoint).catch(() => undefined)
