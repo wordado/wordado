@@ -22,6 +22,7 @@
 - Entry IDs are unique across the packs a client loads (spec §5.1). An entry ID is the key of a `c:` word ID and must satisfy `isWordId`.
 - Every theme is named and described in English and in the pack's L1 (spec §8.9, §13).
 - The sample pack's audio is generated once with the macOS system voice and committed. It is below the quality bar of spec §5.4 and is replaced by plan 8's TTS; the plan says so where the clips are made.
+  *(Later change: Apple's system voices are, as far as we know, licensed for personal, non-commercial use only, so `say-audio.sh` below was replaced by `pipeline/scripts/tts-audio.sh`, which uses Piper TTS with the public-domain `en_GB-cori-high` voice; see `pipeline/samples/README.md`.)*
 - Code style: no semicolons, single quotes, 2-space indent, named exports only, `readonly` on every interface field. Wire-format fields (pack and manifest JSON) are `snake_case`, as the spec writes them; `core`'s in-memory types stay `camelCase`. Each new module has one test file beside it.
 - Every task ends with `pnpm test` and `pnpm typecheck` green from the repository root.
 
