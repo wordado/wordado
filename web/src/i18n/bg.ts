@@ -114,6 +114,7 @@ export const bg: Messages = {
   'settings.signedInAs': 'Влезли сте като {email}',
   'settings.export': 'Изтеглете данните си (JSON)',
   'settings.exportOffline': 'Свържете се, за да изтеглите данните си.',
+  'settings.exporting': 'Данните ви се подготвят…',
   'settings.signOut': 'Изход',
   'settings.signingOut': 'Излизане…',
   'settings.signOutOffline': 'За изход е нужна връзка. Напредъкът ви остава на това устройство.',

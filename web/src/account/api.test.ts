@@ -6,15 +6,15 @@ interface Call {
   readonly init: RequestInit | undefined
 }
 
-/** A fetch that answers from a table of `METHOD path` → [status, body], and records every call. */
-function fakeFetch(routes: Record<string, readonly [number, unknown]>) {
+/** A fetch that answers from a table of `METHOD path` → [status, body, headers?], and records every call. */
+function fakeFetch(routes: Record<string, readonly [number, unknown, Record<string, string>?]>) {
   const calls: Call[] = []
   const fetchFn = async (url: string, init?: RequestInit) => {
     calls.push({ url, init })
     const route = routes[`${init?.method ?? 'GET'} ${url}`]
     if (!route) throw new TypeError('Failed to fetch')
-    const [status, body] = route
-    return new Response(body === undefined ? null : JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
+    const [status, body, headers = {}] = route
+    return new Response(body === undefined ? null : JSON.stringify(body), { status, headers: { 'content-type': 'application/json', ...headers } })
   }
   return { fetchFn, calls }
 }
@@ -97,5 +97,31 @@ describe('httpApi (plan 5 contract)', () => {
   it('treats reminders as unavailable when the server has no key', async () => {
     expect(await httpApi(fakeFetch({ 'GET /v1/push/public-key': [404, { error: 'not_configured' }] }).fetchFn).pushPublicKey()).toBeNull()
     expect(await httpApi(fakeFetch({ 'GET /v1/push/public-key': [200, { publicKey: 'BPk' }] }).fetchFn).pushPublicKey()).toBe('BPk')
+  })
+
+  it('names the learner an account deletion is for, and reports a refusal', async () => {
+    const { fetchFn, calls } = fakeFetch({ 'DELETE /v1/account': [200, { deleted: true }] })
+    await httpApi(fetchFn, () => 'u1').deleteAccount()
+    expect(new Headers(calls[0]!.init?.headers).get('x-wordado-user')).toBe('u1')
+    const refused = fakeFetch({ 'DELETE /v1/account': [409, { error: 'wrong_user' }] })
+    await expect(httpApi(refused.fetchFn, () => 'u1').deleteAccount()).rejects.toMatchObject({ status: 409, code: 'wrong_user' })
+  })
+
+  it('fetches the export for the recorded learner, with the server’s file name', async () => {
+    const { fetchFn, calls } = fakeFetch({
+      'GET /v1/export': [200, { format: 'wordado-export-1' }, { 'content-disposition': 'attachment; filename="wordado-export-2026-09-25.json"' }],
+    })
+    const file = await httpApi(fetchFn, () => 'u1').exportData()
+    expect(file).toEqual({ name: 'wordado-export-2026-09-25.json', json: '{"format":"wordado-export-1"}' })
+    expect(calls[0]!.init?.credentials).toBe('include')
+    expect(new Headers(calls[0]!.init?.headers).get('x-wordado-user')).toBe('u1')
+  })
+
+  it('names the export file itself when the server does not, and reports a refusal or no connection', async () => {
+    const unnamed = fakeFetch({ 'GET /v1/export': [200, { format: 'wordado-export-1' }] })
+    expect((await httpApi(unnamed.fetchFn).exportData()).name).toBe('wordado-export.json')
+    const refused = fakeFetch({ 'GET /v1/export': [409, { error: 'wrong_user' }] })
+    await expect(httpApi(refused.fetchFn, () => 'u1').exportData()).rejects.toMatchObject({ status: 409, code: 'wrong_user' })
+    await expect(httpApi(fakeFetch({}).fetchFn).exportData()).rejects.toBeInstanceOf(OfflineError)
   })
 })

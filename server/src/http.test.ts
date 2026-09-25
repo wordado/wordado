@@ -64,4 +64,27 @@ describe('x-wordado-user: the learner the client means to sync', () => {
     expect(await h.deps.db.query('select 1 from push_subscription')).toHaveLength(1)
     expect((await s.put('/v1/push/subscription', subscription(s.userId))).status).toBe(200)
   })
+
+  it('refuses to delete another learner’s account, and deletes nothing', async () => {
+    const h = harness()
+    const s = await h.signIn()
+    const wrong = await s.del('/v1/account', { confirm: true }, { 'x-wordado-user': 'someone-else' })
+    expect(wrong.status).toBe(409)
+    expect(wrong.body).toEqual({ error: 'wrong_user' })
+    expect((await s.get('/v1/me')).status).toBe(200)
+    expect((await s.del('/v1/account', { confirm: true }, { 'x-wordado-user': s.userId })).status).toBe(200)
+    expect((await s.get('/v1/me')).status).toBe(401)
+  })
+
+  it('refuses to export another learner’s data, and exports for the right one or an older client', async () => {
+    const h = harness()
+    const s = await h.signIn()
+    const wrong = await s.get('/v1/export', { 'x-wordado-user': 'someone-else' })
+    expect(wrong.status).toBe(409)
+    expect(wrong.body).toEqual({ error: 'wrong_user' })
+    const right = await s.get('/v1/export', { 'x-wordado-user': s.userId })
+    expect(right.status).toBe(200)
+    expect(right.body.account.userId).toBe(s.userId)
+    expect((await s.get('/v1/export')).status).toBe(200)
+  })
 })

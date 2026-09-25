@@ -1,9 +1,14 @@
 import { act, cleanup, fireEvent, screen, within } from '@testing-library/react'
 import { MAX_NEW_WORD_LIMIT, type WordId } from '@wordado/core'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiError } from '../account/api'
 import { SignOutOffline } from '../account/controller'
+import { fakeApi } from '../test/fakeApi'
 import { fakeAccounts, fakeAudio, fakeReminders, renderWith, setup } from '../test/fixtures'
+import { saveFile } from '../download'
 import { Settings } from './Settings'
+
+vi.mock('../download', () => ({ saveFile: vi.fn() }))
 
 beforeEach(() => window.history.replaceState(null, '', '/settings'))
 afterEach(cleanup)
@@ -106,16 +111,32 @@ describe('Settings: the account (spec §11)', () => {
     renderWith(<Settings />, ctx)
     expect(screen.getByText(/without an account/)).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Create an account' })).toBeTruthy()
-    expect(screen.queryByRole('link', { name: 'Download your data (JSON)' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Download your data (JSON)' })).toBeNull()
   })
 
-  it('downloads the export with the session', async () => {
+  it('downloads the export for the recorded learner and saves it under the server’s name', async () => {
+    vi.mocked(saveFile).mockClear()
     const ctx = await setup()
-    renderWith(<Settings />, { ...ctx, account: ana })
+    const api = fakeApi()
+    renderWith(<Settings />, { ...ctx, account: ana, api })
     expect(screen.getByText('Signed in as ana@example.com')).toBeTruthy()
-    const link = screen.getByRole('link', { name: 'Download your data (JSON)' })
-    expect(link.getAttribute('href')).toBe('/v1/export')
-    expect(link.hasAttribute('download')).toBe(true)
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Download your data (JSON)' })))
+    expect(api.calls).toContain('exportData')
+    expect(saveFile).toHaveBeenCalledWith('wordado-export-2026-09-25.json', '{"format":"wordado-export-1"}')
+  })
+
+  it('says why the export failed and saves nothing', async () => {
+    vi.mocked(saveFile).mockClear()
+    const ctx = await setup()
+    const api = fakeApi({
+      exportData: async () => {
+        throw new ApiError(409, 'wrong_user')
+      },
+    })
+    renderWith(<Settings />, { ...ctx, account: ana, api })
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Download your data (JSON)' })))
+    expect(screen.getByRole('alert').textContent).toBe('Your sign-in has expired. Sign in again.')
+    expect(saveFile).not.toHaveBeenCalled()
   })
 
   it('signs out, and asks first when answers could not be synced', async () => {

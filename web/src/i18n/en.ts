@@ -119,6 +119,7 @@ export const en = {
   'settings.signedInAs': 'Signed in as {email}',
   'settings.export': 'Download your data (JSON)',
   'settings.exportOffline': 'Connect to download your data.',
+  'settings.exporting': 'Preparing your data…',
   'settings.signOut': 'Sign out',
   'settings.signingOut': 'Signing out…',
   'settings.signOutOffline': 'Signing out needs a connection. Your progress stays on this device.',

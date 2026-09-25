@@ -40,6 +40,10 @@ export function fakeApi(over: Partial<Api> = {}, session: Me | null = null): Fak
     deleteAccount: async () => {
       calls.push('deleteAccount')
     },
+    exportData: async () => {
+      calls.push('exportData')
+      return { name: 'wordado-export-2026-09-25.json', json: '{"format":"wordado-export-1"}' }
+    },
     pushPublicKey: async () => null,
     putSubscription: async () => {
       calls.push('putSubscription')
