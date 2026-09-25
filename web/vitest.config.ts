@@ -29,6 +29,11 @@ export default defineConfig({
           name: 'browser',
           include: ['src/**/*.browser.test.ts'],
           browser: { enabled: true, headless: true, provider: playwright(), instances: [{ browser: 'chromium' }] },
+          // A limit for a hang, as in `unit`. Idle or under local load the slowest
+          // storage test takes under 0.4 s, beside TabLock's timer-bound ones
+          // (1.8 s by design); on a loaded CI runner an IndexedDB erase took 4 s,
+          // too near the 5 s default.
+          testTimeout: 20_000,
         },
       },
     ],
