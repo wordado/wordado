@@ -49,12 +49,62 @@ async function codeFor(email: string): Promise<string> {
   }
 }
 
+/** What the page saw around the age gate's Continue click; kept on `window` between evaluations. */
+interface GateTrace {
+  readonly events: string[]
+  readonly form: HTMLFormElement | null
+}
+
+/**
+ * Clicks Continue on the age gate, recording what reached the page. In Firefox on CI the click
+ * has twice done nothing: no step change, no error, focus left on the year. When that happens
+ * the test now fails at once with the events the page saw, instead of timing out without a clue.
+ * The gate's submit handler calls preventDefault, so a submit reaching the window already
+ * prevented means the handler ran. Test-only: the app is unchanged.
+ */
+async function continuePastGate(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const started = performance.now()
+    const trace: GateTrace = { events: [], form: document.querySelector('form') }
+    const name = (target: EventTarget | null) =>
+      target instanceof Element ? `${target.tagName.toLowerCase()}${target.id ? `#${target.id}` : ''}${target.tagName === 'BUTTON' ? ` "${target.textContent?.trim()}"` : ''}` : String(target)
+    const note = (line: string) => trace.events.push(`${Math.round(performance.now() - started)}ms ${line}`)
+    for (const type of ['pointerdown', 'mousedown', 'focusin', 'mouseup', 'click', 'submit']) {
+      document.addEventListener(type, (event) => note(`${type} on ${name(event.target)}`), true)
+    }
+    window.addEventListener('submit', (event) => note(`submit reached the window${event.defaultPrevented ? ', prevented: the handler ran' : ', not prevented: no handler ran'}`))
+    ;(window as unknown as { __gateTrace: GateTrace }).__gateTrace = trace
+  })
+  await page.getByRole('button', { name: 'Continue' }).click()
+  try {
+    await expect(page.getByLabel('Email')).toBeVisible({ timeout: 10_000 })
+  } catch (err) {
+    const seen = await page.evaluate(() => {
+      const trace = (window as unknown as { __gateTrace: GateTrace }).__gateTrace
+      const focused = document.activeElement
+      return {
+        events: trace.events,
+        formStillInPage: trace.form?.isConnected ?? null,
+        formsNow: document.querySelectorAll('form').length,
+        focused: focused ? `${focused.tagName.toLowerCase()}${focused.id ? `#${focused.id}` : ''}` : null,
+        heading: document.querySelector('h1')?.textContent ?? null,
+        alerts: [...document.querySelectorAll('[role="alert"]')].map((alert) => alert.textContent),
+        url: location.href,
+      }
+    })
+    const report = JSON.stringify(seen, null, 2)
+    console.log(`Continue on the age gate did nothing:\n${report}`)
+    await test.info().attach('age-gate-continue', { body: report, contentType: 'application/json' })
+    throw err
+  }
+}
+
 /** Through the age gate and an emailed code, as a learner would (spec §8.6, §11). */
 async function signIn(page: Page, email: string, gate: { country?: string; year?: number } = {}): Promise<void> {
   await page.goto('/signin')
   await page.getByLabel('Country where you live').selectOption(gate.country ?? 'BG')
   await page.getByLabel('Year of birth').fill(String(gate.year ?? 1990))
-  await page.getByRole('button', { name: 'Continue' }).click()
+  await continuePastGate(page)
   await page.getByLabel('Email').fill(email)
   await page.getByRole('button', { name: 'Email me a code' }).click()
   await page.getByLabel('Code').fill(await codeFor(email))
