@@ -13,16 +13,18 @@ Nothing deploys until the repository variable `DEPLOY_ENABLED` is `true` (step 1
 
 ### Before you start
 
-Checked 2026-09-25: the `wordado` organisation is on GitHub Free, and the repository is private. On
-Free, a private repository gets no environment secrets, no deployment branch policies (the
-environments of step 6) and no branch protection (step 7). There are three ways forward:
+Since 2026-09-25 `wordado/wordado` is public, on GitHub Free: its code under the MIT licence, and its
+content under its own terms (`pipeline/samples/README.md`). A public repository on Free gets everything
+the workflows need, with nothing to buy:
+- environment secrets and deployment branch policies (step 6);
+- branch protection (step 7);
+- Actions minutes at no cost.
 
-- **GitHub Team** for the organisation.
-- **Make the repository public.** Actions minutes then become free as well.
-- **Repository-level secrets**, with preview and production told apart by name, accepting that `main`
-  is unprotected.
+Pull-request workflows from outside contributors wait for approval (Settings › Actions), and a fork's
+runs never receive the environments' secrets.
 
-The workflows as written assume the first or the second.
+The private history before that date lives in `wordado/wordado-archive`, and the product research in the
+private `wordado/wordado-research`, cloned into `docs/research/` and ignored here.
 
 ### Steps
 
@@ -69,7 +71,10 @@ The workflows as written assume the first or the second.
      production prints sign-in codes to its log, as development does. The preview has no mailer on
      purpose: its codes are only in its log, which `smoke:remote` reads.
    A deploy refuses half of a pair, and a `BETTER_AUTH_SECRET` under 32 characters (`server/scripts/secretsFile.ts`).
-7. **Protect `main`.**
+7. **Protect `main`.** *Done 2026-09-25*: the five checks below are required, a pull request must be
+   up to date with `main` before it merges, and force pushes to `main` and its deletion are refused.
+   Admins can still override. A history rewrite of `main` therefore needs this protection lifted for
+   the push and restored straight after. To set it up again:
    `gh api -X PUT repos/wordado/wordado/branches/main/protection -F "required_status_checks[strict]=true" -f "required_status_checks[contexts][]=Typecheck, lint, workflows, deploy config" -f "required_status_checks[contexts][]=Suites and the Worker smoke run" -f "required_status_checks[contexts][]=End to end (chromium)" -f "required_status_checks[contexts][]=End to end (firefox)" -f "required_status_checks[contexts][]=End to end (webkit)" -F enforce_admins=false -F "required_pull_request_reviews=null" -F "restrictions=null"`
    Those names are the CI jobs' names (`.github/workflows/ci.yml`), and a check must have run once on a pull request before GitHub offers it.
 8. **The transport rate limit** (spec §10). Dashboard › wordado.com › Security › WAF › Rate limiting
@@ -77,9 +82,9 @@ The workflows as written assume the first or the second.
    A week offline is a few 500-event pages and a pull, far below it. Sign-in has its own limits (plan 5).
 9. **Content first.** Run **Publish content** (Actions › Publish content › Run workflow, source
    `pipeline/samples/a1-bg`). Then the first production build finds a manifest at `CONTENT_MANIFEST_URL`.
-10. **Enable deploys.** First confirm that `cloudflare/wrangler-action@v4` exists (its releases on
-    GitHub): the first real deploy is its first use. Then `gh variable set DEPLOY_ENABLED --body true`.
-    The next pull request deploys the preview, and the next merge deploys production. Once deploys are
+10. **Enable deploys.** `gh variable set DEPLOY_ENABLED --body true`. The next pull request deploys
+    the preview, and the next merge deploys production. `cloudflare/wrangler-action@v4` exists (its
+    `v4` tag was checked on 2026-09-25), but that first deploy is its first real use, so watch it. Once deploys are
     on, consider adding "Preview deployment / Deploy (preview)" to `main`'s required checks (step 7).
 
 ## Everyday
