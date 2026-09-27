@@ -136,6 +136,10 @@ export function adoptRelease(dir: string, outDir: string): void {
   const target = contentPaths(dir).lastPublished
   const info = JSON.parse(readFileSync(join(outDir, 'release.json'), 'utf8')) as ReleaseInfo
   if (info.draft) throw new Error('a draft release is never adopted')
+  const current = readLastPublished(dir).manifest.corpus_version
+  if (info.corpus_version !== current + 1) {
+    throw new Error(`${outDir} is corpus version ${info.corpus_version}, but last-published/ is at ${current}; it can only adopt version ${current + 1}`)
+  }
   rmSync(target, { recursive: true, force: true })
   mkdirSync(target, { recursive: true })
   for (const f of readdirSync(outDir)) {

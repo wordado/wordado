@@ -53,10 +53,16 @@ export function assemble(input: AssembleInput): Assembled {
   for (const e of liveEntries) {
     const english = foldField(e.english, decisions.for(QUEUES.english, e.entry_id))
     const translation = foldField(e.l1[l1]!, decisions.for(QUEUES.translation(l1), e.entry_id))
+    const level = foldField(e.level_proposal, decisions.for(QUEUES.level, e.entry_id))
     if (!english.reviewed) pending.push(`${e.entry_id}: english not reviewed`)
     if (!translation.reviewed) pending.push(`${e.entry_id}: translation (${l1}) not reviewed`)
-    if ((e.level_flagged || levelSampled(e.entry_id)) && !foldField(e.level_proposal, decisions.for(QUEUES.level, e.entry_id)).reviewed) {
+    if ((e.level_flagged || levelSampled(e.entry_id)) && !level.reviewed) {
       pending.push(`${e.entry_id}: level not reviewed`)
+    }
+    // A decision recorded after `corpus draft` last ran is not folded into e.live or e.level yet: ship nothing
+    // stale (Review Focus 1). Rerunning the draft picks it up as a drop or a new level.
+    if (english.dropped || translation.dropped || level.value !== e.level) {
+      pending.push(`${e.entry_id}: decided since the draft; run corpus draft`)
     }
     const senses = perHead.get(`${norm(e.headword)}|${e.pos}`) ?? 1
     if (senses > 1 && translation.value.sense.trim() === '') problems.push(`${e.entry_id}: ${e.headword} (${e.pos}) has ${senses} live entries, so it needs a ${l1} sense gloss`)

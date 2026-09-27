@@ -120,6 +120,34 @@ describe('planRelease and writeRelease', () => {
     expect(packOf(o, 'corpus-v1-bg.pack').entries.find((e) => e.entry_id === 'ghost-1')).toMatchObject({ retired: true, unit_id: 'a1-01' })
   })
 
+  it('flags a decision recorded after the draft instead of silently shipping it stale', async () => {
+    const dir = await reviewed()
+    const draft = JSON.parse(readFileSync(join(dir, 'work', 'draft.json'), 'utf8'))
+
+    // A drop on a live, non-pinned entry: nothing reruns the draft to notice it is no longer live.
+    const go = draft.entries.find((e: { entry_id: string }) => e.entry_id === 'go-1')
+    Decisions.read(dir).append(QUEUES.translation('bg'), [{ key: 'go-1', at: NOW, verdict: 'drop', proposed: go.l1.bg, by: 'r' }])
+    const dropPlan = planRelease(dir, { draft: false, now: NOW })
+    expect(dropPlan.pending).toContain('go-1: decided since the draft; run corpus draft')
+    expect(() => writeRelease(dir, out(), dropPlan)).toThrow(/awaits review/)
+
+    // A level fix on another live entry: e.level still holds the draft's value until it reruns.
+    const the = draft.entries.find((e: { entry_id: string }) => e.entry_id === 'the-1')
+    const newLevel = the.level === 'A1' ? 'A2' : 'A1'
+    Decisions.read(dir).append(QUEUES.level, [{ key: 'the-1', at: NOW, verdict: 'fix', proposed: the.level_proposal, value: newLevel, by: 'r' }])
+    const levelPlan = planRelease(dir, { draft: false, now: NOW })
+    expect(levelPlan.pending).toContain('the-1: decided since the draft; run corpus draft')
+    expect(() => writeRelease(dir, out(), levelPlan)).toThrow(/awaits review/)
+  })
+
+  it('refuses to adopt a release that is not last-published’s immediate successor', async () => {
+    const dir = await reviewed()
+    const o1 = out()
+    writeRelease(dir, o1, planRelease(dir, { draft: false, now: NOW }))
+    adoptRelease(dir, o1)
+    expect(() => adoptRelease(dir, o1)).toThrow(/corpus version 1, but last-published\/ is at 1; it can only adopt version 2/)
+  })
+
   it('refuses to write into a directory that is not empty', async () => {
     const dir = await reviewed()
     const o = out()
