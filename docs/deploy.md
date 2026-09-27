@@ -9,6 +9,23 @@ published by the manual **Publish content** workflow.
 
 Nothing deploys until the repository variable `DEPLOY_ENABLED` is `true` (step 10).
 
+## What is provisioned
+
+Set up on 2026-09-27 by following the steps below. Names and addresses only: every secret lives in the
+GitHub environments or with Cloudflare.
+
+| What | Preview | Production |
+|---|---|---|
+| Worker and address | `wordado-preview`, `https://wordado-preview.danchom.workers.dev` | `wordado`, `https://wordado.com` |
+| Neon branch (project `wordado`, Frankfurt, Postgres 18) | `preview` | the project's main branch |
+| Hyperdrive | `wordado-preview` | `wordado` |
+| Queue | `wordado-jobs-preview` | `wordado-jobs` |
+| GitHub environment | `preview` | `production` (deploys from `main` only) |
+
+Shared: the R2 bucket `wordado-content` (Western Europe) at `https://content.wordado.com`, readable from
+both addresses, with the sample pack published; the rate-limit rule on `/v1/sync/*`; `main` protected.
+Not yet: Resend and Google sign-in (before the beta).
+
 ## Provisioning, once
 
 ### Before you start
