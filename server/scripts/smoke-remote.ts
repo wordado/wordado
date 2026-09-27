@@ -34,8 +34,19 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
 }
 
 try {
+  const base = origin.replace(/\/$/, '')
   await until('wrangler tail to connect', async () => (/Connected to/i.test(output.join('')) ? true : null), 60_000)
-  await runSmoke({ base: origin.replace(/\/$/, ''), readCode: (email) => codeIn(() => output.join(''), email, 30_000), runCron: false })
+  // "Connected" comes a moment before Cloudflare delivers events: a request made at once can go unseen,
+  // and with it the sign-in code. Wait until the tail shows a request of ours before signing in.
+  await until(
+    'the tail to show this deployment’s requests',
+    async () => {
+      await fetch(`${base}/health`)
+      return /\/health\b/.test(output.join('')) ? true : null
+    },
+    60_000,
+  )
+  await runSmoke({ base, readCode: (email) => codeIn(() => output.join(''), email, 30_000), runCron: false })
   console.log('smoke: ok')
 } catch (error) {
   console.error(output.join('').split('\n').slice(-60).join('\n'))
