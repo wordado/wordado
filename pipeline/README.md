@@ -116,7 +116,9 @@ On a workstation, not in Actions:
    `redo`.
 5. **Triage** (`triage`) whenever reports have come in, before a release. It reopens items and marks clips
    `redo`: run `audio` and review again.
-6. **Status**, locally, until it says `0 problems, 0 items awaiting review`.
+6. **Status**, locally, until it says `0 problems, 0 items awaiting review`. It reads `work/draft.json`, which is
+   not committed, so first pull `main` (the Corpus › `draft` action's merged caches) and run
+   `corpus draft "$PWD/content" --offline`, which rebuilds the draft from the caches without spending money.
 7. **Release** (`release`), approved by the `production` environment's reviewer. It checks that the CDN serves
    `last-published/`, rebuilds the draft `--offline` from the committed caches (never spending money, and never
    publishing a proposal nobody has seen), builds with every gate, uploads packs, audio and `fixes.json`, then
@@ -124,11 +126,13 @@ On a workstation, not in Actions:
 
 ## When something is wrong
 
-- **"pinned entry … is not live: the senses stage no longer proposes it".** A sample word's senses changed. Find
-  the lemma's line in `cache/senses.jsonl` and restore a sense with the sample's part of speech. That file is
-  plain JSON, one item per line. Then run `draft` again.
+- **"pinned entry … is not live: the senses stage no longer proposes it".** The senses stage proposed no sense
+  of that sample word with the sample's part of speech. (A sample entry takes the first sense of its part of
+  speech, however many there are.) Find the lemma's line in `cache/senses.jsonl` and restore a sense with the
+  sample's part of speech. That file is plain JSON, one item per line. Then run `draft` again.
 - **A stale decision.** A prompt version was bumped, so proposals changed, and their earlier verdicts no longer
-  apply (Decision 5). `queues` offers them again.
+  apply (Decision 5). `queues` offers them again. Open files under `review/` still hold the old proposals, so
+  delete them before running `corpus queues` again.
 - **The budget stopped a draft.** Run `draft` again: everything already paid for is in `cache/`.
 - **`live` fails before a release.** `last-published/` is behind the CDN, or ahead of it: pull `main` of the
   content repository. If a publish failed after uploading the manifest, restore `last-published/` from the CDN's
