@@ -8,6 +8,11 @@ describe('the end-to-end browser matrix (spec §13)', () => {
     expect(BROWSER_PROJECTS.map((p) => p.name)).toEqual(['chromium', 'firefox', 'webkit', 'mobile-chrome', 'mobile-safari'])
   })
 
+  it('turns off Firefox’s form history, whose dropdown swallows the next click', () => {
+    const firefox = BROWSER_PROJECTS.find((p) => p.name === 'firefox')
+    expect(firefox?.use?.launchOptions?.firefoxUserPrefs).toEqual({ 'browser.formfill.enable': false })
+  })
+
   it('runs Chromium alone unless told otherwise, as local runs always have', () => {
     expect(names(undefined)).toEqual(['chromium'])
     expect(names('')).toEqual(['chromium'])
