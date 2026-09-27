@@ -155,4 +155,12 @@ jobs:
           git add last-published registry.json
           git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
             commit -m "corpus: published version $version (run $GITHUB_RUN_ID)"
-          git push origin HEAD:main
+          # The manifest is already live, so this must land: a pull request merged during the run (a reviewer's
+          # decisions) would make a plain push non-fast-forward. Reviewers' pull requests do not touch
+          # last-published/ or registry.json, so the rebase does not conflict. A push that loses a second race
+          # is retried once.
+          for attempt in 1 2; do
+            if git pull --rebase --autostash origin main && git push origin HEAD:main; then exit 0; fi
+            echo "Attempt $attempt to push the release record failed."
+          done
+          exit 1
