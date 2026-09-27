@@ -12,6 +12,7 @@ import { initContent } from './init'
 import { readLastPublished } from './lastPublished'
 import { liveProblems } from './live'
 import { openRouterLlm, type Llm } from './llm'
+import { countParquet, sumGoogleBooks, writeCounts } from './prepare'
 import { publishProblems } from './publishable'
 import { exportQueues, importQueues, pendingItems, queueSpecs } from './queues'
 import { adoptRelease, planRelease, writeRelease } from './release'
@@ -30,11 +31,14 @@ const USAGE = `usage: corpus <command>
     release <dir> <out> [--draft]  build the next corpus version into <out>
     published <dir> <out>          after a publish: <out> becomes last-published/
     live <dir> <manifest-url>      does the CDN serve last-published/?
+  frequency lists (run on a workstation; the output goes into the content repository's sources/):
+    count-text <out.tsv> <parquet...>                  word forms in Parquet text shards (FineWeb)
+    sum-gbooks <out.tsv> <gz...> [--from Y] [--to Y]   Google Books 1-grams, years 2000-2019 by default
   packs:
     build <source-dir> | validate <pack-file> | check <previous-pack> <next-pack> | publishable <dir>`
 
 const argv = process.argv.slice(2)
-const VALUED = new Set(['--by', '--batch'])
+const VALUED = new Set(['--by', '--batch', '--from', '--to'])
 const option = (name: string): string | undefined => {
   const i = argv.indexOf(name)
   return i >= 0 ? argv[i + 1] : undefined
@@ -246,6 +250,26 @@ async function main(): Promise<void> {
     case 'live':
       await live(arg(first), arg(second))
       break
+    case 'count-text': {
+      const [out, ...files] = positional.slice(1)
+      if (!out || files.length === 0) usage()
+      const counts = await countParquet(files, (file, texts) => console.error(`  ${file}: ${texts.toLocaleString('en')} texts`))
+      const tokens = [...counts.values()].reduce((a, b) => a + b, 0)
+      const written = writeCounts(out, counts, { comment: `corpus count-text over ${files.length} Parquet files, ${tokens} tokens, ${now()}` })
+      console.log(`wrote ${out}: ${written} forms, ${tokens.toLocaleString('en')} tokens`)
+      break
+    }
+    case 'sum-gbooks': {
+      const [out, ...files] = positional.slice(1)
+      if (!out || files.length === 0) usage()
+      const from = Number(option('--from') ?? 2000)
+      const to = Number(option('--to') ?? 2019)
+      if (!Number.isInteger(from) || !Number.isInteger(to) || from > to) usage()
+      const counts = await sumGoogleBooks(files, from, to)
+      const written = writeCounts(out, counts, { comment: `corpus sum-gbooks, Google Books Ngram v3 1-grams, ${from}-${to}, ${now()}` })
+      console.log(`wrote ${out}: ${written} forms`)
+      break
+    }
     case 'build':
       build(arg(first))
       break
