@@ -4,11 +4,20 @@ import { sha256Hex } from './checksum'
 /**
  * What would be wrong with serving a directory as the CDN's root (spec §4.4):
  * `manifest.json`, every pack it lists and every clip those packs list, each
- * present with its size and checksum. Empty means it can be published. `read`
- * returns a file's bytes by its path relative to the directory, or null.
- * URLs are already validated as relative by core's validators (validateManifest, validatePack).
+ * present with its size and checksum, and not a draft release (Decision 14).
+ * Empty means it can be published. `read` returns a file's bytes by its path
+ * relative to the directory, or null. URLs are already validated as relative
+ * by core's validators (validateManifest, validatePack).
  */
 export function publishProblems(read: (path: string) => Uint8Array | null): string[] {
+  const release = read('release.json')
+  if (release !== null) {
+    try {
+      if ((JSON.parse(new TextDecoder().decode(release)) as { draft?: unknown }).draft === true) return ['release.json: a draft build cannot be published']
+    } catch {
+      return ['release.json: not JSON']
+    }
+  }
   const raw = read('manifest.json')
   if (raw === null) return ['manifest.json: missing']
   let json: unknown

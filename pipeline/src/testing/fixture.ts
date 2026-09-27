@@ -2,10 +2,15 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Pack } from '@wordado/core'
+import { audioQueueItems, clipsNeeded, generateClips, readAudioRecords } from '../audio'
+import { readConfig } from '../config'
 import type { PipelineConfig } from '../config'
+import { Decisions, QUEUES } from '../decisions'
+import { readDraft } from '../draft'
 import { writeJson } from '../files'
 import { initContent, SAMPLE_DIR } from '../init'
 import { fakeLlm } from '../llm'
+import { pendingItems } from '../queues'
 
 /**
  * An invented frequency list: made up for the tests, so it needs no clearance.
@@ -107,4 +112,30 @@ export function makeContent(overrides: { config?: Partial<PipelineConfig> } = {}
   // The template's starting list would ask the fake LLM about words it does not know; tests add their own.
   writeFileSync(join(dir, 'essentials.txt'), '')
   return dir
+}
+
+/** A clip per live entry from a fake voice: bytes that name the clip, 0.5 s long. */
+export async function recordAudio(dir: string, batch = 'b1'): Promise<void> {
+  const config = readConfig(dir)
+  const draft = readDraft(dir)
+  const live = new Set(draft.live)
+  const needs = clipsNeeded(draft.entries.filter((e) => live.has(e.entry_id)), readAudioRecords(dir), config, Decisions.read(dir))
+  await generateClips(dir, needs, {
+    tts: { speak: async (text) => new TextEncoder().encode(text) },
+    encoder: { toM4a: async (mp3) => ({ bytes: new Uint8Array([...new TextEncoder().encode('m4a:'), ...mp3]), seconds: 0.5 }) },
+    config,
+    batch,
+    now: () => '2026-10-01T10:00:00Z',
+  })
+}
+
+/** A reviewer who says ok to everything pending, audio included. */
+export function approveAll(dir: string): void {
+  const config = readConfig(dir)
+  const decisions = Decisions.read(dir)
+  const at = '2026-10-01T11:00:00Z'
+  for (const [queue, items] of pendingItems(readDraft(dir), decisions, config.l1s)) {
+    decisions.append(queue, items.map((i) => ({ key: i.key, at, verdict: 'ok' as const, proposed: i.proposed, by: 'fixture' })))
+  }
+  decisions.append(QUEUES.audio, audioQueueItems(readAudioRecords(dir), decisions).map((i) => ({ key: i.key, at, verdict: 'ok' as const, proposed: i.key, by: 'fixture' })))
 }
