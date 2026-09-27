@@ -40,7 +40,7 @@
       // Empty on purpose: --var supplies both from APP_ORIGIN. An empty BASE_URL fails at configFromEnv;
       // an empty TRUSTED_ORIGINS trusts no origin beyond BASE_URL.
       "vars": { "MIN_PROTOCOL_VERSION": "1", "BASE_URL": "", "TRUSTED_ORIGINS": "" },
-      "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "00000000000000000000000000000000" }],
+      "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "450f6ae2fa4e4fb2a30f1e3b209af355" }],
       "queues": {
         "producers": [{ "binding": "JOBS", "queue": "wordado-jobs-preview" }],
         "consumers": [{ "queue": "wordado-jobs-preview", "max_batch_size": 1, "max_batch_timeout": 5, "max_retries": 5 }]
@@ -59,7 +59,7 @@
       // Empty on purpose: --var supplies both from APP_ORIGIN. An empty BASE_URL fails at configFromEnv;
       // an empty TRUSTED_ORIGINS trusts no origin beyond BASE_URL.
       "vars": { "MIN_PROTOCOL_VERSION": "1", "BASE_URL": "", "TRUSTED_ORIGINS": "" },
-      "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "00000000000000000000000000000000" }],
+      "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "f6d2528bb07a410384c8f2ce75882e7c" }],
       "queues": {
         "producers": [{ "binding": "JOBS", "queue": "wordado-jobs" }],
         "consumers": [{ "queue": "wordado-jobs", "max_batch_size": 1, "max_batch_timeout": 5, "max_retries": 5 }]
