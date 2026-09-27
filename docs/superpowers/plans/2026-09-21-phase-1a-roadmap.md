@@ -33,7 +33,9 @@ against the sample pack.
   The age gate ships with a provisional table (`web/src/account/ageGate.ts`) that the review must confirm before the beta opens.
   The privacy policy (`web/public/privacy.html`, served at `/privacy`) names its controller as `[Controller name]`,
   `[Address]` and `[Contact email]`: the review fills them in and checks the legal bases and the transfer to the US
-  (the page's opening comment). Google's app cannot be published before, since its Branding page links to the policy.
+  (the page's opening comment). Until then, Google's app stays in **Testing** (Google Auth Platform › Audience):
+  only its listed test users, at most 100, can sign in with Google, and they sign in again every 7 days. The order
+  before the beta is announced: fill in the controller, the legal review, then **Publish app**.
 - **Docker** — resolved 2026-09-23: Docker Desktop is installed, and plan 5 runs Postgres in it (spec §4.4).
 - **A name and domain.** Resend needs a verified sending domain before sign-in
   emails can be sent from a deployed beta (`docs/research/2026-09-21-app-name-research.md`).
