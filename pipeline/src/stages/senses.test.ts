@@ -41,6 +41,12 @@ describe('describeLemmas', () => {
     expect((await describeLemmas(lemma, [], run(() => ({ items: [{ ...pronoun, headword: 'Me' }] }))))[0]![0]!.headword).toBe('i')
   })
 
+  it('drops a variant that is only the headword in other capitals', async () => {
+    const pronoun = { lemma: 'i', headword: 'I', senses: [{ ...bank.senses[0], pos: 'pron', gloss: '', variants: ['i', 'I'] }] }
+    const lemma = [{ lemma: 'i', perMillion: 9000, rank: 10, pinned: false }]
+    expect((await describeLemmas(lemma, [], run(() => ({ items: [pronoun] }))))[0]![0]!.variants).toEqual([])
+  })
+
   it('rejects two senses of one part of speech that the gloss cannot tell apart', async () => {
     const same = { ...bank, senses: [bank.senses[0], { ...bank.senses[1], gloss: '' }] }
     await expect(describeLemmas(lemmas, [], run(() => ({ items: [same] })))).rejects.toThrow(/needs a gloss/)

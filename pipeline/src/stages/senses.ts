@@ -96,7 +96,7 @@ function parseSense(headword: string, themeIds: ReadonlySet<string>, raw: Record
     gloss: cell(String(raw['gloss'] ?? '')),
     level,
     ipa,
-    variants: [...new Set(strings(raw['variants']).map(norm))].filter((v) => v !== headword),
+    variants: [...new Set(strings(raw['variants']).map(norm))].filter((v) => v !== norm(headword)),
     themes: [...new Set(strings(raw['themes']))].filter((t) => themeIds.has(t)).slice(0, 3),
     examples,
   }
