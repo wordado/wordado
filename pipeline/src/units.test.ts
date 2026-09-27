@@ -23,6 +23,16 @@ describe('assignUnits (spec §7.2, Decision 9)', () => {
     expect(assignUnits([], live, new Set(), 4).map((u) => u.entry_ids.length)).toEqual([5])
   })
 
+  it('at the real unit size (20), folds a leftover of exactly half into the unit before it', () => {
+    const live = Array.from({ length: 30 }, (_, i) => c(`w${i + 1}`, 'A1', 'x', i + 1))
+    expect(assignUnits([], live, new Set(), 20).map((u) => u.entry_ids.length)).toEqual([30])
+  })
+
+  it('at the real unit size (20), keeps a leftover over half on its own', () => {
+    const live = Array.from({ length: 31 }, (_, i) => c(`w${i + 1}`, 'A1', 'x', i + 1))
+    expect(assignUnits([], live, new Set(), 20).map((u) => u.entry_ids.length)).toEqual([20, 11])
+  })
+
   it('moves an entry whose level changed out of its unit, but keeps a retired published entry in place', () => {
     const units = [{ unit_id: 'a1-01', level: 'A1' as const, entry_ids: ['moved', 'retired', 'kept', 'never'] }]
     const out = assignUnits(units, [c('moved', 'A2', 'x', 1), c('kept', 'A1', 'x', 2)], new Set(['moved', 'retired', 'kept']), 20)
@@ -34,7 +44,11 @@ describe('assignUnits (spec §7.2, Decision 9)', () => {
 
   it('never reuses a unit number, even of a unit that is now empty', () => {
     const units = [{ unit_id: 'a1-07', level: 'A1' as const, entry_ids: ['gone'] }]
-    expect(assignUnits(units, [c('n', 'A1', 'x', 1)], new Set(), 20).map((u) => u.unit_id)).toEqual(['a1-07', 'a1-08'])
+    const out = assignUnits(units, [c('n', 'A1', 'x', 1)], new Set(), 20)
+    expect(out).toEqual([
+      { unit_id: 'a1-07', level: 'A1', entry_ids: [] },
+      { unit_id: 'a1-08', level: 'A1', entry_ids: ['n'] },
+    ])
   })
 })
 
