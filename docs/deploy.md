@@ -27,12 +27,18 @@ Shared: the R2 bucket `wordado-content` (Western Europe) at `https://content.wor
 both addresses, with the sample pack published; the rate-limit rule on `/v1/sync/*`; `main` protected.
 Sign-in, since 2026-09-27: Resend sends codes from `codes@wordado.com` (a sending-only key limited to
 wordado.com), and Google's app (redirect `https://wordado.com/api/auth/callback/google`) is in **Testing**: only its listed test users can sign in with Google, until the privacy policy is final (roadmap).
+Mail DNS, since 2026-09-27: DMARC is `v=DMARC1; p=none; rua=mailto:<id>@dmarc-reports.cloudflare.net;`, its
+reports read on the dashboard (wordado.com › Email › DMARC Management). Once a week or two of reports show every
+real sender passing, tighten it to `p=quarantine`. The apex MX, `10 inbound-smtp.eu-west-1.amazonaws.com`, is
+Resend's receiving record, but receiving is not enabled, so mail to `@wordado.com` is refused at once. Keep it
+until the support address below decides how wordado.com receives: no MX would leave senders retrying for days,
+and a null MX (`0 .`) can make some providers distrust mail *from* wordado.com, the sign-in codes included.
 Not yet: a redirect from `www.wordado.com` to `https://wordado.com`
 (before the beta is announced): a proxied `AAAA www 100::` record and the Redirect Rules template *Redirect from
 WWW to root* (301, query string kept). Never serve the app on `www` too: its local data, sign-in cookie and
 installed app would be separate from the apex's. A public support address, such as `support@wordado.com`
-(before Google's app is published): Cloudflare Email Routing forwards it to a personal inbox, since Resend only
-sends. Google's **User support email** (Branding) is a dropdown of the signed-in account and the Google Groups it
+(before Google's app is published): either Resend receiving (enable wordado.com under Receiving; it uses the
+present MX) or Cloudflare Email Routing, which replaces the MX with its own and forwards to a personal inbox. Google's **User support email** (Branding) is a dropdown of the signed-in account and the Google Groups it
 manages, so it needs a Google Group or a Google account for that address; until then it shows the personal
 address to test users only. The same address can fill the privacy policy's `[Contact email]`.
 
