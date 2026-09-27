@@ -8,7 +8,10 @@ import { devices } from 'playwright'
  */
 export const BROWSER_PROJECTS: readonly Project[] = [
   { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
-  { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
+  // No form history: after one test has typed a birth year, Firefox offers it again in a dropdown under
+  // the field, and the click that closes that dropdown is swallowed (the page saw only a mouseup on
+  // Continue: run 36315140278). Browser chrome, not the app, so the test browser turns it off.
+  { name: 'firefox', use: { ...devices['Desktop Firefox'], launchOptions: { firefoxUserPrefs: { 'browser.formfill.enable': false } } } },
   { name: 'webkit', use: { ...devices['Desktop Safari'] } },
   { name: 'mobile-chrome', use: { ...devices['Pixel 7'] } },
   { name: 'mobile-safari', use: { ...devices['iPhone 15'] } },
