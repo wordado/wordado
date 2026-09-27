@@ -219,10 +219,16 @@ importers:
       '@wordado/core':
         specifier: workspace:*
         version: link:../core
+      pg:
+        specifier: ^8.23.0
+        version: 8.23.0
     devDependencies:
       '@types/node':
         specifier: ^24.0.0
         version: 24.13.6
+      '@types/pg':
+        specifier: ^8.23.1
+        version: 8.23.1
       tsx:
         specifier: ^4.19.0
         version: 4.23.15

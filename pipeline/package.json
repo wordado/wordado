@@ -9,10 +9,12 @@
     "corpus": "tsx src/cli.ts"
   },
   "dependencies": {
-    "@wordado/core": "workspace:*"
+    "@wordado/core": "workspace:*",
+    "pg": "^8.23.0"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "@types/pg": "^8.23.1",
     "tsx": "^4.19.0"
   }
 }
