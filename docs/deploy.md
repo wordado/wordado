@@ -2,7 +2,8 @@
 
 The web app and the API are one Cloudflare Worker (`server/wrangler.jsonc`): `wordado` on
 `https://wordado.com` (production) and `wordado-preview` on `https://wordado-preview.<subdomain>.workers.dev`
-(preview). Every push to `main` deploys production once CI is green. Every pull request from this
+(preview). Every push to `main` deploys production once CI is green and a reviewer approves it (the
+`production` environment's required reviewer). Every pull request from this
 repository deploys the preview and runs one learner's life against it (`smoke:remote`). Content (packs
 and audio) lives in the R2 bucket `wordado-content`, served at `https://content.wordado.com`, and is
 published by the manual **Publish content** workflow.
@@ -106,9 +107,20 @@ private `wordado/wordado-research`, cloned into `docs/research/` and ignored her
 
 ## Everyday
 
-- **Deploy:** merge a green pull request. CI migrates `DATABASE_URL`, then deploys the Worker with the web build.
-  Migrations run while the previous Worker still serves, and `wrangler rollback` restores a Worker that
-  runs against the new schema, so every migration must work with the previous Worker too: expand first,
+- **Release:**
+  1. Open a pull request. Once its checks pass, CI deploys it to the preview and runs `smoke:remote` there.
+  2. Try it on `https://wordado-preview.danchom.workers.dev`. Sign-in codes appear in
+     `pnpm --filter @wordado/server exec wrangler tail --env preview`, since the preview has no mailer. The
+     preview is shared, so with several pull requests open it shows the one deployed last.
+  3. Merge. `main`'s CI runs, and its **Production deployment** job waits for review.
+  4. Open that run under Actions: **Review deployments** › tick `production` › **Approve and deploy**.
+     CI migrates `DATABASE_URL`, then deploys the Worker with the web build. A run left unapproved
+     expires after 30 days, and nothing is deployed.
+
+  The reviewer is set on the `production` environment (Settings › Environments › production). It also
+  gates **Publish content**, which uses the same environment.
+- **Migrations:** they run while the previous Worker still serves, and `wrangler rollback` restores a
+  Worker that runs against the new schema, so every migration must work with the previous Worker too: expand first,
   contract in a later release.
 - **Rollback:** `pnpm --filter @wordado/server exec wrangler rollback --env production` restores the previous
   Worker and its assets together. Migrations are forward-only: never roll the schema back; write a new migration.
