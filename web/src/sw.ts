@@ -10,7 +10,8 @@ cleanupOutdatedCaches()
 // The shell, both SQLite builds, the fonts and the bundled sample's manifest and pack (spec §8.6, §9.1). Its audio
 // is not precached: the app fetches the clips into the one audio cache, `wordado-audio-v1` (decision of plan 6b).
 precacheAndRoute(manifest)
-// Every in-app URL is the shell; the router takes it from there. The API is never the shell.
+// Every in-app URL is the shell; the router takes it from there. The API is never the shell. A static page in
+// public/ (privacy.html) never reaches this route: the precache above answers its clean URL, /privacy, first.
 registerRoute(new NavigationRoute(createHandlerBoundToURL('/index.html'), { denylist: [/^\/api\//, /^\/v1\//] }))
 
 const sw = self as unknown as ServiceWorkerGlobalScope

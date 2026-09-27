@@ -68,6 +68,7 @@ export const bg: Messages = {
   'install.button': 'Инсталирайте',
   'install.later': 'Не сега',
   'settings.app': 'Приложението',
+  'privacy.link': 'Политика за поверителност',
 
   'settings.title': 'Настройки',
   'settings.saved': 'Запазено',

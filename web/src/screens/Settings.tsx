@@ -20,6 +20,9 @@ export function Settings() {
       <LanguageSettings />
       <AccountSettings />
       <AppSettings />
+      <p className="privacy-link">
+        <a href="/privacy">{t('privacy.link')}</a>
+      </p>
     </div>
   )
 }

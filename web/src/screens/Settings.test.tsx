@@ -277,3 +277,11 @@ describe('Settings: reminders (spec §8.11)', () => {
     expect((screen.getByRole('checkbox', { name: 'Remind me to study' }) as HTMLInputElement).checked).toBe(false)
   })
 })
+
+describe('Settings: the privacy policy (spec §11)', () => {
+  it('links to the policy', async () => {
+    const ctx = await setup()
+    renderWith(<Settings />, ctx)
+    expect(screen.getByRole('link', { name: 'Privacy policy' }).getAttribute('href')).toBe('/privacy')
+  })
+})

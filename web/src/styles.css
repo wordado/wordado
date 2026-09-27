@@ -751,6 +751,11 @@ dialog.report textarea {
   outline: none;
 }
 
+.privacy-link {
+  margin: var(--space-5) 0 0;
+  font-size: var(--step--1);
+}
+
 .signin .or {
   margin: var(--space-4) 0 var(--space-2);
   color: var(--ink-soft);

@@ -74,6 +74,20 @@ test('plays a matching board once five words are known', async ({ page }) => {
   await expect(page.getByRole('status')).toHaveText('✓ All pairs matched.')
 })
 
+test('serves the privacy policy, not the app, once the service worker controls the page', async ({ page }) => {
+  await page.goto('/')
+  await page.evaluate(async () => {
+    await navigator.serviceWorker.ready
+  })
+  await page.reload()
+  expect(await page.evaluate(() => navigator.serviceWorker.controller !== null)).toBe(true)
+
+  await page.goto('/privacy')
+  await expect(heading(page)).toHaveText('Privacy policy')
+  await expect(page.locator('.nav')).toHaveCount(0)
+  await expectAccessible(page, { dark: true })
+})
+
 test('meets WCAG 2.2 A and AA on every screen (spec §11.1)', async ({ page }) => {
   await page.goto('/')
   await expect(heading(page)).toHaveText('10 new words')
