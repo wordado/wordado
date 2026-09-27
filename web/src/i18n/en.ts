@@ -73,6 +73,7 @@ export const en = {
   'install.button': 'Install',
   'install.later': 'Not now',
   'settings.app': 'The app',
+  'privacy.link': 'Privacy policy',
 
   'settings.title': 'Settings',
   'settings.saved': 'Saved',

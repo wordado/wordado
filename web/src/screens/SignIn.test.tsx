@@ -266,3 +266,11 @@ describe('SignIn: Google (spec §8.6)', () => {
     expect(redirects).toEqual([])
   })
 })
+
+describe('SignIn: the privacy policy (spec §11)', () => {
+  it('links to the policy where the email address is asked for', async () => {
+    await render()
+    await passGate('BG', 1990)
+    expect(screen.getByRole('link', { name: 'Privacy policy' }).getAttribute('href')).toBe('/privacy')
+  })
+})

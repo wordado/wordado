@@ -318,6 +318,9 @@ export function SignIn(props: { readonly redirect?: (url: string) => void; reado
           <button type="button" className="button" disabled={busy || !online} onClick={() => void google()}>
             {t('signin.google')}
           </button>
+          <p className="privacy-link">
+            <a href="/privacy">{t('privacy.link')}</a>
+          </p>
         </>
       )}
 
