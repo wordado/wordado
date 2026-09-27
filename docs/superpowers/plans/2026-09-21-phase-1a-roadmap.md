@@ -37,9 +37,8 @@ against the sample pack.
   only its listed test users, at most 100, can sign in with Google, and they sign in again every 7 days. The order
   before the beta is announced: fill in the controller, the legal review, then **Publish app**.
 - **Docker** — resolved 2026-09-23: Docker Desktop is installed, and plan 5 runs Postgres in it (spec §4.4).
-- **A name and domain.** Resend needs a verified sending domain before sign-in
-  emails can be sent from a deployed beta (`docs/research/2026-09-21-app-name-research.md`).
-  Local development prints codes to the console and is not blocked.
+- **A name and domain** — resolved 2026-09-27: wordado.com is Resend's verified sending domain, and production
+  sends sign-in codes from `codes@wordado.com`; Google sign-in works for the Google app's test users (`docs/deploy.md`).
 - **Spec approval table (§16).** Several † rows still read "Pending". The plans
   follow the spec as written; update the table when the sign-off is formal.
 - **Provisioning** (plan 7, `docs/deploy.md`). Cloudflare, Neon and R2 are created by hand once; deploys stay off until `DEPLOY_ENABLED` is set.

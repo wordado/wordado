@@ -25,7 +25,9 @@ GitHub environments or with Cloudflare.
 
 Shared: the R2 bucket `wordado-content` (Western Europe) at `https://content.wordado.com`, readable from
 both addresses, with the sample pack published; the rate-limit rule on `/v1/sync/*`; `main` protected.
-Not yet: Resend and Google sign-in (before the beta). A redirect from `www.wordado.com` to `https://wordado.com`
+Sign-in, since 2026-09-27: Resend sends codes from `codes@wordado.com` (a sending-only key limited to
+wordado.com), and Google's app (redirect `https://wordado.com/api/auth/callback/google`) is in **Testing**: only its listed test users can sign in with Google, until the privacy policy is final (roadmap).
+Not yet: a redirect from `www.wordado.com` to `https://wordado.com`
 (before the beta is announced): a proxied `AAAA www 100::` record and the Redirect Rules template *Redirect from
 WWW to root* (301, query string kept). Never serve the app on `www` too: its local data, sign-in cookie and
 installed app would be separate from the apex's. A public support address, such as `support@wordado.com`
@@ -90,7 +92,7 @@ private `wordado/wordado-research`, cloned into `docs/research/` and ignored her
      `gh secret set R2_ACCESS_KEY_ID --env production`, `gh secret set R2_SECRET_ACCESS_KEY --env production`.
    - Reminders, per environment: a pair from `pnpm --filter @wordado/server vapid-keys` as
      `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, and `VAPID_SUBJECT` (`mailto:…`).
-   - Production, before the beta (roadmap blockers): `RESEND_API_KEY` with `EMAIL_FROM`
+   - Production only (*done 2026-09-27*): `RESEND_API_KEY` with `EMAIL_FROM`
      (`Wordado <codes@wordado.com>`, once Resend has verified the domain), and `GOOGLE_CLIENT_ID` with
      `GOOGLE_CLIENT_SECRET` (redirect `https://wordado.com/api/auth/callback/google`). Without Resend,
      production prints sign-in codes to its log, as development does. The preview has no mailer on
