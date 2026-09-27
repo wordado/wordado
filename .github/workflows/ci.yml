@@ -36,6 +36,8 @@ jobs:
       - run: pnpm lint
       - name: Lint the workflows
         run: docker run --rm -v "$PWD:/repo" --workdir /repo rhysd/actionlint:1.7.7 -color
+      - name: Lint the content repository's workflow
+        run: docker run --rm -v "$PWD:/repo" --workdir /repo rhysd/actionlint:1.7.7 -color pipeline/template/.github/workflows/corpus.yml
       - name: Build the web app
         run: pnpm --filter @wordado/web build
       - name: Dry-run both deployments
@@ -64,6 +66,8 @@ jobs:
       # container already up, the server's `db:up` changes nothing.
       - name: Postgres, before any browser runs
         run: pnpm --filter @wordado/server db:up
+      - name: ffmpeg, for the pipeline's encoder tests
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
       - run: pnpm test
       - run: pnpm --filter @wordado/server smoke
 

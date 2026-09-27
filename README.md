@@ -11,7 +11,7 @@ spaced repetition (FSRS), a level path, and sync across devices.
 | `client-data` | The client's local database, outbox and sync engine, over a SQL driver. |
 | `web` | The web app: Vite + React, SQLite in a Worker (OPFS, then IndexedDB). |
 | `server` | The API: Hono on Cloudflare Workers, Postgres through Hyperdrive. |
-| `pipeline` | Builds and checks corpus packs. |
+| `pipeline` | Builds the corpus: frequency data to reviewed, published packs (`pipeline/README.md`). |
 
 ## Run it
 
@@ -34,4 +34,5 @@ The **code** in this repository is licensed under the MIT licence (`LICENSE`).
 The **content** is not: the word lists, translations, example sentences and audio under
 `pipeline/samples/` are not covered by the MIT licence. See
 [`pipeline/samples/README.md`](pipeline/samples/README.md) for their terms. The same applies
-to the corpus packs and audio that Wordado serves to learners.
+to the corpus packs and audio that Wordado serves to learners. The corpus's sources and review history
+live in a private repository.

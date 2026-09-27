@@ -1,0 +1,158 @@
+name: Corpus
+
+# The corpus pipeline (spec §4.4, §5.4), started by hand. The pipeline's code is the public
+# wordado/wordado at vars.PIPELINE_REF; this repository holds the content it reads and writes.
+# draft, audio and triage open a pull request with what they changed; release publishes to R2,
+# manifest last, and commits the new last-published/ to main.
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: What to run
+        type: choice
+        required: true
+        options: [draft, audio, triage, release]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: corpus
+  cancel-in-progress: false
+
+env:
+  ACTION: ${{ inputs.action }}
+  # Absolute, so it works from any step's working directory.
+  CORPUS: pnpm --dir ${{ github.workspace }}/wordado --filter @wordado/pipeline corpus
+
+jobs:
+  work:
+    name: ${{ inputs.action }}
+    if: inputs.action != 'release'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    environment: corpus
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          path: content
+      - uses: actions/checkout@v5
+        with:
+          repository: wordado/wordado
+          ref: ${{ vars.PIPELINE_REF }}
+          path: wordado
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: wordado/package.json
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: wordado/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+        working-directory: wordado
+      - name: ffmpeg, for the clips
+        if: inputs.action == 'audio'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - name: Run ${{ inputs.action }}
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          REPORTS_DATABASE_URL: ${{ secrets.REPORTS_DATABASE_URL }}
+        run: |
+          content="$GITHUB_WORKSPACE/content"
+          case "$ACTION" in
+            # A reviewer's drop or level fix can reshape units, whose titles are then asked again, so these
+            # run online rather than --offline: an --offline draft would fail on the reshaped titles.
+            draft) $CORPUS draft "$content" ;;
+            audio) $CORPUS draft "$content" && $CORPUS audio "$content" --batch "$(date -u +%Y%m%dT%H%M)" ;;
+            triage) $CORPUS draft "$content" && $CORPUS triage "$content" ;;
+          esac
+          $CORPUS queues "$content"
+          $CORPUS status "$content"
+      - name: Open a pull request with the results
+        working-directory: content
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git add -A
+          if git diff --cached --quiet; then echo "Nothing changed."; exit 0; fi
+          branch="corpus/$ACTION-$GITHUB_RUN_ID"
+          git switch -c "$branch"
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            commit -m "corpus: $ACTION (run $GITHUB_RUN_ID)"
+          git push origin "$branch"
+          gh pr create --base main --head "$branch" --title "corpus: $ACTION ($GITHUB_RUN_ID)" \
+            --body "Results of the Corpus workflow's $ACTION run $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID. New review files are under review/."
+
+  release:
+    name: release
+    if: inputs.action == 'release'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    environment: production
+    env:
+      OUT: ${{ github.workspace }}/out
+      BUCKET: s3://${{ vars.CONTENT_BUCKET }}
+      R2: https://${{ vars.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
+      MANIFEST_URL: ${{ vars.CONTENT_MANIFEST_URL }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: auto
+      # R2 does not take the AWS CLI's default integrity headers.
+      AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+      AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          path: content
+      - uses: actions/checkout@v5
+        with:
+          repository: wordado/wordado
+          ref: ${{ vars.PIPELINE_REF }}
+          path: wordado
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: wordado/package.json
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: wordado/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+        working-directory: wordado
+      - name: The CDN serves last-published/, the version this release follows
+        run: $CORPUS live "$GITHUB_WORKSPACE/content" "$MANIFEST_URL"
+      - name: Build the release (every gate)
+        run: |
+          $CORPUS draft "$GITHUB_WORKSPACE/content" --offline
+          $CORPUS release "$GITHUB_WORKSPACE/content" "$OUT"
+      - name: Every file the manifest reaches is present, with its checksum
+        run: $CORPUS publishable "$OUT"
+      - name: Upload the packs and the audio (not the manifest)
+        run: |
+          aws s3 sync "$OUT" "$BUCKET" --endpoint-url "$R2" --exclude '*' --include '*.pack' \
+            --content-type application/json --cache-control 'public, max-age=31536000, immutable'
+          aws s3 sync "$OUT/audio" "$BUCKET/audio" --endpoint-url "$R2" \
+            --content-type audio/mp4 --cache-control 'public, max-age=86400'
+          aws s3 cp "$OUT/fixes.json" "$BUCKET/fixes.json" --endpoint-url "$R2" \
+            --content-type application/json --cache-control no-cache
+      - name: Publish the manifest, last
+        run: |
+          aws s3 cp "$OUT/manifest.json" "$BUCKET/manifest.json" --endpoint-url "$R2" \
+            --content-type application/json --cache-control no-cache
+      - name: The CDN serves the new manifest
+        run: |
+          expected=$(node -e "console.log(JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8')).corpus_version)" "$OUT/manifest.json")
+          served=$(curl --fail --silent --show-error -H 'cache-control: no-cache' "$MANIFEST_URL" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>console.log(JSON.parse(s).corpus_version))")
+          echo "corpus version: published $expected, served $served"
+          test "$expected" = "$served"
+      - name: Record the release as last-published/
+        working-directory: content
+        run: |
+          $CORPUS published "$GITHUB_WORKSPACE/content" "$OUT"
+          version=$(node -e "console.log(JSON.parse(require('fs').readFileSync('last-published/manifest.json','utf8')).corpus_version)")
+          git add last-published registry.json
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            commit -m "corpus: published version $version (run $GITHUB_RUN_ID)"
+          git push origin HEAD:main

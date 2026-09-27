@@ -6,7 +6,7 @@ The web app and the API are one Cloudflare Worker (`server/wrangler.jsonc`): `wo
 `production` environment's required reviewer). Every pull request from this
 repository deploys the preview and runs one learner's life against it (`smoke:remote`). Content (packs
 and audio) lives in the R2 bucket `wordado-content`, served at `https://content.wordado.com`, and is
-published by the manual **Publish content** workflow.
+published by the **Corpus** workflow of the private `wordado/wordado-content` repository (`pipeline/README.md`).
 
 Nothing deploys until the repository variable `DEPLOY_ENABLED` is `true` (step 10).
 
@@ -96,6 +96,8 @@ private `wordado/wordado-research`, cloned into `docs/research/` and ignored her
    - `APP_ORIGIN`: `https://wordado-preview.<subdomain>.workers.dev` for preview, `https://wordado.com` for production.
    - Production only: `gh variable set CONTENT_BUCKET --body wordado-content --env production`,
      `gh secret set R2_ACCESS_KEY_ID --env production`, `gh secret set R2_SECRET_ACCESS_KEY --env production`.
+     The Worker does not use them, but they stay here and are removed only after the first corpus release
+     proves the content repository's copies work.
    - Reminders, per environment: a pair from `pnpm --filter @wordado/server vapid-keys` as
      `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, and `VAPID_SUBJECT` (`mailto:…`).
    - Production only (*done 2026-09-27*): `RESEND_API_KEY` with `EMAIL_FROM`
@@ -113,8 +115,9 @@ private `wordado/wordado-research`, cloned into `docs/research/` and ignored her
 8. **The transport rate limit** (spec §10). Dashboard › wordado.com › Security › WAF › Rate limiting
    rules: *URI Path starts with `/v1/sync/`*, 60 requests per 10 seconds per IP, block for 10 seconds.
    A week offline is a few 500-event pages and a pull, far below it. Sign-in has its own limits (plan 5).
-9. **Content first.** Run **Publish content** (Actions › Publish content › Run workflow, source
-   `pipeline/samples/a1-bg`). Then the first production build finds a manifest at `CONTENT_MANIFEST_URL`.
+9. **Content first.** *Done 2026-09-27*, with the sample (v0), by the Publish content workflow that plan 8
+   replaced. The first corpus version is published by the content repository's **Corpus** workflow
+   (`pipeline/README.md`).
 10. **Enable deploys.** `gh variable set DEPLOY_ENABLED --body true`. The next pull request deploys
     the preview, and the next merge deploys production. `cloudflare/wrangler-action@v4` exists (its
     `v4` tag was checked on 2026-09-25), but that first deploy is its first real use, so watch it. Once deploys are
@@ -132,8 +135,8 @@ private `wordado/wordado-research`, cloned into `docs/research/` and ignored her
      CI migrates `DATABASE_URL`, then deploys the Worker with the web build. A run left unapproved
      expires after 30 days, and nothing is deployed.
 
-  The reviewer is set on the `production` environment (Settings › Environments › production). It also
-  gates **Publish content**, which uses the same environment.
+  The reviewer is set on the `production` environment (Settings › Environments › production). The content
+  repository's `production` environment has the same reviewer, for its **Corpus** release.
 - **Migrations:** they run while the previous Worker still serves, and `wrangler rollback` restores a
   Worker that runs against the new schema, so every migration must work with the previous Worker too: expand first,
   contract in a later release.
@@ -144,7 +147,7 @@ private `wordado/wordado-research`, cloned into `docs/research/` and ignored her
 - **CPU** (spec §4.4, §17.2): `smoke:remote` prints how long a 500-event page and a 101-word pull took.
   Workers › wordado-preview › Metrics shows CPU time per request. The free plan's 10 ms is the first
   ceiling. When it binds, move to Workers Paid ($5 a month).
-- **Content:** Publish content with a directory of the pipeline's shape (plan 8 builds it). The manifest goes last.
+- **Content:** see `pipeline/README.md`. Its release job uploads packs, audio and `fixes.json`, and the manifest last.
 
 ## Before each release (spec §13)
 
