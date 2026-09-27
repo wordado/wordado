@@ -43,9 +43,12 @@ const headPos = (k: { headword: string; pos: string }) => `${norm(k.headword)}|$
 
 /**
  * An ID for each sense (Decision 10). An exact (headword, POS, gloss) match
- * keeps its ID. Failing that, a headword and POS with one sense on each side
- * keep theirs, because the gloss of a lone sense is only a label, and the new
- * gloss is recorded. Anything else gets the next number for its slug.
+ * keeps its ID. Failing that, an unlabelled entry (a sample entry, seeded with
+ * no gloss) takes the first unmatched sense of its headword and POS, because
+ * the senses stage lists the most common sense first, and that is the sense
+ * the sample taught. A labelled entry with one sense on each side keeps its
+ * ID too, because the gloss of a lone sense is only a label. Either way the
+ * new gloss is recorded. Anything else gets the next number for its slug.
  */
 export function assignIds(registry: Registry, keys: readonly SenseKey[]): { registry: Registry; ids: string[] } {
   const seen = new Set<string>()
@@ -65,15 +68,25 @@ export function assignIds(registry: Registry, keys: readonly SenseKey[]): { regi
   keys.forEach((k, i) => keysByHead.set(headPos(k), [...(keysByHead.get(headPos(k)) ?? []), i]))
   const entriesByHead = new Map<string, number[]>()
   entries.forEach((e, i) => entriesByHead.set(headPos(e), [...(entriesByHead.get(headPos(e)) ?? []), i]))
+  const bind = (k: number, e: number) => {
+    ids[k] = entries[e]!.entry_id
+    used.add(entries[e]!.entry_id)
+    entries[e] = { ...entries[e]!, sense_en: keys[k]!.sense_en }
+  }
+  for (const [head, ks] of keysByHead) {
+    for (const e of entriesByHead.get(head) ?? []) {
+      if (entries[e]!.sense_en !== '' || used.has(entries[e]!.entry_id)) continue
+      const k = ks.find((k) => ids[k] === null)
+      if (k !== undefined) bind(k, e)
+    }
+  }
   for (const [head, ks] of keysByHead) {
     const es = entriesByHead.get(head) ?? []
     if (ks.length !== 1 || es.length !== 1) continue
     const k = ks[0]!
     const e = es[0]!
     if (ids[k] !== null || used.has(entries[e]!.entry_id)) continue
-    ids[k] = entries[e]!.entry_id
-    used.add(entries[e]!.entry_id)
-    entries[e] = { ...entries[e]!, sense_en: keys[k]!.sense_en }
+    bind(k, e)
   }
 
   const highest = new Map<string, number>()

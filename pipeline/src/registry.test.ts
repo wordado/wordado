@@ -47,6 +47,16 @@ describe('assignIds', () => {
     expect(out.registry.entries.find((e) => e.entry_id === 'hello-1')).toMatchObject({ sense_en: 'greeting', pinned: true })
   })
 
+  it('binds an unlabelled entry to the first of several senses of its headword and POS, and records that gloss', () => {
+    const registry: Registry = { entries: [{ entry_id: 'time-1', headword: 'time', pos: 'noun', sense_en: '', pinned: true }], units: [] }
+    const out = assignIds(registry, [
+      { headword: 'time', pos: 'noun', sense_en: 'duration' },
+      { headword: 'time', pos: 'noun', sense_en: 'occasion' },
+    ])
+    expect(out.ids).toEqual(['time-1', 'time-2'])
+    expect(out.registry.entries.find((e) => e.entry_id === 'time-1')).toMatchObject({ sense_en: 'duration', pinned: true })
+  })
+
   it('gives a new sense the next number for its slug, never reusing one', () => {
     const out = assignIds(base, [
       { headword: 'bank', pos: 'noun', sense_en: 'money' },
