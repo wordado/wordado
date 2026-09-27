@@ -85,7 +85,13 @@ export async function runDraft(opts: DraftOptions): Promise<Draft> {
   const lemmaResults = await lemmatise(forms, run('lemmas'))
   const essentials = new Set(readEssentials(dir))
   const pinnedHeadwords = [...registry.entries.filter((e) => e.pinned).map((e) => e.headword), ...essentials]
-  const lemmas = rankLemmas(forms, lemmaResults, pinnedHeadwords, config.max_lemmas)
+  // A published entry stays live unless a reviewer drops it (Decision 9), so neither a list refresh that pushes
+  // its lemma past the cut nor a banded level outside the shipped ones may take it out of the draft.
+  const published = registry.entries.filter((e) => last.live.has(e.entry_id))
+  const publishedHeads = new Set(published.map((e) => `${norm(e.headword)}|${e.pos}`))
+  const lemmas = rankLemmas(forms, lemmaResults, [...pinnedHeadwords, ...published.map((e) => e.headword)], config.max_lemmas)
+  // rankLemmas marks a published lemma pinned too; only a sample or essential word passes the level check whole.
+  const pinnedLemmas = new Set(pinnedHeadwords.map(norm))
   const senses = await describeLemmas(lemmas, themes.map((t) => t.theme_id), run('senses'))
 
   const inScope = lemmas.flatMap((lemma, i) =>
@@ -95,7 +101,9 @@ export async function runDraft(opts: DraftOptions): Promise<Draft> {
       // An essential word's frequency understates it, so its level is the LLM's, and a reviewer checks every one.
       const banded = essential ? { level: s.level === 'C2' ? null : s.level, flagged: true } : bandLevel(s.level, band)
       if (banded.level === null) return []
-      if (!lemma.pinned && !config.levels.includes(banded.level)) return []
+      // A published sense keeps its unit, and the unit's level is its proposal, whatever the banding says now.
+      const wasPublished = publishedHeads.has(`${norm(s.headword)}|${s.pos}`)
+      if (!pinnedLemmas.has(lemma.lemma) && !wasPublished && !config.levels.includes(banded.level)) return []
       return [{ ...s, rank: lemma.rank, order, band, essential, banded: banded.level, flagged: banded.flagged }]
     }),
   )

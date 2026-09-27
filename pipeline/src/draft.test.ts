@@ -1,4 +1,5 @@
-import { readFileSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { OfflineMiss } from './cache'
@@ -6,9 +7,27 @@ import { Decisions, QUEUES } from './decisions'
 import { readDraft, runDraft } from './draft'
 import { writeJson } from './files'
 import type { Llm, LlmRequest } from './llm'
+import { adoptRelease, planRelease, writeRelease } from './release'
 import { LicenceError } from './sources'
 import type { SenseProposal } from './stages/senses'
-import { makeContent, sampleLlm } from './testing/fixture'
+import { approveAll, FIXTURE_TSV, makeContent, recordAudio, sampleLlm } from './testing/fixture'
+
+/** A content directory whose first draft was reviewed, released as version 1 and recorded in last-published/. */
+async function publishedV1(): Promise<string> {
+  const dir = makeContent()
+  await runDraft({ dir, llm: sampleLlm(), offline: false })
+  await recordAudio(dir)
+  approveAll(dir)
+  const out = join(mkdtempSync(join(tmpdir(), 'release-')), 'out')
+  writeRelease(dir, out, planRelease(dir, { draft: false, now: '2026-10-02T09:00:00Z' }))
+  adoptRelease(dir, out)
+  return dir
+}
+
+const editConfig = (dir: string, change: Record<string, unknown>) => {
+  const file = join(dir, 'pipeline.json')
+  writeJson(file, { ...JSON.parse(readFileSync(file, 'utf8')), ...change })
+}
 
 describe('runDraft', () => {
   it('keeps all 60 sample IDs live in their units, and places the new words', async () => {
@@ -85,6 +104,26 @@ describe('runDraft', () => {
     expect(draft.live).toContain('the-1')
     expect(draft.live).not.toContain('go-1')
     expect(draft.problems).toEqual([])
+  })
+
+  it('keeps a published lemma live when a list refresh pushes it past max_lemmas (Decision 9)', async () => {
+    const dir = await publishedV1()
+    // the and go rank first and second; bank, third, is now past the cut.
+    editConfig(dir, { max_lemmas: 2 })
+    const draft = await runDraft({ dir, llm: sampleLlm(), offline: false })
+    expect(draft.live).toEqual(expect.arrayContaining(['bank-1', 'bank-2']))
+    expect(draft.entries.find((e) => e.entry_id === 'bank-1')).toMatchObject({ level: 'A2', rank: 3 })
+    expect(draft.problems).toEqual([])
+  })
+
+  it('keeps a published sense live when its banded level leaves the shipped levels (Decision 9)', async () => {
+    const dir = await publishedV1()
+    // Two sample words now outrank bank, and small targets put rank 5 in the C1 band, so bank's A2 clamps to B1.
+    writeFileSync(join(dir, 'sources', 'invented.tsv'), `${FIXTURE_TSV}hello\t20000\nmoney\t10000\n`)
+    editConfig(dir, { targets: { A1: 1, A2: 1, B1: 1, B2: 1, C1: 1 } })
+    const draft = await runDraft({ dir, llm: sampleLlm(), offline: false })
+    expect(draft.entries.find((e) => e.entry_id === 'bank-1')).toMatchObject({ band: 'C1', level_proposal: 'A2', level: 'A2' })
+    expect(draft.live).toEqual(expect.arrayContaining(['bank-1', 'bank-2']))
   })
 
   it('stops before reading anything when a source is not cleared', async () => {
