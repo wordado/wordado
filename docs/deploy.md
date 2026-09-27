@@ -28,7 +28,11 @@ both addresses, with the sample pack published; the rate-limit rule on `/v1/sync
 Not yet: Resend and Google sign-in (before the beta). A redirect from `www.wordado.com` to `https://wordado.com`
 (before the beta is announced): a proxied `AAAA www 100::` record and the Redirect Rules template *Redirect from
 WWW to root* (301, query string kept). Never serve the app on `www` too: its local data, sign-in cookie and
-installed app would be separate from the apex's.
+installed app would be separate from the apex's. A public support address, such as `support@wordado.com`
+(before Google's app is published): Cloudflare Email Routing forwards it to a personal inbox, since Resend only
+sends. Google's **User support email** (Branding) is a dropdown of the signed-in account and the Google Groups it
+manages, so it needs a Google Group or a Google account for that address; until then it shows the personal
+address to test users only. The same address can fill the privacy policy's `[Contact email]`.
 
 ## Provisioning, once
 
