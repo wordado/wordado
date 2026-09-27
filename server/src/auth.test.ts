@@ -1,6 +1,8 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import { TEST_DATABASE_URL } from '../test/db'
 import { BASE_URL, harness } from '../test/harness'
-import { AUTH_MAX_BODY_BYTES } from './app'
+import { AUTH_MAX_BODY_BYTES, createApp } from './app'
+import { createPool, pgDb } from './db/db'
 import { OTP_SENDS_PER_MINUTE, SESSION_DAYS } from './auth'
 
 const json = { 'content-type': 'application/json', origin: BASE_URL }
@@ -170,5 +172,22 @@ describe('the country pre-fill (spec §11)', () => {
 describe('health', () => {
   it('answers when the database does', async () => {
     expect((await harness().request('/health')).body).toEqual({ ok: true })
+  })
+})
+
+describe('one request, one pool (as in the Worker)', () => {
+  it('leaves nothing running on the pool once a request that needs no database is answered', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    try {
+      const db = pgDb(createPool(TEST_DATABASE_URL, 1))
+      const app = createApp({ ...harness().deps, db })
+      expect((await app.request('/v1/country', { headers: { 'cf-ipcountry': 'BG' } })).status).toBe(200)
+      // The Worker ends the pool as soon as the response is out (src/worker.ts).
+      await db.end()
+      await new Promise((resolve) => setTimeout(resolve, 100))
+      expect(errors.mock.calls.flat().map(String).filter((line) => line.includes('schema'))).toEqual([])
+    } finally {
+      errors.mockRestore()
+    }
   })
 })

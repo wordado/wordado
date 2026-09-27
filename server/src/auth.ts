@@ -34,7 +34,12 @@ export function createAuth(deps: ServerDeps) {
       storage: 'database',
       customRules: { '/email-otp/send-verification-otp': { window: 60, max: OTP_SENDS_PER_MINUTE } },
     },
-    advanced: { ipAddress: { ipAddressHeaders: ['cf-connecting-ip'] } },
+    advanced: {
+      ipAddress: { ipAddressHeaders: ['cf-connecting-ip'] },
+      // The migrations own the schema (migrations/0001_init.sql). Better Auth's own check would run on every
+      // request, since the Worker's pool is new each time, and fail once the pool is ended under it.
+      database: { validateSchema: false },
+    },
     plugins: [
       emailOTP({
         otpLength: 6,
