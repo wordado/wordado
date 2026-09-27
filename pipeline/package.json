@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@wordado/core": "workspace:*",
-    "hyparquet": "^1.31.2",
+    "hyparquet": "1.31.1",
     "pg": "^8.23.0"
   },
   "devDependencies": {

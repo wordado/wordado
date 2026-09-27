@@ -220,8 +220,8 @@ importers:
         specifier: workspace:*
         version: link:../core
       hyparquet:
-        specifier: ^1.31.2
-        version: 1.31.2
+        specifier: 1.31.1
+        version: 1.31.1
       pg:
         specifier: ^8.23.0
         version: 8.23.0
@@ -2671,9 +2671,6 @@ packages:
 
   hyparquet@1.31.1:
     resolution: {integrity: sha512-tF9580Xb+41+Eb+mH0av1k7m1PWl+PSKrX66Yd7UOZ760cwEXP9/enwHRMSCeVncaubRI8XPb3v580/ujYKK5w==}
-
-  hyparquet@1.31.2:
-    resolution: {integrity: sha512-dpVTCGkPPIdfDExa7YZGaJpuBTmLFDKGeZ6meHUj1mz/Q3qmaQHGLLqCyPBkQjfxrYNb08YTax682qeGO+zkVA==}
 
   idb@7.1.1:
     resolution: {integrity: sha512-gchesWBzyvGHRO9W8tzUWFDycow5gwjvFKfyV9FF32Y7F50yZMp7mP+T2mJIWFx49zicqyC4uefHM17o6xKIVQ==}
@@ -5746,8 +5743,6 @@ snapshots:
       hyparquet: 1.31.1
 
   hyparquet@1.31.1: {}
-
-  hyparquet@1.31.2: {}
 
   idb@7.1.1: {}
 
