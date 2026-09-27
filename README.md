@@ -24,7 +24,8 @@ pnpm --filter @wordado/server dev       # the API on :8787, with Postgres in Doc
 pnpm --filter @wordado/web dev          # the app on http://localhost:5173
 ```
 
-More in each package's README, and deployment in `docs/deploy.md`.
+Building a feature, step by step: `docs/development.md`. More in each package's README, and deployment in
+`docs/deploy.md`.
 
 ## Licence
 
