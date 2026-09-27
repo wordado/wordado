@@ -6,7 +6,7 @@
 
 **Architecture:** The pipeline **code** lives in this public repository (`pipeline/`) and is tested on fixtures. The corpus **content** lives in a new private repository, `wordado/wordado-content`, cloned into `content/` and ignored here. That covers the licence register, frequency lists, LLM caches, the ID registry, review queues and decisions, audio, and the last published snapshot. `corpus init` scaffolds it from `pipeline/template/`. That includes its GitHub Actions workflow, which checks out this repository at a pinned commit and runs `corpus draft | audio | triage | release`. Each command reads the content directory and writes back into it. Every LLM and TTS result is cached in the content repository, so a rerun costs nothing and gives the same proposals. A reviewer's decision is an append-only event bound to the exact proposal it judged.
 
-**Tech Stack:** TypeScript 7 on Node 24 (`tsx`), Vitest 5, OpenRouter (chat completions with `json_schema` structured output; `/api/v1/audio/speech` for TTS), ffmpeg/ffprobe (AAC in MP4, loudness and silence trim), `pg` for the read-only report pull, GitHub Actions in the content repository, the AWS CLI against R2's S3 API.
+**Tech Stack:** TypeScript 7 on Node 24 (`tsx`), Vitest 5, OpenRouter (chat completions with `json_schema` structured output; `/api/v1/audio/speech` for TTS), ffmpeg/ffprobe (AAC in MP4, loudness and silence trim), `pg` for the read-only report pull, hyparquet for reading FineWeb's Parquet shards, GitHub Actions in the content repository, the AWS CLI against R2's S3 API.
 
 **Spec:** `docs/superpowers/specs/2026-09-20-vocabulary-learning-app-design.md`. This plan implements:
 - §5.1: versioned, immutable packs, the stability rules and the manifest as a list.
@@ -56,6 +56,7 @@ Roadmap: `docs/superpowers/plans/2026-09-21-phase-1a-roadmap.md`, row 8.
 16. **"Your report was fixed" is plan 8b** (the product owner, 2026-09-27). This plan publishes `fixes.json`; 8b shows it in the app.
 17. **A1–B1 first** (the product owner, 2026-09-27; spec §14). B2 and C1 come in a later corpus version of the same pack. That version changes `pipeline.json` only: `levels` gains B2 and C1, and `max_forms` and `max_lemmas` rise enough to cover about 7,100 entries. Its B2 and C1 units follow the B1 units, and every existing ID, unit and learner's progress stays as it is.
 18. **LLM defaults.** Model `anthropic/claude-sonnet-5` (the operator confirms the slug on openrouter.ai/models before the first run), temperature 0.2, `provider: { require_parameters: true, data_collection: "deny" }`, and a spend ceiling per run (`llm.max_usd_per_run`, from `usage.cost`). Cache keys are (stage, prompt version, input), not the model: changing the model does not throw away reviewed proposals, and bumping a prompt version does.
+19. **Frequency sources, from the pilot** (the product owner, 2026-09-27; `docs/research/2026-09-27-frequency-pilot/report.md` in the research repository). The pilot compared four sources that allow commercial use. Our own count of **FineWeb** (ODC-By 1.0) was the strongest, and **FineWeb merged with Google Books GB 2000–2019** (CC BY 3.0) the most balanced. Project Gutenberg ranks the language of old novels, and Wikipedia has almost no dialogue. `corpus count-text` counts FineWeb's Parquet shards and `corpus sum-gbooks` adds up Google Books' yearly counts. Each writes a `sources/*.tsv` for the licence register, so the legal review still gates them. Every source ranks conversational words low (*hello* about 4,400th, *goodbye* about 7,400th), and no free subtitle list is licensed for us. So `essentials.txt`, a curated in-house list of about 230 everyday words, is always described. Its senses take the LLM's level rather than the frequency band, count toward the level targets, and all go to banding review. The senses stage also returns a headword's capitals (*I, Monday, TV*), which the lowercased lists lose.
 
 ## Review Focus
 
@@ -89,11 +90,12 @@ Roadmap: `docs/superpowers/plans/2026-09-21-phase-1a-roadmap.md`, row 8.
 - `src/assemble.ts`, `src/fixes.ts`, `src/release.ts` (+ tests); `src/publishable.ts` (modify, + test): packs per L1, the gates, the release directory; refuse a draft (Task 14).
 - `src/reports.ts` (+ test); `package.json` (modify: `pg`, `@types/pg`): pull and triage (Task 15).
 - `src/live.ts` (+ test), `src/cli.ts` (modify), `src/cli.test.ts`, `src/e2e.test.ts`: the commands and the whole pipeline (Task 16).
-- `template/.github/workflows/corpus.yml`, `README.md`: the content repository's workflow and the runbook (Task 17).
+- `src/prepare.ts` (+ test), `src/cli.ts` (modify), `package.json` (modify: `hyparquet`, `hyparquet-writer`): frequency lists from FineWeb and Google Books (Task 17).
+- `template/.github/workflows/corpus.yml`, `README.md`: the content repository's workflow and the runbook (Task 18).
 
 **Core (`core/`)**: `src/index.ts` (modify): export `norm` (Task 3).
 
-**Repository** (Task 17)
+**Repository** (Task 18)
 - `.gitignore`: `content/`.
 - `.github/workflows/ci.yml` (modify): ffmpeg for the pipeline suite; actionlint over the template workflow.
 - `.github/workflows/publish-content.yml` (delete).
@@ -365,7 +367,7 @@ git commit -m "feat(pipeline): CSV for the review queues and stable JSON files"
   - `interface PipelineConfig { readonly l1s: readonly string[]; readonly levels: readonly CefrLevel[]; readonly targets: Readonly<Record<CefrLevel, number>>; readonly max_forms: number; readonly max_lemmas: number; readonly unit_size: number; readonly report_threshold: number; readonly llm: { readonly model: string; readonly concurrency: number; readonly max_usd_per_run: number }; readonly tts: { readonly model: string; readonly accents: Readonly<Partial<Record<Accent, TtsVoice>>>; readonly max_clips_per_run: number } }`
   - `interface CuratedTheme { readonly theme_id: string; readonly name: Readonly<Record<string, string>>; readonly description: Readonly<Record<string, string>> }`: names keyed by `en` and each L1.
   - `configProblems(raw: unknown): string[]`; `readConfig(dir: string): PipelineConfig` (throws `ConfigError` listing problems); `themeProblems(raw: unknown, l1s: readonly string[]): string[]`; `readThemes(dir: string, l1s: readonly string[]): CuratedTheme[]`.
-  - `contentPaths(dir: string)` returns `{ root, config, sources, sourcesDir, themes, registry, cacheDir, cache(stage), draft, reviewDir, queueDir(queue), decisionsDir, decisions(queue), audioDir, clip(clipId), audioRecords, lastPublished }`.
+  - `contentPaths(dir: string)` returns `{ root, config, sources, sourcesDir, themes, registry, cacheDir, cache(stage), draft, reviewDir, queueDir(queue), decisionsDir, decisions(queue), audioDir, clip(clipId), audioRecords, lastPublished, essentials }`.
   - `interface SourceRecord { readonly id: string; readonly file: string; readonly title: string; readonly url: string; readonly licence: string; readonly commercial_use: boolean; readonly share_alike: boolean; readonly attribution: string; readonly cleared_by: string; readonly cleared_on: string; readonly notes: string }`
   - `licenceProblems(record: SourceRecord): string[]`; `class LicenceError extends Error { readonly problems: readonly string[] }`; `readClearedSources(dir: string): { record: SourceRecord; text: string }[]`.
 
@@ -540,6 +542,7 @@ export function contentPaths(dir: string) {
     clip: (clipId: string) => join(dir, 'audio', `${clipId}.m4a`),
     audioRecords: join(dir, 'audio.jsonl'),
     lastPublished: join(dir, 'last-published'),
+    essentials: join(dir, 'essentials.txt'),
   }
 }
 
@@ -1720,6 +1723,13 @@ describe('describeLemmas', () => {
     await expect(describeLemmas(lemmas, [], run(() => ({ items: [{ ...bank, lemma: 'river' }] })))).rejects.toThrow(/answers other items/)
   })
 
+  it('keeps a headword’s capitals, and ignores a "headword" that is another word', async () => {
+    const pronoun = { lemma: 'i', headword: 'I', senses: [{ ...bank.senses[0], pos: 'pron', gloss: '' }] }
+    const lemma = [{ lemma: 'i', perMillion: 9000, rank: 10, pinned: false }]
+    expect((await describeLemmas(lemma, [], run(() => ({ items: [pronoun] }))))[0]![0]!.headword).toBe('I')
+    expect((await describeLemmas(lemma, [], run(() => ({ items: [{ ...pronoun, headword: 'Me' }] }))))[0]![0]!.headword).toBe('i')
+  })
+
   it('rejects two senses of one part of speech that the gloss cannot tell apart', async () => {
     const same = { ...bank, senses: [bank.senses[0], { ...bank.senses[1], gloss: '' }] }
     await expect(describeLemmas(lemmas, [], run(() => ({ items: [same] })))).rejects.toThrow(/needs a gloss/)
@@ -1802,7 +1812,7 @@ For each headword you are given, in the order given, list the senses a learner u
 - "variants": other accepted spellings (colour → color); usually empty.
 - "themes": up to three theme ids from the list given, most relevant first; empty if none fits.
 - "examples": three short, natural English sentences using the headword in this sense, suitable for adults, at or below the sense's level. No names of real people or brands.
-Do not invent senses to reach four. Return one item per headword, in the same order, with "lemma" exactly as given.`
+Do not invent senses to reach four. Return one item per headword, in the same order, with "lemma" exactly as given, and "headword" as a dictionary prints it: with its capital letters where it has them (I, Monday, English, TV), otherwise the same as "lemma".`
 
 function schema(themeIds: readonly string[]) {
   return {
@@ -1814,6 +1824,7 @@ function schema(themeIds: readonly string[]) {
           type: 'object',
           properties: {
             lemma: { type: 'string' },
+            headword: { type: 'string' },
             senses: {
               type: 'array',
               items: {
@@ -1832,7 +1843,7 @@ function schema(themeIds: readonly string[]) {
               },
             },
           },
-          required: ['lemma', 'senses'],
+          required: ['lemma', 'headword', 'senses'],
           additionalProperties: false,
         },
       },
@@ -1873,9 +1884,12 @@ function parse(asked: readonly string[], themeIds: ReadonlySet<string>) {
     const items = (value as { items?: unknown }).items
     if (!Array.isArray(items) || items.length !== asked.length) throw new ParseError(`answers other items than it was asked`)
     return items.map((raw, i) => {
-      const item = raw as { lemma?: unknown; senses?: unknown }
+      const item = raw as { lemma?: unknown; headword?: unknown; senses?: unknown }
       if (item.lemma !== asked[i]) throw new ParseError(`answers other items than it was asked: item ${i} is ${JSON.stringify(item.lemma)}`)
-      const senses = (Array.isArray(item.senses) ? item.senses : []).slice(0, 4).map((s, j) => parseSense(asked[i]!, themeIds, s as Record<string, unknown>, `${asked[i]} sense ${j}`))
+      // Frequency lists are lowercased; the headword keeps its capitals (I, Monday) when it is the same word.
+      const display = String(item.headword ?? '').trim()
+      const headword = display !== '' && norm(display) === asked[i] ? display : asked[i]!
+      const senses = (Array.isArray(item.senses) ? item.senses : []).slice(0, 4).map((s, j) => parseSense(headword, themeIds, s as Record<string, unknown>, `${asked[i]} sense ${j}`))
       const byPos = new Map<string, SenseProposal[]>()
       for (const s of senses) byPos.set(s.pos, [...(byPos.get(s.pos) ?? []), s])
       for (const [pos, group] of byPos) {
@@ -1930,7 +1944,7 @@ The test's `bank` fixture has a theme `unknown-theme`, which the schema's enum w
 - [ ] **Step 4: Run it to see it pass**
 
 Run: `pnpm --filter @wordado/pipeline test -- senses`
-Expected: PASS, 8 tests.
+Expected: PASS, 9 tests.
 
 - [ ] **Step 5: Commit**
 
@@ -2957,10 +2971,10 @@ git commit -m "feat(pipeline): units by theme and their titles"
 
 ### Task 11: The content directory, the last published snapshot and the draft
 
-`corpus init` seeds a content directory from the sample: the template's files, a registry with the sample pinned, the curated themes, and `last-published/` holding the sample (v0). `corpus draft` runs every LLM stage in order, assigns IDs, folds the level and drop decisions, selects, places units and names them. It writes `registry.json` and `work/draft.json`. A fixture content directory built on the sample, and a fake LLM that answers from the sample, serve this task's test and every later one.
+`corpus init` seeds a content directory from the sample: the template's files, a registry with the sample pinned, the curated themes, and `last-published/` holding the sample (v0). `corpus draft` runs every LLM stage in order, assigns IDs, folds the level and drop decisions, selects, places units and names them. It writes `registry.json` and `work/draft.json`. Words in `essentials.txt`, a curated list of everyday spoken words that frequency lists rank too low (Decision 19), are always described. Their senses are live at the LLM's level, and every one goes to banding review. A fixture content directory built on the sample, and a fake LLM that answers from the sample, serve this task's test and every later one.
 
 **Files:**
-- Create: `pipeline/template/pipeline.json`, `pipeline/template/sources.json`, `pipeline/template/README.md`, `pipeline/template/.gitignore`
+- Create: `pipeline/template/pipeline.json`, `pipeline/template/sources.json`, `pipeline/template/README.md`, `pipeline/template/.gitignore`, `pipeline/template/essentials.txt`
 - Create: `pipeline/src/lastPublished.ts`, `pipeline/src/lastPublished.test.ts`, `pipeline/src/init.ts`, `pipeline/src/draft.ts`, `pipeline/src/draft.test.ts`, `pipeline/src/testing/fixture.ts`
 
 **Interfaces:**
@@ -2972,11 +2986,12 @@ git commit -m "feat(pipeline): units by theme and their titles"
   - `SAMPLE_DIR: string` (absolute path of `pipeline/samples/a1-bg`), `TEMPLATE_DIR: string`
   - `initContent(dir: string): void` (refuses a non-empty directory)
   - `interface EnglishFields { readonly ipa: string; readonly variants: readonly string[]; readonly examples: readonly string[] }`
-  - `interface DraftEntry { readonly entry_id: string; readonly headword: string; readonly pos: PartOfSpeech; readonly sense_en: string; readonly rank: number; readonly order: number; readonly pinned: boolean; readonly band: CefrLevel; readonly level_proposal: CefrLevel; readonly level: CefrLevel; readonly level_flagged: boolean; readonly themes: readonly string[]; readonly english: EnglishFields; readonly l1: Readonly<Record<string, TranslationFields>> }`
+  - `interface DraftEntry { readonly entry_id: string; readonly headword: string; readonly pos: PartOfSpeech; readonly sense_en: string; readonly rank: number; readonly order: number; readonly pinned: boolean; readonly essential: boolean; readonly band: CefrLevel; readonly level_proposal: CefrLevel; readonly level: CefrLevel; readonly level_flagged: boolean; readonly themes: readonly string[]; readonly english: EnglishFields; readonly l1: Readonly<Record<string, TranslationFields>> }`
   - `interface DraftUnit { readonly unit_id: string; readonly level: CefrLevel; readonly entry_ids: readonly string[]; readonly titles: Readonly<Record<string, LocalizedText>> }`
   - `interface Draft { readonly live: readonly string[]; readonly entries: readonly DraftEntry[]; readonly units: readonly DraftUnit[]; readonly problems: readonly string[] }`
   - `runDraft(opts: { dir: string; llm: Llm; offline: boolean }): Promise<Draft>` (also writes `registry.json` and `work/draft.json`)
   - `readDraft(dir: string): Draft`
+  - `readEssentials(dir: string): string[]` (normalised headwords; a missing file is an empty list)
   - Test helpers in `src/testing/fixture.ts`: `makeContent(overrides?: { config?: Partial<PipelineConfig> }): string`; `sampleLlm(): Llm & { calls: { name: string; input: unknown }[] }`; `FIXTURE_TSV: string`
 
 - [ ] **Step 1: Write the template**
@@ -3017,6 +3032,240 @@ git commit -m "feat(pipeline): units by theme and their titles"
 ```
 work/
 .DS_Store
+```
+
+`pipeline/template/essentials.txt` (the starting list; reviewers extend it in the content repository):
+
+```
+# Everyday spoken words that frequency lists rank too low for their CEFR level (Decision 19).
+# One headword per line. Each is described whatever its frequency; its senses are live at the LLM's level,
+# and every one goes to banding review. Written in-house: no licence applies.
+
+# greetings and politeness
+hello
+hi
+goodbye
+bye
+please
+thanks
+thank you
+sorry
+excuse me
+welcome
+okay
+yes
+no
+pardon
+congratulations
+good morning
+good night
+see you
+of course
+sure
+maybe
+oh
+wow
+
+# people and family
+mum
+dad
+mother
+father
+parent
+son
+daughter
+brother
+sister
+grandmother
+grandfather
+grandma
+grandpa
+aunt
+uncle
+cousin
+husband
+wife
+baby
+kid
+friend
+boyfriend
+girlfriend
+neighbour
+
+# feelings and states
+happy
+sad
+tired
+hungry
+thirsty
+angry
+scared
+bored
+excited
+worried
+sick
+ill
+fine
+great
+nice
+lovely
+
+# food and drink
+breakfast
+lunch
+dinner
+bread
+butter
+cheese
+egg
+milk
+coffee
+tea
+juice
+beer
+wine
+sandwich
+soup
+salad
+pizza
+pasta
+rice
+chicken
+fish
+meat
+apple
+banana
+orange
+tomato
+potato
+cake
+chocolate
+sugar
+salt
+ice cream
+
+# at home
+kitchen
+bedroom
+bathroom
+toilet
+shower
+bed
+sofa
+fridge
+cupboard
+window
+door
+key
+lamp
+towel
+soap
+toothbrush
+
+# things people carry and use
+phone
+mobile
+email
+computer
+laptop
+internet
+wifi
+password
+app
+camera
+charger
+TV
+television
+radio
+ticket
+bag
+wallet
+umbrella
+glasses
+watch
+
+# around town and travel
+bus
+train
+taxi
+car
+bike
+airport
+station
+hotel
+restaurant
+cafe
+shop
+supermarket
+pharmacy
+hospital
+post office
+street
+bridge
+park
+museum
+beach
+map
+
+# time
+today
+tomorrow
+yesterday
+tonight
+morning
+afternoon
+evening
+night
+weekend
+Monday
+Tuesday
+Wednesday
+Thursday
+Friday
+Saturday
+Sunday
+
+# weather and colours
+weather
+sun
+rain
+snow
+hot
+cold
+warm
+red
+blue
+green
+yellow
+black
+white
+
+# body and health
+head
+hand
+eye
+tooth
+doctor
+medicine
+pain
+
+# everyday actions
+eat
+drink
+sleep
+wake up
+wash
+cook
+buy
+pay
+open
+close
+wait
+help
+sit
+call
+speak
+listen
 ```
 
 `pipeline/template/README.md`:
@@ -3078,6 +3327,7 @@ const sample = JSON.parse(readFileSync(join(SAMPLE_DIR, 'corpus-v0-bg.pack'), 'u
 
 const EXTRA_SENSES: Record<string, unknown[]> = {
   the: [{ pos: 'det', gloss: '', level: 'A1', ipa: 'ðə', variants: [], themes: [], examples: ['The door is open.'] }],
+  okay: [{ pos: 'intj', gloss: '', level: 'A1', ipa: 'əʊˈkeɪ', variants: ['OK'], themes: [], examples: ['Okay, see you later.'] }],
   go: [{ pos: 'verb', gloss: '', level: 'A1', ipa: 'ɡəʊ', variants: [], themes: ['travel'], examples: ['We go home at six.'] }],
   bank: [
     { pos: 'noun', gloss: 'money', level: 'A2', ipa: 'bæŋk', variants: [], themes: ['shopping'], examples: ['The bank opens at nine.'] },
@@ -3087,6 +3337,7 @@ const EXTRA_SENSES: Record<string, unknown[]> = {
 }
 const EXTRA_BG: Record<string, { translation: string; alternates: string[]; sense: string }> = {
   'the|': { translation: '(определителен член)', alternates: [], sense: '' },
+  'okay|': { translation: 'добре', alternates: ['окей'], sense: '' },
   'go|': { translation: 'отивам', alternates: ['ходя'], sense: '' },
   'bank|money': { translation: 'банка', alternates: [], sense: 'за пари' },
   'bank|building': { translation: 'банка', alternates: [], sense: 'сграда' },
@@ -3161,6 +3412,8 @@ export function makeContent(overrides: { config?: Partial<PipelineConfig> } = {}
   ])
   mkdirSync(join(dir, 'sources'), { recursive: true })
   writeFileSync(join(dir, 'sources', 'invented.tsv'), FIXTURE_TSV)
+  // The template's starting list would ask the fake LLM about words it does not know; tests add their own.
+  writeFileSync(join(dir, 'essentials.txt'), '')
   return dir
 }
 ```
@@ -3196,15 +3449,17 @@ describe('readLastPublished', () => {
 `pipeline/src/draft.test.ts`:
 
 ```ts
-import { readFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { OfflineMiss } from './cache'
 import { Decisions, QUEUES } from './decisions'
 import { readDraft, runDraft } from './draft'
-import { OfflineMiss } from './cache'
-import { LicenceError } from './sources'
-import { makeContent, sampleLlm } from './testing/fixture'
 import { writeJson } from './files'
+import type { Llm, LlmRequest } from './llm'
+import { LicenceError } from './sources'
+import type { SenseProposal } from './stages/senses'
+import { makeContent, sampleLlm } from './testing/fixture'
 
 describe('runDraft', () => {
   it('keeps all 60 sample IDs live in their units, and places the new words', async () => {
@@ -3266,6 +3521,19 @@ describe('runDraft', () => {
     }
     const draft = await runDraft({ dir: makeContent(), llm, offline: false })
     expect(draft.problems).toEqual(['pinned entry hello-1 (hello, intj) is not live: the senses stage no longer proposes it'])
+  })
+
+  it('makes an essential word live at the LLM’s level, sends it to banding review, and counts it toward the target', async () => {
+    const dir = makeContent()
+    writeFileSync(join(dir, 'essentials.txt'), '# test\nOkay\n')
+    const draft = await runDraft({ dir, llm: sampleLlm(), offline: false })
+    const okay = draft.entries.find((e) => e.headword === 'okay')!
+    expect(okay).toMatchObject({ entry_id: 'okay-1', essential: true, level: 'A1', level_flagged: true })
+    expect(draft.live).toContain('okay-1')
+    // A1's target of 62 is now the 60 sample words, okay and the; go (rank 2) no longer fits.
+    expect(draft.live).toContain('the-1')
+    expect(draft.live).not.toContain('go-1')
+    expect(draft.problems).toEqual([])
   })
 
   it('stops before reading anything when a source is not cleared', async () => {
@@ -3396,7 +3664,8 @@ export function initContent(dir: string): void {
 `pipeline/src/draft.ts`:
 
 ```ts
-import type { CefrLevel, LocalizedText, PartOfSpeech } from '@wordado/core'
+import { existsSync, readFileSync } from 'node:fs'
+import { norm, type CefrLevel, type LocalizedText, type PartOfSpeech } from '@wordado/core'
 import { StageCache } from './cache'
 import { readConfig, readThemes } from './config'
 import { contentPaths } from './content'
@@ -3429,6 +3698,8 @@ export interface DraftEntry {
   readonly rank: number
   readonly order: number
   readonly pinned: boolean
+  /** In essentials.txt: live at the LLM's level whatever its frequency (Decision 19). */
+  readonly essential: boolean
   readonly band: CefrLevel
   /** What the banding queue judges: the unit's level for a placed entry, else the banded LLM level. */
   readonly level_proposal: CefrLevel
@@ -3478,17 +3749,20 @@ export async function runDraft(opts: DraftOptions): Promise<Draft> {
 
   const forms = rankForms(sources.map((s) => parseFrequencyList(s.text, s.record.id)), config.max_forms)
   const lemmaResults = await lemmatise(forms, run('lemmas'))
-  const pinnedHeadwords = registry.entries.filter((e) => e.pinned).map((e) => e.headword)
+  const essentials = new Set(readEssentials(dir))
+  const pinnedHeadwords = [...registry.entries.filter((e) => e.pinned).map((e) => e.headword), ...essentials]
   const lemmas = rankLemmas(forms, lemmaResults, pinnedHeadwords, config.max_lemmas)
   const senses = await describeLemmas(lemmas, themes.map((t) => t.theme_id), run('senses'))
 
   const inScope = lemmas.flatMap((lemma, i) =>
     senses[i]!.flatMap((s, order) => {
       const band = frequencyBand(lemma.rank, config.targets)
-      const banded = bandLevel(s.level, band)
+      const essential = essentials.has(lemma.lemma)
+      // An essential word's frequency understates it, so its level is the LLM's, and a reviewer checks every one.
+      const banded = essential ? { level: s.level === 'C2' ? null : s.level, flagged: true } : bandLevel(s.level, band)
       if (banded.level === null) return []
       if (!lemma.pinned && !config.levels.includes(banded.level)) return []
-      return [{ ...s, rank: lemma.rank, order, band, banded: banded.level, flagged: banded.flagged }]
+      return [{ ...s, rank: lemma.rank, order, band, essential, banded: banded.level, flagged: banded.flagged }]
     }),
   )
   const translations: Record<string, TranslationFields[]> = {}
@@ -3521,6 +3795,7 @@ export async function runDraft(opts: DraftOptions): Promise<Draft> {
       rank: s.rank,
       order: s.order,
       pinned: pinned.has(entry_id),
+      essential: s.essential,
       band: s.band,
       level_proposal: proposal,
       level: foldField(proposal, decisions.for(QUEUES.level, entry_id)).value,
@@ -3535,7 +3810,7 @@ export async function runDraft(opts: DraftOptions): Promise<Draft> {
     foldField(e.english, decisions.for(QUEUES.english, e.entry_id)).dropped ||
     config.l1s.some((l) => foldField(e.l1[l], decisions.for(QUEUES.translation(l), e.entry_id)).dropped)
   const live = selectLive(
-    entries.map((e) => ({ entry_id: e.entry_id, level: e.level, rank: e.rank, order: e.order, pinned: e.pinned, wasLive: last.live.has(e.entry_id), dropped: dropped(e) })),
+    entries.map((e) => ({ entry_id: e.entry_id, level: e.level, rank: e.rank, order: e.order, pinned: e.pinned || e.essential, wasLive: last.live.has(e.entry_id), dropped: dropped(e) })),
     config.levels,
     config.targets,
   )
@@ -3577,14 +3852,21 @@ export async function runDraft(opts: DraftOptions): Promise<Draft> {
 export function readDraft(dir: string): Draft {
   return readJson<Draft>(contentPaths(dir).draft)
 }
+
+/** essentials.txt: one headword per line, # for comments (Decision 19). */
+export function readEssentials(dir: string): string[] {
+  const file = contentPaths(dir).essentials
+  if (!existsSync(file)) return []
+  return [...new Set(readFileSync(file, 'utf8').split(/\r?\n/).map((l) => norm(l.replace(/#.*/, ''))).filter((l) => l !== ''))]
+}
 ```
 
-A pinned entry the senses stage stops proposing cannot be live. It has no fields to ship, and the gate refuses the release (Decision 9). The fix is to correct that lemma's line in `cache/senses.jsonl`, which is plain JSON in the content repository, and run `corpus draft` again. The runbook (Task 17) says so.
+A pinned entry the senses stage stops proposing cannot be live. It has no fields to ship, and the gate refuses the release (Decision 9). The fix is to correct that lemma's line in `cache/senses.jsonl`, which is plain JSON in the content repository, and run `corpus draft` again. The runbook (Task 18) says so.
 
 - [ ] **Step 5: Run them to see them pass**
 
 Run: `pnpm --filter @wordado/pipeline test -- lastPublished draft && pnpm --filter @wordado/pipeline typecheck`
-Expected: PASS, 8 tests.
+Expected: PASS, 9 tests.
 
 If the unit counts differ, check `the`/`go` against the fixture's A1 target of 62 before changing the expectations. The test's comment gives the arithmetic.
 
@@ -3637,6 +3919,7 @@ const entry = (entry_id: string, extra: Partial<DraftEntry> = {}): DraftEntry =>
   rank: 1,
   order: 0,
   pinned: false,
+  essential: false,
   band: 'A1',
   level_proposal: 'A1',
   level: 'A1',
@@ -4163,7 +4446,7 @@ import { execFileSync } from 'node:child_process'
 import { describe, expect, it } from 'vitest'
 import { ffmpegEncoder, hasFfmpeg } from './encoder'
 
-// CI installs ffmpeg for this suite (Task 17); a laptop without it skips only this file.
+// CI installs ffmpeg for this suite (Task 18); a laptop without it skips only this file.
 describe.skipIf(!hasFfmpeg())('ffmpegEncoder', () => {
   const tone = (): Uint8Array =>
     new Uint8Array(
@@ -6150,7 +6433,236 @@ git commit -m "feat(pipeline): the corpus commands, the live-manifest check, and
 
 ---
 
-### Task 17: The content repository's workflow, CI, and the runbook
+### Task 17: Frequency lists from FineWeb and Google Books
+
+The pilot's choice of sources (Decision 19), made repeatable in the pipeline. `corpus count-text` counts word forms in Parquet shards (FineWeb's `text` column). `corpus sum-gbooks` adds up Google Books Ngram v3 1-gram counts over a range of years. Both write the `form<TAB>count` file that `parseFrequencyList` reads, most frequent first. The operator runs them once per source refresh, on a workstation: FineWeb shards are 2 GB each. The files then go into the content repository's `sources/`, with their licence records.
+
+**Files:**
+- Create: `pipeline/src/prepare.ts`, `pipeline/src/prepare.test.ts`
+- Modify: `pipeline/src/cli.ts`, `pipeline/package.json`
+
+**Interfaces:**
+- Consumes: `norm` (`@wordado/core`); `parseFrequencyList` (Task 3, in the test).
+- Produces: `countInto(counts: Map<string, number>, text: string): void`; `parquetTexts(file: string, column?: string): AsyncGenerator<string>`; `countParquet(files: readonly string[], progress?: (file: string, texts: number) => void): Promise<Map<string, number>>`; `sumGoogleBooks(files: readonly string[], from: number, to: number): Promise<Map<string, number>>`; `writeCounts(file: string, counts: ReadonlyMap<string, number>, opts: { top?: number; comment: string }): number`.
+
+- [ ] **Step 1: Add the dependencies**
+
+Run: `pnpm --filter @wordado/pipeline add hyparquet@^1.31.2 && pnpm --filter @wordado/pipeline add -D hyparquet-writer@^0.16.10`
+(Both are MIT. hyparquet reads Snappy-compressed Parquet, which FineWeb uses, with no native code.)
+
+- [ ] **Step 2: Write the failing test**
+
+`pipeline/src/prepare.test.ts`:
+
+```ts
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { gzipSync } from 'node:zlib'
+import { parquetWriteFile } from 'hyparquet-writer'
+import { describe, expect, it } from 'vitest'
+import { parseFrequencyList } from './frequency'
+import { countInto, countParquet, parquetTexts, sumGoogleBooks, writeCounts } from './prepare'
+
+const tmp = () => mkdtempSync(join(tmpdir(), 'prepare-'))
+
+describe('countInto', () => {
+  it('counts word forms as the frequency lists do: lowercased, apostrophes kept inside a word, hyphens split', () => {
+    const counts = new Map<string, number>()
+    countInto(counts, 'Don’t stop! The well-known CAFÉ, the café. 42')
+    expect([...counts]).toEqual([["don't", 1], ['stop', 1], ['the', 2], ['well', 1], ['known', 1], ['café', 2]])
+  })
+})
+
+describe('parquetTexts and countParquet', () => {
+  it('reads the text column of every row group, in order, and counts it', async () => {
+    const file = join(tmp(), 'shard.parquet')
+    await parquetWriteFile({
+      filename: file,
+      columnData: [
+        { name: 'text', data: ['a b', 'b', 'c c c', 'd', 'e'], type: 'STRING' },
+        { name: 'id', data: ['1', '2', '3', '4', '5'], type: 'STRING' },
+      ],
+      rowGroupSize: 2,
+    })
+    const texts: string[] = []
+    for await (const t of parquetTexts(file)) texts.push(t)
+    expect(texts).toEqual(['a b', 'b', 'c c c', 'd', 'e'])
+    expect(Object.fromEntries(await countParquet([file]))).toEqual({ a: 1, b: 2, c: 3, d: 1, e: 1 })
+  })
+})
+
+describe('sumGoogleBooks', () => {
+  it('adds up the years asked for, folds case, and skips part-of-speech tagged forms', async () => {
+    const file = join(tmp(), '1-00000-of-00004.gz')
+    const lines = ['Water\t1999,5,1\t2000,3,1\t2019,4,2\t2020,9,9', 'water\t2010,1,1', 'water_NOUN\t2005,100,1', 'the\t2005,10,1', 'old\t1990,7,1']
+    writeFileSync(file, gzipSync(`${lines.join('\n')}\n`))
+    expect(Object.fromEntries(await sumGoogleBooks([file], 2000, 2019))).toEqual({ water: 8, the: 10 })
+  })
+})
+
+describe('writeCounts', () => {
+  it('writes the most frequent forms first, ties by form, in a file parseFrequencyList reads back', () => {
+    const file = join(tmp(), 'sources', 'x.tsv')
+    expect(writeCounts(file, new Map([['b', 2], ['a', 2], ['c', 5], ['d', 1]]), { top: 3, comment: 'test counts' })).toBe(3)
+    const text = readFileSync(file, 'utf8')
+    expect(text).toBe('# test counts\nform\tcount\nc\t5\na\t2\nb\t2\n')
+    expect([...parseFrequencyList(text, 'x')]).toEqual([['c', 5], ['a', 2], ['b', 2]])
+  })
+})
+```
+
+- [ ] **Step 3: Run it to see it fail**
+
+Run: `pnpm --filter @wordado/pipeline test -- prepare`
+Expected: FAIL, "Failed to resolve import './prepare'".
+
+- [ ] **Step 4: Implement**
+
+`pipeline/src/prepare.ts`:
+
+```ts
+import { createReadStream, mkdirSync, writeFileSync } from 'node:fs'
+import { dirname } from 'node:path'
+import { createInterface } from 'node:readline'
+import { createGunzip } from 'node:zlib'
+import { norm } from '@wordado/core'
+import { asyncBufferFromFile, parquetMetadataAsync, parquetReadObjects } from 'hyparquet'
+
+/** A running word: letters, with apostrophes inside (don't). Hyphens and digits split words. */
+const TOKEN = /\p{L}+(?:['’]\p{L}+)*/gu
+
+/** Adds a text's word forms to `counts`, normalised as parseFrequencyList normalises them (Task 3). */
+export function countInto(counts: Map<string, number>, text: string): void {
+  // One normalisation per text rather than per token: this runs over billions of tokens.
+  for (const [token] of text.normalize('NFC').toLowerCase().matchAll(TOKEN)) {
+    const form = token.includes('’') ? token.replaceAll('’', "'") : token
+    counts.set(form, (counts.get(form) ?? 0) + 1)
+  }
+}
+
+/** One Parquet file's text column, a row group at a time, so a 2 GB shard never sits in memory whole. */
+export async function* parquetTexts(file: string, column = 'text'): AsyncGenerator<string> {
+  const buffer = await asyncBufferFromFile(file)
+  const metadata = await parquetMetadataAsync(buffer)
+  let rowStart = 0
+  for (const group of metadata.row_groups) {
+    const rowEnd = rowStart + Number(group.num_rows)
+    const rows = (await parquetReadObjects({ file: buffer, metadata, columns: [column], rowStart, rowEnd })) as Record<string, unknown>[]
+    for (const row of rows) {
+      const text = row[column]
+      if (typeof text === 'string') yield text
+    }
+    rowStart = rowEnd
+  }
+}
+
+export async function countParquet(files: readonly string[], progress?: (file: string, texts: number) => void): Promise<Map<string, number>> {
+  const counts = new Map<string, number>()
+  for (const file of files) {
+    let texts = 0
+    for await (const text of parquetTexts(file)) {
+      countInto(counts, text)
+      texts += 1
+      if (progress && texts % 100_000 === 0) progress(file, texts)
+    }
+    progress?.(file, texts)
+  }
+  return counts
+}
+
+/**
+ * Google Books Ngram v3 1-grams: `ngram TAB year,match_count,volume_count TAB …`.
+ * Adds up `match_count` for years `from`–`to` (the pilot used 2000–2019, so the
+ * counts reflect current usage), folds case, and skips part-of-speech tagged
+ * forms (`water_NOUN`), which would count a word twice.
+ */
+export async function sumGoogleBooks(files: readonly string[], from: number, to: number): Promise<Map<string, number>> {
+  const counts = new Map<string, number>()
+  for (const file of files) {
+    const lines = createInterface({ input: createReadStream(file).pipe(createGunzip()), crlfDelay: Infinity })
+    for await (const line of lines) {
+      const [ngram, ...cells] = line.split('\t')
+      if (!ngram || ngram.includes('_')) continue
+      let n = 0
+      for (const cell of cells) {
+        const [year, match] = cell.split(',')
+        const y = Number(year)
+        if (y >= from && y <= to) n += Number(match)
+      }
+      if (n === 0) continue
+      const form = norm(ngram)
+      counts.set(form, (counts.get(form) ?? 0) + n)
+    }
+  }
+  return counts
+}
+
+/** The pipeline's input format (`form<TAB>count`, a comment, a header), most frequent first. Returns the rows written. */
+export function writeCounts(file: string, counts: ReadonlyMap<string, number>, opts: { top?: number; comment: string }): number {
+  const rows = [...counts]
+    .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
+    .slice(0, opts.top ?? 200_000)
+  mkdirSync(dirname(file), { recursive: true })
+  writeFileSync(file, `# ${opts.comment}\nform\tcount\n${rows.map(([form, n]) => `${form}\t${n}`).join('\n')}\n`)
+  return rows.length
+}
+```
+
+200,000 forms is far more than ranking to C1 needs (`max_forms` is 12,000), and keeps the file a few megabytes. `parseFrequencyList` drops what is not a word (digits, stray symbols) when the pipeline reads the file.
+
+In `pipeline/src/cli.ts`:
+
+1. Add `import { countParquet, sumGoogleBooks, writeCounts } from './prepare'`.
+2. Change `const VALUED = new Set(['--by', '--batch'])` to `const VALUED = new Set(['--by', '--batch', '--from', '--to'])`.
+3. In `USAGE`, after the `live` line, add:
+
+```
+  frequency lists (run on a workstation; the output goes into the content repository's sources/):
+    count-text <out.tsv> <parquet...>                  word forms in Parquet text shards (FineWeb)
+    sum-gbooks <out.tsv> <gz...> [--from Y] [--to Y]   Google Books 1-grams, years 2000-2019 by default
+```
+
+4. Add these cases to `main`'s `switch`, before `build`:
+
+```ts
+    case 'count-text': {
+      const [out, ...files] = positional.slice(1)
+      if (!out || files.length === 0) usage()
+      const counts = await countParquet(files, (file, texts) => console.error(`  ${file}: ${texts.toLocaleString('en')} texts`))
+      const tokens = [...counts.values()].reduce((a, b) => a + b, 0)
+      const written = writeCounts(out, counts, { comment: `corpus count-text over ${files.length} Parquet files, ${tokens} tokens, ${now()}` })
+      console.log(`wrote ${out}: ${written} forms, ${tokens.toLocaleString('en')} tokens`)
+      break
+    }
+    case 'sum-gbooks': {
+      const [out, ...files] = positional.slice(1)
+      if (!out || files.length === 0) usage()
+      const from = Number(option('--from') ?? 2000)
+      const to = Number(option('--to') ?? 2019)
+      if (!Number.isInteger(from) || !Number.isInteger(to) || from > to) usage()
+      const counts = await sumGoogleBooks(files, from, to)
+      const written = writeCounts(out, counts, { comment: `corpus sum-gbooks, Google Books Ngram v3 1-grams, ${from}-${to}, ${now()}` })
+      console.log(`wrote ${out}: ${written} forms`)
+      break
+    }
+```
+
+- [ ] **Step 5: Run it to see it pass**
+
+Run: `pnpm --filter @wordado/pipeline test && pnpm --filter @wordado/pipeline typecheck && pnpm lint`
+Expected: PASS, 5 new tests, and every earlier suite still green.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add pipeline/package.json pnpm-lock.yaml pipeline/src/prepare.ts pipeline/src/prepare.test.ts pipeline/src/cli.ts
+git commit -m "feat(pipeline): frequency lists from FineWeb shards and Google Books 1-grams"
+```
+
+---
+
+### Task 18: The content repository's workflow, CI, and the runbook
 
 **Files:**
 - Create: `pipeline/template/.github/workflows/corpus.yml`, `pipeline/README.md`
@@ -6421,6 +6933,43 @@ it, and of the chosen voice, for commercial use of their output. Record that out
 field for the first source, or in the content repository's README. A source that needs attribution appears in
 each release's `release.json`, and the app must show it (a follow-up).
 
+## Preparing the frequency lists
+
+The pilot (`docs/research/2026-09-27-frequency-pilot/` in the research repository) chose two sources: our own count of
+FineWeb, and Google Books GB for 2000–2019 (Decision 19). Both need the legal review's clearance and an attribution.
+On a workstation, not in Actions:
+
+1. **FineWeb.** Download 10 of the shards of `HuggingFaceFW/fineweb` `sample/10BT`, about 5 billion tokens
+   (`https://huggingface.co/datasets/HuggingFaceFW/fineweb/resolve/main/sample/10BT/000_00000.parquet`, and so on).
+   Then run `pnpm --filter @wordado/pipeline corpus count-text "$PWD/content/sources/fineweb.tsv" <shards...>`.
+   Time one shard first: the rest take as long each.
+2. **Google Books GB.** Download the four files listed at
+   `https://storage.googleapis.com/books/ngrams/books/20200217/eng-gb/eng-gb-1-ngrams_exports.html`, about 3.6 GB.
+   Then run `pnpm --filter @wordado/pipeline corpus sum-gbooks "$PWD/content/sources/google-books-gb.tsv" <files...>`.
+3. **The licence register.** Record both in `sources.json` with the legal review's clearance:
+
+   ```json
+   [
+     {
+       "id": "fineweb", "file": "fineweb.tsv", "title": "FineWeb (sample-10BT, 10 shards), counted by corpus count-text",
+       "url": "https://huggingface.co/datasets/HuggingFaceFW/fineweb", "licence": "ODC-By 1.0; Common Crawl terms of use",
+       "commercial_use": true, "share_alike": false,
+       "attribution": "Word frequencies counted from FineWeb by Hugging Face (ODC-By 1.0).",
+       "cleared_by": "", "cleared_on": "", "notes": ""
+     },
+     {
+       "id": "google-books-gb", "file": "google-books-gb.tsv", "title": "Google Books Ngram, British English 1-grams (20200217), 2000-2019",
+       "url": "https://storage.googleapis.com/books/ngrams/books/datasetsv3.html", "licence": "CC BY 3.0 Unported",
+       "commercial_use": true, "share_alike": false,
+       "attribution": "Word frequencies from the Google Books Ngram Viewer (https://books.google.com/ngrams), CC BY 3.0.",
+       "cleared_by": "", "cleared_on": "", "notes": ""
+     }
+   ]
+   ```
+4. **Essential words.** `essentials.txt` starts with about 230 everyday spoken words that frequency lists rank
+   too low (greetings, family, feelings, food, the home, the days of the week). Reviewers add to it; anything on
+   it is described whatever its frequency, and every sense of it goes to banding review.
+
 ## Running a version
 
 1. **Draft** (Actions › Corpus › `draft`). It opens a pull request with the caches, the registry and new review
@@ -6510,13 +7059,13 @@ CI must be green before merge: the new ffmpeg step and the template's actionlint
 
 ---
 
-### Task 18 (operator): The content repository, and the first real run
+### Task 19 (operator): The content repository, and the first real run
 
 Outward-facing. The executing agent asks the product owner before each of these steps and does not run them unasked.
 
 1. Merge the plan 8 pull request once CI is green.
 2. Follow `pipeline/README.md` › *Setting up*: create `wordado/wordado-content` (private), `corpus init`, its Actions settings, variables and environments, the OpenRouter key and privacy setting, and the `corpus_reports` role.
-3. **Stop here until the legal review clears a frequency list** (Decision 1). Then add it to `sources/` and `sources.json` with its clearance, and run **Corpus › draft**. Before the full run, a trial with `max_lemmas: 200` and `max_usd_per_run: 2` shows the proposals and the cost per item. Delete that trial's cache lines with its `pipeline.json` change if the prompts change afterwards.
+3. **Stop here until the legal review clears FineWeb and Google Books GB** (Decisions 1 and 19). Then follow `pipeline/README.md` › *Preparing the frequency lists*: `count-text`, `sum-gbooks`, and their `sources.json` records with the clearance. Commit, then run **Corpus › draft**. Before the full run, a trial with `max_lemmas: 200` and `max_usd_per_run: 2` shows the proposals and the cost per item. Delete that trial's cache lines with its `pipeline.json` change if the prompts change afterwards.
 4. The first review round, audio and release follow *Running a version*. The first release is version 1, checked against the sample (v0), which is what learners have today.
 
 ---
