@@ -3,7 +3,7 @@ import { dirname } from 'node:path'
 import { createInterface } from 'node:readline'
 import { createGunzip } from 'node:zlib'
 import { norm } from '@wordado/core'
-import { asyncBufferFromFile, parquetMetadataAsync, parquetReadObjects } from 'hyparquet'
+import { asyncBufferFromFile, asyncBufferFromUrl, parquetMetadataAsync, parquetReadObjects } from 'hyparquet'
 
 /** A running word: letters, with apostrophes inside (don't). Hyphens and digits split words. */
 const TOKEN = /\p{L}+(?:['’]\p{L}+)*/gu
@@ -17,9 +17,13 @@ export function countInto(counts: Map<string, number>, text: string): void {
   }
 }
 
-/** One Parquet file's text column, a row group at a time, so a 2 GB shard never sits in memory whole. */
-export async function* parquetTexts(file: string, column = 'text'): AsyncGenerator<string> {
-  const buffer = await asyncBufferFromFile(file)
+/**
+ * One Parquet file's text column, a row group at a time, so a 2 GB shard never sits in memory whole. A source is a
+ * path or an http(s) URL. A URL is read by byte ranges into memory and never saved: counting FineWeb this way keeps
+ * no copy of its web text on disk (licence review, question 8).
+ */
+export async function* parquetTexts(source: string, column = 'text'): AsyncGenerator<string> {
+  const buffer = /^https?:\/\//.test(source) ? await asyncBufferFromUrl({ url: source }) : await asyncBufferFromFile(source)
   const metadata = await parquetMetadataAsync(buffer)
   let rowStart = 0
   for (const group of metadata.row_groups) {
@@ -33,12 +37,35 @@ export async function* parquetTexts(file: string, column = 'text'): AsyncGenerat
   }
 }
 
-export async function countParquet(files: readonly string[], progress?: (file: string, texts: number) => void): Promise<Map<string, number>> {
+/**
+ * The word table's size limit. Billions of tokens of web text hold tens of millions of distinct forms, most seen
+ * once, which outgrow Node's default heap; 12 million entries stay well inside it.
+ */
+export const MAX_FORMS = 12_000_000
+
+/**
+ * Drops the rarest forms, raising the floor (seen once, then twice, …) until at most half of `max` remain, so the
+ * next pruning is far off. A pruned form that comes back starts again from zero, which costs it at most the floor
+ * per pruning: nothing for the 200,000 most frequent forms of a corpus this size, whose counts run to hundreds.
+ */
+export function pruneRare(counts: Map<string, number>, max: number): void {
+  for (let floor = 1; counts.size > max / 2; floor += 1) {
+    for (const [form, n] of counts) if (n <= floor) counts.delete(form)
+  }
+}
+
+export async function countParquet(
+  sources: readonly string[],
+  progress?: (source: string, texts: number) => void,
+  opts: { maxForms?: number } = {},
+): Promise<Map<string, number>> {
+  const maxForms = opts.maxForms ?? MAX_FORMS
   const counts = new Map<string, number>()
-  for (const file of files) {
+  for (const file of sources) {
     let texts = 0
     for await (const text of parquetTexts(file)) {
       countInto(counts, text)
+      if (counts.size > maxForms) pruneRare(counts, maxForms)
       texts += 1
       if (progress && texts % 100_000 === 0) progress(file, texts)
     }

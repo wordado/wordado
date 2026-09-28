@@ -84,10 +84,17 @@ The pilot (`docs/research/2026-09-27-frequency-pilot/` in the research repositor
 FineWeb, and Google Books GB for 2000–2019 (Decision 19). Both need the legal review's clearance and an attribution.
 On a workstation, not in Actions:
 
-1. **FineWeb.** Download 10 of the shards of `HuggingFaceFW/fineweb` `sample/10BT`, about 5 billion tokens
-   (`https://huggingface.co/datasets/HuggingFaceFW/fineweb/resolve/main/sample/10BT/000_00000.parquet`, and so on).
-   Then run `pnpm --filter @wordado/pipeline corpus count-text "$PWD/content/sources/fineweb.tsv" <shards...>`.
-   Time one shard first: the rest take as long each.
+1. **FineWeb.** Stream 10 of the shards of `HuggingFaceFW/fineweb` `sample/10BT`, about 5 billion tokens, straight
+   from Hugging Face: `count-text` reads each one by byte ranges into memory and **saves no copy of the web text**
+   (the licence review's question 8). Nothing to download or delete:
+   ```bash
+   pnpm --filter @wordado/pipeline corpus count-text "$PWD/content/sources/fineweb.tsv" \
+     https://huggingface.co/datasets/HuggingFaceFW/fineweb/resolve/main/sample/10BT/00{0..9}_00000.parquet
+   ```
+   It takes about as long as the network allows, 20–40 minutes for the ten. The word table stays within Node's
+   default memory: when it reaches 12 million forms, the rarest are dropped, which leaves the 200,000 kept forms'
+   counts untouched. The 2026-09-28 count was made from downloaded shards, before streaming existed, and they were
+   deleted afterwards (`sources.json` notes).
 2. **Google Books GB.** Download the four files listed at
    `https://storage.googleapis.com/books/ngrams/books/20200217/eng-gb/eng-gb-1-ngrams_exports.html`, about 3.6 GB.
    Then run `pnpm --filter @wordado/pipeline corpus sum-gbooks "$PWD/content/sources/google-books-gb.tsv" <files...>`.
