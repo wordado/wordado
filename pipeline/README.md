@@ -55,12 +55,18 @@ absolutely: `"$PWD/content"` from the repository root.
    publish.
 3. **OpenRouter.** Create a key with a monthly credit limit. In Settings › Privacy, turn off providers that may
    train on inputs (the chat requests also send `data_collection: "deny"`; the speech endpoint does not document
-   that field). Check `llm.model` and `tts.model` in `pipeline.json` against openrouter.ai/models.
+   that field). Leave *zero data retention* off: Google's endpoint for Gemini TTS keeps data for a while, and ZDR
+   filters it out ("ZDR violation (account settings)"); nothing about learners is ever sent. Check `llm.model` and
+   `tts.model` in `pipeline.json` against openrouter.ai/models.
 4. **The report reader.** In Neon (production branch, SQL editor):
    `create role corpus_reports login password '<generated>'; grant select on content_report to corpus_reports;`
    `REPORTS_DATABASE_URL` is its direct connection string, with `sslmode=require`. It can read reports and nothing else.
 5. **Voices.** Try the UK voice on a dozen words before the first `audio` run, and change `tts.accents.uk` until a
-   native listener is happy. Every later change remakes every clip.
+   native listener is happy. Every later change remakes every clip. The 2026-09-28 trial chose Gemini 3.8 Flash TTS,
+   voice Aoede, steered to a British accent through `provider_options` (the template's default). OpenAI's
+   `gpt-4o-mini-tts` is not on OpenRouter, and MAI-Voice-2 has US voices only (a candidate for a later US accent).
+   Gemini speaks raw PCM only, so its voice sets `"response_format": "pcm"`; the TTS client wraps the PCM as WAV at
+   the rate the response names, and the encoder takes it from there.
 
 ## The legal gate (spec §5.4, §15)
 

@@ -37,6 +37,15 @@ describe('configProblems', () => {
     expect(configProblems({ ...validConfig, tts: { ...validConfig.tts, accents: {} } })).toEqual(['tts.accents.uk: required'])
   })
 
+  it('accepts mp3 or pcm as a voice’s response format, and nothing else', () => {
+    const withFormat = (response_format: string) => ({
+      ...validConfig,
+      tts: { ...validConfig.tts, accents: { uk: { ...validConfig.tts.accents.uk, response_format } } },
+    })
+    expect(configProblems(withFormat('pcm'))).toEqual([])
+    expect(configProblems(withFormat('wav'))).toEqual(['tts.accents.uk.response_format: must be mp3 or pcm'])
+  })
+
   it('refuses levels out of path order, which would make units go backwards', () => {
     expect(configProblems({ ...validConfig, levels: ['A2', 'A1'] })).toEqual(['levels: must be in CEFR order without repeats'])
   })
