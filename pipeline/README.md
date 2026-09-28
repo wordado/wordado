@@ -40,12 +40,19 @@ absolutely: `"$PWD/content"` from the repository root.
 1. **The content repository.** `gh repo create wordado/wordado-content --private`, then from this repository's root:
    `pnpm --filter @wordado/pipeline corpus init "$PWD/content"`, and in `content/`: `git init -b main`, commit, and
    `git remote add origin https://github.com/wordado/wordado-content.git && git push -u origin main`.
-2. **Its Actions.** Settings › Actions › General › *Allow GitHub Actions to create and approve pull requests*.
-   Variables: `PIPELINE_REF` (a commit of wordado/wordado; move it forward on purpose), `CLOUDFLARE_ACCOUNT_ID`,
-   `CONTENT_BUCKET` (`wordado-content`), `CONTENT_MANIFEST_URL` (`https://content.wordado.com/manifest.json`).
-   Environment `corpus`: secrets `OPENROUTER_API_KEY` and `REPORTS_DATABASE_URL`. Environment `production`, with
-   the product owner as required reviewer: secrets `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY` (the R2 token of
-   `docs/deploy.md` step 5).
+2. **Its Actions.** The repository is private on GitHub Free, which offers neither environment secrets nor
+   required reviewers in private repositories, so everything is repository-level and the workflow gates the release
+   itself. Settings › Actions › General › *Allow GitHub Actions to create and approve pull requests*. Then, from
+   inside `content/`:
+   - Variables: `gh variable set PIPELINE_REF --body <commit of wordado/wordado>` (move it forward on purpose),
+     `CLOUDFLARE_ACCOUNT_ID`, `CONTENT_BUCKET` (`wordado-content`), `CONTENT_MANIFEST_URL`
+     (`https://content.wordado.com/manifest.json`), and `RELEASE_ACTORS`: the GitHub users allowed to publish,
+     separated by spaces or commas (`danchom`).
+   - Secrets: `gh secret set OPENROUTER_API_KEY`, `gh secret set REPORTS_DATABASE_URL`,
+     `gh secret set R2_ACCESS_KEY_ID` and `gh secret set R2_SECRET_ACCESS_KEY` (the R2 token of `docs/deploy.md`
+     step 5). Each step of the workflow receives only the secrets it uses.
+   Give native-speaker reviewers write access to open pull requests: without being in `RELEASE_ACTORS`, they cannot
+   publish.
 3. **OpenRouter.** Create a key with a monthly credit limit. In Settings › Privacy, turn off providers that may
    train on inputs (the chat requests also send `data_collection: "deny"`; the speech endpoint does not document
    that field). Check `llm.model` and `tts.model` in `pipeline.json` against openrouter.ai/models.
@@ -119,7 +126,7 @@ On a workstation, not in Actions:
 6. **Status**, locally, until it says `0 problems, 0 items awaiting review`. It reads `work/draft.json`, which is
    not committed, so first pull `main` (the Corpus › `draft` action's merged caches) and run
    `corpus draft "$PWD/content" --offline`, which rebuilds the draft from the caches without spending money.
-7. **Release** (`release`), approved by the `production` environment's reviewer. It checks that the CDN serves
+7. **Release** (`release`, with `release` typed in the *confirm* field; only users in `RELEASE_ACTORS` can run it). It checks that the CDN serves
    `last-published/`, rebuilds the draft `--offline` from the committed caches (never spending money, and never
    publishing a proposal nobody has seen), builds with every gate, uploads packs, audio and `fixes.json`, then
    the manifest, checks that the CDN serves it, and commits the new `last-published/` to main.

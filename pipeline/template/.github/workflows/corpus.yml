@@ -4,6 +4,10 @@ name: Corpus
 # wordado/wordado at vars.PIPELINE_REF; this repository holds the content it reads and writes.
 # draft, audio and triage open a pull request with what they changed; release publishes to R2,
 # manifest last, and commits the new last-published/ to main.
+#
+# This repository is private on GitHub Free, which offers neither environment secrets nor required
+# reviewers there. Secrets are repository secrets, each handed only to the step that needs it, and a
+# release runs only for a user named in vars.RELEASE_ACTORS who typed "release" in the confirm field.
 on:
   workflow_dispatch:
     inputs:
@@ -12,6 +16,10 @@ on:
         type: choice
         required: true
         options: [draft, audio, triage, release]
+      confirm:
+        description: For a release, type release
+        type: string
+        required: false
 
 permissions:
   contents: write
@@ -32,7 +40,6 @@ jobs:
     if: inputs.action != 'release'
     runs-on: ubuntu-24.04
     timeout-minutes: 240
-    environment: corpus
     steps:
       - uses: actions/checkout@v5
         with:
@@ -90,19 +97,33 @@ jobs:
     if: inputs.action == 'release'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
-    environment: production
     env:
       OUT: ${{ github.workspace }}/out
       BUCKET: s3://${{ vars.CONTENT_BUCKET }}
       R2: https://${{ vars.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
       MANIFEST_URL: ${{ vars.CONTENT_MANIFEST_URL }}
-      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
       AWS_DEFAULT_REGION: auto
       # R2 does not take the AWS CLI's default integrity headers.
       AWS_REQUEST_CHECKSUM_CALCULATION: when_required
       AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
     steps:
+      # The release gate that a required reviewer would be on a paid plan: nothing runs until it passes.
+      - name: Only a release actor who typed "release" can publish
+        env:
+          CONFIRM: ${{ inputs.confirm }}
+          RELEASE_ACTORS: ${{ vars.RELEASE_ACTORS }}
+        run: |
+          if [ "$CONFIRM" != release ]; then
+            echo "::error::Type release in the confirm field to publish."
+            exit 1
+          fi
+          case " $(echo "$RELEASE_ACTORS" | tr ',' ' ') " in
+            *" $GITHUB_TRIGGERING_ACTOR "*) echo "$GITHUB_TRIGGERING_ACTOR may release." ;;
+            *)
+              echo "::error::$GITHUB_TRIGGERING_ACTOR is not in the repository variable RELEASE_ACTORS."
+              exit 1
+              ;;
+          esac
       - uses: actions/checkout@v5
         with:
           path: content
@@ -130,6 +151,9 @@ jobs:
       - name: Every file the manifest reaches is present, with its checksum
         run: $CORPUS publishable "$OUT"
       - name: Upload the packs and the audio (not the manifest)
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
         run: |
           aws s3 sync "$OUT" "$BUCKET" --endpoint-url "$R2" --exclude '*' --include '*.pack' \
             --content-type application/json --cache-control 'public, max-age=31536000, immutable'
@@ -138,6 +162,9 @@ jobs:
           aws s3 cp "$OUT/fixes.json" "$BUCKET/fixes.json" --endpoint-url "$R2" \
             --content-type application/json --cache-control no-cache
       - name: Publish the manifest, last
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
         run: |
           aws s3 cp "$OUT/manifest.json" "$BUCKET/manifest.json" --endpoint-url "$R2" \
             --content-type application/json --cache-control no-cache
@@ -152,13 +179,13 @@ jobs:
         run: |
           $CORPUS published "$GITHUB_WORKSPACE/content" "$OUT"
           version=$(node -e "console.log(JSON.parse(require('fs').readFileSync('last-published/manifest.json','utf8')).corpus_version)")
-          git add last-published registry.json
+          # Only last-published/: the offline draft leaves registry.json as the merged draft pull request left it,
+          # and no other job writes last-published/, so the rebase below cannot conflict.
+          git add last-published
           git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
             commit -m "corpus: published version $version (run $GITHUB_RUN_ID)"
-          # The manifest is already live, so this must land: a pull request merged during the run (a reviewer's
-          # decisions) would make a plain push non-fast-forward. Reviewers' pull requests do not touch
-          # last-published/ or registry.json, so the rebase does not conflict. A push that loses a second race
-          # is retried once.
+          # The manifest is already live, so this must land: a pull request merged during the run would make a
+          # plain push non-fast-forward. A push that loses a second race is retried once.
           for attempt in 1 2; do
             if git pull --rebase --autostash origin main && git push origin HEAD:main; then exit 0; fi
             echo "Attempt $attempt to push the release record failed."

@@ -136,7 +136,8 @@ private `wordado/wordado-research`, cloned into `docs/research/` and ignored her
      expires after 30 days, and nothing is deployed.
 
   The reviewer is set on the `production` environment (Settings › Environments › production). The content
-  repository's `production` environment has the same reviewer, for its **Corpus** release.
+  repository is private on GitHub Free, which has no required reviewers there: its **Corpus** release runs
+  only for the users in its `RELEASE_ACTORS` variable, who type `release` to confirm (`pipeline/README.md`).
 - **Migrations:** they run while the previous Worker still serves, and `wrangler rollback` restores a
   Worker that runs against the new schema, so every migration must work with the previous Worker too: expand first,
   contract in a later release.
