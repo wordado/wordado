@@ -32,7 +32,7 @@ export interface DraftEntry {
   readonly rank: number
   readonly order: number
   readonly pinned: boolean
-  /** In essentials.txt: live at the LLM's level whatever its frequency (Decision 19). */
+  /** The first sense of a word in essentials.txt: live at the LLM's level whatever its frequency (Decision 19). */
   readonly essential: boolean
   readonly band: CefrLevel
   /** What the banding queue judges: the unit's level for a placed entry, else the banded LLM level. */
@@ -97,8 +97,10 @@ export async function runDraft(opts: DraftOptions): Promise<Draft> {
   const inScope = lemmas.flatMap((lemma, i) =>
     senses[i]!.flatMap((s, order) => {
       const band = frequencyBand(lemma.rank, config.targets)
-      const essential = essentials.has(lemma.lemma)
-      // An essential word's frequency understates it, so its level is the LLM's, and a reviewer checks every one.
+      // Only the first sense, the most common by the stage's instruction, is essential: essentials.txt guarantees
+      // the everyday meaning of "bed", not the garden plot. Its frequency understates it, so its level is the LLM's
+      // and a reviewer checks every one; the word's other senses compete by frequency like any word's.
+      const essential = essentials.has(lemma.lemma) && order === 0
       const banded = essential ? { level: s.level === 'C2' ? null : s.level, flagged: true } : bandLevel(s.level, band)
       if (banded.level === null) return []
       // A published sense keeps its unit, and the unit's level is its proposal, whatever the banding says now.

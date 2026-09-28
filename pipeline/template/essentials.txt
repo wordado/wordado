@@ -1,6 +1,7 @@
 # Everyday spoken words that frequency lists rank too low for their CEFR level (Decision 19).
-# One headword per line. Each is described whatever its frequency; its senses are live at the LLM's level,
-# and every one goes to banding review. Written in-house: no licence applies.
+# One headword per line. Each is described whatever its frequency. Its first sense, the everyday one, is live at
+# the LLM's level and goes to banding review; its other senses compete by frequency like any word's.
+# Written in-house: no licence applies.
 
 # greetings and politeness
 hello
