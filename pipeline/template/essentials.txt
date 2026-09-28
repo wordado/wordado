@@ -1,0 +1,229 @@
+# Everyday spoken words that frequency lists rank too low for their CEFR level (Decision 19).
+# One headword per line. Each is described whatever its frequency; its senses are live at the LLM's level,
+# and every one goes to banding review. Written in-house: no licence applies.
+
+# greetings and politeness
+hello
+hi
+goodbye
+bye
+please
+thanks
+thank you
+sorry
+excuse me
+welcome
+okay
+yes
+no
+pardon
+congratulations
+good morning
+good night
+see you
+of course
+sure
+maybe
+oh
+wow
+
+# people and family
+mum
+dad
+mother
+father
+parent
+son
+daughter
+brother
+sister
+grandmother
+grandfather
+grandma
+grandpa
+aunt
+uncle
+cousin
+husband
+wife
+baby
+kid
+friend
+boyfriend
+girlfriend
+neighbour
+
+# feelings and states
+happy
+sad
+tired
+hungry
+thirsty
+angry
+scared
+bored
+excited
+worried
+sick
+ill
+fine
+great
+nice
+lovely
+
+# food and drink
+breakfast
+lunch
+dinner
+bread
+butter
+cheese
+egg
+milk
+coffee
+tea
+juice
+beer
+wine
+sandwich
+soup
+salad
+pizza
+pasta
+rice
+chicken
+fish
+meat
+apple
+banana
+orange
+tomato
+potato
+cake
+chocolate
+sugar
+salt
+ice cream
+
+# at home
+kitchen
+bedroom
+bathroom
+toilet
+shower
+bed
+sofa
+fridge
+cupboard
+window
+door
+key
+lamp
+towel
+soap
+toothbrush
+
+# things people carry and use
+phone
+mobile
+email
+computer
+laptop
+internet
+wifi
+password
+app
+camera
+charger
+TV
+television
+radio
+ticket
+bag
+wallet
+umbrella
+glasses
+watch
+
+# around town and travel
+bus
+train
+taxi
+car
+bike
+airport
+station
+hotel
+restaurant
+cafe
+shop
+supermarket
+pharmacy
+hospital
+post office
+street
+bridge
+park
+museum
+beach
+map
+
+# time
+today
+tomorrow
+yesterday
+tonight
+morning
+afternoon
+evening
+night
+weekend
+Monday
+Tuesday
+Wednesday
+Thursday
+Friday
+Saturday
+Sunday
+
+# weather and colours
+weather
+sun
+rain
+snow
+hot
+cold
+warm
+red
+blue
+green
+yellow
+black
+white
+
+# body and health
+head
+hand
+eye
+tooth
+doctor
+medicine
+pain
+
+# everyday actions
+eat
+drink
+sleep
+wake up
+wash
+cook
+buy
+pay
+open
+close
+wait
+help
+sit
+call
+speak
+listen

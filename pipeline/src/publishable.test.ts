@@ -57,4 +57,10 @@ describe('publishProblems (spec §4.4: never a manifest whose files are not all 
   it("names an invalid manifest by its validator's errors", () => {
     expect(publishProblems(sample({ 'manifest.json': bytes({ schema_version: 1 }) })).length).toBeGreaterThan(0)
   })
+
+  it('refuses a draft release, and a release.json that is not JSON', () => {
+    expect(publishProblems(sample({ 'release.json': bytes({ draft: true }) }))).toEqual(['release.json: a draft build cannot be published'])
+    expect(publishProblems(sample({ 'release.json': new TextEncoder().encode('{') }))).toEqual(['release.json: not JSON'])
+    expect(publishProblems(sample({ 'release.json': bytes({ draft: false }) }))).toEqual([])
+  })
 })

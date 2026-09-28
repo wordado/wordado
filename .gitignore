@@ -13,3 +13,6 @@ graphify-out/
 
 # Product research lives in the private repo wordado/wordado-research, cloned here.
 docs/research/
+
+# The corpus lives in the private repo wordado/wordado-content, cloned here (pipeline/README.md).
+content/

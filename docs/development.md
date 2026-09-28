@@ -92,6 +92,9 @@ pnpm --filter @wordado/server exec vitest run src/<path>.test.ts    # needs Dock
   version until clients have updated (spec §4.3).
 - **Sample content**: after editing `pipeline/samples/a1-bg/source.json`, rebuild with `pnpm sample-pack`
   and commit the pack and manifest it writes.
+- **The corpus pipeline** (`pipeline/README.md`) is tested on fixtures: `pnpm --filter @wordado/pipeline test`.
+  Its encoder tests need ffmpeg (`brew install ffmpeg`) and are skipped without it; CI installs it. Real runs need the
+  private content repository, cloned into `content/`.
 - **Style**: no semicolons, single quotes, named exports, `readonly` interface fields, comments that say why.
   `pnpm lint` enforces the rest.
 

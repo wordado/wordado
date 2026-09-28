@@ -20,16 +20,17 @@ that it can use the real interfaces of the plans before it.
 | 6a | **Web client: platform and study loop** — `2026-09-24-web-platform-and-study.md` | `web`, `core`, `client-data` | Vite + React PWA; wa-sqlite over OPFS with IndexedDB and in-memory fallbacks; single-tab lock and take-over; the bundled sample and a verified audio cache; the shared study-run state machine; the four game modes; today, path, themes, progress, practice; report an error; Bulgarian and English interface; offline shell; the demo end to end in Chromium with an axe scan | 4 |
 | 6b | **Web client: accounts and settings** — `2026-09-24-web-accounts-and-settings.md` | `web` | Sign-in (emailed code, Google); the age gate; demo carry-over and discard; the transport, sync lifecycle and status; settings (level, retention, limits, goal, audio, latency grading); the placement test; known and suspended words; reminders; account deletion and export; installation and update prompts; the WCAG 2.2 AA pass over its screens | 5, 6a |
 | 7 | **CI and deploy** — `2026-09-25-ci-and-deploy.md` | repo | GitHub Actions: typecheck, lint, suites, server tests against a Postgres service; Wrangler deploy and preview deployments; end-to-end browser matrix; the CDN manifest for learners (`VITE_CONTENT_MANIFEST_URL`) beside the bundled sample for the demo, with an `AudioStore` per manifest (moved from 6b); both end-to-end suites (`e2e`, `e2e:accounts`) in the browser matrix; oxlint; one Worker serving the app and the API; preview deployments with a remote smoke run; `corpus publishable` and the content publish workflow; the identity check on deletion and export (from 6b); WebKit's IndexedDB fallback | 5, 6a, 6b |
-| 8 | Corpus pipeline | `pipeline` | Frequency data → CEFR banding → translation → review queues → TTS → packs → R2; pipeline tests (§13); the manually started workflow | 3, **legal review** |
+| 8 | **Corpus pipeline** — `2026-09-27-corpus-pipeline.md` | `pipeline` | Licence register and gate; frequency lists → lemmas → senses with CEFR banding → translations → IDs, selection, units, titles; review queues as spreadsheets; OpenRouter TTS with spot-listen batches; report triage; release with review, audio and succession gates; `fixes.json`; the private content repository and its Corpus workflow | 3, 7; real runs: **legal review** |
+| 8b | Report fixed notices | `web` | Tell a reporter their report was fixed (spec §8.10), from the CDN's `fixes.json`; show the sources' attributions from `release.json` | 8 |
 
-Plans 4 and 5 are independent of each other and can run in parallel. Plan 8 can
-start as soon as its legal review clears and does not block 4–7, which run
-against the sample pack.
+Plans 4 and 5 are independent of each other and can run in parallel. Plan 8 was built before its legal
+review cleared; its first real run waits for it.
 
 ## Blockers outside the code
 
-- **Legal review** (spec §15) gates plan 8: licences of candidate frequency
-  lists, and the per-country age-of-consent table the age gate in plan 6 needs.
+- **Legal review** (spec §15) gates plan 8's real runs (the code is built and tested on fixtures): licences of
+  candidate frequency lists and of the LLM and TTS output, and the per-country age-of-consent table the age gate
+  in plan 6 needs.
   The age gate ships with a provisional table (`web/src/account/ageGate.ts`) that the review must confirm before the beta opens.
   The privacy policy (`web/public/privacy.html`, served at `/privacy`) names its controller as `[Controller name]`,
   `[Address]` and `[Contact email]`: the review fills them in and checks the legal bases and the transfer to the US

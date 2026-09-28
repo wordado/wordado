@@ -1,0 +1,20 @@
+{
+  "l1s": ["bg"],
+  "levels": ["A1", "A2", "B1"],
+  "targets": { "A1": 600, "A2": 1000, "B1": 1500, "B2": 2000, "C1": 2000 },
+  "max_forms": 12000,
+  "max_lemmas": 5000,
+  "unit_size": 20,
+  "report_threshold": 2,
+  "llm": { "model": "anthropic/claude-sonnet-5", "concurrency": 4, "max_usd_per_run": 40 },
+  "tts": {
+    "model": "openai/gpt-4o-mini-tts-2025-12-15",
+    "accents": {
+      "uk": {
+        "voice": "alloy",
+        "instructions": "Say the English word or phrase once, clearly and naturally, in a neutral standard British accent. Nothing else."
+      }
+    },
+    "max_clips_per_run": 4000
+  }
+}
