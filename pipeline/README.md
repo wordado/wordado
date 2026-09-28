@@ -52,7 +52,9 @@ absolutely: `"$PWD/content"` from the repository root.
      `gh secret set R2_ACCESS_KEY_ID` and `gh secret set R2_SECRET_ACCESS_KEY` (the R2 token of `docs/deploy.md`
      step 5). Each step of the workflow receives only the secrets it uses.
    Give native-speaker reviewers write access to open pull requests: without being in `RELEASE_ACTORS`, they cannot
-   publish.
+   publish. **Before adding anyone else to `RELEASE_ACTORS`**, either the legal review has cleared every source (no
+   `cleared_by` starting with `Provisional:`, see *The legal gate*), or add a release check that refuses provisional
+   sources first. Today only the product owner can publish, and knows which clearances are provisional.
 3. **OpenRouter.** Create a key with a monthly credit limit. In Settings › Privacy, turn off providers that may
    train on inputs (the chat requests also send `data_collection: "deny"`; the speech endpoint does not document
    that field). Leave *zero data retention* off: Google's endpoint for Gemini TTS keeps data for a while, and ZDR
@@ -77,6 +79,13 @@ listed source is cleared, commercial and not share-alike.** Put the list itself 
 it, and of the chosen voice, for commercial use of their output. Record that outcome in `sources.json`'s `notes`
 field for the first source, or in the content repository's README. A source that needs attribution appears in
 each release's `release.json`, and the app must show it (a follow-up).
+
+**A provisional clearance.** The product owner may clear a source before the legal review answers, so that drafting,
+audio and review can start. Write it so it can be found again: `cleared_by` starts with `Provisional:` and says the
+legal review is pending, with the date in `cleared_on`. The pipeline treats it like any clearance, including at
+release, so publishing waits on the release actors (setup step 2). When the review answers, replace both fields with
+the reviewer's name and date. If it rejects a source, remove the source, draft again, and review the entries whose
+selection or level changes.
 
 ## Preparing the frequency lists
 
