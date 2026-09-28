@@ -40,7 +40,6 @@ describe('openRouterLlm', () => {
     expect(await llm.json(req)).toEqual({ n: 3 })
     expect(bodies[0]).toMatchObject({
       model: 'anthropic/claude-sonnet-5',
-      temperature: 0.2,
       messages: [
         { role: 'system', content: 'Count.' },
         { role: 'user', content: '{"words":["a"]}' },
@@ -48,6 +47,8 @@ describe('openRouterLlm', () => {
       response_format: { type: 'json_schema', json_schema: { name: 'count', strict: true, schema: req.schema } },
       provider: { require_parameters: true, data_collection: 'deny' },
     })
+    // Claude Sonnet 5 accepts no sampling parameters; with require_parameters, sending one leaves no endpoint (HTTP 404).
+    expect(bodies[0]).not.toHaveProperty('temperature')
   })
 
   it('retries a malformed, a truncated or an unparseable reply, then succeeds', async () => {

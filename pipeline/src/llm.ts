@@ -54,6 +54,9 @@ export interface OpenRouterOptions {
  * OpenRouter's chat completions with strict `json_schema` output (§17.1).
  * `require_parameters` keeps the request off providers that would ignore the
  * schema; `data_collection: "deny"` keeps it off providers that train on it.
+ * No sampling parameters are sent: Claude Sonnet 5 accepts none, and with
+ * `require_parameters` one would leave no endpoint at all. The stage caches
+ * keep proposals stable instead.
  * Rate limits, server errors, network failures and answers that do not parse
  * are retried with backoff; any other client error is not.
  */
@@ -75,7 +78,6 @@ export function openRouterLlm(opts: OpenRouterOptions): Llm {
         },
         body: JSON.stringify({
           model: opts.model,
-          temperature: 0.2,
           messages: [
             { role: 'system', content: req.system },
             { role: 'user', content: JSON.stringify(req.input) },
