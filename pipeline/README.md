@@ -129,7 +129,8 @@ On a workstation, not in Actions:
    ```
 4. **Essential words.** `essentials.txt` starts with about 230 everyday spoken words that frequency lists rank
    too low (greetings, family, feelings, food, the home, the days of the week). Reviewers add to it; anything on
-   it is described whatever its frequency, and every sense of it goes to banding review.
+   it is described whatever its frequency. Its first sense, the everyday one, is live and goes to banding review;
+   its other senses (the *bed* of a garden) compete by frequency like any word's.
 
 ## Running a version
 

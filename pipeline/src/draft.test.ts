@@ -106,6 +106,15 @@ describe('runDraft', () => {
     expect(draft.problems).toEqual([])
   })
 
+  it('guarantees only an essential word’s first sense; its other senses compete like any word', async () => {
+    const dir = makeContent()
+    writeFileSync(join(dir, 'essentials.txt'), 'bank\n')
+    const draft = await runDraft({ dir, llm: sampleLlm(), offline: false })
+    const bank = draft.entries.filter((e) => e.headword === 'bank').map((e) => [e.sense_en, e.essential, e.level_flagged])
+    // money is the first sense the stage lists; river is the third (building merged into money, Decision 8).
+    expect(bank).toEqual([['money', true, true], ['river', false, false]])
+  })
+
   it('keeps a published lemma live when a list refresh pushes it past max_lemmas (Decision 9)', async () => {
     const dir = await publishedV1()
     // the and go rank first and second; bank, third, is now past the cut.
