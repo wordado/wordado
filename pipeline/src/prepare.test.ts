@@ -1,11 +1,13 @@
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { createServer, type Server } from 'node:http'
+import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { gzipSync } from 'node:zlib'
 import { parquetWriteFile } from 'hyparquet-writer'
 import { describe, expect, it } from 'vitest'
 import { parseFrequencyList } from './frequency'
-import { countInto, countParquet, parquetTexts, sumGoogleBooks, writeCounts } from './prepare'
+import { countInto, countParquet, parquetTexts, pruneRare, sumGoogleBooks, writeCounts } from './prepare'
 
 const tmp = () => mkdtempSync(join(tmpdir(), 'prepare-'))
 
@@ -32,6 +34,58 @@ describe('parquetTexts and countParquet', () => {
     for await (const t of parquetTexts(file)) texts.push(t)
     expect(texts).toEqual(['a b', 'b', 'c c c', 'd', 'e'])
     expect(Object.fromEntries(await countParquet([file]))).toEqual({ a: 1, b: 2, c: 3, d: 1, e: 1 })
+  })
+
+  it('streams a shard over HTTP by byte ranges, so nothing is saved to disk (licence review, question 8)', async () => {
+    const file = join(tmp(), 'shard.parquet')
+    await parquetWriteFile({ filename: file, columnData: [{ name: 'text', data: ['one two', 'two', 'three three three'], type: 'STRING' }], rowGroupSize: 2 })
+    const bytes = readFileSync(file)
+    const ranges: string[] = []
+    // A minimal range-capable server, as Hugging Face's file hosting is: HEAD gives the size, GET honours Range.
+    const server: Server = createServer((req, res) => {
+      const range = /bytes=(\d+)-(\d+)?/.exec(req.headers.range ?? '')
+      if (req.method === 'HEAD') {
+        res.writeHead(200, { 'content-length': bytes.length, 'accept-ranges': 'bytes' })
+        return res.end()
+      }
+      if (!range) return res.writeHead(200, { 'content-length': bytes.length }).end(bytes)
+      ranges.push(range[0])
+      const start = Number(range[1])
+      const end = range[2] === undefined ? bytes.length - 1 : Number(range[2])
+      res.writeHead(206, { 'content-range': `bytes ${start}-${end}/${bytes.length}`, 'content-length': end - start + 1 })
+      res.end(bytes.subarray(start, end + 1))
+    })
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    try {
+      const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/shard.parquet`
+      const texts: string[] = []
+      for await (const t of parquetTexts(url)) texts.push(t)
+      expect(texts).toEqual(['one two', 'two', 'three three three'])
+      expect(ranges.length).toBeGreaterThan(0)
+    } finally {
+      await new Promise((resolve) => server.close(resolve))
+    }
+  })
+
+  it('keeps the word table bounded by dropping rare forms, while frequent ones keep their counts', async () => {
+    const file = join(tmp(), 'shard.parquet')
+    const rare = Array.from({ length: 40 }, (_, i) => `rare${String.fromCharCode(97 + (i % 26))}${String.fromCharCode(97 + Math.floor(i / 26))}`)
+    await parquetWriteFile({ filename: file, columnData: [{ name: 'text', data: ['the the the', ...rare, 'the cat cat'], type: 'STRING' }] })
+    const counts = await countParquet([file], undefined, { maxForms: 10 })
+    expect(counts.size).toBeLessThanOrEqual(10)
+    expect(counts.get('the')).toBe(4)
+    expect(counts.get('cat')).toBe(2)
+  })
+})
+
+describe('pruneRare', () => {
+  it('drops the forms seen least often, raising the floor until the table is at most half the limit', () => {
+    const counts = new Map([['a', 5], ['b', 1], ['c', 1], ['d', 2], ['e', 1], ['f', 2]])
+    pruneRare(counts, 3)
+    expect(Object.fromEntries(counts)).toEqual({ a: 5 })
+    const more = new Map([['a', 5], ['b', 1], ['d', 2]])
+    pruneRare(more, 4)
+    expect(Object.fromEntries(more)).toEqual({ a: 5, d: 2 })
   })
 })
 

@@ -32,7 +32,7 @@ const USAGE = `usage: corpus <command>
     published <dir> <out>          after a publish: <out> becomes last-published/
     live <dir> <manifest-url>      does the CDN serve last-published/?
   frequency lists (run on a workstation; the output goes into the content repository's sources/):
-    count-text <out.tsv> <parquet...>                  word forms in Parquet text shards (FineWeb)
+    count-text <out.tsv> <parquet file or URL...>      word forms in Parquet text shards (FineWeb); URLs are streamed, not saved
     sum-gbooks <out.tsv> <gz...> [--from Y] [--to Y]   Google Books 1-grams, years 2000-2019 by default
   packs:
     build <source-dir> | validate <pack-file> | check <previous-pack> <next-pack> | publishable <dir>`
@@ -255,7 +255,7 @@ async function main(): Promise<void> {
       if (!out || files.length === 0) usage()
       const counts = await countParquet(files, (file, texts) => console.error(`  ${file}: ${texts.toLocaleString('en')} texts`))
       const tokens = [...counts.values()].reduce((a, b) => a + b, 0)
-      const written = writeCounts(out, counts, { comment: `corpus count-text over ${files.length} Parquet files, ${tokens} tokens, ${now()}` })
+      const written = writeCounts(out, counts, { comment: `corpus count-text over ${files.length} Parquet shards, ${tokens} tokens, ${now()}` })
       console.log(`wrote ${out}: ${written} forms, ${tokens.toLocaleString('en')} tokens`)
       break
     }
