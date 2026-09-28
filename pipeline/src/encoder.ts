@@ -12,7 +12,8 @@ export interface Encoded {
 }
 
 export interface Encoder {
-  toM4a(mp3: Uint8Array): Promise<Encoded>
+  /** Any audio ffmpeg recognises by its content: the TTS hands over MP3, or WAV for a PCM voice. */
+  toM4a(audio: Uint8Array): Promise<Encoded>
 }
 
 /**
@@ -34,12 +35,13 @@ export function ffmpegEncoder(opts: { ffmpeg?: string; ffprobe?: string } = {}):
   const ffmpeg = opts.ffmpeg ?? 'ffmpeg'
   const ffprobe = opts.ffprobe ?? 'ffprobe'
   return {
-    async toM4a(mp3) {
+    async toM4a(audio) {
       const dir = mkdtempSync(join(tmpdir(), 'clip-'))
-      const input = join(dir, 'in.mp3')
+      // No extension: ffmpeg recognises MP3 and WAV by their content.
+      const input = join(dir, 'in.audio')
       const output = join(dir, 'out.m4a')
       try {
-        writeFileSync(input, mp3)
+        writeFileSync(input, audio)
         try {
           await run(ffmpeg, [
             '-hide_banner', '-loglevel', 'error', '-y', '-i', input,

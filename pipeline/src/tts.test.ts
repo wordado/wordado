@@ -32,6 +32,27 @@ describe('openRouterTts', () => {
     })
   })
 
+  it('asks for PCM when the voice says so, and wraps it as WAV at the rate and channels the response names', async () => {
+    const pcm = new Response(new Uint8Array([1, 0, 2, 0]), { headers: { 'content-type': 'audio/pcm;rate=24000;channels=1' } })
+    const { t, bodies } = tts([pcm])
+    const wav = Buffer.from(await t.speak('hi', { ...voice, response_format: 'pcm' }))
+    expect(bodies[0]!['response_format']).toBe('pcm')
+    expect([wav.toString('ascii', 0, 4), wav.toString('ascii', 8, 12), wav.toString('ascii', 36, 40)]).toEqual(['RIFF', 'WAVE', 'data'])
+    expect([wav.readUInt16LE(20), wav.readUInt16LE(22), wav.readUInt32LE(24), wav.readUInt32LE(28), wav.readUInt16LE(34)]).toEqual([1, 1, 24000, 48000, 16])
+    expect([wav.readUInt32LE(4), wav.readUInt32LE(40)]).toEqual([40, 4])
+    expect([...wav.subarray(44)]).toEqual([1, 0, 2, 0])
+  })
+
+  it('reads another rate and channel count, and assumes 24 kHz mono when the content type names none', async () => {
+    const stereo = new Response(new Uint8Array([0, 0, 0, 0]), { headers: { 'content-type': 'audio/pcm; rate=16000; channels=2' } })
+    const bare = new Response(new Uint8Array([0, 0]), { headers: { 'content-type': 'audio/pcm' } })
+    const { t } = tts([stereo, bare])
+    const a = Buffer.from(await t.speak('a', { ...voice, response_format: 'pcm' }))
+    const b = Buffer.from(await t.speak('b', { ...voice, response_format: 'pcm' }))
+    expect([a.readUInt16LE(22), a.readUInt32LE(24), a.readUInt32LE(28)]).toEqual([2, 16000, 64000])
+    expect([b.readUInt16LE(22), b.readUInt32LE(24)]).toEqual([1, 24000])
+  })
+
   it('passes a voice’s own provider options through instead', async () => {
     const { t, bodies } = tts([mp3()])
     await t.speak('hi', { ...voice, provider_options: { 'google-ai-studio': { speech_metadata: { style: 'calm' } } } })

@@ -8,6 +8,8 @@ export interface TtsVoice {
   readonly instructions: string
   /** Passed through as the request's `provider.options` (OpenRouter's per-provider settings). */
   readonly provider_options?: Readonly<Record<string, unknown>>
+  /** What the endpoint returns: MP3 (the default), or raw 16-bit PCM for models that only speak PCM, such as Gemini TTS. */
+  readonly response_format?: 'mp3' | 'pcm'
 }
 
 /** `pipeline.json`: everything a run may tune without a code change. */
@@ -107,6 +109,9 @@ export function configProblems(raw: unknown): string[] {
           str(voice['voice'], `${path}.voice`)
           str(voice['instructions'], `${path}.instructions`)
           if (voice['provider_options'] !== undefined && !isRecord(voice['provider_options'])) p.push(`${path}.provider_options: must be an object`)
+          if (voice['response_format'] !== undefined && voice['response_format'] !== 'mp3' && voice['response_format'] !== 'pcm') {
+            p.push(`${path}.response_format: must be mp3 or pcm`)
+          }
         }
       }
     }
