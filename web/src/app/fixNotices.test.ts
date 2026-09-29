@@ -70,4 +70,23 @@ describe('FixNotices', () => {
     await notices.check(source([r('k1', 'c:bank-1', 'translation')]), URL_)
     expect(notices.store.get()).toEqual([{ reportKey: 'k1', field: 'translation', headword: 'bank' }])
   })
+
+  it('discards a check that resolves after a newer one has already updated the store', async () => {
+    const storage = memoryStorage()
+    let releaseFirst!: (file: FixesFile | null) => void
+    const firstFetch = new Promise<FixesFile | null>((resolve) => {
+      releaseFirst = resolve
+    })
+    let call = 0
+    const notices = new FixNotices({
+      storage,
+      fetchFixes: async () => (++call === 1 ? firstFetch : fixes),
+    })
+    const firstCheck = notices.check(source([r('k1', 'c:bank-1', 'translation')]), URL_)
+    await notices.check(source([r('k2', 'c:gone-1', 'audio')]), URL_)
+    expect(notices.store.get()).toEqual([{ reportKey: 'k2', field: 'audio', headword: null }])
+    releaseFirst(fixes)
+    await firstCheck
+    expect(notices.store.get()).toEqual([{ reportKey: 'k2', field: 'audio', headword: null }])
+  })
 })

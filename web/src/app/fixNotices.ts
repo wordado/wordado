@@ -26,6 +26,8 @@ export interface FixNoticesDeps {
 /** "Something you reported has been fixed" (spec §8.10). */
 export class FixNotices {
   readonly store: Store<readonly FixNotice[]> = createStore<readonly FixNotice[]>([])
+  /** Bumped at the start of every `check`, so a slower, older call can tell it has been superseded and drop its result. */
+  private generation = 0
 
   constructor(private readonly deps: FixNoticesDeps) {}
 
@@ -39,13 +41,20 @@ export class FixNotices {
     }
   }
 
-  /** Fetches fixes.json beside `manifestUrl` and lists the learner's fixed reports not yet told; keeps its state on a failed fetch. */
+  /**
+   * Fetches fixes.json beside `manifestUrl` and lists the learner's fixed reports not yet told; keeps its state on
+   * a failed fetch. `main.tsx` may start a newer `check` (a pack activation, an account switch) before this one
+   * resolves; a stale call must never overwrite the newer result, so it drops its result once superseded.
+   */
   async check(source: FixSource, manifestUrl: string): Promise<void> {
+    const generation = ++this.generation
     const fixes = await this.deps.fetchFixes(manifestUrl)
-    if (fixes === null) return
+    if (fixes === null || generation !== this.generation) return
     const told = new Set(this.seen())
     const { packVersion, corpus } = source.snapshot
-    const matched = fixedReports(await source.reports(), fixes, packVersion).filter((m) => !told.has(m.report.key))
+    const reports = await source.reports()
+    if (generation !== this.generation) return
+    const matched = fixedReports(reports, fixes, packVersion).filter((m) => !told.has(m.report.key))
     this.store.set(
       matched.map(({ report, fix }) => {
         // Corpus entries are keyed by entry ID, without the `c:` prefix (core/src/types.ts:49).
