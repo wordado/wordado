@@ -185,6 +185,80 @@ p {
   border-color: var(--ink);
 }
 
+/* The account, at the end of the masthead */
+
+.account {
+  position: relative;
+  align-self: center;
+}
+
+.account-signin {
+  align-self: center;
+}
+
+.account-circle {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  font: 600 var(--step-0) / 1 var(--font-ui);
+  color: var(--rose-ink);
+  background: var(--rose);
+  border: 2px solid transparent;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.account-circle[aria-expanded='true'] {
+  border-color: var(--ink);
+}
+
+.account-dot {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 0.75rem;
+  height: 0.75rem;
+  background: var(--amber);
+  border: 2px solid var(--paper);
+  border-radius: 50%;
+}
+
+.account-panel {
+  position: absolute;
+  top: calc(100% + var(--space-2));
+  right: 0;
+  z-index: 10;
+  width: max-content;
+  max-width: min(20rem, calc(100vw - 2 * var(--space-4)));
+  padding: var(--space-3) var(--space-4);
+  background: var(--paper-raised);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  box-shadow: 0 0.5rem 1.5rem rgb(20 28 51 / 0.15);
+}
+
+.account-email {
+  margin: 0 0 var(--space-1);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.account-panel ul {
+  display: grid;
+  gap: var(--space-2);
+  margin: var(--space-3) 0 0;
+  padding: var(--space-3) 0 0;
+  list-style: none;
+  border-top: 1px solid var(--rule);
+}
+
+.account-panel .note {
+  margin: 0;
+}
+
 .banner {
   margin: var(--space-3) 0 0;
   font-size: var(--step--1);

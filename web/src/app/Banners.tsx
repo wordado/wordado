@@ -7,7 +7,7 @@ import { useOnline } from '../useOnline'
 import { useStore } from '../useStore'
 import { ConfirmDialog } from './Confirm'
 import { useApp } from './context'
-import { syncMessage } from './syncMessage'
+import { syncMessage, type SyncMessage } from './syncMessage'
 
 const NOTICE: Readonly<Record<AccountNotice, MessageKey>> = {
   'carried-over': 'notice.carried-over',
@@ -114,14 +114,19 @@ function InstallBanner() {
   )
 }
 
-/** One line in the masthead saying what sync is doing (spec §9.2); nothing in the demo. */
-export function SyncLine() {
-  const { t } = useT()
+/** What sync is doing for the signed-in learner (spec §9.2); null in the demo or when there is nothing to say. */
+export function useSyncMessage(): SyncMessage | null {
   const { account, accounts } = useApp()
   const { expired } = useStore(accounts.store)
   const { sync } = useClientSnapshot()
   const online = useOnline()
-  const message = syncMessage(sync, { online, expired, signedIn: account !== null })
+  return syncMessage(sync, { online, expired, signedIn: account !== null })
+}
+
+/** One line saying what sync is doing (spec §9.2), in the account menu; nothing in the demo. */
+export function SyncLine() {
+  const { t } = useT()
+  const message = useSyncMessage()
   if (!message) return null
   return (
     <p className={`sync-line${message.tone === 'warning' ? ' warning' : ''}`} role="status">

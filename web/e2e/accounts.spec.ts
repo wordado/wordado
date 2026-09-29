@@ -112,7 +112,14 @@ async function signIn(page: Page, email: string, gate: { country?: string; year?
   await expect(page).toHaveURL('/')
 }
 
-const synced = (page: Page) => expect(page.getByText('All progress saved to your account')).toBeVisible({ timeout: 15_000 })
+/** The sync line lives in the account menu: open it (it stays open until the next navigation) and read it. */
+async function syncLine(page: Page, text: string, timeout?: number): Promise<void> {
+  const circle = page.getByRole('button', { name: /^Account: / })
+  if ((await circle.getAttribute('aria-expanded')) !== 'true') await circle.click()
+  await expect(page.getByText(text)).toBeVisible({ timeout })
+}
+
+const synced = (page: Page) => syncLine(page, 'All progress saved to your account', 15_000)
 
 async function exported(page: Page): Promise<{ reviewEvents: { wordId: string; deviceId: string }[]; documents: { type: string; fields: Record<string, unknown> }[] }> {
   const response = await page.request.get('/v1/export')
@@ -151,7 +158,7 @@ test('studies offline, then syncs on reconnecting (spec §13)', async ({ browser
   await ctx.setOffline(true)
   await studyNew(page, 1)
   await page.goto('/')
-  await expect(page.getByText('Offline: 1 answer syncs when you are back online')).toBeVisible()
+  await syncLine(page, 'Offline: 1 answer syncs when you are back online')
   await ctx.setOffline(false)
   await synced(page)
   expect((await exported(page)).reviewEvents).toHaveLength(1)
@@ -231,8 +238,9 @@ test('signs out leaving nothing behind, then deletes the account (spec §11)', a
   const email = address('leave')
   await signIn(page, email)
   await studyNew(page, 1)
-  await page.goto('/settings')
+  await page.getByRole('button', { name: `Account: ${email}` }).click()
   await page.getByRole('button', { name: 'Sign out' }).click()
+  await expect(page.getByRole('link', { name: 'Sign in' })).toBeVisible()
   await expect(page.getByText('You are signed out. Nothing of your account is left on this device.')).toBeVisible()
   await expect(heading(page)).toHaveText('10 new words')
 

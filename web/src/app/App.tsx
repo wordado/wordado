@@ -11,7 +11,8 @@ import { Settings } from '../screens/Settings'
 import { SignIn } from '../screens/SignIn'
 import { Study } from '../screens/Study'
 import { Themes } from '../screens/Themes'
-import { Banners, SyncLine } from './Banners'
+import { AccountMenu } from './AccountMenu'
+import { Banners } from './Banners'
 
 const NAV: readonly { readonly route: Route; readonly label: MessageKey }[] = [
   { route: { name: 'home' }, label: 'nav.home' },
@@ -62,7 +63,7 @@ function LanguageSwitch() {
   )
 }
 
-/** The shell: wordmark, navigation, language, banner, and the routed screen. */
+/** The shell: wordmark, navigation, language, the account, banners, and the routed screen. */
 export function App(props: { readonly resumed: boolean }) {
   const { t } = useT()
   const route = useRoute()
@@ -105,7 +106,7 @@ export function App(props: { readonly resumed: boolean }) {
           </ul>
         </nav>
         <LanguageSwitch />
-        <SyncLine />
+        <AccountMenu />
       </header>
       <aside aria-label={t('banner.label')}>
         <Banners />
