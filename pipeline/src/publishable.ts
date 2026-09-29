@@ -1,10 +1,11 @@
-import { validateManifest, validatePack } from '@wordado/core'
+import { validateCredits, validateManifest, validatePack } from '@wordado/core'
 import { sha256Hex } from './checksum'
 
 /**
  * What would be wrong with serving a directory as the CDN's root (spec §4.4):
  * `manifest.json`, every pack it lists and every clip those packs list, each
  * present with its size and checksum, and not a draft release (Decision 14).
+ * A release directory (one with `release.json`) also needs a valid `credits.json`.
  * Empty means it can be published. `read` returns a file's bytes by its path
  * relative to the directory, or null. URLs are already validated as relative
  * by core's validators (validateManifest, validatePack).
@@ -16,6 +17,13 @@ export function publishProblems(read: (path: string) => Uint8Array | null): stri
       if ((JSON.parse(new TextDecoder().decode(release)) as { draft?: unknown }).draft === true) return ['release.json: a draft build cannot be published']
     } catch {
       return ['release.json: not JSON']
+    }
+    const credits = read('credits.json')
+    if (credits === null) return ['credits.json: missing']
+    try {
+      if (validateCredits(JSON.parse(new TextDecoder().decode(credits))) === null) return ['credits.json: not a credits file']
+    } catch {
+      return ['credits.json: not a credits file']
     }
   }
   const raw = read('manifest.json')

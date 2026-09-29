@@ -2,11 +2,13 @@ import {
   DOCUMENT_TYPES,
   ENTITLEMENT_SOURCES,
   ENTITLEMENT_TIERS,
+  REPORT_FIELDS,
   isWordId,
   settingsFromFields,
   validateSettingsPatch,
   type Entitlement,
   type ReportField,
+  type ReportRecord,
   type Settings,
   type WordFlag,
   type WordId,
@@ -112,4 +114,16 @@ export async function addContentReport(tx: SqlDriver, env: ClientEnv, report: Co
   const key = env.uuid()
   await writeLocalPatch(tx, DOC.contentReport, key, { ...report, createdAt: env.now() })
   return key
+}
+
+/** The learner's content reports, as this device holds them (they sync from the learner's other devices too). */
+export async function readReports(driver: SqlDriver): Promise<ReportRecord[]> {
+  const out: ReportRecord[] = []
+  for (const doc of await listDocuments(driver, DOC.contentReport)) {
+    const { wordId, field, packVersion } = doc.fields
+    if (doc.deleted || typeof wordId !== 'string' || !isWordId(wordId)) continue
+    if (typeof field !== 'string' || !(REPORT_FIELDS as readonly string[]).includes(field)) continue
+    out.push({ key: doc.key, wordId, field: field as ReportRecord['field'], packVersion: typeof packVersion === 'number' ? packVersion : 0 })
+  }
+  return out
 }

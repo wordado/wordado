@@ -1,4 +1,5 @@
 import { useClientSnapshot } from '@wordado/client-data'
+import type { FixedField } from '@wordado/core'
 import { useState } from 'react'
 import type { AccountNotice } from '../account/controller'
 import { useT, type MessageKey } from '../i18n/i18n'
@@ -38,6 +39,7 @@ export function Banners() {
           </button>
         </div>
       )}
+      <FixBanner />
       {account === null ? (
         <div className={`banner${backend === 'memory' ? ' warning' : ''}`}>
           <p>{t(backend === 'memory' ? 'banner.memory' : 'banner.demo')}</p>
@@ -70,6 +72,34 @@ export function Banners() {
       )}
     </div>
   )
+}
+
+/** "Something you reported has been fixed" (spec §8.10): one banner, dismissed once. */
+function FixBanner() {
+  const { t } = useT()
+  const { fixNotices } = useApp()
+  const notices = useStore(fixNotices.store)
+  if (notices.length === 0) return null
+  const only = notices.length === 1 ? notices[0]! : null
+  return (
+    <div className="banner notice-line" role="status">
+      <p>
+        {only?.headword
+          ? t('fixed.one', { field: t(FIELD[only.field]), word: only.headword })
+          : t('fixed.some', { count: notices.length })}
+      </p>
+      <button type="button" className="link-button" onClick={() => fixNotices.dismiss()}>
+        {t('notice.dismiss')}
+      </button>
+    </div>
+  )
+}
+
+const FIELD: Readonly<Record<FixedField, MessageKey>> = {
+  translation: 'fixed.field.translation',
+  example: 'fixed.field.example',
+  audio: 'fixed.field.audio',
+  level: 'fixed.field.level',
 }
 
 /** A newer version is waiting, or this one is too old for the packs or the server (spec §4.3, §9.3). */

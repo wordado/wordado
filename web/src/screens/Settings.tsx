@@ -1,4 +1,5 @@
 import { useT } from '../i18n/i18n'
+import { AboutSettings } from '../settings/AboutSettings'
 import { AccountSettings } from '../settings/AccountSettings'
 import { AppSettings } from '../settings/AppSettings'
 import { AudioDownload } from '../settings/AudioDownload'
@@ -20,6 +21,7 @@ export function Settings() {
       <LanguageSettings />
       <AccountSettings />
       <AppSettings />
+      <AboutSettings />
       <p className="privacy-link">
         <a href="/privacy">{t('privacy.link')}</a>
       </p>

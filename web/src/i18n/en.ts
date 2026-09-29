@@ -54,6 +54,12 @@ export const en = {
   'notice.other-account': 'This device holds the progress of {email}. Sign out of that account in settings before using another.',
   'notice.google-failed': 'Google sign-in didn’t complete. Try again, or use a code by email.',
   'notice.dismiss': 'Dismiss',
+  'fixed.one': 'You reported the {field} of “{word}”. It is fixed now. Thank you!',
+  'fixed.some': { one: 'We fixed {count} thing you reported. Thank you!', other: 'We fixed {count} things you reported. Thank you!' },
+  'fixed.field.translation': 'translation',
+  'fixed.field.example': 'example sentence',
+  'fixed.field.audio': 'pronunciation',
+  'fixed.field.level': 'level',
 
   'sync.syncing': 'Syncing…',
   'sync.synced': 'All progress saved to your account',
@@ -73,6 +79,10 @@ export const en = {
   'install.button': 'Install',
   'install.later': 'Not now',
   'settings.app': 'The app',
+  'settings.about': 'About',
+  'about.sources': 'The word list is built from these sources:',
+  'about.ownList': 'This word list was prepared by Wordado.',
+  'about.unavailable': 'The word data’s sources appear here once the app has been online.',
   'privacy.link': 'Privacy policy',
 
   'settings.title': 'Settings',

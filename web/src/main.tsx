@@ -3,19 +3,23 @@ import '@fontsource-variable/literata'
 import './styles.css'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { dayToIsoDate, localDay } from '@wordado/core'
+import { dayToIsoDate, localDay, validateCredits, validateFixes } from '@wordado/core'
 import { httpApi } from './account/api'
 import { AccountController } from './account/controller'
 import { accountStorage, browserStorage, pendingSignIn } from './account/storage'
 import { httpTransport } from './account/transport'
 import { Boot } from './app/boot'
 import { noteInstallReport, refreshAudioOnActivation, startPackChecks } from './app/content'
+import { watchContentFiles } from './app/contentFiles'
+import { Credits } from './app/credits'
+import { FixNotices } from './app/fixNotices'
 import { AppLifecycle, watchUpdates, type InstallEvent } from './app/lifecycle'
 import { Root } from './app/Root'
 import { startSyncLoop } from './app/syncLoop'
 import { AudioStore } from './content/audio'
 import { AudioSwitch } from './content/audioSwitch'
 import { fetchManifest, manifestUrlFor, packFetcher, SAMPLE_MANIFEST_URL } from './content/packs'
+import { fetchSibling } from './content/siblings'
 import { webEnv } from './env'
 import { I18nProvider } from './i18n/i18n'
 import { writeInterfaceLanguage } from './reminders/prefs'
@@ -44,6 +48,13 @@ let controller: AccountController | null = null
 const transport = httpTransport({ onUnauthorized: () => controller?.sessionExpired(), expectedUser })
 
 const lifecycle = new AppLifecycle({ storage: browserStorage('localStorage'), reload: () => window.location.reload() })
+/** The word data's attributions (plan 8b), for Settings › About. */
+const credits = new Credits({
+  storage: browserStorage('localStorage'),
+  fetch: (url) => fetchSibling(url, 'credits.json', validateCredits),
+})
+/** What the learner reported that is fixed now (spec §8.10). */
+const fixNotices = new FixNotices({ storage: browserStorage('localStorage'), fetchFixes: (url) => fetchSibling(url, 'fixes.json', validateFixes) })
 
 const boot = new Boot(
   {
@@ -81,6 +92,25 @@ boot.store.subscribe(() => {
   stopAudioWatch?.()
   stopAudioWatch = state.status === 'ready' ? refreshAudioOnActivation(state.client, audio) : null
   if (state.status === 'ready') lifecycle.recordVisit(dayToIsoDate(localDay(env.now(), env.tzOffsetMin())))
+})
+
+// The credits and "your report was fixed" follow the pack the learner has (plan 8b, Decision 6).
+let stopContentWatch: (() => void) | null = null
+boot.store.subscribe(() => {
+  const state = boot.store.get()
+  stopContentWatch?.()
+  if (state.status === 'ready') {
+    stopContentWatch = watchContentFiles(state.client, () => {
+      const manifestUrl = manifestUrlFor(state.account)
+      void credits.refresh(manifestUrl).catch(() => undefined)
+      void fixNotices.check(state.client, manifestUrl).catch(() => undefined)
+    })
+  } else {
+    // A sign-out or account switch: the previous account's notice must never linger under the demo or the next
+    // account, and any check still in flight for it must be discarded (plan 8b review fix).
+    stopContentWatch = null
+    fixNotices.reset()
+  }
 })
 
 startPackChecks({
@@ -161,7 +191,7 @@ createRoot(document.getElementById('root')!).render(
         localeMounted = true
       }}
     >
-      <Root boot={boot} services={{ env, audio, afterRun, api, accounts: controller!, reminders, lifecycle }} />
+      <Root boot={boot} services={{ env, audio, afterRun, api, accounts: controller!, reminders, lifecycle, credits, fixNotices }} />
     </I18nProvider>
   </StrictMode>,
 )
