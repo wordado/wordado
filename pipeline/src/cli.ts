@@ -23,7 +23,8 @@ import { openRouterTts } from './tts'
 const USAGE = `usage: corpus <command>
   content (a content directory, e.g. an absolute path to your clone of wordado-content):
     init <dir>                     a new content directory, seeded with the sample
-    draft <dir> [--offline]        every LLM stage; --offline uses the cache only
+    draft <dir> [--offline] [--regroup]
+                                   every LLM stage; --offline uses the cache only; --regroup rebuilds unpublished units
     audio <dir> [--batch <id>]     TTS clips for live entries that need one
     queues <dir>                   write pending review items to review/
     import <dir> --by <name>       apply reviewed rows as decisions
@@ -114,7 +115,7 @@ async function draft(dir: string): Promise<void> {
   const config = readConfig(dir)
   const offline = flag('--offline')
   const llm = offline ? offlineLlm : openRouterLlm({ apiKey: apiKey(), model: config.llm.model, maxUsd: config.llm.max_usd_per_run })
-  const d = await runDraft({ dir, llm, offline })
+  const d = await runDraft({ dir, llm, offline, regroup: flag('--regroup') })
   const live = new Set(d.live)
   const perLevel = config.levels.map((level) => `${level} ${d.entries.filter((e) => live.has(e.entry_id) && e.level === level).length}`).join(', ')
   const units = d.units.filter((u) => u.entry_ids.some((id) => live.has(id))).length

@@ -6,7 +6,7 @@ units, native-speaker review, TTS audio and learners' error reports, up to a pub
 `wordado/wordado-content`, cloned into `content/` beside this repository's packages and ignored by it.
 
 ```
-frequency lists ─► lemmas ─► senses + banding ─► translations ─► IDs, selection, units, titles   (corpus draft)
+frequency lists ─► lemmas ─► senses + banding ─► translations ─► IDs, selection, themes, units, titles   (corpus draft)
                                                                      │
                      review/*.csv ◄──────── corpus queues ◄─────────┤
                           │                                          │
@@ -25,7 +25,7 @@ absolutely: `"$PWD/content"` from the repository root.
 | Command | What it does |
 |---|---|
 | `init <dir>` | A new content directory: the template, the sample's IDs pinned in `registry.json`, the curated themes, and the sample as `last-published/` (v0). |
-| `draft <dir> [--offline]` | Every LLM stage, then IDs, selection, units and titles. Needs `OPENROUTER_API_KEY`, except `--offline`, which uses the caches only. |
+| `draft <dir> [--offline] [--regroup]` | Every LLM stage, then IDs, selection, themes, units and titles. Needs `OPENROUTER_API_KEY`, except `--offline`, which uses the caches only. `--regroup` rebuilds every unit no published pack carries. |
 | `audio <dir> [--batch <id>]` | Clips for live entries that have none, whose voice settings changed, or that were marked `redo`. Needs ffmpeg and `OPENROUTER_API_KEY`. |
 | `queues <dir>` | Writes pending review items to `review/<queue>/`. |
 | `import <dir> --by <name>` | Applies every reviewed row as a decision. |
@@ -178,6 +178,19 @@ open items are already open. Then run `queues`: the items come out with their cu
 and the note in the **reopened** column. The release waits for them again, unless the queue is in
 `accept_unreviewed`. Audio is not reopened; mark a clip `redo` instead. A corrected field is listed in the next
 version's `fixes.json`.
+
+## Themes and units
+
+`themes.json` is the curated theme list, each theme named and described in English and every L1. The *themes*
+stage asks, for every live sense, which themes fit (up to three, most relevant first); the English descriptions
+are part of the question, so write them to say what belongs and what does not ("Jobs, workplaces and colleagues;
+not business or the economy in general"). Changing the list asks the themes stage again for every live sense
+(about $3 for 3,100), and nothing else: the senses question keeps the 24 ids it was first asked with.
+
+Units are sticky: a word keeps its unit from draft to draft, so new themes only group words not yet in a unit.
+To regroup, run `corpus draft "$PWD/content" --regroup` locally: every unit no published pack carries is rebuilt
+from the current themes, and its title is asked again. A published unit keeps its words; a learner's path does
+not change under them.
 
 ## When something is wrong
 

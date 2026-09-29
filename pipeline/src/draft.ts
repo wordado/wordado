@@ -12,7 +12,8 @@ import { assignIds, type Registry } from './registry'
 import { selectLive, senseRank } from './select'
 import { readClearedSources } from './sources'
 import { lemmatise, rankLemmas, type StageRun } from './stages/lemmas'
-import { bandLevel, describeLemmas, frequencyBand } from './stages/senses'
+import { bandLevel, describeLemmas, frequencyBand, SENSES_THEME_IDS } from './stages/senses'
+import { themeSenses } from './stages/themes'
 import { titleUnits } from './stages/titles'
 import { mergeSenses, translateSenses, type TranslationFields } from './stages/translate'
 import { assignUnits, groupTitles } from './units'
@@ -68,6 +69,11 @@ export interface DraftOptions {
   readonly llm: Llm
   /** No LLM calls: every answer must be cached (the release workflow). */
   readonly offline: boolean
+  /**
+   * Rebuilds every unit no published pack carries, from the current themes; a published unit keeps its words.
+   * Their unit IDs are free again, since no learner has seen them.
+   */
+  readonly regroup?: boolean
 }
 
 /** `corpus draft`: every LLM stage, then IDs, decisions, selection and units. Writes registry.json and work/draft.json. */
@@ -93,7 +99,7 @@ export async function runDraft(opts: DraftOptions): Promise<Draft> {
   const lemmas = rankLemmas(forms, lemmaResults, [...pinnedHeadwords, ...published.map((e) => e.headword)], config.max_lemmas)
   // rankLemmas marks a published lemma pinned too; only a sample or essential word passes the level check whole.
   const pinnedLemmas = new Set(pinnedHeadwords.map(norm))
-  const senses = await describeLemmas(lemmas, themes.map((t) => t.theme_id), run('senses'))
+  const senses = await describeLemmas(lemmas, SENSES_THEME_IDS, run('senses'))
 
   const inScope = lemmas.flatMap((lemma, i) =>
     senses[i]!.flatMap((s, order) => {
@@ -129,7 +135,7 @@ export async function runDraft(opts: DraftOptions): Promise<Draft> {
   registry = assigned.registry
   const pinned = new Set(registry.entries.filter((e) => e.pinned).map((e) => e.entry_id))
   const unitOf = new Map(registry.units.flatMap((u) => u.entry_ids.map((id) => [id, u] as const)))
-  const entries: DraftEntry[] = merged.map((s, i) => {
+  const proposed: DraftEntry[] = merged.map((s, i) => {
     const entry_id = assigned.ids[i]!
     const unit = unitOf.get(entry_id)
     // An entry keeps its unit, and so its level, unless a banding decision moves it (Decision 9).
@@ -147,7 +153,7 @@ export async function runDraft(opts: DraftOptions): Promise<Draft> {
       level_proposal: proposal,
       level: foldField(proposal, decisions.for(QUEUES.level, entry_id)).value,
       level_flagged: !unit && s.flagged,
-      themes: s.themes,
+      themes: [],
       english: { ipa: s.ipa, variants: s.variants, examples: s.examples },
       l1: s.l1,
     }
@@ -157,13 +163,23 @@ export async function runDraft(opts: DraftOptions): Promise<Draft> {
     foldField(e.english, decisions.for(QUEUES.english, e.entry_id)).dropped ||
     config.l1s.some((l) => foldField(e.l1[l], decisions.for(QUEUES.translation(l), e.entry_id)).dropped)
   const live = selectLive(
-    entries.map((e) => ({ entry_id: e.entry_id, level: e.level, rank: e.rank, order: e.order, pinned: e.pinned || e.essential, wasLive: last.live.has(e.entry_id), dropped: dropped(e) })),
+    proposed.map((e) => ({ entry_id: e.entry_id, level: e.level, rank: e.rank, order: e.order, pinned: e.pinned || e.essential, wasLive: last.live.has(e.entry_id), dropped: dropped(e) })),
     config.levels,
     config.targets,
   )
+  // Themes are asked for live entries only: they group units, and ship with the pack.
+  const liveProposed = proposed.filter((e) => live.has(e.entry_id))
+  const themed = await themeSenses(
+    liveProposed.map((e) => ({ headword: e.headword, pos: e.pos, gloss: e.sense_en, example: e.english.examples[0]! })),
+    themes,
+    run('themes'),
+  )
+  const themesOf = new Map(liveProposed.map((e, i) => [e.entry_id, themed[i]!]))
+  const entries = proposed.map((e) => ({ ...e, themes: themesOf.get(e.entry_id) ?? [] }))
   const liveEntries = entries.filter((e) => live.has(e.entry_id))
+  const publishedUnits = new Set([...last.packs.values()].flatMap((p) => p.units.map((u) => u.unit_id)))
   const units = assignUnits(
-    registry.units,
+    opts.regroup ? registry.units.filter((u) => publishedUnits.has(u.unit_id)) : registry.units,
     liveEntries.map((e) => ({ entry_id: e.entry_id, level: e.level, theme: e.themes[0] ?? '', pos: e.pos, rank: e.rank, order: e.order })),
     last.published,
     config.unit_size,

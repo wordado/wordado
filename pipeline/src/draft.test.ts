@@ -9,7 +9,7 @@ import { writeJson } from './files'
 import type { Llm, LlmRequest } from './llm'
 import { adoptRelease, planRelease, writeRelease } from './release'
 import { LicenceError } from './sources'
-import type { SenseProposal } from './stages/senses'
+import { SENSES_THEME_IDS, type SenseProposal } from './stages/senses'
 import { approveAll, FIXTURE_TSV, makeContent, recordAudio, sampleLlm } from './testing/fixture'
 
 /** A content directory whose first draft was reviewed, released as version 1 and recorded in last-published/. */
@@ -61,6 +61,48 @@ describe('runDraft', () => {
 
   it('offline, names the stage that is not cached', async () => {
     await expect(runDraft({ dir: makeContent(), llm: sampleLlm(), offline: true })).rejects.toThrow(OfflineMiss)
+  })
+
+  it('asks the themes of live entries in their own stage; the senses question keeps its fixed theme list', async () => {
+    const dir = makeContent()
+    const file = join(dir, 'themes.json')
+    const extra = { theme_id: 'linking', name: { en: 'Linking words', bg: 'Свързващи думи' }, description: { en: 'Because, although.', bg: 'Защото, въпреки че.' } }
+    writeJson(file, [...JSON.parse(readFileSync(file, 'utf8')), extra])
+    const llm = sampleLlm()
+    const draft = await runDraft({ dir, llm, offline: false })
+    const senses = llm.calls.filter((c) => c.name === 'senses')
+    expect(senses.length).toBeGreaterThan(0)
+    for (const c of senses) expect((c.input as { themes: string[] }).themes).toEqual(SENSES_THEME_IDS)
+    const asked = llm.calls.filter((c) => c.name === 'themes').flatMap((c) => (c.input as { items: unknown[] }).items)
+    expect(asked).toHaveLength(64)
+    expect((llm.calls.find((c) => c.name === 'themes')!.input as { themes: { id: string }[] }).themes.map((t) => t.id)).toContain('linking')
+    expect(draft.entries.find((e) => e.entry_id === 'hello-1')!.themes).toEqual(['greetings'])
+  })
+
+  it('with regroup, rebuilds the units no published pack carries from the current themes', async () => {
+    const dir = makeContent({ config: { unit_size: 4 } })
+    const first = await runDraft({ dir, llm: sampleLlm(), offline: false })
+    expect(first.units.find((u) => u.unit_id === 'a1-04')).toMatchObject({ entry_ids: ['the-1', 'go-1'], group: 'mixed' })
+    // A new theme list asks the themes stage again, and it now puts the and go together.
+    const file = join(dir, 'themes.json')
+    const extra = { theme_id: 'linking', name: { en: 'Linking words', bg: 'Свързващи думи' }, description: { en: 'Because, although.', bg: 'Защото, въпреки че.' } }
+    writeJson(file, [...JSON.parse(readFileSync(file, 'utf8')), extra])
+    const base = sampleLlm()
+    const llm: Llm = {
+      ...base,
+      json: <T,>(req: LlmRequest<T>) =>
+        req.name === 'themes'
+          ? Promise.resolve(req.parse({ items: (req.input as { items: { key: string; headword: string }[] }).items.map((i) => ({ key: i.key, themes: ['the', 'go'].includes(i.headword) ? ['actions'] : [] })) }))
+          : base.json(req),
+    }
+    const kept = await runDraft({ dir, llm, offline: false })
+    expect(kept.units.find((u) => u.unit_id === 'a1-04')).toMatchObject({ group: 'mixed' })
+    const regrouped = await runDraft({ dir, llm, offline: false, regroup: true })
+    const unit = regrouped.units.find((u) => u.unit_id === 'a1-04')!
+    expect(unit).toMatchObject({ entry_ids: ['the-1', 'go-1'], titles: { bg: { en: 'Unit a1-04', l1: 'Урок a1-04' } } })
+    expect(unit).not.toHaveProperty('group')
+    // The sample's published units keep their words.
+    expect(regrouped.units.filter((u) => ['a1-01', 'a1-02', 'a1-03'].includes(u.unit_id)).map((u) => u.entry_ids)).toEqual(first.units.slice(0, 3).map((u) => u.entry_ids))
   })
 
   it('a dropped entry leaves the live set, and a level fix moves it to a unit of its new level', async () => {
