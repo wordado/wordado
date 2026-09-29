@@ -71,6 +71,10 @@ export function sampleLlm() {
         }),
       }
     }
+    if (name === 'themes') {
+      const items = (input as { items: { key: string; headword: string; pos: string }[] }).items
+      return { items: items.map((item) => ({ key: item.key, themes: sample.entries.find((e) => e.headword === item.headword && e.pos === item.pos)?.themes ?? [] })) }
+    }
     if (name === 'titles') {
       const units = (input as { units: { unit: string }[] }).units
       return { items: units.map((u) => ({ unit: u.unit, en: `Unit ${u.unit}`, bg: `Урок ${u.unit}` })) }

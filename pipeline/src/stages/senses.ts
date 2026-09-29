@@ -5,6 +5,16 @@ import type { RankedLemma, StageRun } from './lemmas'
 
 export const SENSES_VERSION = 1
 
+/**
+ * The theme ids the senses question has always been asked with: the 24 curated themes of 2026-09. Themes are now
+ * decided by their own stage (`themeSenses`), so the senses' own themes are not used; the question keeps this list
+ * so that extending the curated themes does not ask every headword again.
+ */
+export const SENSES_THEME_IDS: readonly string[] = [
+  'actions', 'animals', 'body', 'city', 'clothes', 'colours', 'daily-life', 'directions', 'doctor', 'feelings', 'food', 'greetings',
+  'hobbies', 'home', 'numbers', 'people', 'restaurant', 'school', 'shopping', 'technology', 'time', 'travel', 'weather', 'work',
+]
+
 export type LlmLevel = CefrLevel | 'C2'
 const LLM_LEVELS: readonly LlmLevel[] = [...CEFR_LEVELS, 'C2']
 
