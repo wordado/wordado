@@ -1,11 +1,11 @@
-import { createReadStream, mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { Readable } from 'node:stream'
 import type { ReadableStream as WebReadableStream } from 'node:stream/web'
 import { createInterface } from 'node:readline'
 import { createGunzip } from 'node:zlib'
 import { norm } from '@wordado/core'
-import { asyncBufferFromFile, asyncBufferFromUrl, parquetMetadataAsync, parquetReadObjects } from 'hyparquet'
+import { asyncBufferFromUrl, parquetMetadataAsync, parquetReadObjects } from 'hyparquet'
 
 /** A running word: letters, with apostrophes inside (don't). Hyphens and digits split words. */
 const TOKEN = /\p{L}+(?:['’]\p{L}+)*/gu
@@ -20,12 +20,24 @@ export function countInto(counts: Map<string, number>, text: string): void {
 }
 
 /**
- * One Parquet file's text column, a row group at a time, so a 2 GB shard never sits in memory whole. A source is a
- * path or an http(s) URL. A URL is read by byte ranges into memory and never saved: counting FineWeb this way keeps
- * no copy of its web text on disk (licence review, question 8).
+ * Counting only ever streams (licence review, question 8): a source is an http(s) URL, read over the network, and
+ * only the counts are kept. A local file is refused, so no downloaded copy of a corpus is ever counted, or kept.
+ */
+export function streamed(sources: readonly string[]): void {
+  for (const source of sources) {
+    if (!/^https?:\/\//.test(source)) {
+      throw new Error(`${source}: counting reads only http(s) URLs, streamed and never saved; to try a local file, serve it over HTTP`)
+    }
+  }
+}
+
+/**
+ * One Parquet file's text column, a row group at a time, read by byte ranges from its URL into memory, so a 2 GB
+ * shard never sits in memory whole and nothing of its web text is written to disk.
  */
 export async function* parquetTexts(source: string, column = 'text'): AsyncGenerator<string> {
-  const buffer = /^https?:\/\//.test(source) ? await asyncBufferFromUrl({ url: source }) : await asyncBufferFromFile(source)
+  streamed([source])
+  const buffer = await asyncBufferFromUrl({ url: source })
   const metadata = await parquetMetadataAsync(buffer)
   let rowStart = 0
   for (const group of metadata.row_groups) {
@@ -61,6 +73,7 @@ export async function countParquet(
   progress?: (source: string, texts: number) => void,
   opts: { maxForms?: number } = {},
 ): Promise<Map<string, number>> {
+  streamed(sources)
   const maxForms = opts.maxForms ?? MAX_FORMS
   const counts = new Map<string, number>()
   for (const file of sources) {
@@ -76,9 +89,8 @@ export async function countParquet(
   return counts
 }
 
-/** A gzip file's bytes: a local path, or an http(s) URL read as it downloads and never saved (licence review, question 8). */
+/** A gzip file's bytes from its URL, read as it downloads and never saved. */
 async function gzipSource(source: string): Promise<Readable> {
-  if (!/^https?:\/\//.test(source)) return createReadStream(source)
   const res = await fetch(source)
   if (!res.ok || !res.body) throw new Error(`${source}: HTTP ${res.status}`)
   return Readable.fromWeb(res.body as WebReadableStream<Uint8Array>)
@@ -88,9 +100,8 @@ async function gzipSource(source: string): Promise<Readable> {
  * Google Books Ngram v3 1-grams: `ngram TAB year,match_count,volume_count TAB …`.
  * Adds up `match_count` for years `from`–`to` (the pilot used 2000–2019, so the
  * counts reflect current usage), folds case, and skips part-of-speech tagged
- * forms (`water_NOUN`), which would count a word twice. Each source is a local
- * `.gz` file or a URL, decompressed and counted as it streams in; only the
- * counts are kept.
+ * forms (`water_NOUN`), which would count a word twice. Each source is a URL,
+ * decompressed and counted as it streams in; only the counts are kept.
  */
 export async function sumGoogleBooks(
   sources: readonly string[],
@@ -98,11 +109,12 @@ export async function sumGoogleBooks(
   to: number,
   progress?: (source: string, lines: number) => void,
 ): Promise<Map<string, number>> {
+  streamed(sources)
   const counts = new Map<string, number>()
   for (const source of sources) {
     const raw = await gzipSource(source)
     const gunzip = createGunzip()
-    // pipe() does not pass a source's error on: a broken download or a missing file must fail the loop below.
+    // pipe() does not pass a source's error on: a broken download must fail the loop below.
     raw.on('error', (err) => gunzip.destroy(err))
     const lines = createInterface({ input: raw.pipe(gunzip), crlfDelay: Infinity })
     let read = 0
