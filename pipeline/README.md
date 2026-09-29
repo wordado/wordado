@@ -29,6 +29,7 @@ absolutely: `"$PWD/content"` from the repository root.
 | `audio <dir> [--batch <id>]` | Clips for live entries that have none, whose voice settings changed, or that were marked `redo`. Needs ffmpeg and `OPENROUTER_API_KEY`. |
 | `queues <dir>` | Writes pending review items to `review/<queue>/`. |
 | `import <dir> --by <name>` | Applies every reviewed row as a decision. |
+| `compare <dir> [--sample <n>] [--stage <stage>]` | Asks the chosen LLM a sample of the draft's questions in a throwaway cache; writes `work/compare.md` beside the draft's answers. |
 | `reopen <dir> <queue> --by <name> (--all \| --keys <file>) [--note <text>]` | Sends reviewed items of one queue back for a second review; `queues` then writes them out again. |
 | `triage <dir>` | Reads `content_report` (`REPORTS_DATABASE_URL`); reopens fields at the threshold, remakes reported clips. |
 | `status <dir>` | What stands between the content and a release. |
@@ -191,6 +192,37 @@ Units are sticky: a word keeps its unit from draft to draft, so new themes only 
 To regroup, run `corpus draft "$PWD/content" --regroup` locally: every unit no published pack carries is rebuilt
 from the current themes, and its title is asked again. A published unit keeps its words; a learner's path does
 not change under them.
+
+## Running locally on your Claude plan
+
+`draft` and `compare` can answer on your own Claude plan instead of OpenRouter, through Claude Code's print mode:
+
+```bash
+CORPUS_LLM=claude-code pnpm --filter @wordado/pipeline corpus draft "$PWD/content"
+```
+
+It needs Claude Code installed and signed in (`claude` on the PATH); an `ANTHROPIC_API_KEY` in the environment is
+removed for these calls, so they never bill an API account. Each request runs `claude -p` in an empty temporary
+directory with no tools, the stage's instructions as the system prompt and its schema as `--json-schema`. The model
+is `llm.model` without `anthropic/` (`claude-sonnet-5`, the model the caches were made with), or `CORPUS_LLM_MODEL`.
+
+- The answers go into the same caches, each recorded with the model that gave it (`claude-code:claude-sonnet-5`),
+  so a later run on OpenRouter reuses them, and CI never needs your plan.
+- The calls count against the plan's usage limits. When one is reached the run stops with "usage limit is reached";
+  everything answered so far is cached, so rerun after the limit resets. `llm.max_usd_per_run` does not apply; the
+  spend printed is Claude Code's API-equivalent estimate.
+- Almost all of a call's time is the model writing its answer (about 37 s for a batch of senses; starting Claude
+  Code adds about 3 s), so more calls at a time is what makes a run faster. `CORPUS_LLM_CONCURRENCY=8` overrides
+  `llm.concurrency` (4) for `draft` and `compare`; how many help depends on the plan's rate limits. Try it on
+  `compare` first. One long Claude session for many batches would be slower on the whole: every batch would carry
+  the earlier ones in its context, using the plan's limits up faster and making answers depend on each other.
+- Audio still needs `OPENROUTER_API_KEY`: Claude does not speak.
+- Your own `~/.claude` settings and CLAUDE.md still load with each call (only `--bare` would skip them, and it does
+  not work with a plan's login). Check your claude.ai privacy settings if training on these prompts matters.
+
+**Before trusting another model or provider**, run `corpus compare "$PWD/content" --sample 20` with it chosen
+(`--stage senses|translate|themes` for one). It asks a sample of the draft's live words in a throwaway cache and
+writes `work/compare.md`, its answers beside the draft's. Nothing goes into the content caches.
 
 ## When something is wrong
 

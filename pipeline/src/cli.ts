@@ -1,9 +1,11 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { checkPackSuccession, loadCorpus, offeredThemes, themeEntries, validatePack, type Pack, type PackError } from '@wordado/core'
 import { audioQueueItems, clipsNeeded, generateClips, readAudioRecords } from './audio'
 import { BuildError, buildPack, type BuildOutput, type ClipFile } from './build'
-import { readConfig, reviewQueues } from './config'
+import { claudeCodeLlm } from './claudeCode'
+import { COMPARE_STAGES, compareReport, compareStages, type CompareStage } from './compare'
+import { readConfig, reviewQueues, type PipelineConfig } from './config'
 import { Decisions, QUEUES } from './decisions'
 import { readDraft, runDraft } from './draft'
 import { ffmpegEncoder } from './encoder'
@@ -28,6 +30,8 @@ const USAGE = `usage: corpus <command>
     audio <dir> [--batch <id>]     TTS clips for live entries that need one
     queues <dir>                   write pending review items to review/
     import <dir> --by <name>       apply reviewed rows as decisions
+    compare <dir> [--sample <n>] [--stage senses|translate|themes]
+                                   ask the chosen LLM a sample of the draft's questions; writes work/compare.md
     reopen <dir> <queue> --by <name> (--all | --keys <file>) [--note <text>]
                                    send reviewed items back for a second review
     triage <dir>                   read content reports (REPORTS_DATABASE_URL) and reopen what they cross
@@ -38,11 +42,14 @@ const USAGE = `usage: corpus <command>
   frequency lists (run on a workstation; the output goes into the content repository's sources/):
     count-text <out.tsv> <parquet file or URL...>      word forms in Parquet text shards (FineWeb); URLs are streamed, not saved
     sum-gbooks <out.tsv> <gz...> [--from Y] [--to Y]   Google Books 1-grams, years 2000-2019 by default
+  the LLM (draft, compare): OpenRouter by default; CORPUS_LLM=claude-code answers on your Claude plan
+    through Claude Code (claude -p), for local runs; CORPUS_LLM_MODEL overrides the model, and
+    CORPUS_LLM_CONCURRENCY the calls at a time (llm.concurrency).
   packs:
     build <source-dir> | validate <pack-file> | check <previous-pack> <next-pack> | publishable <dir>`
 
 const argv = process.argv.slice(2)
-const VALUED = new Set(['--by', '--batch', '--from', '--to', '--keys', '--note'])
+const VALUED = new Set(['--by', '--batch', '--from', '--to', '--keys', '--note', '--sample', '--stage'])
 const option = (name: string): string | undefined => {
   const i = argv.indexOf(name)
   return i >= 0 ? argv[i + 1] : undefined
@@ -111,16 +118,60 @@ function build(dir: string): void {
   }
 }
 
+/** The LLM for draft and compare: CORPUS_LLM picks OpenRouter (the default, and CI's) or the user's Claude plan. */
+function chosenLlm(config: PipelineConfig): Llm {
+  const kind = process.env['CORPUS_LLM'] ?? 'openrouter'
+  const model = process.env['CORPUS_LLM_MODEL']
+  if (kind === 'claude-code') return claudeCodeLlm({ model: model ?? config.llm.model.replace(/^anthropic\//, '') })
+  if (kind !== 'openrouter') {
+    console.error(`CORPUS_LLM must be openrouter or claude-code, not ${kind}`)
+    process.exit(2)
+  }
+  return openRouterLlm({ apiKey: apiKey(), model: model ?? config.llm.model, maxUsd: config.llm.max_usd_per_run })
+}
+
+/** CORPUS_LLM_CONCURRENCY: LLM calls at a time, over pipeline.json's llm.concurrency (try more on a Claude plan). */
+function llmConcurrency(): number | undefined {
+  const raw = process.env['CORPUS_LLM_CONCURRENCY']
+  if (raw === undefined || raw === '') return undefined
+  const n = Number(raw)
+  if (!Number.isInteger(n) || n < 1 || n > 32) {
+    console.error(`CORPUS_LLM_CONCURRENCY must be a whole number from 1 to 32, not ${raw}`)
+    process.exit(2)
+  }
+  return n
+}
+
+const spendNote = (llm: Llm) =>
+  llm.model.startsWith('claude-code:') ? `$${llm.spentUsd().toFixed(2)} API-equivalent, on your Claude plan` : `$${llm.spentUsd().toFixed(2)}`
+
 async function draft(dir: string): Promise<void> {
   const config = readConfig(dir)
   const offline = flag('--offline')
-  const llm = offline ? offlineLlm : openRouterLlm({ apiKey: apiKey(), model: config.llm.model, maxUsd: config.llm.max_usd_per_run })
-  const d = await runDraft({ dir, llm, offline, regroup: flag('--regroup') })
+  const llm = offline ? offlineLlm : chosenLlm(config)
+  const d = await runDraft({ dir, llm, offline, regroup: flag('--regroup'), concurrency: llmConcurrency() })
   const live = new Set(d.live)
   const perLevel = config.levels.map((level) => `${level} ${d.entries.filter((e) => live.has(e.entry_id) && e.level === level).length}`).join(', ')
   const units = d.units.filter((u) => u.entry_ids.some((id) => live.has(id))).length
-  console.log(`draft: ${d.live.length} live entries (${perLevel}) in ${units} units; LLM spend this run $${llm.spentUsd().toFixed(2)}`)
+  console.log(`draft: ${d.live.length} live entries (${perLevel}) in ${units} units; LLM spend this run ${spendNote(llm)}`)
   for (const p of d.problems) console.error(p)
+}
+
+async function compare(dir: string): Promise<void> {
+  const config = readConfig(dir)
+  const stage = option('--stage')
+  if (stage !== undefined && !(COMPARE_STAGES as readonly string[]).includes(stage)) usage()
+  const sample = Number(option('--sample') ?? 20)
+  if (!Number.isInteger(sample) || sample < 1) usage()
+  const llm = chosenLlm(config)
+  const rows = await compareStages(dir, llm, { sample, stages: stage ? [stage as CompareStage] : COMPARE_STAGES, concurrency: llmConcurrency() })
+  const file = join(dir, 'work', 'compare.md')
+  writeFileSync(file, compareReport(rows, llm.model, now()))
+  for (const s of new Set(rows.map((r) => r.stage))) {
+    const rs = rows.filter((r) => r.stage === s)
+    console.log(`${s}: ${rs.filter((r) => r.same).length} of ${rs.length} the same`)
+  }
+  console.log(`wrote ${file}; LLM spend ${spendNote(llm)}`)
 }
 
 async function audio(dir: string): Promise<void> {
@@ -259,6 +310,9 @@ async function main(): Promise<void> {
       break
     case 'import':
       importReviewed(arg(first))
+      break
+    case 'compare':
+      await compare(arg(first))
       break
     case 'reopen':
       reopen(arg(first), arg(second))

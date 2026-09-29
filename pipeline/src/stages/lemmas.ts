@@ -79,6 +79,7 @@ export function lemmatise(forms: readonly RankedForm[], run: StageRun): Promise<
     batchSize: BATCH,
     concurrency: run.concurrency,
     offline: run.offline,
+    model: run.llm.model,
     run: (batch) => run.llm.json({ name: 'lemmas', system: SYSTEM, input: { forms: batch }, schema: SCHEMA, parse: parse(batch) }),
   })
 }

@@ -99,6 +99,7 @@ export async function translateSenses(l1: string, items: readonly TranslateItem[
     batchSize: BATCH,
     concurrency: run.concurrency,
     offline: run.offline,
+    model: run.llm.model,
     run: (batch) =>
       run.llm.json({
         name: 'translate',

@@ -71,6 +71,7 @@ export async function themeSenses(senses: readonly ThemeSense[], themes: readonl
     batchSize: 25,
     concurrency: run.concurrency,
     offline: run.offline,
+    model: run.llm.model,
     run: (batch) =>
       run.llm.json({
         name: 'themes',

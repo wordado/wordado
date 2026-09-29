@@ -74,6 +74,8 @@ export interface DraftOptions {
    * Their unit IDs are free again, since no learner has seen them.
    */
   readonly regroup?: boolean
+  /** LLM calls at a time; `llm.concurrency` when absent (CORPUS_LLM_CONCURRENCY). */
+  readonly concurrency?: number | undefined
 }
 
 /** `corpus draft`: every LLM stage, then IDs, decisions, selection and units. Writes registry.json and work/draft.json. */
@@ -86,7 +88,7 @@ export async function runDraft(opts: DraftOptions): Promise<Draft> {
   const last = readLastPublished(dir)
   const decisions = Decisions.read(dir)
   let registry = readJson<Registry>(paths.registry)
-  const run = (stage: string): StageRun => ({ llm, cache: StageCache.open(paths.cache(stage)), concurrency: config.llm.concurrency, offline })
+  const run = (stage: string): StageRun => ({ llm, cache: StageCache.open(paths.cache(stage)), concurrency: opts.concurrency ?? config.llm.concurrency, offline })
 
   const forms = rankForms(sources.map((s) => parseFrequencyList(s.text, s.record.id)), config.max_forms)
   const lemmaResults = await lemmatise(forms, run('lemmas'))

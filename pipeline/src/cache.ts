@@ -6,6 +6,8 @@ import { mapLimit } from './mapLimit'
 interface Line {
   readonly key: string
   readonly value: unknown
+  /** Which model answered: `anthropic/claude-sonnet-5` through OpenRouter, `claude-code:claude-sonnet-5` on a Claude plan. */
+  readonly model?: string
 }
 
 /**
@@ -30,9 +32,9 @@ export class StageCache {
   get(key: string): unknown {
     return this.map.get(key)
   }
-  set(key: string, value: unknown): void {
+  set(key: string, value: unknown, model?: string): void {
     this.map.set(key, value)
-    appendJsonl(this.file, [{ key, value }])
+    appendJsonl(this.file, [{ key, value, ...(model ? { model } : {}) }])
   }
 }
 
@@ -62,6 +64,8 @@ export interface CachedBatchOptions<I, O> {
   readonly concurrency: number
   /** Release runs offline: every item must already be cached. */
   readonly offline: boolean
+  /** Recorded with each answer (provenance); not part of the key. */
+  readonly model?: string
   readonly run: (batch: readonly I[]) => Promise<readonly O[]>
 }
 
@@ -82,7 +86,7 @@ export async function cachedBatch<I, O>(opts: CachedBatchOptions<I, O>): Promise
   await mapLimit(batches, opts.concurrency, async (batch) => {
     const out = await opts.run(batch.map((i) => opts.items[i]!))
     if (out.length !== batch.length) throw new Error(`${opts.stage}: a batch of ${batch.length} came back with ${out.length}`)
-    batch.forEach((i, j) => opts.cache.set(keys[i]!, out[j]))
+    batch.forEach((i, j) => opts.cache.set(keys[i]!, out[j], opts.model))
   })
   return keys.map((k) => opts.cache.get(k) as O)
 }
