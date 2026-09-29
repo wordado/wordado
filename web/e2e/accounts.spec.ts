@@ -116,7 +116,7 @@ async function signIn(page: Page, email: string, gate: { country?: string; year?
 async function syncLine(page: Page, text: string, timeout?: number): Promise<void> {
   const circle = page.getByRole('button', { name: /^Account: / })
   if ((await circle.getAttribute('aria-expanded')) !== 'true') await circle.click()
-  await expect(page.getByText(text)).toBeVisible({ timeout })
+  await expect(page.getByText(text)).toBeVisible(timeout === undefined ? {} : { timeout })
 }
 
 const synced = (page: Page) => syncLine(page, 'All progress saved to your account', 15_000)
