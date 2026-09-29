@@ -8,6 +8,7 @@ import type { Api } from '../account/api'
 import type { AccountActions, AccountState } from '../account/controller'
 import type { AccountRecord } from '../account/storage'
 import { AppProvider } from '../app/context'
+import type { CreditsPort, CreditsView } from '../app/credits'
 import { type LifecycleState, type LifecyclePort } from '../app/lifecycle'
 import type { AudioPort } from '../content/audio'
 import { I18nProvider, type Locale } from '../i18n/i18n'
@@ -54,6 +55,7 @@ export interface RenderContext {
   readonly account?: AccountRecord | null
   readonly reminders?: ReminderActions
   readonly lifecycle?: LifecyclePort
+  readonly credits?: CreditsPort
 }
 
 /** Installation and updates as the banners and settings see them; every call is logged. */
@@ -117,6 +119,11 @@ export function fakeReminders(over: Partial<ReminderActions> = {}): ReminderActi
   }
 }
 
+/** Credits as Settings › About sees them: none yet, unless a test says so. */
+export function fakeCredits(view: Partial<CreditsView> = {}): CreditsPort {
+  return { store: createStore<CreditsView>({ manifestUrl: null, credits: null, ...view }) }
+}
+
 /** Renders inside every provider the app has, in English unless told otherwise. */
 export function renderWith(ui: ReactElement, ctx: RenderContext): RenderResult {
   const storage = { getItem: () => ctx.locale ?? 'en', setItem: () => undefined }
@@ -134,6 +141,7 @@ export function renderWith(ui: ReactElement, ctx: RenderContext): RenderResult {
             account: ctx.account ?? null,
             reminders: ctx.reminders ?? fakeReminders(),
             lifecycle: ctx.lifecycle ?? fakeLifecycle(),
+            credits: ctx.credits ?? fakeCredits(),
           }}
         >
           {ui}

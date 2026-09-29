@@ -73,6 +73,10 @@ export const en = {
   'install.button': 'Install',
   'install.later': 'Not now',
   'settings.app': 'The app',
+  'settings.about': 'About',
+  'about.sources': 'The word list is built from these sources:',
+  'about.ownList': 'This word list was prepared by Wordado.',
+  'about.unavailable': 'The word data’s sources appear here once the app has been online.',
   'privacy.link': 'Privacy policy',
 
   'settings.title': 'Settings',

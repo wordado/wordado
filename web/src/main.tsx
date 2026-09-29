@@ -3,19 +3,21 @@ import '@fontsource-variable/literata'
 import './styles.css'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { dayToIsoDate, localDay } from '@wordado/core'
+import { dayToIsoDate, localDay, validateCredits } from '@wordado/core'
 import { httpApi } from './account/api'
 import { AccountController } from './account/controller'
 import { accountStorage, browserStorage, pendingSignIn } from './account/storage'
 import { httpTransport } from './account/transport'
 import { Boot } from './app/boot'
 import { noteInstallReport, refreshAudioOnActivation, startPackChecks } from './app/content'
+import { Credits } from './app/credits'
 import { AppLifecycle, watchUpdates, type InstallEvent } from './app/lifecycle'
 import { Root } from './app/Root'
 import { startSyncLoop } from './app/syncLoop'
 import { AudioStore } from './content/audio'
 import { AudioSwitch } from './content/audioSwitch'
 import { fetchManifest, manifestUrlFor, packFetcher, SAMPLE_MANIFEST_URL } from './content/packs'
+import { fetchSibling } from './content/siblings'
 import { webEnv } from './env'
 import { I18nProvider } from './i18n/i18n'
 import { writeInterfaceLanguage } from './reminders/prefs'
@@ -44,6 +46,11 @@ let controller: AccountController | null = null
 const transport = httpTransport({ onUnauthorized: () => controller?.sessionExpired(), expectedUser })
 
 const lifecycle = new AppLifecycle({ storage: browserStorage('localStorage'), reload: () => window.location.reload() })
+/** The word data's attributions (plan 8b), for Settings › About. Task 6 adds the trigger that refreshes it. */
+const credits = new Credits({
+  storage: browserStorage('localStorage'),
+  fetch: (url) => fetchSibling(url, 'credits.json', validateCredits),
+})
 
 const boot = new Boot(
   {
@@ -161,7 +168,7 @@ createRoot(document.getElementById('root')!).render(
         localeMounted = true
       }}
     >
-      <Root boot={boot} services={{ env, audio, afterRun, api, accounts: controller!, reminders, lifecycle }} />
+      <Root boot={boot} services={{ env, audio, afterRun, api, accounts: controller!, reminders, lifecycle, credits }} />
     </I18nProvider>
   </StrictMode>,
 )

@@ -68,6 +68,10 @@ export const bg: Messages = {
   'install.button': 'Инсталирайте',
   'install.later': 'Не сега',
   'settings.app': 'Приложението',
+  'settings.about': 'За приложението',
+  'about.sources': 'Речникът е съставен по данни от тези източници:',
+  'about.ownList': 'Този речник е съставен от Wordado.',
+  'about.unavailable': 'Източниците на речника се показват тук, след като приложението е било онлайн.',
   'privacy.link': 'Политика за поверителност',
 
   'settings.title': 'Настройки',
