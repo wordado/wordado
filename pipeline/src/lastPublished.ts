@@ -1,22 +1,11 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { validateManifest, validatePack, type Pack, type PackManifest, type ReportField } from '@wordado/core'
+import { validateManifest, validatePack, type FixesFile, type Pack, type PackManifest } from '@wordado/core'
 import { sha256Hex } from './checksum'
 import { contentPaths } from './content'
 import { readJsonOr } from './files'
 
-/** One entry field that changed in a corpus version: what plan 8b matches a learner's reports against (spec §8.10). */
-export interface Fix {
-  readonly word_id: string
-  readonly field: ReportField
-  readonly fixed_in: number
-}
-
-export interface FixesFile {
-  readonly schema_version: 1
-  readonly corpus_version: number
-  readonly fixes: readonly Fix[]
-}
+export type { Fix, FixesFile } from '@wordado/core'
 
 /** The corpus as last published: the predecessor every release is checked against (Decision 14). */
 export interface LastPublished {
