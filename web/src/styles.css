@@ -155,6 +155,14 @@ p {
   height: 2.25rem;
 }
 
+/* The icon's navy square would melt into the dark paper; a hairline keeps its shape. */
+@media (prefers-color-scheme: dark) {
+  .wordmark img {
+    border-radius: 22%;
+    box-shadow: 0 0 0 1px var(--rule);
+  }
+}
+
 .masthead-actions {
   display: flex;
   align-items: center;
