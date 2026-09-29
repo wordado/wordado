@@ -89,4 +89,46 @@ describe('FixNotices', () => {
     await firstCheck
     expect(notices.store.get()).toEqual([{ reportKey: 'k2', field: 'audio', headword: null }])
   })
+
+  it('reset() empties the store at once, and a check already in flight does not bring the notice back', async () => {
+    const storage = memoryStorage()
+    let releaseInFlight!: (file: FixesFile | null) => void
+    const inFlightFetch = new Promise<FixesFile | null>((resolve) => {
+      releaseInFlight = resolve
+    })
+    let call = 0
+    const notices = new FixNotices({
+      storage,
+      fetchFixes: async () => (++call === 1 ? fixes : inFlightFetch),
+    })
+    await notices.check(source([r('k1', 'c:bank-1', 'translation')]), URL_)
+    expect(notices.store.get()).toEqual([{ reportKey: 'k1', field: 'translation', headword: 'bank' }])
+    const inFlight = notices.check(source([r('k1', 'c:bank-1', 'translation')]), URL_)
+    notices.reset()
+    expect(notices.store.get()).toEqual([])
+    releaseInFlight(fixes)
+    await inFlight
+    expect(notices.store.get()).toEqual([])
+  })
+
+  it('dismiss() bumps the generation, so a check already past the fixes fetch cannot re-show the report dismiss() just marked told', async () => {
+    const storage = memoryStorage()
+    const notices = new FixNotices({ storage, fetchFixes: async () => fixes })
+    await notices.check(source([r('k1', 'c:bank-1', 'translation')]), URL_)
+    expect(notices.store.get()).toEqual([{ reportKey: 'k1', field: 'translation', headword: 'bank' }])
+
+    // This check's fixes fetch resolves at once, so it reaches `reports()` and suspends there, on the promise below.
+    let releaseReports!: (reports: ReportRecord[]) => void
+    const reportsPromise = new Promise<ReportRecord[]>((resolve) => {
+      releaseReports = resolve
+    })
+    const slowSource: FixSource = { reports: () => reportsPromise, snapshot: { packVersion: 2, corpus } }
+    const inFlight = notices.check(slowSource, URL_)
+    await Promise.resolve() // let it compute `told` (not yet marking k1 told) and suspend on reports()
+    notices.dismiss()
+    expect(notices.store.get()).toEqual([])
+    releaseReports([r('k1', 'c:bank-1', 'translation')])
+    await inFlight
+    expect(notices.store.get()).toEqual([])
+  })
 })

@@ -92,7 +92,9 @@ selection or level changes.
 
 **Attributions reach the app** as `credits.json` beside the manifest, from each cleared source's `attribution`.
 Every release writes and uploads it. After changing an attribution without a release (or for a version published
-before 8b), run Actions › Corpus › `credits`.
+before 8b), run Actions › Corpus › `credits`. Removing a source from `sources.json` must go with a release (draft
+and release), not only a `credits` run, because `credits` stamps today's register onto the published version and
+the published corpus still owes the removed source's attribution until a release rebuilds it.
 
 ## Preparing the frequency lists
 

@@ -99,14 +99,18 @@ let stopContentWatch: (() => void) | null = null
 boot.store.subscribe(() => {
   const state = boot.store.get()
   stopContentWatch?.()
-  stopContentWatch =
-    state.status === 'ready'
-      ? watchContentFiles(state.client, () => {
-          const manifestUrl = manifestUrlFor(state.account)
-          void credits.refresh(manifestUrl).catch(() => undefined)
-          void fixNotices.check(state.client, manifestUrl).catch(() => undefined)
-        })
-      : null
+  if (state.status === 'ready') {
+    stopContentWatch = watchContentFiles(state.client, () => {
+      const manifestUrl = manifestUrlFor(state.account)
+      void credits.refresh(manifestUrl).catch(() => undefined)
+      void fixNotices.check(state.client, manifestUrl).catch(() => undefined)
+    })
+  } else {
+    // A sign-out or account switch: the previous account's notice must never linger under the demo or the next
+    // account, and any check still in flight for it must be discarded (plan 8b review fix).
+    stopContentWatch = null
+    fixNotices.reset()
+  }
 })
 
 startPackChecks({

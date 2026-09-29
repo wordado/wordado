@@ -1,12 +1,12 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { checkPackSuccession, loadCorpus, offeredThemes, themeEntries, validatePack, type Pack, type PackError } from '@wordado/core'
+import { checkPackSuccession, loadCorpus, offeredThemes, themeEntries, validatePack, type CreditsFile, type Pack, type PackError } from '@wordado/core'
 import { audioQueueItems, clipsNeeded, generateClips, readAudioRecords } from './audio'
 import { BuildError, buildPack, type BuildOutput, type ClipFile } from './build'
 import { claudeCodeLlm } from './claudeCode'
 import { COMPARE_STAGES, compareReport, compareStages, type CompareStage } from './compare'
 import { readConfig, reviewQueues, type PipelineConfig } from './config'
-import { creditsFile } from './credits'
+import { checkedCredits } from './credits'
 import { Decisions, QUEUES } from './decisions'
 import { readDraft, runDraft } from './draft'
 import { ffmpegEncoder } from './encoder'
@@ -289,6 +289,19 @@ function release(dir: string, outDir: string): void {
   if (plan.retired.length > 0) console.log(`retired: ${plan.retired.join(', ')}`)
 }
 
+/** `corpus credits`: refuses to write a file the app would reject (a blank source title), instead of writing it unchecked. */
+function writeCredits(dir: string, file: string): void {
+  let credits: CreditsFile
+  try {
+    credits = checkedCredits(readClearedSources(dir), readLastPublished(dir).manifest.corpus_version)
+  } catch (err) {
+    console.error(err instanceof Error ? err.message : String(err))
+    process.exit(1)
+  }
+  writeJson(file, credits)
+  console.log(`wrote ${file}: ${credits.sources.length} sources at corpus v${credits.corpus_version}`)
+}
+
 async function live(dir: string, url: string): Promise<void> {
   const problems = await liveProblems(dir, url)
   for (const p of problems) console.error(p)
@@ -330,14 +343,9 @@ async function main(): Promise<void> {
     case 'release':
       release(arg(first), arg(second))
       break
-    case 'credits': {
-      const dir = arg(first)
-      const file = arg(second)
-      const credits = creditsFile(readClearedSources(dir), readLastPublished(dir).manifest.corpus_version)
-      writeJson(file, credits)
-      console.log(`wrote ${file}: ${credits.sources.length} sources at corpus v${credits.corpus_version}`)
+    case 'credits':
+      writeCredits(arg(first), arg(second))
       break
-    }
     case 'published':
       adoptRelease(arg(first), arg(second))
       console.log(`last-published/ is now ${second}`)

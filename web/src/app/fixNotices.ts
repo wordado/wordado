@@ -67,6 +67,8 @@ export class FixNotices {
 
   /** The learner saw them: never tell these again on this device. */
   dismiss(): void {
+    // Bumped here too: a check already in flight must not re-show what this call is about to mark told.
+    this.generation += 1
     const shown = this.store.get().map((n) => n.reportKey)
     if (shown.length === 0) return
     const kept = [...this.seen().filter((k) => !shown.includes(k)), ...shown].slice(-MAX_SEEN)
@@ -75,6 +77,15 @@ export class FixNotices {
     } catch {
       // A private window may refuse storage: the notice may then come back next visit.
     }
+    this.store.set([])
+  }
+
+  /**
+   * Clears the notice and discards any check in flight (plan 8b review fix): called whenever the account leaves
+   * 'ready' (a sign-out or account switch), so account A's notice never renders under the demo or the next account.
+   */
+  reset(): void {
+    this.generation += 1
     this.store.set([])
   }
 }

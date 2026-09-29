@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url'
 import { Grade, type PackManifest } from '@wordado/core'
 import { describe, expect, it } from 'vitest'
 import { Client, ClientClosed } from './client'
+import { DOC } from './documentTypes'
+import { writeLocalPatch } from './documents'
 import type { SqlDriver } from './driver'
 import { nodeSqliteDriver } from './drivers/nodeSqlite'
 import type { AnswerInput } from './learner'
@@ -246,6 +248,20 @@ describe('Client.reports', () => {
     const reports = await client.reports()
     expect(reports).toHaveLength(2)
     expect(reports.find((r) => r.key === key)).toEqual({ key, wordId: 'c:hello-1', field: 'translation', packVersion: 0 })
+  })
+
+  it('skips a deleted report, one with an unknown field, and one with an invalid word ID', async () => {
+    const driver = nodeSqliteDriver()
+    const client = await Client.open({ driver, env: testEnv(), l1: 'bg' })
+    await client.installPacks(manifest, fromDisk)
+    await client.startSession()
+    const good = await client.report({ wordId: 'c:hello-1', field: 'translation', note: '', packVersion: 0 })
+    const tombstoned = await client.report({ wordId: 'c:goodbye-1', field: 'audio', note: '', packVersion: 0 })
+    await writeLocalPatch(driver, DOC.contentReport, tombstoned, {}, true)
+    await writeLocalPatch(driver, DOC.contentReport, 'bad-field', { wordId: 'c:hello-1', field: 'nonsense', packVersion: 0 })
+    await writeLocalPatch(driver, DOC.contentReport, 'bad-word', { wordId: 'not-a-word-id', field: 'translation', packVersion: 0 })
+    const reports = await client.reports()
+    expect(reports).toEqual([{ key: good, wordId: 'c:hello-1', field: 'translation', packVersion: 0 }])
   })
 })
 
