@@ -96,6 +96,36 @@ describe('sumGoogleBooks', () => {
     writeFileSync(file, gzipSync(`${lines.join('\n')}\n`))
     expect(Object.fromEntries(await sumGoogleBooks([file], 2000, 2019))).toEqual({ water: 8, the: 10 })
   })
+
+  it('streams a file over HTTP, decompressing and counting as it arrives, so nothing is saved to disk', async () => {
+    const body = gzipSync('Water\t2000,3,1\t2019,4,2\nthe\t2005,10,1\n')
+    // The whole file in small chunks, as a slow download would bring it.
+    const server: Server = createServer((req, res) => {
+      if (req.url === '/broken.gz') {
+        // Half the file, then the connection drops.
+        res.writeHead(200, { 'content-length': body.length })
+        res.write(body.subarray(0, body.length >> 1))
+        return void res.destroy()
+      }
+      if (req.url !== '/1-00000-of-00004.gz') return res.writeHead(404).end()
+      res.writeHead(200, { 'content-type': 'application/octet-stream' })
+      for (let i = 0; i < body.length; i += 7) res.write(body.subarray(i, i + 7))
+      res.end()
+    })
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    try {
+      const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+      const seen: [string, number][] = []
+      const counts = await sumGoogleBooks([`${base}/1-00000-of-00004.gz`], 2000, 2019, (source, lines) => seen.push([source, lines]))
+      expect(Object.fromEntries(counts)).toEqual({ water: 7, the: 10 })
+      expect(seen).toEqual([[`${base}/1-00000-of-00004.gz`, 2]])
+      await expect(sumGoogleBooks([`${base}/missing.gz`], 2000, 2019)).rejects.toThrow(/HTTP 404/)
+      await expect(sumGoogleBooks([`${base}/broken.gz`], 2000, 2019)).rejects.toThrow()
+      await expect(sumGoogleBooks([join(tmp(), 'absent.gz')], 2000, 2019)).rejects.toThrow(/ENOENT/)
+    } finally {
+      await new Promise((resolve) => server.close(resolve))
+    }
+  })
 })
 
 describe('writeCounts', () => {

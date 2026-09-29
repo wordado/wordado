@@ -106,9 +106,16 @@ On a workstation, not in Actions:
    default memory: when it reaches 12 million forms, the rarest are dropped, which leaves the 200,000 kept forms'
    counts untouched. The 2026-09-28 count was made from downloaded shards, before streaming existed, and they were
    deleted afterwards (`sources.json` notes).
-2. **Google Books GB.** Download the four files listed at
-   `https://storage.googleapis.com/books/ngrams/books/20200217/eng-gb/eng-gb-1-ngrams_exports.html`, about 3.6 GB.
-   Then run `pnpm --filter @wordado/pipeline corpus sum-gbooks "$PWD/content/sources/google-books-gb.tsv" <files...>`.
+2. **Google Books GB.** Stream the four British English 1-gram files (listed at
+   `https://storage.googleapis.com/books/ngrams/books/20200217/eng-gb/eng-gb-1-ngrams_exports.html`, about 4 GB
+   compressed): each is decompressed and counted as it downloads, and only the counts are kept. Nothing to delete:
+
+   ```bash
+   pnpm --filter @wordado/pipeline corpus sum-gbooks "$PWD/content/sources/google-books-gb.tsv" \
+     https://storage.googleapis.com/books/ngrams/books/20200217/eng-gb/1-0000{0..3}-of-00004.gz
+   ```
+   The 2026-09-28 count was made from downloaded files, before streaming existed, and they were deleted afterwards
+   (`sources.json` notes). New frequency sources should stream the same way: read over the network, keep the counts.
 3. **The licence register.** Record both in `sources.json` with the legal review's clearance:
 
    ```json
