@@ -115,7 +115,11 @@ On a workstation, not in Actions:
      https://storage.googleapis.com/books/ngrams/books/20200217/eng-gb/1-0000{0..3}-of-00004.gz
    ```
    The 2026-09-28 count was made from downloaded files, before streaming existed, and they were deleted afterwards
-   (`sources.json` notes). New frequency sources should stream the same way: read over the network, keep the counts.
+   (`sources.json` notes).
+
+   Both commands take **URLs only** and refuse a local file: counting streams, keeps the counts and nothing else,
+   so no downloaded copy of a corpus exists to be kept or deleted. A new frequency source must stream the same way.
+   To try a small local sample, serve it over HTTP (`python3 -m http.server`) and pass its `http://localhost` URL.
 3. **The licence register.** Record both in `sources.json` with the legal review's clearance:
 
    ```json
