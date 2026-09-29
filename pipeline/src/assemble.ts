@@ -27,6 +27,13 @@ export interface Assembled {
   readonly problems: readonly string[]
   /** Awaits a reviewer; blocks all but a draft. */
   readonly pending: readonly string[]
+  /** Awaits a reviewer in a queue `accept_unreviewed` names: ships as proposed, and stays open for review. */
+  readonly unreviewed: readonly Unreviewed[]
+}
+
+export interface Unreviewed {
+  readonly queue: string
+  readonly line: string
 }
 
 /**
@@ -39,6 +46,9 @@ export function assemble(input: AssembleInput): Assembled {
   const { l1, draft, decisions, config } = input
   const problems: string[] = []
   const pending: string[] = []
+  const unreviewed: Unreviewed[] = []
+  const accepted = new Set(config.accept_unreviewed ?? [])
+  const awaiting = (queue: string, line: string) => void (accepted.has(queue) ? unreviewed.push({ queue, line }) : pending.push(line))
   const live = new Set(draft.live)
   const liveEntries = draft.entries.filter((e) => live.has(e.entry_id))
   const clips = currentClips(input.records)
@@ -54,10 +64,10 @@ export function assemble(input: AssembleInput): Assembled {
     const english = foldField(e.english, decisions.for(QUEUES.english, e.entry_id))
     const translation = foldField(e.l1[l1]!, decisions.for(QUEUES.translation(l1), e.entry_id))
     const level = foldField(e.level_proposal, decisions.for(QUEUES.level, e.entry_id))
-    if (!english.reviewed) pending.push(`${e.entry_id}: english not reviewed`)
-    if (!translation.reviewed) pending.push(`${e.entry_id}: translation (${l1}) not reviewed`)
+    if (!english.reviewed) awaiting(QUEUES.english, `${e.entry_id}: english not reviewed`)
+    if (!translation.reviewed) awaiting(QUEUES.translation(l1), `${e.entry_id}: translation (${l1}) not reviewed`)
     if ((e.level_flagged || levelSampled(e.entry_id)) && !level.reviewed) {
-      pending.push(`${e.entry_id}: level not reviewed`)
+      awaiting(QUEUES.level, `${e.entry_id}: level not reviewed`)
     }
     // A decision recorded after `corpus draft` last ran is not folded into e.live or e.level yet: ship nothing
     // stale (Review Focus 1). Rerunning the draft picks it up as a drop or a new level.
@@ -118,7 +128,7 @@ export function assemble(input: AssembleInput): Assembled {
     const proposed = draftUnits.get(u.unit_id)?.titles[l1]
     if (hasLive && proposed) {
       const state = foldField(proposed, decisions.for(QUEUES.title(l1), u.unit_id))
-      if (!state.reviewed) pending.push(`unit ${u.unit_id}: title (${l1}) not reviewed`)
+      if (!state.reviewed) awaiting(QUEUES.title(l1), `unit ${u.unit_id}: title (${l1}) not reviewed`)
       title = state.value
     }
     if (!title) {
@@ -139,5 +149,6 @@ export function assemble(input: AssembleInput): Assembled {
     clipIds,
     problems,
     pending,
+    unreviewed,
   }
 }

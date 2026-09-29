@@ -5,7 +5,8 @@ import { canonicalJson, checkPackSuccession, loadCorpus, validatePack, type Pack
 import { describe, expect, it } from 'vitest'
 import { sha256Hex } from './checksum'
 import { Decisions, QUEUES } from './decisions'
-import { runDraft } from './draft'
+import { readDraft, runDraft } from './draft'
+import { pendingItems } from './queues'
 import { writeJson } from './files'
 import { publishProblems } from './publishable'
 import { adoptRelease, planRelease, writeRelease } from './release'
@@ -60,6 +61,34 @@ describe('planRelease and writeRelease', () => {
     const o = out()
     writeRelease(dir, o, planRelease(dir, { draft: true, now: NOW }))
     expect(publishProblems(reader(o))).toEqual(['release.json: a draft build cannot be published'])
+  })
+
+  it('ships the open items of accepted queues as proposed, counts them in release.json, and still gates the rest', async () => {
+    const dir = makeContent({ config: { accept_unreviewed: ['english', 'level', 'title-bg', 'audio'] } })
+    await runDraft({ dir, llm: sampleLlm(), offline: false })
+    await recordAudio(dir)
+    const before = planRelease(dir, { draft: false, now: NOW })
+    expect(before.pending.length).toBeGreaterThan(0)
+    expect(before.pending.every((p) => p.endsWith('translation (bg) not reviewed'))).toBe(true)
+
+    // A reviewer does only the Bulgarian translations.
+    const decisions = Decisions.read(dir)
+    const t = QUEUES.translation('bg')
+    const pending = pendingItems(readDraft(dir), decisions, ['bg']).get(t)!
+    decisions.append(t, pending.map((i) => ({ key: i.key, at: NOW, verdict: 'ok' as const, proposed: i.proposed, by: 'Мария' })))
+
+    const plan = planRelease(dir, { draft: false, now: NOW })
+    expect([plan.problems, plan.pending]).toEqual([[], []])
+    const counts = plan.releaseInfo.unreviewed!
+    expect(Object.keys(counts).sort()).toEqual(['audio', 'english', 'level', 'title-bg'])
+    expect(counts['english']).toBe(64)
+    expect(plan.unreviewed.filter((u) => u.queue === 'english')).toHaveLength(64)
+    const o = out()
+    writeRelease(dir, o, plan)
+    expect(publishProblems(reader(o))).toEqual([])
+    expect(JSON.parse(readFileSync(join(o, 'release.json'), 'utf8')).unreviewed).toEqual(counts)
+    // Nothing was recorded as reviewed: the accepted queues' items are still open for a later review.
+    expect(pendingItems(readDraft(dir), Decisions.read(dir), ['bg']).get(QUEUES.english)).toHaveLength(64)
   })
 
   it('carries an entry the last version had and this one does not, retired with its published fields', async () => {

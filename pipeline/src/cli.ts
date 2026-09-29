@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { checkPackSuccession, loadCorpus, offeredThemes, themeEntries, validatePack, type Pack, type PackError } from '@wordado/core'
 import { audioQueueItems, clipsNeeded, generateClips, readAudioRecords } from './audio'
 import { BuildError, buildPack, type BuildOutput, type ClipFile } from './build'
-import { readConfig } from './config'
+import { readConfig, reviewQueues } from './config'
 import { Decisions, QUEUES } from './decisions'
 import { readDraft, runDraft } from './draft'
 import { ffmpegEncoder } from './encoder'
@@ -14,6 +14,7 @@ import { liveProblems } from './live'
 import { openRouterLlm, type Llm } from './llm'
 import { countParquet, sumGoogleBooks, writeCounts } from './prepare'
 import { publishProblems } from './publishable'
+import { reopenReviewed } from './reopen'
 import { exportQueues, importQueues, pendingItems, queueSpecs } from './queues'
 import { adoptRelease, planRelease, writeRelease } from './release'
 import { pgQuery, pullReports, triage } from './reports'
@@ -26,6 +27,8 @@ const USAGE = `usage: corpus <command>
     audio <dir> [--batch <id>]     TTS clips for live entries that need one
     queues <dir>                   write pending review items to review/
     import <dir> --by <name>       apply reviewed rows as decisions
+    reopen <dir> <queue> --by <name> (--all | --keys <file>) [--note <text>]
+                                   send reviewed items back for a second review
     triage <dir>                   read content reports (REPORTS_DATABASE_URL) and reopen what they cross
     status <dir>                   what stands between the content and a release
     release <dir> <out> [--draft]  build the next corpus version into <out>
@@ -38,7 +41,7 @@ const USAGE = `usage: corpus <command>
     build <source-dir> | validate <pack-file> | check <previous-pack> <next-pack> | publishable <dir>`
 
 const argv = process.argv.slice(2)
-const VALUED = new Set(['--by', '--batch', '--from', '--to'])
+const VALUED = new Set(['--by', '--batch', '--from', '--to', '--keys', '--note'])
 const option = (name: string): string | undefined => {
   const i = argv.indexOf(name)
   return i >= 0 ? argv[i + 1] : undefined
@@ -148,6 +151,22 @@ function importReviewed(dir: string): void {
   if (out.errors.length > 0) process.exit(1)
 }
 
+function reopen(dir: string, queue: string): void {
+  const config = readConfig(dir)
+  const queues = reviewQueues(config.l1s)
+  if (!queues.includes(queue)) {
+    console.error(`${queue} is not a review queue; one of ${queues.join(', ')}`)
+    process.exit(2)
+  }
+  const by = option('--by')
+  const file = option('--keys')
+  if (!by || flag('--all') === (file !== undefined)) usage()
+  const keys = file === undefined ? 'all' : readFileSync(file, 'utf8').split('\n').map((l) => l.replace(/#.*/, '').trim()).filter((l) => l !== '')
+  const out = reopenReviewed(Decisions.read(dir), queue, { keys, by, note: option('--note') ?? 'second review', now: now() })
+  console.log(`${out.reopened.length} ${queue} items reopened; ${out.skipped.length} skipped. Next: corpus queues`)
+  for (const s of out.skipped) console.log(`  ${s}`)
+}
+
 async function triageReports(dir: string): Promise<void> {
   const url = process.env['REPORTS_DATABASE_URL']
   if (!url) {
@@ -193,6 +212,10 @@ function status(dir: string): void {
   console.log(`corpus v${plan.corpusVersion}: ${plan.problems.length} problems, ${plan.pending.length} items awaiting review`)
   for (const p of plan.problems) console.log(`  ${p}`)
   for (const s of summarise(plan.pending)) console.log(s)
+  if (plan.unreviewed.length > 0) {
+    console.log(`ships unreviewed (accept_unreviewed): ${plan.unreviewed.length} items`)
+    for (const s of summarise(plan.unreviewed.map((u) => u.line))) console.log(s)
+  }
   if (plan.retired.length > 0) console.log(`  retires: ${plan.retired.join(', ')}`)
 }
 
@@ -205,6 +228,8 @@ function release(dir: string, outDir: string): void {
   }
   const files = writeRelease(dir, outDir, plan)
   console.log(`wrote corpus v${plan.corpusVersion}${flag('--draft') ? ' (draft)' : ''} to ${outDir}: ${plan.outputs.length} packs, ${plan.clipIds.length} clips, ${files.length} files`)
+  const unreviewed = Object.entries(plan.releaseInfo.unreviewed ?? {})
+  if (unreviewed.length > 0) console.log(`shipped unreviewed: ${unreviewed.map(([q, n]) => `${n} ${q}`).join(', ')}`)
   if (plan.retired.length > 0) console.log(`retired: ${plan.retired.join(', ')}`)
 }
 
@@ -233,6 +258,9 @@ async function main(): Promise<void> {
       break
     case 'import':
       importReviewed(arg(first))
+      break
+    case 'reopen':
+      reopen(arg(first), arg(second))
       break
     case 'triage':
       await triageReports(arg(first))

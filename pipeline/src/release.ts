@@ -1,12 +1,12 @@
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { checkPackSuccession, MANIFEST_SCHEMA_VERSION, type PackManifest } from '@wordado/core'
-import { assemble } from './assemble'
-import { audioProblems, readAudioRecords } from './audio'
+import { assemble, type Unreviewed } from './assemble'
+import { audioGate, readAudioRecords } from './audio'
 import { AUDIO_EXT, BuildError, buildPack, type BuildOutput } from './build'
 import { readConfig, readThemes } from './config'
 import { contentPaths } from './content'
-import { Decisions } from './decisions'
+import { Decisions, QUEUES } from './decisions'
 import { readDraft } from './draft'
 import { writeJson } from './files'
 import { diffFixes, nextFixesFile } from './fixes'
@@ -20,6 +20,8 @@ export interface ReleaseInfo {
   readonly l1s: readonly string[]
   /** Attributions the cleared sources require; the app's about page shows them (handover). */
   readonly attributions: readonly { readonly source: string; readonly attribution: string }[]
+  /** Items shipped as proposed, per review queue, because `accept_unreviewed` named the queue. Absent when none. */
+  readonly unreviewed?: Readonly<Record<string, number>>
 }
 
 export interface ReleasePlan {
@@ -31,6 +33,8 @@ export interface ReleasePlan {
   readonly releaseInfo: ReleaseInfo
   readonly problems: readonly string[]
   readonly pending: readonly string[]
+  /** Open review items that ship anyway (`accept_unreviewed`); they block nothing. */
+  readonly unreviewed: readonly Unreviewed[]
   readonly retired: readonly string[]
 }
 
@@ -47,6 +51,8 @@ export function planRelease(dir: string, opts: { draft: boolean; now: string }):
   const corpusVersion = last.manifest.corpus_version + 1
   const problems: string[] = [...draft.problems]
   const pending: string[] = []
+  const unreviewed: Unreviewed[] = []
+  const accepted = new Set(config.accept_unreviewed ?? [])
   for (const l1 of last.packs.keys()) if (!config.l1s.includes(l1)) problems.push(`${l1}: published before, so it must stay in pipeline.json's l1s`)
 
   const hasClip = (id: string) => existsSync(paths.clip(id))
@@ -56,13 +62,17 @@ export function planRelease(dir: string, opts: { draft: boolean; now: string }):
   const seenFix = new Set<string>()
   const retired = new Set<string>()
   const liveList = draft.entries.filter((e) => draft.live.includes(e.entry_id))
-  pending.push(...audioProblems(liveList, records, config, decisions))
+  const audio = audioGate(liveList, records, config, decisions)
+  pending.push(...audio.missing)
+  if (accepted.has(QUEUES.audio)) unreviewed.push(...audio.unheard.map((line) => ({ queue: QUEUES.audio, line })))
+  else pending.push(...audio.unheard)
 
   for (const l1 of config.l1s) {
     const previous = last.packs.get(l1) ?? null
     const a = assemble({ l1, corpusVersion, draft, decisions, themes, records, config, previous, hasClip })
     problems.push(...a.problems.map((p) => `${l1}: ${p}`))
     pending.push(...a.pending.filter((p) => !pending.includes(p)))
+    unreviewed.push(...a.unreviewed.filter((u) => !unreviewed.some((v) => v.line === u.line)))
     let out: BuildOutput
     try {
       out = buildPack(a.source, a.clipIds.map((clipId) => ({ clipId, bytes: new Uint8Array(readFileSync(paths.clip(clipId))) })))
@@ -89,12 +99,15 @@ export function planRelease(dir: string, opts: { draft: boolean; now: string }):
     corpus_version: corpusVersion,
     packs: outputs.flatMap((o) => o.manifest.packs).sort((a, b) => (a.l1 < b.l1 ? -1 : 1)),
   }
+  const counts: Record<string, number> = {}
+  for (const u of unreviewed) counts[u.queue] = (counts[u.queue] ?? 0) + 1
   const releaseInfo: ReleaseInfo = {
     corpus_version: corpusVersion,
     draft: opts.draft,
     built_at: opts.now,
     l1s: config.l1s,
     attributions: sources.filter((s) => s.record.attribution.trim() !== '').map((s) => ({ source: s.record.title, attribution: s.record.attribution })),
+    ...(unreviewed.length > 0 ? { unreviewed: counts } : {}),
   }
   return {
     corpusVersion,
@@ -105,6 +118,7 @@ export function planRelease(dir: string, opts: { draft: boolean; now: string }):
     releaseInfo,
     problems,
     pending,
+    unreviewed,
     retired: [...retired].sort(),
   }
 }

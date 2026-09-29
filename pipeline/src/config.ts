@@ -1,6 +1,7 @@
 import { CEFR_LEVELS, type Accent, type CefrLevel } from '@wordado/core'
 import { readJson } from './files'
 import { contentPaths } from './content'
+import { QUEUES } from './decisions'
 
 export interface TtsVoice {
   readonly voice: string
@@ -25,6 +26,12 @@ export interface PipelineConfig {
   readonly unit_size: number
   /** Independent reports that send a field to review (spec §8.10, §15). */
   readonly report_threshold: number
+  /**
+   * Review queues whose open items do not block a release: an MVP ships their proposals as they are. The items
+   * stay open for review (nothing is recorded as reviewed), and release.json counts them. Remove a queue to gate
+   * it again.
+   */
+  readonly accept_unreviewed?: readonly string[]
   readonly llm: { readonly model: string; readonly concurrency: number; readonly max_usd_per_run: number }
   readonly tts: {
     readonly model: string
@@ -49,7 +56,15 @@ export class ConfigError extends Error {
   }
 }
 
-const isRecord = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v)
+/** Every review queue a content directory with these L1s has. */
+export const reviewQueues = (l1s: readonly string[]): string[] => [
+  QUEUES.english,
+  QUEUES.level,
+  QUEUES.audio,
+  ...l1s.flatMap((l1) => [QUEUES.translation(l1), QUEUES.title(l1)]),
+]
+
+const isRecord =(v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v)
 const LANG = /^[a-z]{2}$/
 const THEME_ID = /^[a-z0-9][a-z0-9-]*$/
 
@@ -85,6 +100,16 @@ export function configProblems(raw: unknown): string[] {
   posInt(raw['max_lemmas'], 'max_lemmas')
   posInt(raw['unit_size'], 'unit_size')
   posInt(raw['report_threshold'], 'report_threshold')
+  const accept = raw['accept_unreviewed']
+  if (accept !== undefined) {
+    const queues = reviewQueues(Array.isArray(l1s) ? l1s.filter((l): l is string => typeof l === 'string') : [])
+    if (!Array.isArray(accept)) p.push('accept_unreviewed: must be a list of review queues')
+    else
+      accept.forEach((q, i) => {
+        if (typeof q !== 'string' || !queues.includes(q)) p.push(`accept_unreviewed[${i}]: must be one of ${queues.join(', ')}`)
+        else if (accept.indexOf(q) !== i) p.push(`accept_unreviewed[${i}]: ${q} appears twice`)
+      })
+  }
   const llm = raw['llm']
   if (!isRecord(llm)) p.push('llm: must be an object')
   else {

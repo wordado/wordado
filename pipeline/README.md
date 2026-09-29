@@ -29,6 +29,7 @@ absolutely: `"$PWD/content"` from the repository root.
 | `audio <dir> [--batch <id>]` | Clips for live entries that have none, whose voice settings changed, or that were marked `redo`. Needs ffmpeg and `OPENROUTER_API_KEY`. |
 | `queues <dir>` | Writes pending review items to `review/<queue>/`. |
 | `import <dir> --by <name>` | Applies every reviewed row as a decision. |
+| `reopen <dir> <queue> --by <name> (--all \| --keys <file>) [--note <text>]` | Sends reviewed items of one queue back for a second review; `queues` then writes them out again. |
 | `triage <dir>` | Reads `content_report` (`REPORTS_DATABASE_URL`); reopens fields at the threshold, remakes reported clips. |
 | `status <dir>` | What stands between the content and a release. |
 | `release <dir> <out> [--draft]` | The next corpus version, if every gate passes; `--draft` skips only the review gates and cannot be published. |
@@ -153,6 +154,30 @@ On a workstation, not in Actions:
    `last-published/`, rebuilds the draft `--offline` from the committed caches (never spending money, and never
    publishing a proposal nobody has seen), builds with every gate, uploads packs, audio and `fixes.json`, then
    the manifest, checks that the CDN serves it, and commits the new `last-published/` to main.
+
+## An MVP release: shipping some queues unreviewed
+
+`accept_unreviewed` in `pipeline.json` lists review queues whose open items do not block a release, for example
+`["english", "level", "title-bg", "audio"]`: the release ships their proposals as they are. Nothing is recorded as
+reviewed, so the items stay open, `queues` keeps writing them out, and a later review picks them up. `status` lists
+them under *ships unreviewed*, and `release.json` counts them per queue. Missing clips, clips marked `redo` and
+decisions made since the draft still block.
+
+Never list a translation queue for a public release: learners are marked right or wrong against the translation
+and its alternates. Remove a queue from the list to gate it again; its open items then block the next release.
+
+For the first MVP the content repository ships A1 only (`"levels": ["A1"]`), with every translation reviewed and
+the other queues accepted. A2 and B1 come in a later version, by adding them back to `levels`, drafting again, and
+reviewing them.
+
+## A second review
+
+`corpus reopen "$PWD/content" <queue> --by <name> --all --note "second review"` sends every reviewed item of a
+queue back; `--keys <file>` sends only the keys listed in the file, one per line. Dropped items stay dropped, and
+open items are already open. Then run `queues`: the items come out with their current values, fixes included,
+and the note in the **reopened** column. The release waits for them again, unless the queue is in
+`accept_unreviewed`. Audio is not reopened; mark a clip `redo` instead. A corrected field is listed in the next
+version's `fixes.json`.
 
 ## When something is wrong
 
