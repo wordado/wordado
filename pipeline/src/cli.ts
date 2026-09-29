@@ -41,7 +41,7 @@ const USAGE = `usage: corpus <command>
     live <dir> <manifest-url>      does the CDN serve last-published/?
   frequency lists (run on a workstation; the output goes into the content repository's sources/):
     count-text <out.tsv> <parquet file or URL...>      word forms in Parquet text shards (FineWeb); URLs are streamed, not saved
-    sum-gbooks <out.tsv> <gz...> [--from Y] [--to Y]   Google Books 1-grams, years 2000-2019 by default
+    sum-gbooks <out.tsv> <gz file or URL...> [--from Y] [--to Y]   Google Books 1-grams, years 2000-2019 by default; URLs are streamed, not saved
   the LLM (draft, compare): OpenRouter by default; CORPUS_LLM=claude-code answers on your Claude plan
     through Claude Code (claude -p), for local runs; CORPUS_LLM_MODEL overrides the model, and
     CORPUS_LLM_CONCURRENCY the calls at a time (llm.concurrency).
@@ -348,7 +348,7 @@ async function main(): Promise<void> {
       const from = Number(option('--from') ?? 2000)
       const to = Number(option('--to') ?? 2019)
       if (!Number.isInteger(from) || !Number.isInteger(to) || from > to) usage()
-      const counts = await sumGoogleBooks(files, from, to)
+      const counts = await sumGoogleBooks(files, from, to, (file, lines) => console.error(`  ${file}: ${lines.toLocaleString('en')} lines`))
       const written = writeCounts(out, counts, { comment: `corpus sum-gbooks, Google Books Ngram v3 1-grams, ${from}-${to}, ${now()}` })
       console.log(`wrote ${out}: ${written} forms`)
       break

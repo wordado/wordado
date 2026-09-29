@@ -1,5 +1,7 @@
 import { createReadStream, mkdirSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
+import { Readable } from 'node:stream'
+import type { ReadableStream as WebReadableStream } from 'node:stream/web'
 import { createInterface } from 'node:readline'
 import { createGunzip } from 'node:zlib'
 import { norm } from '@wordado/core'
@@ -74,17 +76,38 @@ export async function countParquet(
   return counts
 }
 
+/** A gzip file's bytes: a local path, or an http(s) URL read as it downloads and never saved (licence review, question 8). */
+async function gzipSource(source: string): Promise<Readable> {
+  if (!/^https?:\/\//.test(source)) return createReadStream(source)
+  const res = await fetch(source)
+  if (!res.ok || !res.body) throw new Error(`${source}: HTTP ${res.status}`)
+  return Readable.fromWeb(res.body as WebReadableStream<Uint8Array>)
+}
+
 /**
  * Google Books Ngram v3 1-grams: `ngram TAB year,match_count,volume_count TAB …`.
  * Adds up `match_count` for years `from`–`to` (the pilot used 2000–2019, so the
  * counts reflect current usage), folds case, and skips part-of-speech tagged
- * forms (`water_NOUN`), which would count a word twice.
+ * forms (`water_NOUN`), which would count a word twice. Each source is a local
+ * `.gz` file or a URL, decompressed and counted as it streams in; only the
+ * counts are kept.
  */
-export async function sumGoogleBooks(files: readonly string[], from: number, to: number): Promise<Map<string, number>> {
+export async function sumGoogleBooks(
+  sources: readonly string[],
+  from: number,
+  to: number,
+  progress?: (source: string, lines: number) => void,
+): Promise<Map<string, number>> {
   const counts = new Map<string, number>()
-  for (const file of files) {
-    const lines = createInterface({ input: createReadStream(file).pipe(createGunzip()), crlfDelay: Infinity })
+  for (const source of sources) {
+    const raw = await gzipSource(source)
+    const gunzip = createGunzip()
+    // pipe() does not pass a source's error on: a broken download or a missing file must fail the loop below.
+    raw.on('error', (err) => gunzip.destroy(err))
+    const lines = createInterface({ input: raw.pipe(gunzip), crlfDelay: Infinity })
+    let read = 0
     for await (const line of lines) {
+      read += 1
       const [ngram, ...cells] = line.split('\t')
       if (!ngram || ngram.includes('_')) continue
       let n = 0
@@ -97,6 +120,7 @@ export async function sumGoogleBooks(files: readonly string[], from: number, to:
       const form = norm(ngram)
       counts.set(form, (counts.get(form) ?? 0) + n)
     }
+    progress?.(source, read)
   }
   return counts
 }
