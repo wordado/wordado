@@ -59,6 +59,31 @@ describe('runDraft', () => {
     expect(draft.live).toHaveLength(64)
   })
 
+  it('makes as many LLM calls at a time as it is told, over llm.concurrency', async () => {
+    const peak = async (concurrency?: number) => {
+      const base = sampleLlm()
+      let inFlight = 0
+      let max = 0
+      const llm: Llm = {
+        ...base,
+        json: async <T,>(req: LlmRequest<T>) => {
+          max = Math.max(max, (inFlight += 1))
+          await new Promise((r) => setTimeout(r, 2))
+          try {
+            return await base.json(req)
+          } finally {
+            inFlight -= 1
+          }
+        },
+      }
+      await runDraft({ dir: makeContent(), llm, offline: false, ...(concurrency ? { concurrency } : {}) })
+      return max
+    }
+    expect(await peak(1)).toBe(1)
+    // 64 translations go in four batches of 20.
+    expect(await peak(3)).toBe(3)
+  })
+
   it('offline, names the stage that is not cached', async () => {
     await expect(runDraft({ dir: makeContent(), llm: sampleLlm(), offline: true })).rejects.toThrow(OfflineMiss)
   })

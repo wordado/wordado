@@ -43,7 +43,8 @@ const USAGE = `usage: corpus <command>
     count-text <out.tsv> <parquet file or URL...>      word forms in Parquet text shards (FineWeb); URLs are streamed, not saved
     sum-gbooks <out.tsv> <gz...> [--from Y] [--to Y]   Google Books 1-grams, years 2000-2019 by default
   the LLM (draft, compare): OpenRouter by default; CORPUS_LLM=claude-code answers on your Claude plan
-    through Claude Code (claude -p), for local runs; CORPUS_LLM_MODEL overrides the model.
+    through Claude Code (claude -p), for local runs; CORPUS_LLM_MODEL overrides the model, and
+    CORPUS_LLM_CONCURRENCY the calls at a time (llm.concurrency).
   packs:
     build <source-dir> | validate <pack-file> | check <previous-pack> <next-pack> | publishable <dir>`
 
@@ -129,6 +130,18 @@ function chosenLlm(config: PipelineConfig): Llm {
   return openRouterLlm({ apiKey: apiKey(), model: model ?? config.llm.model, maxUsd: config.llm.max_usd_per_run })
 }
 
+/** CORPUS_LLM_CONCURRENCY: LLM calls at a time, over pipeline.json's llm.concurrency (try more on a Claude plan). */
+function llmConcurrency(): number | undefined {
+  const raw = process.env['CORPUS_LLM_CONCURRENCY']
+  if (raw === undefined || raw === '') return undefined
+  const n = Number(raw)
+  if (!Number.isInteger(n) || n < 1 || n > 32) {
+    console.error(`CORPUS_LLM_CONCURRENCY must be a whole number from 1 to 32, not ${raw}`)
+    process.exit(2)
+  }
+  return n
+}
+
 const spendNote = (llm: Llm) =>
   llm.model.startsWith('claude-code:') ? `$${llm.spentUsd().toFixed(2)} API-equivalent, on your Claude plan` : `$${llm.spentUsd().toFixed(2)}`
 
@@ -136,7 +149,7 @@ async function draft(dir: string): Promise<void> {
   const config = readConfig(dir)
   const offline = flag('--offline')
   const llm = offline ? offlineLlm : chosenLlm(config)
-  const d = await runDraft({ dir, llm, offline, regroup: flag('--regroup') })
+  const d = await runDraft({ dir, llm, offline, regroup: flag('--regroup'), concurrency: llmConcurrency() })
   const live = new Set(d.live)
   const perLevel = config.levels.map((level) => `${level} ${d.entries.filter((e) => live.has(e.entry_id) && e.level === level).length}`).join(', ')
   const units = d.units.filter((u) => u.entry_ids.some((id) => live.has(id))).length
@@ -151,7 +164,7 @@ async function compare(dir: string): Promise<void> {
   const sample = Number(option('--sample') ?? 20)
   if (!Number.isInteger(sample) || sample < 1) usage()
   const llm = chosenLlm(config)
-  const rows = await compareStages(dir, llm, { sample, stages: stage ? [stage as CompareStage] : COMPARE_STAGES })
+  const rows = await compareStages(dir, llm, { sample, stages: stage ? [stage as CompareStage] : COMPARE_STAGES, concurrency: llmConcurrency() })
   const file = join(dir, 'work', 'compare.md')
   writeFileSync(file, compareReport(rows, llm.model, now()))
   for (const s of new Set(rows.map((r) => r.stage))) {

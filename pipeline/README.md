@@ -211,6 +211,11 @@ is `llm.model` without `anthropic/` (`claude-sonnet-5`, the model the caches wer
 - The calls count against the plan's usage limits. When one is reached the run stops with "usage limit is reached";
   everything answered so far is cached, so rerun after the limit resets. `llm.max_usd_per_run` does not apply; the
   spend printed is Claude Code's API-equivalent estimate.
+- Almost all of a call's time is the model writing its answer (about 37 s for a batch of senses; starting Claude
+  Code adds about 3 s), so more calls at a time is what makes a run faster. `CORPUS_LLM_CONCURRENCY=8` overrides
+  `llm.concurrency` (4) for `draft` and `compare`; how many help depends on the plan's rate limits. Try it on
+  `compare` first. One long Claude session for many batches would be slower on the whole: every batch would carry
+  the earlier ones in its context, using the plan's limits up faster and making answers depend on each other.
 - Audio still needs `OPENROUTER_API_KEY`: Claude does not speak.
 - Your own `~/.claude` settings and CLAUDE.md still load with each call (only `--bare` would skip them, and it does
   not work with a plan's login). Check your claude.ai privacy settings if training on these prompts matters.

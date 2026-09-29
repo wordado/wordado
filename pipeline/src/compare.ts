@@ -38,13 +38,13 @@ const translationText = (t: TranslationFields) => [t.translation, ...t.alternate
  * caches hold: a way to judge another model or provider before it answers for real. Needs `corpus draft` first.
  * Levels differ by design: the cached one is after banding, the fresh one is the model's own.
  */
-export async function compareStages(dir: string, llm: Llm, opts: { readonly sample: number; readonly stages: readonly CompareStage[] }): Promise<CompareRow[]> {
+export async function compareStages(dir: string, llm: Llm, opts: { readonly sample: number; readonly stages: readonly CompareStage[]; readonly concurrency?: number | undefined }): Promise<CompareRow[]> {
   const config = readConfig(dir)
   const draft = readDraft(dir)
   const live = new Set(draft.live)
   const picked = sampleEntries(draft.entries.filter((e) => live.has(e.entry_id)), opts.sample)
   const scratch = mkdtempSync(join(tmpdir(), 'corpus-compare-'))
-  const run = (stage: string): StageRun => ({ llm, cache: StageCache.open(join(scratch, `${stage}.jsonl`)), concurrency: config.llm.concurrency, offline: false })
+  const run = (stage: string): StageRun => ({ llm, cache: StageCache.open(join(scratch, `${stage}.jsonl`)), concurrency: opts.concurrency ?? config.llm.concurrency, offline: false })
   const items = picked.map((e) => ({ headword: e.headword, pos: e.pos, gloss: e.sense_en, example: e.english.examples[0] ?? '' }))
   const rows: CompareRow[] = []
   const push = (stage: string, key: string, cached: string, fresh: string) => rows.push({ stage, key, cached, fresh, same: cached === fresh })
