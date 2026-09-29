@@ -54,6 +54,12 @@ export const en = {
   'notice.other-account': 'This device holds the progress of {email}. Sign out of that account in settings before using another.',
   'notice.google-failed': 'Google sign-in didn’t complete. Try again, or use a code by email.',
   'notice.dismiss': 'Dismiss',
+  'fixed.one': 'You reported the {field} of “{word}”. It is fixed now. Thank you!',
+  'fixed.some': { one: 'We fixed {count} thing you reported. Thank you!', other: 'We fixed {count} things you reported. Thank you!' },
+  'fixed.field.translation': 'translation',
+  'fixed.field.example': 'example sentence',
+  'fixed.field.audio': 'pronunciation',
+  'fixed.field.level': 'level',
 
   'sync.syncing': 'Syncing…',
   'sync.synced': 'All progress saved to your account',

@@ -7,6 +7,7 @@ import type { AudioPort } from '../content/audio'
 import type { ReminderActions } from '../reminders/reminders'
 import type { Backend } from '../storage/protocol'
 import type { CreditsPort } from './credits'
+import type { FixNoticesPort } from './fixNotices'
 import type { LifecyclePort } from './lifecycle'
 
 /** What the screens need beside the Client. */
@@ -27,6 +28,8 @@ export interface AppServices {
   readonly lifecycle: LifecyclePort
   /** The word data's attributions (plan 8b), for Settings › About. */
   readonly credits: CreditsPort
+  /** What the learner reported that is fixed now (spec §8.10). */
+  readonly fixNotices: FixNoticesPort
   /**
    * Called when a run ends: fetches the clips of the words about to be met
    * (spec §9.3), flushes the outbox (spec §9.1), and asks once for persistent

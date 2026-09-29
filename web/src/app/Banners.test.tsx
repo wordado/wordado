@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { NotReady } from '../account/controller'
-import { fakeAccounts, fakeLifecycle, renderWith, setup } from '../test/fixtures'
+import { fakeAccounts, fakeFixNotices, fakeLifecycle, renderWith, setup } from '../test/fixtures'
 import { Banners, SyncLine } from './Banners'
 
 afterEach(cleanup)
@@ -76,6 +76,21 @@ describe('Banners', () => {
     expect(screen.getByRole('status').textContent).toContain('This device holds the progress of ana@example.com')
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }))
     expect(accounts.calls).toEqual(['dismissNotice'])
+  })
+
+  it('tells the learner that the one thing they reported is fixed, naming the word, and dismisses it', async () => {
+    const ctx = await setup()
+    const fixNotices = fakeFixNotices([{ reportKey: 'k1', field: 'translation', headword: 'bank' }])
+    renderWith(<Banners />, { ...ctx, fixNotices })
+    expect(screen.getByText('You reported the translation of “bank”. It is fixed now. Thank you!')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }))
+    expect(fixNotices.dismissed).toBe(1)
+  })
+
+  it('counts several fixed reports, or one whose word is gone', async () => {
+    const ctx = await setup()
+    renderWith(<Banners />, { ...ctx, fixNotices: fakeFixNotices([{ reportKey: 'k1', field: 'audio', headword: null }]) })
+    expect(screen.getByText('We fixed 1 thing you reported. Thank you!')).toBeTruthy()
   })
 
   it('shows the sync status to a learner and nothing in the demo', async () => {

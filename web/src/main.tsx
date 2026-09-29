@@ -3,14 +3,16 @@ import '@fontsource-variable/literata'
 import './styles.css'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { dayToIsoDate, localDay, validateCredits } from '@wordado/core'
+import { dayToIsoDate, localDay, validateCredits, validateFixes } from '@wordado/core'
 import { httpApi } from './account/api'
 import { AccountController } from './account/controller'
 import { accountStorage, browserStorage, pendingSignIn } from './account/storage'
 import { httpTransport } from './account/transport'
 import { Boot } from './app/boot'
 import { noteInstallReport, refreshAudioOnActivation, startPackChecks } from './app/content'
+import { watchContentFiles } from './app/contentFiles'
 import { Credits } from './app/credits'
+import { FixNotices } from './app/fixNotices'
 import { AppLifecycle, watchUpdates, type InstallEvent } from './app/lifecycle'
 import { Root } from './app/Root'
 import { startSyncLoop } from './app/syncLoop'
@@ -46,11 +48,13 @@ let controller: AccountController | null = null
 const transport = httpTransport({ onUnauthorized: () => controller?.sessionExpired(), expectedUser })
 
 const lifecycle = new AppLifecycle({ storage: browserStorage('localStorage'), reload: () => window.location.reload() })
-/** The word data's attributions (plan 8b), for Settings › About. Task 6 adds the trigger that refreshes it. */
+/** The word data's attributions (plan 8b), for Settings › About. */
 const credits = new Credits({
   storage: browserStorage('localStorage'),
   fetch: (url) => fetchSibling(url, 'credits.json', validateCredits),
 })
+/** What the learner reported that is fixed now (spec §8.10). */
+const fixNotices = new FixNotices({ storage: browserStorage('localStorage'), fetchFixes: (url) => fetchSibling(url, 'fixes.json', validateFixes) })
 
 const boot = new Boot(
   {
@@ -88,6 +92,21 @@ boot.store.subscribe(() => {
   stopAudioWatch?.()
   stopAudioWatch = state.status === 'ready' ? refreshAudioOnActivation(state.client, audio) : null
   if (state.status === 'ready') lifecycle.recordVisit(dayToIsoDate(localDay(env.now(), env.tzOffsetMin())))
+})
+
+// The credits and "your report was fixed" follow the pack the learner has (plan 8b, Decision 6).
+let stopContentWatch: (() => void) | null = null
+boot.store.subscribe(() => {
+  const state = boot.store.get()
+  stopContentWatch?.()
+  stopContentWatch =
+    state.status === 'ready'
+      ? watchContentFiles(state.client, () => {
+          const manifestUrl = manifestUrlFor(state.account)
+          void credits.refresh(manifestUrl).catch(() => undefined)
+          void fixNotices.check(state.client, manifestUrl).catch(() => undefined)
+        })
+      : null
 })
 
 startPackChecks({
@@ -168,7 +187,7 @@ createRoot(document.getElementById('root')!).render(
         localeMounted = true
       }}
     >
-      <Root boot={boot} services={{ env, audio, afterRun, api, accounts: controller!, reminders, lifecycle, credits }} />
+      <Root boot={boot} services={{ env, audio, afterRun, api, accounts: controller!, reminders, lifecycle, credits, fixNotices }} />
     </I18nProvider>
   </StrictMode>,
 )
