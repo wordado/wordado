@@ -166,7 +166,22 @@ export function audioQueueItems(records: readonly AudioRecord[], decisions: Deci
 
 /** What stops a release on audio: a live entry without a current clip, a clip marked redo, a batch not yet heard. */
 export function audioProblems(live: readonly { entry_id: string }[], records: readonly AudioRecord[], config: PipelineConfig, decisions: Decisions): string[] {
+  const a = audioGate(live, records, config, decisions)
+  return [...a.missing, ...a.unheard]
+}
+
+/**
+ * The audio gate in two parts: `missing` (no current clip, or one marked redo) always blocks a release;
+ * `unheard` (batches whose listening sample is not done) is the audio review, which `accept_unreviewed` may waive.
+ */
+export function audioGate(
+  live: readonly { entry_id: string }[],
+  records: readonly AudioRecord[],
+  config: PipelineConfig,
+  decisions: Decisions,
+): { readonly missing: string[]; readonly unheard: string[] } {
   const problems: string[] = []
+  const unheard: string[] = []
   const current = currentClips(records)
   const batches = new Set<string>()
   for (const e of live) {
@@ -180,7 +195,7 @@ export function audioProblems(live: readonly { entry_id: string }[], records: re
   const chosen = listenedTo(records)
   for (const batch of [...batches].sort()) {
     const waiting = [...(chosen.get(batch) ?? [])].filter((id) => !heard(decisions, id)).length
-    if (waiting > 0) problems.push(`audio batch ${batch}: ${waiting} clips not yet listened to`)
+    if (waiting > 0) unheard.push(`audio batch ${batch}: ${waiting} clips not yet listened to`)
   }
-  return problems
+  return { missing: problems, unheard }
 }

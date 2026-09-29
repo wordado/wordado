@@ -49,6 +49,16 @@ describe('configProblems', () => {
   it('refuses levels out of path order, which would make units go backwards', () => {
     expect(configProblems({ ...validConfig, levels: ['A2', 'A1'] })).toEqual(['levels: must be in CEFR order without repeats'])
   })
+
+  it('accepts review queues of these L1s in accept_unreviewed, once each', () => {
+    expect(configProblems({ ...validConfig, accept_unreviewed: ['english', 'level', 'title-bg', 'audio'] })).toEqual([])
+    const queues = 'english, level, audio, translation-bg, title-bg'
+    expect(configProblems({ ...validConfig, accept_unreviewed: ['english', 'title-de', 'english'] })).toEqual([
+      `accept_unreviewed[1]: must be one of ${queues}`,
+      'accept_unreviewed[2]: english appears twice',
+    ])
+    expect(configProblems({ ...validConfig, accept_unreviewed: 'english' })).toEqual(['accept_unreviewed: must be a list of review queues'])
+  })
 })
 
 describe('themeProblems', () => {
