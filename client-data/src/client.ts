@@ -10,6 +10,7 @@ import {
   type Entitlement,
   type Mode,
   type PackManifest,
+  type ReportRecord,
   type ReviewEvent,
   type ReviewState,
   type SessionPlan,
@@ -19,7 +20,7 @@ import {
 } from '@wordado/core'
 import { Database } from './database'
 import { pendingDocumentWrites } from './documents'
-import { addContentReport, addUnlocks, patchSettings, readAliases, readEntitlement, readFlags, readSettings, readUnlocks, setFlag, type ContentReportInput } from './documentTypes'
+import { addContentReport, addUnlocks, patchSettings, readAliases, readEntitlement, readFlags, readReports, readSettings, readUnlocks, setFlag, type ContentReportInput } from './documentTypes'
 import type { SqlDriver } from './driver'
 import type { ClientEnv } from './env'
 import { appendAnswer, loadLearner, pendingDayComplete, provisionalXp, recordDayComplete, unpushedEvents, type AnswerInput, type Learner } from './learner'
@@ -302,6 +303,11 @@ export class Client {
   /** Files a content report; it syncs like any document (spec §8.10). */
   report(input: ContentReportInput): Promise<string> {
     return this.guarded(() => this.db.transaction((tx) => addContentReport(tx, this.env, input)))
+  }
+
+  /** The learner's content reports, for telling them what has been fixed (spec §8.10, plan 8b). */
+  reports(): Promise<ReportRecord[]> {
+    return this.guarded(() => readReports(this.db.driver))
   }
 
   /** The one capability check (spec §8.8): the cached entitlement, honoured until its expiry. */

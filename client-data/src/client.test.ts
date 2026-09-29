@@ -238,6 +238,17 @@ describe('attaching a demo to an account (spec §8.6)', () => {
   })
 })
 
+describe('Client.reports', () => {
+  it('returns every report this learner filed, with the corpus version they had', async () => {
+    const client = await openClient()
+    const key = await client.report({ wordId: 'c:hello-1', field: 'translation', note: 'odd', packVersion: 0 })
+    await client.report({ wordId: 'c:bread-1', field: 'other', note: '', packVersion: 0 })
+    const reports = await client.reports()
+    expect(reports).toHaveLength(2)
+    expect(reports.find((r) => r.key === key)).toEqual({ key, wordId: 'c:hello-1', field: 'translation', packVersion: 0 })
+  })
+})
+
 describe('levelClips (spec §9.3)', () => {
   it('lists every clip of the live words of a level', async () => {
     const client = await openClient()
