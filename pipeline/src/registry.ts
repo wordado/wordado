@@ -14,6 +14,8 @@ export interface RegistryUnit {
   readonly unit_id: string
   readonly level: CefrLevel
   readonly entry_ids: readonly string[]
+  /** A unit of words that share no theme: `pos:<tag>` or `mixed`. Such a unit gets a plain title (`groupTitles`). */
+  readonly group?: string
 }
 
 export interface Registry {

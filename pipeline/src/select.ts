@@ -36,3 +36,16 @@ export function selectLive(candidates: readonly SelectCandidate[], levels: reado
   for (const c of rest) if ((count.get(c.level) ?? 0) < targets[c.level]) add(c)
   return live
 }
+
+/** How much rarer each later sense of a word counts than the one before it. */
+export const SENSE_RANK_FACTOR = 3
+
+/**
+ * A sense's rank for banding and selection. Every sense of a word shares the word's frequency, so a common word's
+ * rare sense ("title" as a legal document) used to rank with its main one and take a slot from another word's main
+ * meaning. The stage lists senses most common first; each later one now counts as if the word were three times
+ * rarer.
+ */
+export function senseRank(lemmaRank: number, order: number): number {
+  return lemmaRank * SENSE_RANK_FACTOR ** order
+}

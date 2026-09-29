@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { selectLive, type SelectCandidate } from './select'
+import { selectLive, senseRank, type SelectCandidate } from './select'
 
 const c = (entry_id: string, level: 'A1' | 'A2' | 'B2', rank: number, extra: Partial<SelectCandidate> = {}): SelectCandidate => ({
   entry_id, level, rank, order: 0, pinned: false, wasLive: false, dropped: false, ...extra,
@@ -22,5 +22,20 @@ describe('selectLive (Decision 9)', () => {
 
   it('breaks rank ties by sense order, then ID', () => {
     expect([...selectLive([c('y', 'A1', 1, { order: 1 }), c('x', 'A1', 1, { order: 1 }), c('z', 'A1', 1, { order: 0 })], ['A1'], targets)]).toEqual(['z', 'x'])
+  })
+})
+
+describe('senseRank', () => {
+  it('ranks a word’s first sense at the word’s frequency and each later sense as if the word were three times rarer', () => {
+    expect([0, 1, 2, 3].map((order) => senseRank(100, order))).toEqual([100, 300, 900, 2700])
+  })
+
+  it('lets another word’s main sense take the slot a common word’s rare sense would have taken', () => {
+    // "title" (rank 900) has a rare legal sense (order 2); "harbour" (rank 2000) has only its main sense.
+    const cands = [
+      { entry_id: 'title-2', level: 'B1' as const, rank: senseRank(900, 2), order: 2, pinned: false, wasLive: false, dropped: false },
+      { entry_id: 'harbour-1', level: 'B1' as const, rank: senseRank(2000, 0), order: 0, pinned: false, wasLive: false, dropped: false },
+    ]
+    expect([...selectLive(cands, ['B1'], { A1: 1, A2: 1, B1: 1, B2: 1, C1: 1 })]).toEqual(['harbour-1'])
   })
 })

@@ -9,13 +9,13 @@ import { parseFrequencyList, rankForms } from './frequency'
 import { readLastPublished } from './lastPublished'
 import type { Llm } from './llm'
 import { assignIds, type Registry } from './registry'
-import { selectLive } from './select'
+import { selectLive, senseRank } from './select'
 import { readClearedSources } from './sources'
 import { lemmatise, rankLemmas, type StageRun } from './stages/lemmas'
 import { bandLevel, describeLemmas, frequencyBand } from './stages/senses'
 import { titleUnits } from './stages/titles'
 import { mergeSenses, translateSenses, type TranslationFields } from './stages/translate'
-import { assignUnits } from './units'
+import { assignUnits, groupTitles } from './units'
 
 export interface EnglishFields {
   readonly ipa: string
@@ -29,6 +29,7 @@ export interface DraftEntry {
   readonly headword: string
   readonly pos: PartOfSpeech
   readonly sense_en: string
+  /** The sense's rank: its word's frequency rank, raised for later senses (`senseRank`). */
   readonly rank: number
   readonly order: number
   readonly pinned: boolean
@@ -96,7 +97,9 @@ export async function runDraft(opts: DraftOptions): Promise<Draft> {
 
   const inScope = lemmas.flatMap((lemma, i) =>
     senses[i]!.flatMap((s, order) => {
-      const band = frequencyBand(lemma.rank, config.targets)
+      // A later sense counts as rarer than the word's main one, for its band and for selection.
+      const rank = senseRank(lemma.rank, order)
+      const band = frequencyBand(rank, config.targets)
       // Only the first sense, the most common by the stage's instruction, is essential: essentials.txt guarantees
       // the everyday meaning of "bed", not the garden plot. Its frequency understates it, so its level is the LLM's
       // and a reviewer checks every one; the word's other senses compete by frequency like any word's.
@@ -106,7 +109,7 @@ export async function runDraft(opts: DraftOptions): Promise<Draft> {
       // A published sense keeps its unit, and the unit's level is its proposal, whatever the banding says now.
       const wasPublished = publishedHeads.has(`${norm(s.headword)}|${s.pos}`)
       if (!pinnedLemmas.has(lemma.lemma) && !wasPublished && !config.levels.includes(banded.level)) return []
-      return [{ ...s, rank: lemma.rank, order, band, essential, banded: banded.level, flagged: banded.flagged }]
+      return [{ ...s, rank, order, band, essential, banded: banded.level, flagged: banded.flagged }]
     }),
   )
   const translations: Record<string, TranslationFields[]> = {}
@@ -161,7 +164,7 @@ export async function runDraft(opts: DraftOptions): Promise<Draft> {
   const liveEntries = entries.filter((e) => live.has(e.entry_id))
   const units = assignUnits(
     registry.units,
-    liveEntries.map((e) => ({ entry_id: e.entry_id, level: e.level, theme: e.themes[0] ?? '', rank: e.rank, order: e.order })),
+    liveEntries.map((e) => ({ entry_id: e.entry_id, level: e.level, theme: e.themes[0] ?? '', pos: e.pos, rank: e.rank, order: e.order })),
     last.published,
     config.unit_size,
   )
@@ -169,8 +172,10 @@ export async function runDraft(opts: DraftOptions): Promise<Draft> {
 
   const byId = new Map(entries.map((e) => [e.entry_id, e]))
   const liveUnits = units.filter((u) => u.entry_ids.some((id) => live.has(id)))
-  const titles = await titleUnits(
-    liveUnits.map((u) => ({ unit_id: u.unit_id, level: u.level, words: u.entry_ids.filter((id) => live.has(id)).map((id) => byId.get(id)!.headword) })),
+  // Units of words that share no theme get plain titles; only themed units are named by the LLM.
+  const plain = groupTitles(liveUnits, config.l1s)
+  const named = await titleUnits(
+    liveUnits.filter((u) => !u.group).map((u) => ({ unit_id: u.unit_id, level: u.level, words: u.entry_ids.filter((id) => live.has(id)).map((id) => byId.get(id)!.headword) })),
     config.l1s,
     run('titles'),
   )
@@ -185,7 +190,7 @@ export async function runDraft(opts: DraftOptions): Promise<Draft> {
   const draft: Draft = {
     live: liveEntries.map((e) => e.entry_id),
     entries,
-    units: units.map((u) => ({ ...u, titles: titles.get(u.unit_id) ?? {} })),
+    units: units.map((u) => ({ ...u, titles: plain.get(u.unit_id) ?? named.get(u.unit_id) ?? {} })),
     problems,
   }
   writeJson(paths.registry, registry)
