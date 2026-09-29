@@ -42,7 +42,10 @@ describe('runDraft', () => {
     // money and building both translate as банка, so they merge; river stays apart (Decision 8).
     expect(draft.entries.filter((e) => e.headword === 'bank').map((e) => [e.entry_id, e.sense_en])).toEqual([['bank-1', 'money'], ['bank-2', 'river']])
     expect(draft.units.map((u) => [u.unit_id, u.entry_ids.length])).toEqual([['a1-01', 20], ['a1-02', 20], ['a1-03', 20], ['a1-04', 2], ['a2-01', 2]])
-    expect(draft.units[3]!.titles).toEqual({ bg: { en: 'Unit a1-04', l1: 'Урок a1-04' } })
+    // the and go share no theme: a mixed unit with a plain title, not an LLM-invented one.
+    expect(draft.units[3]).toMatchObject({ group: 'mixed', titles: { bg: { en: 'More words 1', l1: 'Още думи 1' } } })
+    // bank is the third most frequent word; river, its third sense, ranks as if bank were nine times rarer.
+    expect(draft.entries.find((e) => e.entry_id === 'bank-2')!.rank).toBe(27)
     expect(readDraft(dir).live).toEqual(draft.live)
     expect(JSON.parse(readFileSync(join(dir, 'registry.json'), 'utf8')).entries).toHaveLength(64)
   })
