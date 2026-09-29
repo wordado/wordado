@@ -147,6 +147,7 @@ export function describeLemmas(lemmas: readonly RankedLemma[], themeIds: readonl
     batchSize: BATCH,
     concurrency: run.concurrency,
     offline: run.offline,
+    model: run.llm.model,
     run: (batch) =>
       run.llm.json({ name: 'senses', system: SYSTEM, input: { themes: sortedThemes, headwords: batch }, schema: schema(sortedThemes), parse: parse(batch, known) }),
   })

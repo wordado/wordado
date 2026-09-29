@@ -61,6 +61,7 @@ export async function titleUnits(units: readonly TitleUnit[], l1s: readonly stri
     batchSize: 10,
     concurrency: run.concurrency,
     offline: run.offline,
+    model: run.llm.model,
     run: (batch) =>
       run.llm.json({
         name: 'titles',

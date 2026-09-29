@@ -1,4 +1,4 @@
-import { mkdtempSync } from 'node:fs'
+import { mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -34,6 +34,15 @@ describe('cachedBatch', () => {
     expect(await cachedBatch({ ...opts, items: ['a', 'b', 'c'], run: run(calls) })).toEqual(['A', 'B', 'C'])
     expect(await cachedBatch({ ...opts, items: ['c', 'd', 'a'], run: run(calls) })).toEqual(['C', 'D', 'A'])
     expect(calls).toEqual([['a', 'b'], ['c'], ['d']])
+  })
+
+  it('records which model answered each item, beside the answer, not in the key', async () => {
+    const f = file()
+    const opts = { cache: StageCache.open(f), stage: 's', version: 1, keyInput: (w: string) => w, batchSize: 2, concurrency: 1, offline: false }
+    await cachedBatch({ ...opts, items: ['a'], model: 'claude-code:claude-sonnet-5', run: run([]) })
+    expect(readFileSync(f, 'utf8').trim().split('\n').map((l) => JSON.parse(l) as unknown)).toEqual([
+      { key: cacheKey('s', 1, 'a'), value: 'A', model: 'claude-code:claude-sonnet-5' },
+    ])
   })
 
   it('offline, names how many items are missing instead of calling out', async () => {
