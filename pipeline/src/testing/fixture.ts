@@ -40,6 +40,14 @@ const EXTRA_BG: Record<string, { translation: string; alternates: string[]; sens
   'bank|building': { translation: 'банка', alternates: [], sense: 'сграда' },
   'bank|river': { translation: 'бряг', alternates: [], sense: 'на река' },
 }
+const EXTRA_DE: Record<string, { translation: string; alternates: string[]; sense: string }> = {
+  'the|': { translation: 'der', alternates: ['die', 'das'], sense: '' },
+  'okay|': { translation: 'okay', alternates: ['gut'], sense: '' },
+  'go|': { translation: 'gehen', alternates: ['fahren'], sense: '' },
+  'bank|money': { translation: 'Bank', alternates: [], sense: 'Geldinstitut' },
+  'bank|building': { translation: 'Bankgebäude', alternates: [], sense: 'Gebäude' },
+  'bank|river': { translation: 'Ufer', alternates: [], sense: 'Flussufer' },
+}
 
 /** A fake LLM that answers every stage from the sample pack and the few invented words above. */
 export function sampleLlm() {
@@ -62,9 +70,13 @@ export function sampleLlm() {
       }
     }
     if (name === 'translate') {
-      const items = (input as { items: { key: string; headword: string; gloss: string }[] }).items
+      const { l1, items } = input as { l1: string; items: { key: string; headword: string; gloss: string }[] }
       return {
         items: items.map((item) => {
+          if (l1 === 'de') {
+            const extra = EXTRA_DE[`${item.headword}|${item.gloss}`]
+            return { key: item.key, ...(extra ?? { translation: `DE ${item.headword}`, alternates: [], sense: '' }) }
+          }
           const extra = EXTRA_BG[`${item.headword}|${item.gloss}`]
           const e = sample.entries.find((x) => x.headword === item.headword)
           return { key: item.key, ...(extra ?? { translation: e!.translation, alternates: e!.alternates, sense: '' }) }
@@ -76,8 +88,14 @@ export function sampleLlm() {
       return { items: items.map((item) => ({ key: item.key, themes: sample.entries.find((e) => e.headword === item.headword && e.pos === item.pos)?.themes ?? [] })) }
     }
     if (name === 'titles') {
-      const units = (input as { units: { unit: string }[] }).units
-      return { items: units.map((u) => ({ unit: u.unit, en: `Unit ${u.unit}`, bg: `Урок ${u.unit}` })) }
+      const { units, l1s = ['bg'] } = input as { units: { unit: string }[]; l1s?: string[] }
+      return {
+        items: units.map((u) => ({
+          unit: u.unit,
+          en: `Unit ${u.unit}`,
+          ...Object.fromEntries(l1s.map((l) => [l, l === 'bg' ? `Урок ${u.unit}` : `Lektion ${u.unit}`])),
+        })),
+      }
     }
     throw new Error(`the sample LLM does not answer ${name}`)
   })

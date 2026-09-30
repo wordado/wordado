@@ -33,6 +33,14 @@ export const L1_GUIDES: Readonly<Record<string, string>> = {
 - Alternates: other translations a learner might give that are also correct for this sense, most common first, at most four. No near-synonyms that would be wrong in the example sentence.
 - Sense: two to four Bulgarian words that tell this sense apart from the headword's other senses (for bank: "за пари", "на река"). Empty when the gloss is empty.
 Use standard literary Bulgarian. No transliteration, no English words, no explanations in brackets.`,
+  de: `Translate into German, as a bilingual dictionary would.
+- Nouns: the singular, capitalised, without the article (Wasser, not das Wasser): the learners are German speakers and know the gender.
+- Verbs: the infinitive (schreiben). Separable and reflexive verbs as a dictionary gives them (anrufen; sich freuen).
+- Adjectives: the uninflected form (groß).
+- Interjections and phrases: what a German speaker would actually say.
+- Alternates: other translations a learner might give that are also correct for this sense, most common first, at most four. No near-synonyms that would be wrong in the example sentence.
+- Sense: two to four German words that tell this sense apart from the headword's other senses (for bank: "Geldinstitut", "Flussufer"). Empty when the gloss is empty.
+Use standard German as written in Germany, in the current spelling, with ß and umlauts. No English words, no explanations in brackets.`,
 }
 
 const SYSTEM = (guide: string) => `You translate an English vocabulary course for adult learners.
@@ -63,6 +71,7 @@ const SCHEMA = {
 } as const
 
 const BATCH = 20
+const MAX_ALTERNATES = 4
 const clean = (s: unknown) => String(s ?? '').replaceAll('|', '/').replace(/\s+/g, ' ').trim()
 
 function parse(count: number) {
@@ -82,7 +91,7 @@ function parse(count: number) {
         seen.add(norm(alt))
         alternates.push(alt)
       }
-      return { translation, alternates: alternates.slice(0, 4), sense: clean(item['sense']) }
+      return { translation, alternates: alternates.slice(0, MAX_ALTERNATES), sense: clean(item['sense']) }
     })
   }
 }
@@ -111,18 +120,44 @@ export async function translateSenses(l1: string, items: readonly TranslateItem[
   })
 }
 
-/** Senses of one headword and POS merge when every L1's primary translation agrees: the pipeline splits only where translations diverge (spec §5.2). */
+/**
+ * Senses of one headword and POS merge when the lead L1's primary translations agree (spec §5.2; plan 9,
+ * Decision 1). The lead is the first L1 in `pipeline.json`, the one the published corpus was built on, so adding
+ * an L1 never splits a published entry. Where another L1 translates merged senses differently, it keeps the
+ * first sense's translation and gains the other's words as alternates, so either answer is right.
+ */
 export function mergeSenses<T extends { readonly headword: string; readonly pos: string; readonly l1: Readonly<Record<string, TranslationFields>> }>(
   senses: readonly T[],
   l1s: readonly string[],
 ): T[] {
+  const lead = l1s[0]
+  if (lead === undefined) return [...senses]
   const kept: T[] = []
-  const signatures = new Set<string>()
+  const at = new Map<string, number>()
   for (const s of senses) {
-    const signature = [norm(s.headword), s.pos, ...l1s.map((l) => norm(s.l1[l]?.translation ?? ''))].join('|')
-    if (signatures.has(signature)) continue
-    signatures.add(signature)
-    kept.push(s)
+    const signature = [norm(s.headword), s.pos, norm(s.l1[lead]?.translation ?? '')].join('|')
+    const index = at.get(signature)
+    if (index === undefined) {
+      at.set(signature, kept.length)
+      kept.push(s)
+      continue
+    }
+    const first = kept[index]!
+    const l1: Record<string, TranslationFields> = { ...first.l1 }
+    for (const other of l1s.slice(1)) {
+      const mine = first.l1[other]
+      const theirs = s.l1[other]
+      if (!mine || !theirs) continue
+      const known = new Set([mine.translation, ...mine.alternates].map(norm))
+      const alternates = [...mine.alternates]
+      for (const word of [theirs.translation, ...theirs.alternates]) {
+        if (known.has(norm(word))) continue
+        known.add(norm(word))
+        alternates.push(word)
+      }
+      l1[other] = { ...mine, alternates: alternates.slice(0, MAX_ALTERNATES) }
+    }
+    kept[index] = { ...first, l1 }
   }
   return kept
 }

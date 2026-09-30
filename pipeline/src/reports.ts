@@ -1,4 +1,4 @@
-import { REPORT_FIELDS, type ReportField } from '@wordado/core'
+import { LEGACY_L1, REPORT_FIELDS, type ReportField } from '@wordado/core'
 import pg from 'pg'
 import { currentClips, type AudioRecord } from './audio'
 import { sha256Hex } from './checksum'
@@ -58,12 +58,12 @@ export interface TriageInput {
 
 const NOTE_LIMIT = 280
 
-/** Which queue a report sends its entry to, and which fixes reset its count. Audio is handled apart. */
-function routes(field: ReportField, l1s: readonly string[]): { queue: string; fixField: ReportField }[] {
-  if (field === 'example') return [{ queue: QUEUES.english, fixField: 'example' }]
-  if (field === 'level') return [{ queue: QUEUES.level, fixField: 'level' }]
-  // A report does not carry the learner's L1, so it reopens every L1's set; exact while Bulgarian is the only one.
-  return l1s.map((l1) => ({ queue: QUEUES.translation(l1), fixField: 'translation' as ReportField }))
+/** Which queue a report sends its entry to, which fixes reset its count, and (for translation) which L1 those fixes must be. Audio is handled apart. */
+function routes(field: ReportField, l1s: readonly string[]): { queue: string; fixField: ReportField; l1: string }[] {
+  if (field === 'example') return [{ queue: QUEUES.english, fixField: 'example', l1: '' }]
+  if (field === 'level') return [{ queue: QUEUES.level, fixField: 'level', l1: '' }]
+  // A report does not carry the learner's L1, so it reopens every L1's set (Decision 7); each checked against its own L1's fixes.
+  return l1s.map((l1) => ({ queue: QUEUES.translation(l1), fixField: 'translation' as ReportField, l1 }))
 }
 
 /**
@@ -75,7 +75,11 @@ export function triage(input: TriageInput): { events: { queue: string; event: De
   const events: { queue: string; event: DecisionEvent }[] = []
   const summary: string[] = []
   const lastFix = new Map<string, number>()
-  for (const f of input.fixes) lastFix.set(`${f.word_id}|${f.field}`, Math.max(lastFix.get(`${f.word_id}|${f.field}`) ?? 0, f.fixed_in))
+  for (const f of input.fixes) {
+    const l1 = f.field === 'translation' ? (f.l1 ?? LEGACY_L1) : ''
+    const key = `${f.word_id}|${f.field}|${l1}`
+    lastFix.set(key, Math.max(lastFix.get(key) ?? 0, f.fixed_in))
+  }
 
   const groups = new Map<string, { queue: string; entryId: string; reports: ReportRow[] }>()
   const audio = new Map<string, ReportRow[]>()
@@ -87,8 +91,8 @@ export function triage(input: TriageInput): { events: { queue: string; event: De
       audio.set(entryId, [...(audio.get(entryId) ?? []), report])
       continue
     }
-    for (const { queue, fixField } of routes(report.field, input.l1s)) {
-      if (report.pack_version < (lastFix.get(`${report.word_id}|${fixField}`) ?? 0)) continue
+    for (const { queue, fixField, l1 } of routes(report.field, input.l1s)) {
+      if (report.pack_version < (lastFix.get(`${report.word_id}|${fixField}|${l1}`) ?? 0)) continue
       const key = `${queue}|${entryId}`
       const g = groups.get(key) ?? { queue, entryId, reports: [] }
       g.reports.push(report)

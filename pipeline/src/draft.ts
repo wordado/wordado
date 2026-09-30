@@ -86,6 +86,10 @@ export async function runDraft(opts: DraftOptions): Promise<Draft> {
   const themes = readThemes(dir, config.l1s)
   const sources = readClearedSources(dir)
   const last = readLastPublished(dir)
+  const lead = config.l1s[0]
+  if (last.packs.size > 0 && lead !== undefined && !last.packs.has(lead)) {
+    throw new Error("the lead L1 (the first in pipeline.json's l1s) must be one published before: senses merge on it; append a new L1 instead")
+  }
   const decisions = Decisions.read(dir)
   let registry = readJson<Registry>(paths.registry)
   const run = (stage: string): StageRun => ({ llm, cache: StageCache.open(paths.cache(stage)), concurrency: opts.concurrency ?? config.llm.concurrency, offline })

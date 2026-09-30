@@ -25,6 +25,12 @@ describe('diffFixes', () => {
     expect(diffFixes(pack(1, [e()]), pack(2, [e()]))).toEqual([])
     expect(diffFixes(null, pack(1, [e()]))).toEqual([])
   })
+
+  it('names the pack’s L1 on a translation fix, and none on shared fields', () => {
+    const before = pack(1, [e()])
+    const after = { ...pack(2, [e({ translation: 'Wasser' })]), l1: 'de' }
+    expect(diffFixes({ ...before, l1: 'de' }, after)).toContainEqual({ word_id: 'c:water-1', field: 'translation', fixed_in: 2, l1: 'de' })
+  })
 })
 
 describe('nextFixesFile', () => {
