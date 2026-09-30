@@ -636,11 +636,13 @@ Subject: `test(web): the German demo and a change of native language, end to end
 
 ---
 
-### Task 9: Publish German (after the pull request is merged and deployed; the product owner's go-ahead for each step)
+### Task 9: Publish German (release v2 first, then merge and deploy the pull request; the product owner's go-ahead for each step)
 
-- [ ] **Step 1: The migration.** The production deploy applies `0003_second_l1.sql` (check `docs/deploy.md` for how migrations run in production). Confirm it is applied before the web build that sends `l1` on reports reaches learners.
-- [ ] **Step 2: Release v2** (Actions › Corpus › `release`, typing `release`). It publishes the Bulgarian pack unchanged and the German pack beside it.
-- [ ] **Step 3: Check.** `https://content.wordado.com/manifest.json` lists `corpus-bg` and `corpus-de` at v2. On wordado.com, the demo in a German browser studies German. A signed-in learner who switches Settings › Native language to Deutsch gets German translations with their progress intact.
+The order matters. Release v2 puts the German pack in the production manifest before this plan's web build reaches learners. Old builds' `selectPacks` skip packs of another L1, so they keep studying Bulgarian and never see `corpus-de`. Were the web build deployed first, it would offer German (Settings, sign-in, a German browser's demo) before production could deliver the pack.
+
+- [ ] **Step 1: Release v2** (Actions › Corpus › `release`, typing `release`), before the pull request is merged. It publishes the Bulgarian pack unchanged and the German pack beside it. Check that `https://content.wordado.com/manifest.json` lists `corpus-bg` and `corpus-de` at v2, and that wordado.com as it is still studies Bulgarian.
+- [ ] **Step 2: Merge and deploy the pull request.** The production deploy applies `0003_second_l1.sql` (check `docs/deploy.md` for how migrations run in production). Confirm it is applied before the web build that sends `l1` on reports reaches learners.
+- [ ] **Step 3: Check.** On wordado.com, the demo in a German browser studies German. A signed-in learner who switches Settings › Native language to Deutsch gets German translations with their progress intact.
 - [ ] **Step 4: German's first reviewed release** (later): plan 9's second handover note. Web builds from before plan 9 ignore a fix's `l1`. By then every learner runs a build from after plan 9 (the service worker updates within a day of a visit), so no action is needed beyond releasing after this plan's web build has been live for a few days.
 
 ---
