@@ -99,17 +99,39 @@ export class AccountController {
   }
 
   /**
-   * The native language chosen at sign-in (plan 10), once a learner's Client is ready: saved only when the account's
-   * settings, as synced from the server, name none, so an account's own choice from another device is kept. `watchL1`
-   * then switches the pack. Never fails the sign-in: offline, the setting is saved here and syncs later.
+   * The native language chosen at sign-in (plan 10), once a learner's Client is ready: saved only after a sync whose
+   * pull completed and left the account's settings naming none, so an account's own choice from another device is
+   * never overridden by a local write made before it arrived. When the pull fails (offline), the write waits for the
+   * next sync that completes, once. `watchL1` then switches the pack. Never fails the sign-in.
    */
   private async saveL1(l1: L1 | null): Promise<void> {
     if (l1 === null) return
     const state = this.deps.boot.store.get()
     if (state.status !== 'ready' || state.account === null) return
     const client = state.client
-    await client.sync({ force: true }).catch(() => undefined)
-    if (client.snapshot.settings.l1 === null) await client.updateSettings({ l1 }).catch(() => undefined)
+    /** True once a pull has completed and the choice was settled; `Client.sync` resolves after re-reading settings. */
+    const attempt = async (): Promise<boolean> => {
+      const outcome = await client.sync({ force: true }).catch(() => 'failed' as const)
+      if (outcome !== 'synced') return false
+      if (client.snapshot.settings.l1 === null) await client.updateSettings({ l1 }).catch(() => undefined)
+      return true
+    }
+    if (await attempt()) return
+    // A later sync that completes (the sync loop's, or any other) shows as a fresh success in the status. The store
+    // updates before `Client.sync` has re-read the pulled settings, so `attempt` syncs again rather than trust them.
+    const mark = () => `${client.snapshot.sync.lastSyncAt}|${client.snapshot.sync.failures}`
+    let seen = mark()
+    let busy = false
+    const unsubscribe = client.store.subscribe(() => {
+      const { failures, phase } = client.snapshot.sync
+      if (busy || phase !== 'idle' || failures !== 0 || mark() === seen) return
+      busy = true
+      void attempt().then((done) => {
+        busy = false
+        seen = mark()
+        if (done) unsubscribe()
+      })
+    })
   }
 
   /** From the transport: the server answered 401. Only a signed-in learner can have an expired sign-in. */

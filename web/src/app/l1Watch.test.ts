@@ -146,4 +146,28 @@ describe('watchL1 (plan 10, Decision 2)', () => {
     h.choose('de')
     expect(h.calls).toEqual([])
   })
+
+  it('keeps an online event that arrives while an install runs, and retries a failure once', async () => {
+    const h = harness()
+    h.choose('de')
+    // The device drops and comes back while the first attempt is still running.
+    h.goOnline()
+    expect(h.calls).toEqual(['de'])
+    await h.settle({ ok: false, reason: 'unavailable' })
+    expect(h.calls).toEqual(['de', 'de'])
+    await h.settle({ ok: false, reason: 'unavailable' })
+    h.store.set({ ...h.store.get() })
+    expect(h.calls).toEqual(['de', 'de'])
+  })
+
+  it('does nothing more once stopped while an install is pending', async () => {
+    const h = harness()
+    h.choose('de')
+    h.stop()
+    await h.settle({ ok: false, reason: 'unavailable' })
+    h.choose('bg')
+    h.choose('de')
+    expect(h.calls).toEqual(['de'])
+  })
 })
+

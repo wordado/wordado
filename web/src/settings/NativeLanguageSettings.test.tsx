@@ -47,7 +47,7 @@ describe('Settings: the native language (plan 10)', () => {
     fireEvent.click(choice('Deutsch'))
     const dialog = screen.getByRole('dialog')
     expect(dialog.textContent).toContain('Думите ще се превеждат на немски.')
-    await act(async () => fireEvent.click(within(dialog).getByRole('button', { name: 'Смени' })))
+    await act(async () => fireEvent.click(within(dialog).getByRole('button', { name: 'Сменете' })))
     expect(ctx.client.snapshot.settings.l1).toBe('de')
     expect(screen.getByRole('heading', { name: 'Muttersprache' })).toBeTruthy()
   })

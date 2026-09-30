@@ -498,4 +498,39 @@ describe('the native language chosen at sign-in (plan 10)', () => {
     expect(await a.controller.resumeGoogle('ok')).toBe('signed-in')
     expect(a.client().snapshot.settings.l1).toBe('de')
   })
+
+  it('writes nothing while the pull fails, then writes it after a later sync that completes', async () => {
+    const env = testEnv()
+    const server = new FakeServer({ now: env.now })
+    const transport = flaky(server)
+    const a = await app({ env, server, transport })
+    expect(await a.controller.completeSignIn(null, 'de')).toBe('signed-in')
+    expect(a.client().snapshot.settings.l1).toBeNull()
+    transport.online = true
+    env.advance(60_000)
+    expect(await a.client().sync({ force: true })).toBe('synced')
+    await vi.waitFor(() => expect(a.client().snapshot.settings.l1).toBe('de'))
+  })
+
+  it('writes nothing when the sync that completes later brings the account’s own L1', async () => {
+    const env = testEnv()
+    const server = new FakeServer({ now: env.now })
+    const transport = flaky(server)
+    const a = await app({ env, server, transport })
+    expect(await a.controller.completeSignIn(null, 'de')).toBe('signed-in')
+    const other = await Client.open({ driver: nodeSqliteDriver(), env, l1: 'bg', transport: server })
+    await other.updateSettings({ l1: 'bg' })
+    await other.sync()
+    await other.close()
+    transport.online = true
+    env.advance(60_000)
+    expect(await a.client().sync({ force: true })).toBe('synced')
+    await vi.waitFor(() => expect(a.client().snapshot.settings.l1).toBe('bg'))
+    // Let a deferred write, were there one, run and reach the server.
+    for (let i = 0; i < 3; i += 1) {
+      env.advance(60_000)
+      await a.client().sync({ force: true })
+    }
+    expect(a.client().snapshot.settings.l1).toBe('bg')
+  })
 })

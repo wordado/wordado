@@ -18,8 +18,14 @@ export function watchL1(client: Watched, install: (l1: L1) => Promise<ChangeL1Ou
   let running = false
   let stopped = false
   let failed: L1 | null = null
+  /** An online event that arrived while an install ran: honoured once that install settles. */
+  let retryOwed = false
   const check = (retry: boolean) => {
-    if (stopped || running) return
+    if (stopped) return
+    if (running) {
+      if (retry) retryOwed = true
+      return
+    }
     const { l1, settings } = client.store.get()
     const target = settings.l1
     if (target === null || target === l1) {
@@ -33,8 +39,10 @@ export function watchL1(client: Watched, install: (l1: L1) => Promise<ChangeL1Ou
       .then((outcome) => {
         failed = outcome.ok ? null : target
         running = false
-        // The setting may have changed while this install ran.
-        check(false)
+        const owed = retryOwed
+        retryOwed = false
+        // The setting may have changed while this install ran, or the device come back online.
+        check(owed)
       })
   }
   check(false)

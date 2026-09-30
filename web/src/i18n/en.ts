@@ -190,7 +190,7 @@ export const en = {
 
   'signin.title': 'Create an account or sign in',
   'signin.againTitle': 'Sign in again',
-  'signin.gateIntro': 'First, two questions the law asks us. Only your country is kept.',
+  'signin.gateIntro': 'First, two questions the law asks us. Only your country is kept; your native language is saved with your settings.',
   'signin.country': 'Country where you live',
   'signin.countryUnknown': 'I’d rather not say',
   'signin.nativeLanguage': 'Your native language',

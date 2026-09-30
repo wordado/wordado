@@ -126,7 +126,7 @@ export const bg: Messages = {
   'settings.nativeLanguage': 'Роден език',
   'settings.nativeLanguageHint': 'Езикът, на който се превеждат думите.',
   'settings.nativeLanguageConfirm': 'Напредъкът ви се запазва. Думите ще се превеждат на {language}.',
-  'settings.nativeLanguageChange': 'Смени',
+  'settings.nativeLanguageChange': 'Сменете',
   'settings.language': 'Език на интерфейса',
   'settings.languageHint': 'Думите винаги са на английски; това сменя менютата и съобщенията.',
 
@@ -185,7 +185,7 @@ export const bg: Messages = {
 
   'signin.title': 'Създайте профил или влезте',
   'signin.againTitle': 'Влезте отново',
-  'signin.gateIntro': 'Първо два въпроса, които законът изисква. Пазим само държавата ви.',
+  'signin.gateIntro': 'Първо два въпроса, които законът изисква. От тях пазим само държавата ви, а родният ви език се запазва в настройките ви.',
   'signin.country': 'Държава, в която живеете',
   'signin.countryUnknown': 'Предпочитам да не казвам',
   'signin.nativeLanguage': 'Родният ви език',

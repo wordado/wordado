@@ -199,7 +199,7 @@ export const de: Messages = {
 
   'signin.title': 'Konto erstellen oder anmelden',
   'signin.againTitle': 'Erneut anmelden',
-  'signin.gateIntro': 'Zuerst zwei Fragen, die wir dir gesetzlich stellen müssen. Nur dein Land wird gespeichert.',
+  'signin.gateIntro': 'Zuerst zwei Fragen, die wir dir gesetzlich stellen müssen. Davon wird nur dein Land gespeichert; deine Muttersprache speichern wir mit deinen Einstellungen.',
   'signin.country': 'Land, in dem du lebst',
   'signin.countryUnknown': 'Das möchte ich nicht angeben',
   'signin.nativeLanguage': 'Deine Muttersprache',
