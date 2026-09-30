@@ -238,6 +238,8 @@ test('signs out leaving nothing behind, then deletes the account (spec §11)', a
   const email = address('leave')
   await signIn(page, email)
   await studyNew(page, 1)
+  // The end of a session is in focus mode: back to Today, where the masthead is.
+  await page.getByRole('link', { name: 'Back to today' }).click()
   await page.getByRole('button', { name: `Account: ${email}` }).click()
   await page.getByRole('button', { name: 'Sign out' }).click()
   await expect(page.getByRole('link', { name: 'Sign in' })).toBeVisible()

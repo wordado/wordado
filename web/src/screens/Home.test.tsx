@@ -16,6 +16,23 @@ describe('Home', () => {
     expect(screen.getByText('0 XP today, 0 in all')).toBeTruthy()
   })
 
+  it('puts practice beside the main action, not among the single modes', async () => {
+    const ctx = await setup()
+    renderWith(<Home />, ctx)
+    const actions = screen.getByRole('link', { name: 'Start studying' }).parentElement!
+    expect(within(actions).getByRole('link', { name: 'Practise words you know' }).getAttribute('href')).toBe('/practice')
+    const oneWay = screen.getByRole('navigation', { name: 'Study one way' })
+    expect(within(oneWay).queryByRole('link', { name: 'Practise words you know' })).toBeNull()
+  })
+
+  it('gives streak and XP a card of their own, under a visible heading', async () => {
+    const ctx = await setup()
+    renderWith(<Home />, ctx)
+    const card = screen.getByRole('region', { name: 'Streak and XP' })
+    expect(within(card).getByText('Study today to start a streak.')).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Streak and XP' }).className).not.toContain('visually-hidden')
+  })
+
   it('offers single-mode sessions, listening only when audio can play', async () => {
     const ctx = await setup()
     const { unmount } = renderWith(<Home />, ctx)

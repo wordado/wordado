@@ -23,6 +23,9 @@ async function start(mode: RunOptions['mode'], audio: AudioPort = fakeAudio()) {
 
 const press = (key: string) => act(async () => void fireEvent.keyDown(document.body, { key }))
 
+/** Opens the card's ⋯ menu, where setting aside and reporting live. */
+const more = () => fireEvent.click(screen.getByRole('button', { name: 'More' }))
+
 /** The option buttons. Their digit hints are aria-hidden, so a screen reader hears only the option itself. */
 const options = () => [...document.querySelectorAll<HTMLButtonElement>('button.option')]
 
@@ -121,6 +124,45 @@ describe('RunView: flashcards', () => {
     await press(' ')
     const region = screen.getByRole('region', { name: item.entry.translations[0]! })
     expect(document.activeElement).toBe(region)
+  })
+})
+
+describe('RunView: the flashcard play button', () => {
+  it('plays the word on the card when its audio can play', async () => {
+    const audio = fakeAudio({ streamable: () => true })
+    const { run } = await start('flashcard', audio)
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Play the word' })))
+    expect(audio.played.map((clip) => clip.clipId)).toHaveLength(1)
+    expect(run.snapshot.phase).toBe('prompt')
+  })
+
+  it('is not offered when the audio cannot play', async () => {
+    await start('flashcard')
+    expect(screen.queryByRole('button', { name: 'Play the word' })).toBeNull()
+  })
+})
+
+describe('RunView: the top bar', () => {
+  it('shows progress as a bar and a count, and names it for a screen reader', async () => {
+    const { env } = await start('flashcard')
+    const bar = screen.getByRole('progressbar', { name: 'Session progress' })
+    expect(bar.getAttribute('aria-valuenow')).toBe('0')
+    expect(bar.getAttribute('aria-valuetext')).toBe('0 done, 10 to go')
+    env.advance(ITEM_SETTLE_MS)
+    await press(' ')
+    env.advance(ITEM_SETTLE_MS)
+    await press('3')
+    expect(bar.getAttribute('aria-valuenow')).toBe('1')
+    expect(document.querySelector('.study-count')?.textContent).toBe('1 / 10')
+  })
+
+  it('keeps setting aside and reporting in the ⋯ menu', async () => {
+    await start('flashcard')
+    expect(screen.queryByRole('button', { name: 'Report a problem' })).toBeNull()
+    more()
+    expect(screen.getByRole('button', { name: 'I know this word' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Not now' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Report a problem' })).toBeTruthy()
   })
 })
 
@@ -234,6 +276,12 @@ describe('RunView: the end of a run', () => {
     expect(screen.getByText('Today counts toward your streak.')).toBeTruthy()
     expect(screen.getByText('New unit open: People and greetings')).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Back to today' }).getAttribute('href')).toBe('/')
+    // Back to today is the main action, Practise more the second.
+    const links = [...document.querySelectorAll('.done-actions a')].map((a) => [a.textContent, a.classList.contains('primary')])
+    expect(links).toEqual([
+      ['Back to today', true],
+      ['Practise more', false],
+    ])
   })
 })
 
@@ -248,6 +296,7 @@ describe('RunView: reporting a problem', () => {
   it('files a report for the word on the card, keys do not answer while the dialog is open, and focus lands on Continue', async () => {
     const { run, client } = await start('flashcard')
     const report = vi.spyOn(client, 'report')
+    more()
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Report a problem' })))
     await press(' ')
     expect(run.snapshot.phase).toBe('prompt')
@@ -261,6 +310,7 @@ describe('RunView: reporting a problem', () => {
 
   it('returns focus to the card when the dialog is cancelled', async () => {
     await start('flashcard')
+    more()
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Report a problem' })))
     const cancel = screen.getByRole('button', { name: 'Cancel' })
     cancel.focus()
@@ -272,6 +322,7 @@ describe('RunView: reporting a problem', () => {
   it('a double click on Send files exactly one report', async () => {
     const { client } = await start('flashcard')
     const report = vi.spyOn(client, 'report')
+    more()
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Report a problem' })))
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Send report' }))
@@ -283,6 +334,7 @@ describe('RunView: reporting a problem', () => {
   it('shows the error, and lets the learner try again, when the report fails to save', async () => {
     const { client } = await start('flashcard')
     vi.spyOn(client, 'report').mockRejectedValueOnce(new Error('offline'))
+    more()
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Report a problem' })))
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Send report' })))
     expect(screen.getByRole('alert').textContent).toBe('Your answer wasn’t saved: Something went wrong. Try again.')
@@ -296,8 +348,9 @@ describe('setting a word aside (spec §7.4)', () => {
     const run = await StudyRun.start(ctx.client, ctx.env, { kind: 'session', mode: 'flashcard', cachedClips: () => new Set(), online: () => false })
     renderWith(<RunView run={run} kind="session" />, ctx)
     const first = run.snapshot.item!.entry.headword
+    more()
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'I know this word' })))
-    expect(screen.getByText(/^0 done/)).toBeTruthy()
+    expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('0')
     expect(document.querySelector('.hw-word')?.textContent).not.toBe(first)
     expect([...ctx.client.snapshot.flags.values()]).toEqual(['known'])
   })
@@ -306,6 +359,7 @@ describe('setting a word aside (spec §7.4)', () => {
     const ctx = await setup()
     const run = await StudyRun.start(ctx.client, ctx.env, { kind: 'session', mode: 'flashcard', cachedClips: () => new Set(), online: () => false })
     renderWith(<RunView run={run} kind="session" />, ctx)
+    more()
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Not now' })))
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Stop for now' })))
     expect(screen.getByText('1 word set aside. You can bring it back in settings.')).toBeTruthy()

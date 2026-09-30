@@ -104,6 +104,8 @@ export interface LinkProps {
   readonly className?: string
   readonly children?: ReactNode
   readonly 'aria-current'?: 'page' | undefined
+  readonly 'aria-label'?: string
+  readonly 'aria-describedby'?: string
 }
 
 /** An ordinary link that navigates in place; a modified click opens a tab as usual. */
@@ -114,7 +116,14 @@ export function Link(props: LinkProps) {
     navigate(props.to)
   }
   return (
-    <a href={routeHref(props.to)} className={props.className} aria-current={props['aria-current']} onClick={onClick}>
+    <a
+      href={routeHref(props.to)}
+      className={props.className}
+      aria-current={props['aria-current']}
+      aria-label={props['aria-label']}
+      aria-describedby={props['aria-describedby']}
+      onClick={onClick}
+    >
       {props.children}
     </a>
   )

@@ -25,5 +25,7 @@ describe('Study', () => {
     renderWith(<Study kind="session" mode="flashcard" />, ctx)
     const alert = await screen.findByRole('alert')
     expect(alert.textContent).toBe('Your answer wasn’t saved: Something went wrong. Try again.')
+    // Focus mode hides the navigation: the failure offers the way back itself.
+    expect(screen.getByRole('link', { name: 'Back to today' }).getAttribute('href')).toBe('/')
   })
 })

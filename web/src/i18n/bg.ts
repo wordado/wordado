@@ -15,6 +15,7 @@ export const bg: Messages = {
   'account.labelWarning': 'Профил: {email}. {warning}',
   'account.settings': 'Настройки на профила',
   'lang.label': 'Език на интерфейса',
+  'lang.button': 'Език на интерфейса: {language} ({code})',
 
   'boot.starting': 'Отваряме думите ви…',
   'boot.failed': 'Думите не можаха да се заредят. Проверете връзката си и опитайте отново.',
@@ -239,6 +240,8 @@ export const bg: Messages = {
 
   'study.loading': 'Подготвяме думите ви…',
   'study.progress': '{answered} готови, остават {remaining}',
+  'study.progressLabel': 'Напредък в урока',
+  'study.more': 'Още',
   'study.finish': 'Спрете засега',
   'study.reveal': 'Покажете отговора',
   'study.rateLabel': 'Колко добре я знаехте?',
@@ -277,6 +280,13 @@ export const bg: Messages = {
   'practice.matching': 'Свържете думите с преводите им',
   'practice.needWords': 'Първо научете няколко думи: за свързването трябват пет.',
   'practice.noneYet': 'Все още няма какво да упражнявате. Първо научете няколко нови думи.',
+  'practice.mixed': 'Смесено упражнение',
+  'practice.mixedHint': 'От всичко по малко, като в урок',
+  'practice.oneWay': 'Упражнявайте по един начин',
+  'practice.flashcardHint': 'Вижте думата и се оценете сами',
+  'practice.choiceHint': 'Изберете верния отговор от четири',
+  'practice.back': 'Обратно към упражненията',
+  'matching.progressLabel': 'Свързани двойки',
   'matching.title': 'Свързване',
   'matching.instructions': 'Изберете английска дума, после превода ѝ.',
   'matching.english': 'Английски',
@@ -297,6 +307,7 @@ export const bg: Messages = {
   'path.open': 'Отворен',
   'path.words': { one: '{count} дума', other: '{count} думи' },
   'path.wordNew': 'Незапочната',
+  'path.wordActions': 'Действия с думата: {word}',
 
   'flag.known': 'Известна',
   'flag.suspended': 'Не сега',
