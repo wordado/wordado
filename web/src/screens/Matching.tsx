@@ -3,7 +3,7 @@ import type { CorpusEntry } from '@wordado/core'
 import { Check, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useApp } from '../app/context'
-import { useT } from '../i18n/i18n'
+import { languageName, useT } from '../i18n/i18n'
 import { Link } from '../router'
 import { Translation } from '../study/Headword'
 import { useStore } from '../useStore'
@@ -31,7 +31,7 @@ export function Matching() {
 }
 
 function Board(props: { readonly run: MatchingRun; readonly onAgain: () => void }) {
-  const { t } = useT()
+  const { t, locale } = useT()
   const { corpus } = useClientSnapshot()
   const { afterRun } = useApp()
   const { run } = props
@@ -137,7 +137,7 @@ function Board(props: { readonly run: MatchingRun; readonly onAgain: () => void 
             <ul>{s.left.map((entry) => pair('left', entry))}</ul>
           </div>
           <div className="column" role="group" aria-labelledby="matching-l1" data-side="right">
-            <h2 id="matching-l1">{t('matching.translation')}</h2>
+            <h2 id="matching-l1">{languageName(l1, locale)}</h2>
             <ul>{s.right.map((entry) => pair('right', entry))}</ul>
           </div>
         </div>

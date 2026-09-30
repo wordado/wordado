@@ -290,7 +290,6 @@ export const bg: Messages = {
   'matching.title': 'Свързване',
   'matching.instructions': 'Изберете английска дума, после превода ѝ.',
   'matching.english': 'Английски',
-  'matching.translation': 'Български',
   'matching.miss': '{left} и {right} не са двойка.',
   'matching.matched': 'Свързано',
   'matching.done': 'Всички двойки са свързани.',

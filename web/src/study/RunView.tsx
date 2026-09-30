@@ -375,7 +375,8 @@ function Done(props: { readonly snapshot: RunSnapshot; readonly kind: RunKind })
   }, [afterRun])
   const unitTitle = (unitId: string) => {
     const unit = corpus?.units.find((u) => u.unitId === unitId)
-    return unit ? localized(unit.title, locale) : unitId
+    // No corpus yet: packL1 can't match any locale, so `localized` falls back to English.
+    return unit ? localized(unit.title, locale, corpus?.l1 ?? '') : unitId
   }
   return (
     <section className="done" aria-labelledby="done-title">

@@ -74,7 +74,7 @@ export function Home() {
                       )
                     }}
                   >
-                    {localized(theme.name, locale)}
+                    {localized(theme.name, locale, corpus.l1)}
                   </button>
                 </li>
               ))}

@@ -310,7 +310,6 @@ export const de: Messages = {
   'matching.title': 'Zuordnen',
   'matching.instructions': 'Wähl ein englisches Wort, dann seine Übersetzung.',
   'matching.english': 'Englisch',
-  'matching.translation': 'Bulgarisch',
   'matching.miss': '{left} und {right} sind kein Paar.',
   'matching.matched': 'Zugeordnet',
   'matching.done': 'Alle Paare sind zugeordnet.',

@@ -295,7 +295,6 @@ export const en = {
   'matching.title': 'Matching',
   'matching.instructions': 'Pick an English word, then its translation.',
   'matching.english': 'English',
-  'matching.translation': 'Bulgarian',
   'matching.miss': '{left} and {right} aren’t a pair.',
   'matching.matched': 'Matched',
   'matching.done': 'All pairs matched.',

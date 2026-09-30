@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { bg } from './bg'
 import { de } from './de'
 import { en } from './en'
-import { I18nProvider, initialLocale, LOCALE_KEY, localized, translate, useT, type MessageKey } from './i18n'
+import { I18nProvider, initialLocale, languageName, LOCALE_KEY, localized, translate, useT, type MessageKey } from './i18n'
 
 afterEach(() => {
   cleanup()
@@ -76,9 +76,17 @@ describe('translate', () => {
     expect(translate('en', 'home.xp', { today: 30 })).toBe('30 XP today, {total} in all')
   })
 
-  it('reads pack text in the interface language', () => {
-    expect(localized({ en: 'Food', l1: 'Храна' }, 'en')).toBe('Food')
-    expect(localized({ en: 'Food', l1: 'Храна' }, 'bg')).toBe('Храна')
+  it('reads pack text in the pack’s own language only when the interface speaks it, else English', () => {
+    expect(localized({ en: 'Food', l1: 'Храна' }, 'de', 'bg')).toBe('Food')
+    expect(localized({ en: 'Food', l1: 'Храна' }, 'bg', 'bg')).toBe('Храна')
+    expect(localized({ en: 'Food', l1: 'Essen' }, 'de', 'de')).toBe('Essen')
+  })
+})
+
+describe('languageName', () => {
+  it('names a language in the given locale, capitalised', () => {
+    expect(languageName('de', 'bg')).toBe('Немски')
+    expect(languageName('bg', 'en')).toBe('Bulgarian')
   })
 })
 

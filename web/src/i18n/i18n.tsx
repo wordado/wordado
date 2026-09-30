@@ -33,9 +33,16 @@ export function translate(locale: Locale, key: MessageKey, vars: Vars = {}): str
   })
 }
 
-/** Pack text (unit titles, theme names) in the interface language: `l1` is the pack's own language (plan 3). */
-export function localized(text: LocalizedText, locale: Locale): string {
-  return locale === 'en' ? text.en : text.l1
+/** Pack text (unit titles, theme names) in the pack's own language, but only when the interface speaks that
+ * language (plan 10); otherwise English, so a German speaker never sees Bulgarian unit or theme names. */
+export function localized(text: LocalizedText, locale: Locale, packL1: string): string {
+  return locale === packL1 ? text.l1 : text.en
+}
+
+/** A language's name, in `locale`, capitalised (plan 10): for headings such as the Matching translation column. */
+export function languageName(code: string, locale: Locale): string {
+  const name = new Intl.DisplayNames([locale], { type: 'language' }).of(code) ?? code
+  return name.charAt(0).toUpperCase() + name.slice(1)
 }
 
 type LocaleStorage = Pick<Storage, 'getItem' | 'setItem'>

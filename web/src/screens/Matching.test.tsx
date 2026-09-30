@@ -18,6 +18,13 @@ describe('Matching', () => {
     expect(screen.getByRole('link', { name: 'Back to practice' }).getAttribute('href')).toBe('/practice')
   })
 
+  it('heads the translation column with the pack’s language', async () => {
+    const ctx = await setup()
+    await answerNew(ctx.client, ctx.env, 5)
+    renderWith(<Matching />, ctx)
+    expect(screen.getByRole('heading', { name: 'Bulgarian' })).toBeTruthy()
+  })
+
   it('shows pairs matched as a bar and a count, and offers the way back to practice', async () => {
     const ctx = await setup()
     await answerNew(ctx.client, ctx.env, 5)

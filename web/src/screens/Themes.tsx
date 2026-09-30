@@ -30,8 +30,8 @@ export function Themes() {
             const isActive = active === theme.themeId
             return (
               <li key={theme.themeId} className={isActive ? 'theme active' : 'theme'}>
-                <h2>{localized(theme.name, locale)}</h2>
-                <p>{localized(theme.description, locale)}</p>
+                <h2>{localized(theme.name, locale, corpus.l1)}</h2>
+                <p>{localized(theme.description, locale, corpus.l1)}</p>
                 <p className="note">{t('themes.count', { count: entries.length })}</p>
                 {aboveLevel && <p className="note">{t('themes.aboveLevel')}</p>}
                 {isActive ? (

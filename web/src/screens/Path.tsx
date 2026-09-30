@@ -77,7 +77,7 @@ export function Path() {
                     </div>
                     <div className="unit-card">
                       <div className="unit-head">
-                        <h3>{localized(unit.title, locale)}</h3>
+                        <h3>{localized(unit.title, locale, corpus.l1)}</h3>
                         <p className="unit-status">
                           {status === 'locked' && t('path.locked')}
                           {status === 'current' && t('path.current')}
