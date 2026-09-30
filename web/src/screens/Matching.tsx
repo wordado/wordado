@@ -1,5 +1,6 @@
 import { MatchingRun, useClient, useClientSnapshot, type MatchingSide } from '@wordado/client-data'
 import type { CorpusEntry } from '@wordado/core'
+import { Check, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useApp } from '../app/context'
 import { useT } from '../i18n/i18n'
@@ -20,7 +21,9 @@ export function Matching() {
       <section aria-labelledby="matching-title">
         <h1 id="matching-title">{t('matching.title')}</h1>
         <p>{t('practice.needWords')}</p>
-        <Link to={{ name: 'home' }}>{t('done.home')}</Link>
+        <Link className="button" to={{ name: 'practice' }}>
+          {t('practice.back')}
+        </Link>
       </section>
     )
   }
@@ -62,11 +65,12 @@ function Board(props: { readonly run: MatchingRun; readonly onAgain: () => void 
   const pair = (side: MatchingSide, entry: CorpusEntry) => {
     const selected = s.selected?.side === side && s.selected.entryId === entry.entryId
     const matched = s.matched.has(entry.entryId)
+    const missed = s.miss !== null && (side === 'left' ? s.miss.left : s.miss.right) === entry.entryId
     return (
       <li key={entry.entryId}>
         <button
           type="button"
-          className={`pair${selected ? ' is-selected' : ''}${matched ? ' is-matched' : ''}`}
+          className={`pair${selected ? ' is-selected' : ''}${matched ? ' is-matched' : ''}${missed ? ' is-miss' : ''}`}
           aria-pressed={selected}
           disabled={matched}
           data-entry={entry.entryId}
@@ -92,21 +96,53 @@ function Board(props: { readonly run: MatchingRun; readonly onAgain: () => void 
     )
   }
 
+  const total = s.left.length
   return (
     <section className="matching" aria-labelledby="matching-title">
-      <h1 id="matching-title">{t('matching.title')}</h1>
-      <p className="lede">{t('matching.instructions')}</p>
-      <div className="board">
-        <div className="column" role="group" aria-labelledby="matching-en" data-side="left">
-          <h2 id="matching-en">{t('matching.english')}</h2>
-          <ul>{s.left.map((entry) => pair('left', entry))}</ul>
+      <div className="study-bar">
+        <Link className="study-close" to={{ name: 'practice' }} aria-label={t('practice.back')}>
+          <X aria-hidden="true" size={20} strokeWidth={2} />
+        </Link>
+        <div
+          className="study-progress is-pairs"
+          role="progressbar"
+          aria-label={t('matching.progressLabel')}
+          aria-valuemin={0}
+          aria-valuemax={total}
+          aria-valuenow={s.matched.size}
+        >
+          <span style={{ width: `${total === 0 ? 0 : (100 * s.matched.size) / total}%` }} />
         </div>
-        <div className="column" role="group" aria-labelledby="matching-l1" data-side="right">
-          <h2 id="matching-l1">{t('matching.translation')}</h2>
-          <ul>{s.right.map((entry) => pair('right', entry))}</ul>
-        </div>
+        <p className="study-count" aria-hidden="true">
+          {s.matched.size} / {total}
+        </p>
       </div>
-      <div className="feedback" role="status">
+      <div className="matching-head">
+        <h1 id="matching-title">{t('matching.title')}</h1>
+        {!s.done && <p className="lede">{t('matching.instructions')}</p>}
+      </div>
+      {s.done ? (
+        <div className="panel done-card">
+          <span className="done-badge" aria-hidden="true">
+            <Check size={42} strokeWidth={2.25} />
+          </span>
+          <p className="done-card-title" aria-hidden="true">
+            {t('matching.done')}
+          </p>
+        </div>
+      ) : (
+        <div className="board">
+          <div className="column" role="group" aria-labelledby="matching-en" data-side="left">
+            <h2 id="matching-en">{t('matching.english')}</h2>
+            <ul>{s.left.map((entry) => pair('left', entry))}</ul>
+          </div>
+          <div className="column" role="group" aria-labelledby="matching-l1" data-side="right">
+            <h2 id="matching-l1">{t('matching.translation')}</h2>
+            <ul>{s.right.map((entry) => pair('right', entry))}</ul>
+          </div>
+        </div>
+      )}
+      <div className={`feedback${s.miss ? ' is-miss' : ''}${s.done ? ' visually-hidden' : ''}`} role="status">
         {s.miss && (
           <p className="incorrect">
             ✗ {t('matching.miss', { left: byId(s.miss.left)?.headword ?? '', right: byId(s.miss.right)?.translations[0] ?? '' })}
@@ -116,12 +152,12 @@ function Board(props: { readonly run: MatchingRun; readonly onAgain: () => void 
         {s.error !== null && <p>{t('study.error', { message: s.error })}</p>}
       </div>
       {s.done && (
-        <div className="actions">
-          <button type="button" className="button primary" ref={againRef} onClick={props.onAgain}>
+        <div className="done-actions">
+          <button type="button" className="button primary study-main" ref={againRef} onClick={props.onAgain}>
             {t('matching.again')}
           </button>
-          <Link className="button" to={{ name: 'home' }}>
-            {t('done.home')}
+          <Link className="button study-main" to={{ name: 'practice' }}>
+            {t('practice.back')}
           </Link>
         </div>
       )}

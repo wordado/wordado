@@ -613,15 +613,6 @@ main:focus,
   color: var(--rose);
 }
 
-.practice-list {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2) var(--space-4);
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
 
 .motivation {
   display: flex;
@@ -1369,75 +1360,240 @@ dialog.report textarea {
   margin: 0;
 }
 
-/* Matching */
+/* Practice */
 
-.pair {
+.practice {
   display: flex;
-  align-items: baseline;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.practice-head h1 {
+  margin: 0;
+}
+
+.practice-head .lede {
+  margin: var(--space-2) 0 0;
+}
+
+.practice-mixed {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.practice-mixed-head {
+  display: flex;
+  align-items: center;
   gap: var(--space-3);
-  width: 100%;
-  min-height: 3rem;
-  padding: var(--space-3) var(--space-4);
-  font: 400 var(--step-1) / 1.3 var(--font-entry);
-  text-align: left;
-  color: var(--ink);
+}
+
+.practice-mixed-head p,
+.practice-row-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  margin: 0;
+}
+
+.practice-row-title {
+  font-size: 1.0625rem;
+  font-weight: 600;
+}
+
+.practice-icon {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  color: var(--rose);
+  background: var(--paper);
+  border-radius: 0.75rem;
+}
+
+.practice-icon.is-rose {
+  width: 3rem;
+  height: 3rem;
+  background: var(--rose-soft);
+  border-radius: 0.875rem;
+}
+
+.practice-one-way {
+  margin: var(--space-2) var(--space-1) 0;
+  font: 600 var(--step-0) / 1.3 var(--font-ui);
+}
+
+.practice-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* The whole row is the link: its ::after covers the row, so a tap anywhere follows it. */
+.practice-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4);
   background: var(--paper-raised);
   border: 1px solid var(--rule);
-  border-radius: var(--radius);
-  cursor: pointer;
+  border-radius: 1rem;
 }
 
-.pair:hover:not(:disabled) {
-  border-color: var(--ink);
+.practice-row:hover {
+  border-color: var(--ink-soft);
 }
 
-.pair:disabled {
-  cursor: default;
+.practice-row-text {
+  flex-grow: 1;
 }
 
-.pair .option-key {
-  min-width: 1ch;
-  font: 500 var(--step--1) / 1 var(--font-ui);
+.practice-row-link {
+  font-weight: 600;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.practice-row-link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.practice-row:focus-within {
+  outline: 2px solid var(--rose);
+  outline-offset: 2px;
+}
+
+.practice-row-link:focus-visible {
+  outline: none;
+}
+
+.practice-chevron {
+  flex-shrink: 0;
   color: var(--ink-soft);
 }
 
-.pair.is-matched {
-  background: var(--leaf-soft);
-  border-color: var(--leaf);
+/* Matching: focus mode, like studying */
+
+.app > main > .matching {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: 45rem;
+  margin-inline: auto;
+  padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom));
+}
+
+.study-progress.is-pairs span {
+  background: var(--leaf);
+}
+
+.study-close {
+  text-decoration: none;
+}
+
+.matching-head {
+  text-align: center;
+}
+
+.matching-head h1 {
+  margin: 0;
+  font-size: clamp(1.75rem, 6vw, 2.25rem);
+}
+
+.matching-head .lede {
+  margin: var(--space-1) auto 0;
 }
 
 .board {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: var(--space-3);
+  gap: var(--space-3) 1.25rem;
 }
 
 .column h2 {
-  margin-top: var(--space-3);
-  font-size: var(--step-0);
+  margin: 0 var(--space-1) var(--space-2);
+  font: 600 0.75rem / 1.2 var(--font-ui);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   color: var(--ink-soft);
 }
 
 .column ul {
   display: grid;
-  gap: var(--space-2);
+  gap: 0.625rem;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
 .pair {
-  font-size: var(--step-0);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: 4rem;
+  padding: var(--space-2) var(--space-3);
+  font: 500 var(--step-1) / 1.2 var(--font-entry);
+  text-align: center;
+  color: var(--ink);
   overflow-wrap: anywhere;
+  background: var(--paper-raised);
+  border: 1.5px solid var(--rule);
+  border-radius: 1rem;
+  cursor: pointer;
+}
+
+.pair:hover:not(:disabled) {
+  border-color: var(--ink-soft);
+}
+
+.pair:disabled {
+  cursor: default;
 }
 
 .pair.is-selected {
-  border-color: var(--rose);
-  box-shadow: inset 0 0 0 1px var(--rose);
+  font-weight: 600;
+  color: var(--rose);
+  background: var(--rose-soft);
+  border: 2px solid var(--rose);
+  box-shadow: 0 0.25rem 0.75rem color-mix(in srgb, var(--rose) 20%, transparent);
 }
 
 .pair.is-matched {
-  color: var(--ink-soft);
+  color: var(--leaf-ink);
+  background: var(--leaf-soft);
+  border-color: color-mix(in srgb, var(--leaf) 40%, transparent);
+}
+
+.pair.is-miss {
+  color: var(--amber);
+  background: var(--amber-soft);
+  border-color: color-mix(in srgb, var(--amber) 50%, transparent);
+}
+
+.matching .feedback.is-miss {
+  padding: var(--space-3) var(--space-4);
+  background: var(--amber-soft);
+  border-radius: 1rem;
+}
+
+.matching .feedback p {
+  margin: 0;
+}
+
+.done-card .done-card-title {
+  margin: var(--space-2) 0 0;
+  font: 600 clamp(1.75rem, 6vw, 2.25rem) / 1.15 var(--font-entry);
+  color: var(--ink);
 }
 
 /* Forms (spec §11.1: every field labelled, errors tied to it) */
