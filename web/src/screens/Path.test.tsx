@@ -7,6 +7,9 @@ afterEach(cleanup)
 
 const unit = (title: string) => screen.getByRole('heading', { name: title }).closest('li')!
 
+/** Opens a word's ⋯ menu, where setting it aside and bringing it back live. */
+const wordMenu = (row: HTMLElement, headword: string) => fireEvent.click(within(row).getByRole('button', { name: `Word actions: ${headword}` }))
+
 describe('Path', () => {
   it('shows the first unit current and the rest locked before any answer', async () => {
     const ctx = await setup()
@@ -15,6 +18,15 @@ describe('Path', () => {
     expect(within(unit('People and greetings')).getByText('0 of 20 started')).toBeTruthy()
     expect(within(unit('Food and drink')).getByText('Locked')).toBeTruthy()
     expect(screen.getByText('0 of 60 words learned well')).toBeTruthy()
+  })
+
+  it('shows the level as a bar, and offers to study from the current unit', async () => {
+    const ctx = await setup()
+    renderWith(<Path />, ctx)
+    const level = screen.getByRole('progressbar', { name: 'A1: 0 of 60 words learned well' })
+    expect(level.getAttribute('aria-valuemax')).toBe('60')
+    expect(within(unit('People and greetings')).getByRole('link', { name: 'Start studying' }).getAttribute('href')).toBe('/study')
+    expect(within(unit('Food and drink')).queryByRole('link', { name: 'Start studying' })).toBeNull()
   })
 
   it('moves the current unit on once every word of the first is introduced', async () => {
@@ -55,14 +67,17 @@ describe('Path', () => {
     const first = words[0]!
     const headword = first.querySelector('[lang="en"]')!.textContent!
     expect(within(first).getByText('Not started')).toBeTruthy()
+    // The actions sit behind the word's ⋯ button, which takes focus back once a choice is made (spec §11.1).
+    expect(within(first).queryByRole('button', { name: `I know it: ${headword}` })).toBeNull()
+    wordMenu(first, headword)
     await act(async () => fireEvent.click(within(first).getByRole('button', { name: `I know it: ${headword}` })))
     expect(within(first).getByText('Known')).toBeTruthy()
-    // The pressed button is gone: its replacement has focus (spec §11.1).
-    expect(document.activeElement).toBe(within(first).getByRole('button', { name: `Bring back: ${headword}` }))
+    expect(document.activeElement).toBe(within(first).getByRole('button', { name: `Word actions: ${headword}` }))
     expect([...ctx.client.snapshot.flags.values()]).toEqual(['known'])
+    wordMenu(first, headword)
     await act(async () => fireEvent.click(within(first).getByRole('button', { name: `Bring back: ${headword}` })))
     expect(ctx.client.snapshot.flags.size).toBe(0)
-    expect(document.activeElement).toBe(within(first).getByRole('button', { name: `I know it: ${headword}` }))
+    expect(within(first).getByText('Not started')).toBeTruthy()
   })
 
   it('shows a saved-failed alert beside the word when setting it aside fails (spec §11.1)', async () => {
@@ -73,6 +88,7 @@ describe('Path', () => {
     await act(async () => fireEvent.click(food.querySelector('summary')!))
     const first = within(food).getAllByRole('listitem')[0]!
     const headword = first.querySelector('[lang="en"]')!.textContent!
+    wordMenu(first, headword)
     await act(async () => fireEvent.click(within(first).getByRole('button', { name: `I know it: ${headword}` })))
     expect(within(first).getByRole('alert').textContent).toBe('Your change wasn’t saved: Something went wrong. Try again.')
     expect(ctx.client.snapshot.flags.size).toBe(0)

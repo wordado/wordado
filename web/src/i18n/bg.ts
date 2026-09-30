@@ -307,6 +307,7 @@ export const bg: Messages = {
   'path.open': 'Отворен',
   'path.words': { one: '{count} дума', other: '{count} думи' },
   'path.wordNew': 'Незапочната',
+  'path.wordActions': 'Действия с думата: {word}',
 
   'flag.known': 'Известна',
   'flag.suspended': 'Не сега',

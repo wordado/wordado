@@ -312,6 +312,7 @@ export const en = {
   'path.open': 'Open',
   'path.words': { one: '{count} word', other: '{count} words' },
   'path.wordNew': 'Not started',
+  'path.wordActions': 'Word actions: {word}',
 
   'flag.known': 'Known',
   'flag.suspended': 'Not now',
