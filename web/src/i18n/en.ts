@@ -318,6 +318,9 @@ export const en = {
   'path.words': { one: '{count} word', other: '{count} words' },
   'path.wordNew': 'Not started',
   'path.wordActions': 'Word actions: {word}',
+  'path.levelSkipped': 'Skipped',
+  'path.unitsComplete': { one: '{count} unit complete', other: '{count} units complete' },
+  'path.showAll': 'Show all {count} units',
 
   'flag.known': 'Known',
   'flag.suspended': 'Not now',
@@ -328,12 +331,15 @@ export const en = {
 
   'themes.title': 'Themes',
   'themes.intro': 'Pick a theme and its words come first. Your reviews stay the same.',
-  'themes.count': { one: '{count} word', other: '{count} words' },
   'themes.aboveLevel': 'Includes words above your level',
   'themes.choose': 'Study this theme',
   'themes.active': 'Studying now',
   'themes.clear': 'Back to the path',
   'themes.none': 'No themes are big enough yet.',
+  'themes.all': 'All themes',
+  'themes.chooseShort': 'Study',
+  'themes.chooseNamed': 'Study this theme: {name}',
+  'themes.started': '{started} of {count} words started',
 
   'progress.title': 'Progress',
   'progress.tiers': 'Your words',

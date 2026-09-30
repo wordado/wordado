@@ -333,6 +333,9 @@ export const de: Messages = {
   'path.words': { one: '{count} Wort', other: '{count} Wörter' },
   'path.wordNew': 'Noch nicht begonnen',
   'path.wordActions': 'Aktionen für das Wort: {word}',
+  'path.levelSkipped': 'Übersprungen',
+  'path.unitsComplete': { one: '{count} Einheit abgeschlossen', other: '{count} Einheiten abgeschlossen' },
+  'path.showAll': 'Alle {count} Einheiten zeigen',
 
   'flag.known': 'Bekannt',
   'flag.suspended': 'Nicht jetzt',
@@ -343,12 +346,15 @@ export const de: Messages = {
 
   'themes.title': 'Themen',
   'themes.intro': 'Wähl ein Thema, und seine Wörter kommen zuerst. Deine Wiederholungen bleiben gleich.',
-  'themes.count': { one: '{count} Wort', other: '{count} Wörter' },
   'themes.aboveLevel': 'Enthält Wörter über deinem Niveau',
   'themes.choose': 'Dieses Thema lernen',
   'themes.active': 'Wird gerade gelernt',
   'themes.clear': 'Zurück zum Pfad',
   'themes.none': 'Noch ist kein Thema groß genug.',
+  'themes.all': 'Alle Themen',
+  'themes.chooseShort': 'Lernen',
+  'themes.chooseNamed': 'Dieses Thema lernen: {name}',
+  'themes.started': '{started} von {count} Wörtern begonnen',
 
   'progress.title': 'Fortschritt',
   'progress.tiers': 'Deine Wörter',
