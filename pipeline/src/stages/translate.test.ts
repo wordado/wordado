@@ -30,6 +30,12 @@ describe('translateSenses', () => {
     await expect(translateSenses('xx', items, r)).rejects.toThrow(/no translation guide for xx/)
   })
 
+  it('has a German guide: nouns without the article, verbs in the infinitive', () => {
+    expect(L1_GUIDES['de']).toMatch(/German/)
+    expect(L1_GUIDES['de']).toMatch(/without the article/)
+    expect(L1_GUIDES['de']).toMatch(/infinitive/)
+  })
+
   it('rejects a response that answers other items than it was asked', async () => {
     await expect(translateSenses('bg', items, run(() => ({ items: [{ key: '1', translation: 'вода', alternates: [], sense: '' }] })))).rejects.toThrow(/answers other items/)
   })
@@ -42,16 +48,45 @@ describe('translateSenses', () => {
 describe('mergeSenses (Decision 8)', () => {
   const t = (translation: string) => ({ translation, alternates: [], sense: '' })
   const s = (gloss: string, bg: string, es?: string) => ({ headword: 'bank', pos: 'noun', gloss, l1: es ? { bg: t(bg), es: t(es) } : { bg: t(bg) } })
+  const two = (gloss: string, bg: string, de: { translation: string; alternates?: string[] }) => ({
+    headword: 'bank',
+    pos: 'noun',
+    gloss,
+    l1: { bg: { translation: bg, alternates: [], sense: '' }, de: { translation: de.translation, alternates: de.alternates ?? [], sense: '' } },
+  })
 
   it('merges senses whose primary translations agree, keeping the first', () => {
     expect(mergeSenses([s('money', 'банка'), s('building', 'Банка '), s('river', 'бряг')], ['bg']).map((x) => x.gloss)).toEqual(['money', 'river'])
   })
 
-  it('keeps senses apart when any one L1 tells them apart', () => {
-    expect(mergeSenses([s('money', 'банка', 'banco'), s('building', 'банка', 'sucursal')], ['bg', 'es'])).toHaveLength(2)
+  it('merges on the lead L1 even when another L1 differs, folding its word into alternates', () => {
+    const out = mergeSenses([s('money', 'банка', 'banco'), s('building', 'банка', 'sucursal')], ['bg', 'es'])
+    expect(out).toHaveLength(1)
+    expect(out[0]!.l1['es']).toEqual({ translation: 'banco', alternates: ['sucursal'], sense: '' })
   })
 
   it('never merges across parts of speech', () => {
     expect(mergeSenses([s('money', 'банка'), { ...s('', 'банка'), pos: 'verb' }], ['bg'])).toHaveLength(2)
+  })
+
+  it('merges on the lead L1 only; another L1’s other words become alternates of the kept sense', () => {
+    const out = mergeSenses([two('money', 'банка', { translation: 'Bank' }), two('building', 'банка', { translation: 'Bankgebäude', alternates: ['Bank'] }), two('river', 'бряг', { translation: 'Ufer' })], ['bg', 'de'])
+    expect(out.map((x) => x.gloss)).toEqual(['money', 'river'])
+    expect(out[0]!.l1['de']).toEqual({ translation: 'Bank', alternates: ['Bankgebäude'], sense: '' })
+    expect(out[0]!.l1['bg']).toEqual({ translation: 'банка', alternates: [], sense: '' })
+  })
+
+  it('never lets a later L1 split senses the lead L1 merged', () => {
+    const one = mergeSenses([two('money', 'банка', { translation: 'Bank' }), two('building', 'банка', { translation: 'Gebäude' })], ['bg'])
+    const both = mergeSenses([two('money', 'банка', { translation: 'Bank' }), two('building', 'банка', { translation: 'Gebäude' })], ['bg', 'de'])
+    expect(both.map((x) => x.gloss)).toEqual(one.map((x) => x.gloss))
+  })
+
+  it('keeps at most four alternates', () => {
+    const out = mergeSenses(
+      [two('a', 'x', { translation: 'eins', alternates: ['zwei', 'drei', 'vier'] }), two('b', 'x', { translation: 'fünf', alternates: ['sechs'] })],
+      ['bg', 'de'],
+    )
+    expect(out[0]!.l1['de']!.alternates).toEqual(['zwei', 'drei', 'vier', 'fünf'])
   })
 })

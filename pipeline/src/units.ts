@@ -103,6 +103,10 @@ export const GROUP_NAMES: Readonly<Record<string, Readonly<Record<string, string
     noun: 'Съществителни', verb: 'Глаголи', adj: 'Прилагателни', adv: 'Наречия', pron: 'Местоимения', prep: 'Предлози',
     det: 'Определители', num: 'Числителни', conj: 'Съюзи', intj: 'Междуметия', phrase: 'Изрази', mixed: 'Още думи',
   },
+  de: {
+    noun: 'Nomen', verb: 'Verben', adj: 'Adjektive', adv: 'Adverbien', pron: 'Pronomen', prep: 'Präpositionen',
+    det: 'Begleiter', num: 'Zahlwörter', conj: 'Konjunktionen', intj: 'Ausrufe', phrase: 'Wendungen', mixed: 'Weitere Wörter',
+  },
 }
 
 /**
