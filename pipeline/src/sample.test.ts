@@ -1,4 +1,4 @@
-import { cpSync, mkdtempSync, readFileSync } from 'node:fs'
+import { cpSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -117,12 +117,18 @@ describe('the sample manifest (plan 10)', () => {
   })
 
   it('rebuilds byte for byte from a copy of the folder', () => {
-    const copy = join(mkdtempSync(join(tmpdir(), 'sample-')), 'a1')
-    cpSync(DIR, copy, { recursive: true })
-    const { sources: sources2, clips: clips2 } = readSourceDir(copy)
-    const outs = sources2.map((source) => buildPack(source, clips2))
-    writeArtifacts(copy, outs)
-    for (const out of outs) expect(readFileSync(join(copy, out.packFile))).toEqual(Buffer.from(out.packBytes))
-    expect(JSON.parse(readFileSync(join(copy, 'manifest.json'), 'utf8'))).toEqual(JSON.parse(readFileSync(join(DIR, 'manifest.json'), 'utf8')))
+    const root = mkdtempSync(join(tmpdir(), 'sample-'))
+    try {
+      const copy = join(root, 'a1')
+      cpSync(DIR, copy, { recursive: true })
+      const { sources: sources2, clips: clips2 } = readSourceDir(copy)
+      const outs = sources2.map((source) => buildPack(source, clips2))
+      writeArtifacts(copy, outs)
+      // Rebuilding into the copy must reproduce exactly what is committed in DIR, not just be internally consistent.
+      for (const out of outs) expect(readFileSync(join(copy, out.packFile))).toEqual(readFileSync(join(DIR, out.packFile)))
+      expect(JSON.parse(readFileSync(join(copy, 'manifest.json'), 'utf8'))).toEqual(JSON.parse(readFileSync(join(DIR, 'manifest.json'), 'utf8')))
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 })

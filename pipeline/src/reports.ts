@@ -66,8 +66,10 @@ const NOTE_LIMIT = 280
 function routes(field: ReportField, l1s: readonly string[], reportL1: string | null): { queue: string; fixField: ReportField; l1: string }[] {
   if (field === 'example') return [{ queue: QUEUES.english, fixField: 'example', l1: '' }]
   if (field === 'level') return [{ queue: QUEUES.level, fixField: 'level', l1: '' }]
-  // A report names the L1 it was made in; one from before plan 10 names none and reopens every L1's translation.
-  const own = reportL1 !== null && l1s.includes(reportL1) ? [reportL1] : l1s
+  // A report names the L1 it was made in; one from before plan 10 names none, and counts as Bulgarian (every
+  // report made before plan 10 came from a Bulgarian learner, the same reading core/src/fixes.ts gives a fix
+  // with no l1). A report naming an L1 the pipeline no longer carries reopens no translation queue.
+  const own = [reportL1 ?? LEGACY_L1].filter((l1) => l1s.includes(l1))
   return own.map((l1) => ({ queue: QUEUES.translation(l1), fixField: 'translation' as ReportField, l1 }))
 }
 

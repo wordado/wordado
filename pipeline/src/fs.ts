@@ -23,12 +23,23 @@ export function readSourceDir(dir: string): SourceDir {
   return { sources, clips }
 }
 
+/** One version across every pack of a build: `writeArtifacts` refuses to write a manifest that could not honestly say so. */
+function agreedVersion(outs: readonly BuildOutput[], field: 'schema_version' | 'corpus_version'): number | undefined {
+  const versions = new Set(outs.map((o) => o.manifest[field]))
+  if (versions.size > 1) {
+    throw new Error(`writeArtifacts: packs disagree on ${field}: ${outs.map((o) => `${o.pack.l1}=${o.manifest[field]}`).join(', ')}`)
+  }
+  return outs[0]?.manifest[field]
+}
+
 /** Writes every pack and one manifest listing them all, sorted by L1, beside the sources, where the audio already is. */
 export function writeArtifacts(dir: string, outs: readonly BuildOutput[]): void {
+  const schemaVersion = agreedVersion(outs, 'schema_version')
+  const corpusVersion = agreedVersion(outs, 'corpus_version')
   for (const out of outs) writeFileSync(join(dir, out.packFile), out.packBytes)
   const manifest: PackManifest = {
-    schema_version: outs[0]?.manifest.schema_version ?? MANIFEST_SCHEMA_VERSION,
-    corpus_version: outs[0]?.manifest.corpus_version ?? 0,
+    schema_version: schemaVersion ?? MANIFEST_SCHEMA_VERSION,
+    corpus_version: corpusVersion ?? 0,
     packs: outs.flatMap((o) => o.manifest.packs).sort((a, b) => (a.l1 < b.l1 ? -1 : 1)),
   }
   writeFileSync(join(dir, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`)

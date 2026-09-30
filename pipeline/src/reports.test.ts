@@ -71,9 +71,10 @@ describe('triage (spec §8.10, Decision 13)', () => {
     expect(out.events.map((e) => e.queue)).toEqual(['translation-bg'])
   })
 
-  it('treats a legacy translation fix (no l1) as Bulgarian: it suppresses bg but not de (plan 9)', () => {
+  it('treats a legacy translation fix (no l1) as Bulgarian: it suppresses a Bulgarian report but not a German one (plan 9, plan 10)', () => {
     const fixes = [{ word_id: 'c:go-1', field: 'translation' as const, fixed_in: 3 }]
-    const out = triage(input([r({ pack_version: 1 }), r({ pack_version: 1, reporter: 'b' })], { fixes, l1s: ['bg', 'de'] }))
+    expect(triage(input([r({ pack_version: 1 }), r({ pack_version: 1, reporter: 'b' })], { fixes, l1s: ['bg', 'de'] })).events).toEqual([])
+    const out = triage(input([r({ pack_version: 1, l1: 'de' }), r({ pack_version: 1, l1: 'de', reporter: 'b' })], { fixes, l1s: ['bg', 'de'] }))
     expect(out.events.map((e) => e.queue)).toEqual(['translation-de'])
   })
 
@@ -82,9 +83,14 @@ describe('triage (spec §8.10, Decision 13)', () => {
     expect(out.events.map((e) => e.queue)).toEqual(['translation-de'])
   })
 
-  it('reopens every L1 when a translation report names none (a report from before plan 10)', () => {
+  it('treats a translation report naming no L1 as Bulgarian (every report from before plan 10 was one)', () => {
     const out = triage(input([r({ l1: null }), r({ l1: null, reporter: 'b' })], { l1s: ['bg', 'de'] }))
-    expect(out.events.map((e) => e.queue).sort()).toEqual(['translation-bg', 'translation-de'])
+    expect(out.events.map((e) => e.queue)).toEqual(['translation-bg'])
+  })
+
+  it('reopens nothing for a translation report naming an L1 the pipeline no longer carries', () => {
+    const out = triage(input([r({ l1: 'fr' }), r({ l1: 'fr', reporter: 'b' })], { l1s: ['bg', 'de'] }))
+    expect(out.events).toEqual([])
   })
 })
 
