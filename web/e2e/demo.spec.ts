@@ -184,11 +184,17 @@ test('changing the native language in Settings keeps progress and switches trans
   await expect
     .poll(
       async () => {
+        // No throwing `expect` in here: a throw ends the poll at once instead of retrying it.
         await page.goto('/study?mode=flashcard')
+        await page.locator('.card[data-phase="prompt"]').waitFor()
         await page.waitForTimeout(SETTLE_MS)
         await page.keyboard.press('Space')
-        await expect(page.locator('.card[data-phase="revealed"]')).toBeVisible()
-        return page.locator('.card .translation').innerText()
+        const revealed = await page
+          .locator('.card[data-phase="revealed"]')
+          .waitFor({ timeout: 2_000 })
+          .then(() => true)
+          .catch(() => false)
+        return revealed ? page.locator('.card .translation').innerText() : null
       },
       { timeout: 15_000 },
     )
