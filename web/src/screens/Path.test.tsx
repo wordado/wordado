@@ -1,4 +1,5 @@
 import { act, cleanup, fireEvent, screen, within } from '@testing-library/react'
+import { DAY_MS, Grade } from '@wordado/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { answerNew, renderWith, setup } from '../test/fixtures'
 import { Path } from './Path'
@@ -34,9 +35,43 @@ describe('Path', () => {
     await ctx.client.updateSettings({ newWordLimit: 30 })
     renderWith(<Path />, ctx)
     await act(() => answerNew(ctx.client, ctx.env, 20))
+    // Introduced is not complete: the unit is still being learned, so it stays in view.
     expect(within(unit('People and greetings')).getByText('20 of 20 started')).toBeTruthy()
     expect(within(unit('Food and drink')).getByText('Current')).toBeTruthy()
     expect(within(unit('Home and every day')).getByText('Locked')).toBeTruthy()
+  })
+
+  it('folds the finished units into one line that opens them', async () => {
+    const ctx = await setup()
+    await ctx.client.updateSettings({ newWordLimit: 30 })
+    await answerNew(ctx.client, ctx.env, 20)
+    // A unit is complete once its words pass a review on a later day (spec §7.2).
+    ctx.env.advance(2 * DAY_MS)
+    await ctx.client.updateSettings({ reviewCap: 50 })
+    for (const wordId of ctx.client.snapshot.plan!.reviews) {
+      await ctx.client.answer({ wordId, mode: 'flashcard', direction: 'en_to_l1', grade: Grade.Good, latencyMs: 2_000, practice: false })
+      ctx.env.advance(3_000)
+    }
+    renderWith(<Path />, ctx)
+    expect(screen.queryByRole('heading', { name: 'People and greetings' })).toBeNull()
+    const fold = screen.getByRole('button', { name: '1 unit complete' })
+    expect(fold.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(fold)
+    expect(within(unit('People and greetings')).getByText('Complete')).toBeTruthy()
+  })
+
+  it('opens the level being studied and lets it fold', async () => {
+    const ctx = await setup()
+    renderWith(<Path />, ctx)
+    const header = screen.getByRole('button', { name: /^A1/ })
+    expect(header.getAttribute('aria-expanded')).toBe('true')
+    fireEvent.click(header)
+    expect(header.getAttribute('aria-expanded')).toBe('false')
+    expect(screen.queryByRole('heading', { name: 'People and greetings' })).toBeNull()
+    // Folded, the level still says where it stands.
+    expect(within(header).getByText('0 of 60 words learned well')).toBeTruthy()
+    fireEvent.click(header)
+    expect(screen.getByRole('heading', { name: 'People and greetings' })).toBeTruthy()
   })
 
   it('shows a level below the declared one as skipped, never as complete (spec §7.2)', async () => {

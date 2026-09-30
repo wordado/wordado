@@ -1258,18 +1258,103 @@ dialog.report textarea {
   margin-bottom: var(--space-4);
 }
 
-.level {
+/* A level is one card: a button that folds it, its bar, and (open) its units. */
+.level-card {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
-  margin-bottom: var(--space-5);
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+  padding: var(--space-3) 1.25rem var(--space-4);
 }
 
-.level-card {
+.level-heading {
+  margin: 0;
+}
+
+.level-toggle {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-4) 1.25rem;
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0;
+  font: inherit;
+  color: var(--ink);
+  text-align: left;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.level-summary {
+  display: flex;
+  flex-grow: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+}
+
+.level-status {
+  padding: 0.125rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  background: var(--paper);
+  border-radius: 999px;
+}
+
+.level-complete .level-status {
+  color: var(--leaf-ink);
+  background: var(--leaf-soft);
+}
+
+.level-chevron {
+  flex-shrink: 0;
+  color: var(--ink-soft);
+}
+
+[aria-expanded='true'] > .level-chevron {
+  transform: rotate(180deg);
+}
+
+.level-card.level-locked .level-code {
+  color: var(--ink-soft);
+  background: var(--paper);
+}
+
+.level-units {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--rule);
+}
+
+.level-show-all {
+  width: 100%;
+}
+
+.unit-fold-body {
+  padding-bottom: var(--space-4);
+}
+
+.unit-fold-button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0 var(--space-3);
+  font: 600 var(--step--1) / 1 var(--font-ui);
+  color: var(--leaf-ink);
+  background: var(--leaf-soft);
+  border: 1px solid color-mix(in srgb, var(--leaf) 40%, transparent);
+  border-radius: 0.75rem;
+  cursor: pointer;
+}
+
+.unit-fold-button .level-chevron {
+  color: inherit;
 }
 
 .level-code {
@@ -1465,7 +1550,14 @@ dialog.report textarea {
 
 .unit-chevron {
   color: var(--ink-soft);
-  transition: transform 150ms ease-out;
+}
+
+/* The chevrons turn, unless the learner asked for less motion. */
+@media (prefers-reduced-motion: no-preference) {
+  .level-chevron,
+  .unit-chevron {
+    transition: transform 150ms ease-out;
+  }
 }
 
 .unit-words[open] .unit-chevron {
