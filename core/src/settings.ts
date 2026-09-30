@@ -2,6 +2,11 @@ import { RETENTION_TARGETS, type RetentionSetting } from './scheduler'
 import { DEFAULT_NEW_WORD_LIMIT, DEFAULT_REVIEW_CAP, MAX_NEW_WORD_LIMIT } from './session'
 import { CEFR_LEVELS, type CefrLevel } from './types'
 
+/** The learners' native languages (spec §3): one pack per L1. A new L1 adds its code here. */
+export const SUPPORTED_L1S = ['bg', 'de'] as const
+export type L1 = (typeof SUPPORTED_L1S)[number]
+export const isSupportedL1 = (v: unknown): v is L1 => typeof v === 'string' && (SUPPORTED_L1S as readonly string[]).includes(v)
+
 /** The learner's settings document (spec §6.2, §7.4, §8.4). Validated before any rule reads it. */
 export interface Settings {
   readonly declaredLevel: CefrLevel
@@ -15,6 +20,8 @@ export interface Settings {
   readonly audio: boolean
   /** Slow correct answers count as Hard (spec §7.3); off grades on correctness alone (spec §11.1). */
   readonly latencyGrading: boolean
+  /** The learner's L1 (spec §6.2, §8.6); null until chosen. An account without one studies Bulgarian, the only L1 before plan 10. */
+  readonly l1: L1 | null
 }
 
 export const MAX_REVIEW_CAP = 1000
@@ -28,6 +35,7 @@ export const DEFAULT_SETTINGS: Settings = {
   activeTheme: null,
   audio: true,
   latencyGrading: true,
+  l1: null,
 }
 
 export type SettingsValidation =
@@ -61,7 +69,9 @@ export function validateSettingsPatch(patch: Record<string, unknown>): SettingsV
                   ? value === null || (typeof value === 'string' && value !== '')
                   : key === 'audio' || key === 'latencyGrading'
                     ? typeof value === 'boolean'
-                    : false
+                    : key === 'l1'
+                      ? value === null || isSupportedL1(value)
+                      : false
     if (valid) fields[key] = value
     else errors.push(key)
   }

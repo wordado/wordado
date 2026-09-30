@@ -10,6 +10,8 @@ const write = (type: string, key: string, fields: Record<string, unknown>, delet
 
 const report = { wordId: 'c:hello-1', field: 'audio', note: 'robotic', packVersion: 0, createdAt: 1_790_000_000_000 }
 
+const reportWrite = (fields: Record<string, unknown>): DocumentWrite => write('content_report', 'rep-l1', { ...report, ...fields })
+
 describe('checkDocumentWrite', () => {
   it('accepts every write client-data makes', () => {
     for (const w of [
@@ -56,5 +58,11 @@ describe('checkDocumentWrite', () => {
     ['an oversized patch', write('settings', '', { activeTheme: 'x'.repeat(MAX_DOCUMENT_BYTES) })],
   ])('rejects %s as invalid', (_, w) => {
     expect(checkDocumentWrite(w)).toMatchObject({ ok: false, reason: 'invalid' })
+  })
+
+  it('accepts a report’s L1 when it is a supported language, and still accepts a report without one', () => {
+    expect(checkDocumentWrite(reportWrite({ l1: 'de' })).ok).toBe(true)
+    expect(checkDocumentWrite(reportWrite({})).ok).toBe(true)
+    expect(checkDocumentWrite(reportWrite({ l1: 'xx' })).ok).toBe(false)
   })
 })

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_SETTINGS, isValidTzOffset, MAX_REVIEW_CAP, settingsFromFields, validateSettingsPatch } from './settings'
+import { DEFAULT_SETTINGS, isSupportedL1, isValidTzOffset, MAX_REVIEW_CAP, settingsFromFields, validateSettingsPatch } from './settings'
 import { MAX_NEW_WORD_LIMIT } from './session'
 
 function errorsOf(patch: Record<string, unknown>): string[] {
@@ -72,5 +72,17 @@ describe('latency grading', () => {
     expect(DEFAULT_SETTINGS.latencyGrading).toBe(true)
     expect(settingsFromFields({ latencyGrading: false }).latencyGrading).toBe(false)
     expect(settingsFromFields({ latencyGrading: 'off' }).latencyGrading).toBe(true)
+  })
+})
+
+describe('l1', () => {
+  it('holds the learner’s L1: a supported language, or null until chosen', () => {
+    expect(DEFAULT_SETTINGS.l1).toBeNull()
+    expect(validateSettingsPatch({ l1: 'de' })).toEqual({ ok: true, fields: { l1: 'de' } })
+    expect(validateSettingsPatch({ l1: null })).toEqual({ ok: true, fields: { l1: null } })
+    expect(validateSettingsPatch({ l1: 'fr' })).toEqual({ ok: false, errors: ['l1'] })
+    expect(settingsFromFields({ l1: 'xx' }).l1).toBeNull()
+    expect(isSupportedL1('bg')).toBe(true)
+    expect(isSupportedL1('en')).toBe(false)
   })
 })
