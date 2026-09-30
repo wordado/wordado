@@ -1427,10 +1427,9 @@ The release plan with rationale per item is in
 
 ### Phase 1a — Bulgarian beta
 
-This is the MVP: the whole Phase 1 product, for one L1. Bulgarian is the least-served of the
-five languages and the clearest opening, so it ships first and gets the
-highest content quality bar; the other four L1s are not a dependency for
-learning whether the core loop works.
+This is the MVP: the whole Phase 1 product, for one L1. Bulgarian ships first
+and gets the highest content quality bar; the other four L1s are not a
+dependency for learning whether the core loop works.
 
 - Accounts with passwordless sign-in (Google, emailed code), the age gate, and
   a demo mode that carries over on sign-up (†). Self-service account deletion
