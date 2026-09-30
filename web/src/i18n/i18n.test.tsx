@@ -1,11 +1,14 @@
 import { act, cleanup, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { bg } from './bg'
 import { de } from './de'
 import { en } from './en'
 import { I18nProvider, initialLocale, LOCALE_KEY, localized, translate, useT, type MessageKey } from './i18n'
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.restoreAllMocks()
+})
 
 const placeholders = (message: string | { one: string; other: string }): string[] => {
   const text = typeof message === 'string' ? message : `${message.one} ${message.other}`
@@ -36,6 +39,22 @@ describe('initialLocale', () => {
 
   it('falls back to English when nothing is saved or supported', () => {
     expect(initialLocale(null, ['fr'])).toBe('en')
+  })
+
+  it('falls back to the browser languages when storage throws', () => {
+    const storage = {
+      getItem: () => {
+        throw new Error('denied')
+      },
+      setItem: () => {
+        throw new Error('denied')
+      },
+    }
+    expect(initialLocale(storage, ['de-AT'])).toBe('de')
+  })
+
+  it('matches a browser language tag regardless of case', () => {
+    expect(initialLocale(null, ['DE-AT'])).toBe('de')
   })
 })
 
@@ -74,6 +93,7 @@ function Probe() {
 
 describe('I18nProvider', () => {
   it('with no saved value, starts in English (the default, spec §11.2 Decision 4), switches, remembers the choice and sets the document language', () => {
+    vi.spyOn(navigator, 'languages', 'get').mockReturnValue(['en-US', 'en'])
     const saved = new Map<string, string>()
     const storage = { getItem: (k: string) => saved.get(k) ?? null, setItem: (k: string, v: string) => void saved.set(k, v) }
     render(
@@ -89,7 +109,8 @@ describe('I18nProvider', () => {
     expect(saved.get(LOCALE_KEY)).toBe('bg')
   })
 
-  it('starts in the remembered language, and falls back to English for a value it does not know', () => {
+  it('starts in the remembered language, and falls back to the browser (then English) for a value it does not know', () => {
+    vi.spyOn(navigator, 'languages', 'get').mockReturnValue(['fr-FR'])
     const { unmount } = render(
       <I18nProvider storage={{ getItem: () => 'bg', setItem: () => undefined }}>
         <Probe />
@@ -106,6 +127,7 @@ describe('I18nProvider', () => {
   })
 
   it('works when storage throws (a private window), falling back to English', () => {
+    vi.spyOn(navigator, 'languages', 'get').mockReturnValue(['fr-FR'])
     const storage = {
       getItem: () => {
         throw new Error('denied')
