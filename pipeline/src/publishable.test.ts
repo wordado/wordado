@@ -63,4 +63,11 @@ describe('publishProblems (spec §4.4: never a manifest whose files are not all 
     expect(publishProblems(sample({ 'release.json': new TextEncoder().encode('{') }))).toEqual(['release.json: not JSON'])
     expect(publishProblems(sample({ 'release.json': bytes({ draft: false }) }))).toEqual([])
   })
+
+  it('needs a valid credits.json once release.json is present', () => {
+    const valid = sample({ 'release.json': bytes({ draft: false }) })
+    expect(publishProblems(valid)).toEqual([])
+    expect(publishProblems((path) => (path === 'credits.json' ? null : valid(path)))).toEqual(['credits.json: missing'])
+    expect(publishProblems((path) => (path === 'credits.json' ? bytes({ schema_version: 2 }) : valid(path)))).toEqual(['credits.json: not a credits file'])
+  })
 })

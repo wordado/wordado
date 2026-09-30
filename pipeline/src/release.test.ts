@@ -36,7 +36,7 @@ describe('planRelease and writeRelease', () => {
     expect([plan.problems, plan.pending]).toEqual([[], []])
     const o = out()
     writeRelease(dir, o, plan)
-    expect(readdirSync(o).sort()).toEqual(['audio', 'corpus-v1-bg.pack', 'fixes.json', 'manifest.json', 'release.json'])
+    expect(readdirSync(o).sort()).toEqual(['audio', 'corpus-v1-bg.pack', 'credits.json', 'fixes.json', 'manifest.json', 'release.json'])
     expect(publishProblems(reader(o))).toEqual([])
     const v1 = packOf(o, 'corpus-v1-bg.pack')
     const v0 = packOf(join(dir, 'last-published'), 'corpus-v0-bg.pack')
@@ -199,5 +199,19 @@ describe('planRelease and writeRelease', () => {
     expect(planRelease(dir, { draft: false, now: NOW }).releaseInfo.attributions).toEqual([
       { source: 'Invented test list', attribution: 'Frequencies from the Invented Corpus (CC BY 4.0).' },
     ])
+  })
+
+  it('writes credits.json beside the manifest, from the same attributions', async () => {
+    const dir = await reviewed()
+    const sources = JSON.parse(readFileSync(join(dir, 'sources.json'), 'utf8')) as unknown[]
+    writeJson(join(dir, 'sources.json'), [{ ...(sources[0] as object), attribution: 'Frequencies from the Invented Corpus (CC BY 4.0).' }])
+    const o = out()
+    writeRelease(dir, o, planRelease(dir, { draft: false, now: NOW }))
+    expect(JSON.parse(readFileSync(join(o, 'credits.json'), 'utf8'))).toEqual({
+      schema_version: 1,
+      corpus_version: 1,
+      sources: [{ source: 'Invented test list', attribution: 'Frequencies from the Invented Corpus (CC BY 4.0).' }],
+    })
+    expect(publishProblems(reader(o))).toEqual([])
   })
 })

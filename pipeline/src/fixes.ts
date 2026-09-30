@@ -1,7 +1,7 @@
-import { canonicalJson, type Pack, type PackEntry, type ReportField } from '@wordado/core'
+import { canonicalJson, type FixedField, type Pack, type PackEntry } from '@wordado/core'
 import type { Fix, FixesFile } from './lastPublished'
 
-const FIELDS: readonly [ReportField, (e: PackEntry) => unknown][] = [
+const FIELDS: readonly [FixedField, (e: PackEntry) => unknown][] = [
   ['audio', (e) => e.audio],
   ['example', (e) => e.examples],
   ['level', (e) => e.level],

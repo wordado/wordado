@@ -1767,6 +1767,10 @@ label.check input {
   list-style: none;
 }
 
+.credits {
+  padding-inline-start: 1.25rem;
+}
+
 /* Set-aside words and the onboarding question */
 
 .unit-words ul,

@@ -34,6 +34,7 @@ absolutely: `"$PWD/content"` from the repository root.
 | `triage <dir>` | Reads `content_report` (`REPORTS_DATABASE_URL`); reopens fields at the threshold, remakes reported clips. |
 | `status <dir>` | What stands between the content and a release. |
 | `release <dir> <out> [--draft]` | The next corpus version, if every gate passes; `--draft` skips only the review gates and cannot be published. |
+| `credits <dir> <out.json>` | The sources' attributions at the last published version (`credits.json`). |
 | `published <dir> <out>` | After a publish: `<out>` becomes `last-published/`. |
 | `live <dir> <manifest-url>` | Whether the CDN serves `last-published/`. |
 
@@ -88,6 +89,12 @@ legal review is pending, with the date in `cleared_on`. The pipeline treats it l
 release, so publishing waits on the release actors (setup step 2). When the review answers, replace both fields with
 the reviewer's name and date. If it rejects a source, remove the source, draft again, and review the entries whose
 selection or level changes.
+
+**Attributions reach the app** as `credits.json` beside the manifest, from each cleared source's `attribution`.
+Every release writes and uploads it. After changing an attribution without a release (or for a version published
+before 8b), run Actions › Corpus › `credits`. Removing a source from `sources.json` must go with a release (draft
+and release), not only a `credits` run, because `credits` stamps today's register onto the published version and
+the published corpus still owes the removed source's attribution until a release rebuilds it.
 
 ## Preparing the frequency lists
 
@@ -164,8 +171,8 @@ On a workstation, not in Actions:
    `corpus draft "$PWD/content" --offline`, which rebuilds the draft from the caches without spending money.
 7. **Release** (`release`, with `release` typed in the *confirm* field; only users in `RELEASE_ACTORS` can run it). It checks that the CDN serves
    `last-published/`, rebuilds the draft `--offline` from the committed caches (never spending money, and never
-   publishing a proposal nobody has seen), builds with every gate, uploads packs, audio and `fixes.json`, then
-   the manifest, checks that the CDN serves it, and commits the new `last-published/` to main.
+   publishing a proposal nobody has seen), builds with every gate, uploads packs, audio, `fixes.json` and
+   `credits.json`, then the manifest, checks that the CDN serves it, and commits the new `last-published/` to main.
 
 ## An MVP release: shipping some queues unreviewed
 

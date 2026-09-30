@@ -88,6 +88,12 @@ test('serves the privacy policy, not the app, once the service worker controls t
   await expectAccessible(page, { dark: true })
 })
 
+test('Settings › About says the demo’s word list is Wordado’s own, from the bundled sample’s credits', async ({ page }) => {
+  await page.goto('/settings')
+  await expect(page.getByRole('heading', { name: 'About' })).toBeVisible()
+  await expect(page.getByText('This word list was prepared by Wordado.')).toBeVisible()
+})
+
 test('meets WCAG 2.2 A and AA on every screen (spec §11.1)', async ({ page }) => {
   await page.goto('/')
   await expect(heading(page)).toHaveText('10 new words')
