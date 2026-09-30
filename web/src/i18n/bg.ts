@@ -308,6 +308,9 @@ export const bg: Messages = {
   'path.words': { one: '{count} дума', other: '{count} думи' },
   'path.wordNew': 'Незапочната',
   'path.wordActions': 'Действия с думата: {word}',
+  'path.levelSkipped': 'Пропуснато',
+  'path.unitsComplete': { one: '{count} завършен урок', other: '{count} завършени урока' },
+  'path.showAll': 'Покажи всички {count} урока',
 
   'flag.known': 'Известна',
   'flag.suspended': 'Не сега',

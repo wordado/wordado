@@ -313,6 +313,9 @@ export const en = {
   'path.words': { one: '{count} word', other: '{count} words' },
   'path.wordNew': 'Not started',
   'path.wordActions': 'Word actions: {word}',
+  'path.levelSkipped': 'Skipped',
+  'path.unitsComplete': { one: '{count} unit complete', other: '{count} units complete' },
+  'path.showAll': 'Show all {count} units',
 
   'flag.known': 'Known',
   'flag.suspended': 'Not now',
