@@ -8,10 +8,16 @@ export const FIXES_SCHEMA_VERSION = 1
 export type FixedField = Exclude<ReportField, 'other'>
 const FIXED_FIELDS: readonly string[] = REPORT_FIELDS.filter((f) => f !== 'other')
 
+/** Fixes and reports written before either carried an L1 were all Bulgarian (plan 9, Decision 3). */
+export const LEGACY_L1 = 'bg'
+const L1 = /^[a-z]{2}$/
+
 export interface Fix {
   readonly word_id: string
   readonly field: FixedField
   readonly fixed_in: number
+  /** The L1 whose translation changed; only on translation fixes, whose text is per L1. */
+  readonly l1?: string
 }
 
 export interface FixesFile {
@@ -36,7 +42,9 @@ export function validateFixes(value: unknown): FixesFile | null {
     const field = f['field']
     const fixedIn = f['fixed_in']
     if (typeof wordId !== 'string' || !isWordId(wordId) || typeof field !== 'string' || !FIXED_FIELDS.includes(field) || !version(fixedIn, 1)) return null
-    out.push({ word_id: wordId, field: field as FixedField, fixed_in: fixedIn })
+    const l1 = f['l1']
+    if (l1 !== undefined && (typeof l1 !== 'string' || !L1.test(l1) || field !== 'translation')) return null
+    out.push({ word_id: wordId, field: field as FixedField, fixed_in: fixedIn, ...(typeof l1 === 'string' ? { l1 } : {}) })
   }
   return { schema_version: FIXES_SCHEMA_VERSION, corpus_version: corpusVersion, fixes: out }
 }
@@ -48,6 +56,8 @@ export interface ReportRecord {
   readonly field: ReportField
   /** The corpus version the learner had when reporting. */
   readonly packVersion: number
+  /** The learner's L1 when reporting; absent on reports from before plan 10, which were all Bulgarian. */
+  readonly l1?: string
 }
 
 export interface FixedReport {
@@ -56,16 +66,24 @@ export interface FixedReport {
 }
 
 /**
- * The reports a fix answers (plan 8b, Decision 4): same word and field, a fix
- * that came after the report, in a version the learner has installed. Each
- * report is matched to its first such fix.
+ * The reports a fix answers (plan 8b, Decision 4): same word and field (and,
+ * for a translation, the same L1), a fix that came after the report, in a
+ * version the learner has installed. Each report is matched to its first such
+ * fix.
  */
 export function fixedReports(reports: readonly ReportRecord[], fixes: FixesFile, installed: number | null): FixedReport[] {
   if (installed === null) return []
   const out: FixedReport[] = []
   for (const report of reports) {
     const fix = fixes.fixes
-      .filter((f) => f.word_id === report.wordId && f.field === report.field && f.fixed_in > report.packVersion && f.fixed_in <= installed)
+      .filter(
+        (f) =>
+          f.word_id === report.wordId &&
+          f.field === report.field &&
+          (f.field !== 'translation' || (f.l1 ?? LEGACY_L1) === (report.l1 ?? LEGACY_L1)) &&
+          f.fixed_in > report.packVersion &&
+          f.fixed_in <= installed,
+      )
       .sort((a, b) => a.fixed_in - b.fixed_in)[0]
     if (fix) out.push({ report, fix })
   }

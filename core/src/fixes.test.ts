@@ -21,6 +21,13 @@ describe('validateFixes', () => {
     expect(validateFixes({ ...fixes, fixes: [{ word_id: 'c:bank-1', field: 'audio', fixed_in: 0 }] })).toBeNull()
     expect(validateFixes([])).toBeNull()
   })
+
+  it('accepts an L1 on a translation fix only', () => {
+    const withL1 = { schema_version: 1, corpus_version: 2, fixes: [{ word_id: 'c:bank-1', field: 'translation', fixed_in: 2, l1: 'de' }] }
+    expect(validateFixes(withL1)).toEqual(withL1)
+    expect(validateFixes({ ...withL1, fixes: [{ word_id: 'c:bank-1', field: 'audio', fixed_in: 2, l1: 'de' }] })).toBeNull()
+    expect(validateFixes({ ...withL1, fixes: [{ word_id: 'c:bank-1', field: 'translation', fixed_in: 2, l1: 'DE' }] })).toBeNull()
+  })
 })
 
 describe('fixedReports', () => {
@@ -37,5 +44,15 @@ describe('fixedReports', () => {
 
   it('never matches another field, another word, or an "other" report', () => {
     expect(fixedReports([report('k3', 'c:bank-1', 'audio', 1), report('k4', 'c:river-1', 'translation', 1), report('k5', 'c:bank-1', 'other', 1)], fixes, 3)).toEqual([])
+  })
+
+  it('matches a translation fix only to a report in the same L1; one without an L1 counts as Bulgarian', () => {
+    const file: FixesFile = { schema_version: 1, corpus_version: 3, fixes: [{ word_id: 'c:go-1', field: 'translation', fixed_in: 2, l1: 'de' }, { word_id: 'c:go-1', field: 'audio', fixed_in: 2 }] }
+    const de = { ...report('k1', 'c:go-1', 'translation', 1), l1: 'de' }
+    const bg = report('k2', 'c:go-1', 'translation', 1)
+    const deAudio = { ...report('k3', 'c:go-1', 'audio', 1), l1: 'de' }
+    expect(fixedReports([de, bg, deAudio], file, 3).map((m) => m.report.key)).toEqual(['k1', 'k3'])
+    const legacy: FixesFile = { schema_version: 1, corpus_version: 2, fixes: [{ word_id: 'c:go-1', field: 'translation', fixed_in: 2 }] }
+    expect(fixedReports([de, bg], legacy, 2).map((m) => m.report.key)).toEqual(['k2'])
   })
 })

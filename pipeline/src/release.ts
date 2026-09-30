@@ -86,7 +86,7 @@ export function planRelease(dir: string, opts: { draft: boolean; now: string }):
     if (previous) problems.push(...checkPackSuccession(previous, out.pack).map((e) => `${l1}: ${e.path}: ${e.message}`))
     for (const e of out.pack.entries) if (e.retired && last.live.has(e.entry_id)) retired.add(e.entry_id)
     for (const f of diffFixes(previous, out.pack)) {
-      const key = `${f.word_id}|${f.field}`
+      const key = `${f.word_id}|${f.field}|${f.l1 ?? ''}`
       if (!seenFix.has(key)) {
         seenFix.add(key)
         fixes.push(f)
