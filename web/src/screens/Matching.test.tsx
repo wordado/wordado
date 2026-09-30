@@ -15,6 +15,33 @@ describe('Matching', () => {
     await answerNew(ctx.client, ctx.env, 4)
     renderWith(<Matching />, ctx)
     expect(screen.getByText('Learn a few words first: matching needs five.')).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Back to practice' }).getAttribute('href')).toBe('/practice')
+  })
+
+  it('shows pairs matched as a bar and a count, and offers the way back to practice', async () => {
+    const ctx = await setup()
+    await answerNew(ctx.client, ctx.env, 5)
+    renderWith(<Matching />, ctx)
+    const bar = screen.getByRole('progressbar', { name: 'Pairs matched' })
+    expect(bar.getAttribute('aria-valuenow')).toBe('0')
+    expect(bar.getAttribute('aria-valuemax')).toBe('5')
+    const first = english()[0]!
+    await click(first)
+    await click(translationFor(first.dataset.entry!))
+    expect(bar.getAttribute('aria-valuenow')).toBe('1')
+    expect(document.querySelector('.study-count')?.textContent).toBe('1 / 5')
+    expect(screen.getByRole('link', { name: 'Back to practice' }).getAttribute('href')).toBe('/practice')
+  })
+
+  it('marks both tiles of a wrong pair', async () => {
+    const ctx = await setup()
+    await answerNew(ctx.client, ctx.env, 5)
+    renderWith(<Matching />, ctx)
+    const [first, second] = english()
+    await click(first!)
+    await click(translationFor(second!.dataset.entry!))
+    expect(first!.classList.contains('is-miss')).toBe(true)
+    expect(translationFor(second!.dataset.entry!).classList.contains('is-miss')).toBe(true)
   })
 
   it('pairs words with translations, announces a wrong pair, and finishes the board', async () => {
@@ -36,10 +63,15 @@ describe('Matching', () => {
       await click(translationFor(button.dataset.entry!))
     }
     expect(screen.getByRole('status').textContent).toBe('✓ All pairs matched.')
-    expect(english().every((b) => b.disabled && b.textContent!.includes('Matched'))).toBe(true)
+    // The board gives way to the end card: Play again, or back to practice.
+    expect(english()).toHaveLength(0)
+    expect(document.querySelector('.done-card')).not.toBeNull()
+    expect(document.querySelector('.done-actions a')?.textContent).toBe('Back to practice')
+    expect(document.querySelector('.done-actions a')?.getAttribute('href')).toBe('/practice')
     // Matching is practice: the schedule is untouched (spec §8.1).
     expect(ctx.client.snapshot.states).toEqual(states)
     await click(screen.getByRole('button', { name: 'Play again' }))
+    expect(english()).toHaveLength(5)
     expect(english().every((b) => !b.disabled)).toBe(true)
   })
 
