@@ -89,7 +89,7 @@ export async function installPacks(
 ): Promise<InstallReport> {
   const installed = await installedPacks(db)
   const selection = selectPacks({ manifest, l1, installed, supportedSchemaVersions: [PACK_SCHEMA_VERSION] })
-  const others = await activePacks(db.driver)
+  const others = (await activePacks(db.driver)).filter((p) => p.l1 === l1)
   const staged: string[] = []
   const rejected: { packId: string; reason: string }[] = []
   for (const descriptor of selection.fetch) {
@@ -120,13 +120,27 @@ export async function installPacks(
   return { staged, appUpdateNeeded: selection.appUpdateNeeded, rejected }
 }
 
-/** Swaps staged packs in. Call at the start of a session, never in the middle of one (spec §5.1). */
+/**
+ * Swaps staged packs in. Call at the start of a session, never in the middle
+ * of one (spec §5.1). Once something is staged, the active packs of any
+ * other L1 are dropped too (spec §8.6): a language switch leaves only the
+ * new L1's packs active, while every other document (review state, flags,
+ * unlocks) is untouched, so progress carries over.
+ */
 export async function activateStagedPacks(db: Database): Promise<string[]> {
   return db.transaction(async (tx) => {
     const staged = await tx.all<{ pack_id: string }>("SELECT pack_id FROM pack WHERE status = 'staged' ORDER BY pack_id")
     for (const { pack_id } of staged) {
       await tx.run("DELETE FROM pack WHERE pack_id = ? AND status = 'active'", [pack_id])
       await tx.run("UPDATE pack SET status = 'active' WHERE pack_id = ? AND status = 'staged'", [pack_id])
+    }
+    if (staged.length > 0) {
+      const active = await tx.all<{ pack_id: string; json: string }>("SELECT pack_id, json FROM pack WHERE status = 'active'")
+      const stagedIds = new Set(staged.map((s) => s.pack_id))
+      const keepL1s = new Set(active.filter((r) => stagedIds.has(r.pack_id)).map((r) => (JSON.parse(r.json) as Pack).l1))
+      for (const row of active) {
+        if (!keepL1s.has((JSON.parse(row.json) as Pack).l1)) await tx.run("DELETE FROM pack WHERE pack_id = ? AND status = 'active'", [row.pack_id])
+      }
     }
     return staged.map((s) => s.pack_id)
   })

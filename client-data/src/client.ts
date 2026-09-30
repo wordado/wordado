@@ -1,6 +1,7 @@
 import {
   canUse,
   isDayComplete,
+  isSupportedL1,
   utcDay,
   type AudioClip,
   type Capability,
@@ -8,6 +9,7 @@ import {
   type Corpus,
   type CorpusEntry,
   type Entitlement,
+  type L1,
   type Mode,
   type PackManifest,
   type ReportRecord,
@@ -25,7 +27,7 @@ import type { SqlDriver } from './driver'
 import type { ClientEnv } from './env'
 import { appendAnswer, loadLearner, pendingDayComplete, provisionalXp, recordDayComplete, unpushedEvents, type AnswerInput, type Learner } from './learner'
 import { ensureDevice, getUserId, setUserId } from './meta'
-import { activateStagedPacks, activePackVersion, installPacks, loadActiveCorpus, type InstallReport, type PackFetcher } from './packs'
+import { activateStagedPacks, activePackVersion, installedPacks, installPacks, loadActiveCorpus, type InstallReport, type PackFetcher } from './packs'
 import { migrate } from './schema'
 import { createStore, type Store } from './store'
 import { availableModes, dayCompleteInput, entryOf, levelClips, newUnlocks, pathView, progressView, sessionPlan, today, upcomingClips, type PathView, type ProgressView, type StudyContext } from './study'
@@ -34,11 +36,14 @@ import { INITIAL_SYNC_STATUS, readPulledXp, SyncEngine, type PulledXp, type Sync
 export interface ClientOptions {
   readonly driver: SqlDriver
   readonly env: ClientEnv
-  /** The learner's L1: which packs to install. */
+  /** The default L1, used when `settings.l1` is null (spec §8.6). */
   readonly l1: string
   /** Absent in demo mode and before sign-in: `sync` is then skipped. */
   readonly transport?: SyncTransport
 }
+
+/** The outcome of `Client.changeL1` (spec §8.6). */
+export type ChangeL1Outcome = { readonly ok: true } | { readonly ok: false; readonly reason: 'unsupported' | 'unavailable' }
 
 /** Lifetime and today's XP: the server's figures plus what it has not counted yet (spec §8.7). */
 export interface ClientXp {
@@ -65,6 +70,8 @@ export interface ClientSnapshot {
   readonly entitlement: Entitlement | null
   readonly xp: ClientXp
   readonly sync: SyncStatus
+  /** The installed L1 (spec §8.6): `settings.l1 ?? options.l1`. */
+  readonly l1: string
 }
 
 export interface AnswerResult {
@@ -91,6 +98,8 @@ export class Client {
   private corpus: Corpus | null = null
   private packVersion: number | null = null
   private settings!: Settings
+  /** The installed L1: `settings.l1 ?? defaultL1`, mutable so `changeL1` can update it in place. */
+  private _l1!: string
   private flags: Map<WordId, WordFlag> = new Map()
   private unlocked: Set<string> = new Set()
   private entitlement: Entitlement | null = null
@@ -104,7 +113,7 @@ export class Client {
   private constructor(
     private readonly db: Database,
     private readonly env: ClientEnv,
-    private readonly l1: string,
+    private readonly defaultL1: string,
     private readonly learner: Learner,
     transport: SyncTransport | undefined,
   ) {
@@ -124,12 +133,22 @@ export class Client {
     client.userId = await getUserId(db)
     client.xp = await readPulledXp(db.driver)
     await client.reloadDocuments()
+    client.l1 = client.settings.l1 ?? client.defaultL1
     client.refresh()
     return client
   }
 
   get snapshot(): ClientSnapshot {
     return this.store.get()
+  }
+
+  /** The installed L1 (spec §8.6): `settings.l1 ?? options.l1`. */
+  get l1(): string {
+    return this._l1
+  }
+
+  private set l1(value: string) {
+    this._l1 = value
   }
 
   private async reloadDocuments(): Promise<void> {
@@ -178,6 +197,7 @@ export class Client {
       xp: { total: (this.xp?.total ?? 0) + provisional, today: pulledToday + provisionalToday, provisional },
       // The outbox size is known from memory at all times, not only after a push.
       sync: { ...status, pendingEvents: this.learner.localEvents.filter((e) => !e.pushed).length },
+      l1: this.l1,
     }
   }
 
@@ -213,6 +233,12 @@ export class Client {
     return installPacks(this.db, this.env, manifest, this.l1, fetchPack)
   }
 
+  /** Loads what the active packs give the app: the corpus and its version (spec §5.1). */
+  private async reloadCorpus(): Promise<void> {
+    this.corpus = await loadActiveCorpus(this.db)
+    this.packVersion = await activePackVersion(this.db)
+  }
+
   /**
    * Swaps staged packs in and reloads the corpus. Call at the start of a
    * session, never mid-session. Also makes a completed day owed from a
@@ -222,10 +248,7 @@ export class Client {
    */
   async startSession(): Promise<string[]> {
     const activated = await activateStagedPacks(this.db)
-    if (activated.length > 0 || !this.corpus) {
-      this.corpus = await loadActiveCorpus(this.db)
-      this.packVersion = await activePackVersion(this.db)
-    }
+    if (activated.length > 0 || !this.corpus) await this.reloadCorpus()
     try {
       const ctx = this.context()
       if (ctx && isDayComplete(dayCompleteInput(ctx, sessionPlan(ctx)))) await recordDayComplete(this.db, this.learner, today(ctx), this.env.now())
@@ -234,6 +257,28 @@ export class Client {
     }
     this.refresh()
     return activated
+  }
+
+  /**
+   * Switches the installed L1 (spec §8.6): stages the new language's pack beside the current one, then swaps it in
+   * and removes the other language's pack in one transaction. Review state is keyed by entry, so all progress
+   * carries over. Nothing changes when the pack cannot be had (offline): the caller tries again later.
+   */
+  changeL1(l1: L1, manifest: PackManifest, fetchPack: PackFetcher): Promise<ChangeL1Outcome> {
+    return this.guarded(async () => {
+      if (!isSupportedL1(l1)) return { ok: false, reason: 'unsupported' }
+      if (l1 === this.l1) return { ok: true }
+      const report = await installPacks(this.db, this.env, manifest, l1, fetchPack)
+      const installed = await installedPacks(this.db)
+      const has = report.staged.length > 0 || installed.some((p) => p.pack_id === `corpus-${l1}`)
+      if (!has) return { ok: false, reason: 'unavailable' }
+      await activateStagedPacks(this.db)
+      this.l1 = l1
+      // Reload what `open` loads from the active packs (corpus, pack version, session plan), as `startSession` does.
+      await this.reloadCorpus()
+      this.refresh()
+      return { ok: true }
+    })
   }
 
   entry(wordId: WordId): CorpusEntry | null {
@@ -302,7 +347,7 @@ export class Client {
 
   /** Files a content report; it syncs like any document (spec §8.10). */
   report(input: ContentReportInput): Promise<string> {
-    return this.guarded(() => this.db.transaction((tx) => addContentReport(tx, this.env, input)))
+    return this.guarded(() => this.db.transaction((tx) => addContentReport(tx, this.env, { ...input, l1: this.l1 })))
   }
 
   /** The learner's content reports, for telling them what has been fixed (spec §8.10, plan 8b). */

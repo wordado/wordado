@@ -247,7 +247,7 @@ describe('Client.reports', () => {
     await client.report({ wordId: 'c:bread-1', field: 'other', note: '', packVersion: 0 })
     const reports = await client.reports()
     expect(reports).toHaveLength(2)
-    expect(reports.find((r) => r.key === key)).toEqual({ key, wordId: 'c:hello-1', field: 'translation', packVersion: 0 })
+    expect(reports.find((r) => r.key === key)).toEqual({ key, wordId: 'c:hello-1', field: 'translation', packVersion: 0, l1: 'bg' })
   })
 
   it('skips a deleted report, one with an unknown field, and one with an invalid word ID', async () => {
@@ -261,7 +261,78 @@ describe('Client.reports', () => {
     await writeLocalPatch(driver, DOC.contentReport, 'bad-field', { wordId: 'c:hello-1', field: 'nonsense', packVersion: 0 })
     await writeLocalPatch(driver, DOC.contentReport, 'bad-word', { wordId: 'not-a-word-id', field: 'translation', packVersion: 0 })
     const reports = await client.reports()
-    expect(reports).toEqual([{ key: good, wordId: 'c:hello-1', field: 'translation', packVersion: 0 }])
+    expect(reports).toEqual([{ key: good, wordId: 'c:hello-1', field: 'translation', packVersion: 0, l1: 'bg' }])
+  })
+
+  it('stores the learner\'s L1 in a report and returns it from reports()', async () => {
+    const driver = nodeSqliteDriver()
+    const client = await Client.open({ driver, env: testEnv(), l1: 'de' })
+    await client.installPacks(manifest, fromDisk)
+    await client.startSession()
+    const key = await client.report({ wordId: 'c:apple-1', field: 'translation', note: '', packVersion: 0 })
+    const reports = await client.reports()
+    expect(reports.find((r) => r.key === key)).toEqual({ key, wordId: 'c:apple-1', field: 'translation', packVersion: 0, l1: 'de' })
+  })
+})
+
+describe('Client.changeL1 (spec §8.6)', () => {
+  it('switches the corpus, keeping every bit of progress, and drops the old language pack', async () => {
+    const env = testEnv()
+    const driver = nodeSqliteDriver()
+    const client = await Client.open({ driver, env, l1: 'bg' })
+    await client.installPacks(manifest, fromDisk)
+    await client.startSession()
+    await client.answer(answer('c:hello-1'))
+    await client.answer(answer('c:goodbye-1'))
+    await client.answer(answer('c:please-1'))
+    await client.setFlag('c:hello-1', 'known')
+    const statesBefore = new Map(client.snapshot.states)
+    const unlockedBefore = new Set(client.snapshot.unlocked)
+    const flagsBefore = new Map(client.snapshot.flags)
+    expect(statesBefore.size).toBe(3)
+    expect(flagsBefore.get('c:hello-1')).toBe('known')
+
+    await client.updateSettings({ l1: 'de' })
+    expect(await client.changeL1('de', manifest, fromDisk)).toEqual({ ok: true })
+
+    expect(client.snapshot.l1).toBe('de')
+    expect(client.snapshot.corpus?.l1).toBe('de')
+    expect(client.snapshot.states).toEqual(statesBefore)
+    expect(client.snapshot.unlocked).toEqual(unlockedBefore)
+    expect(client.snapshot.flags).toEqual(flagsBefore)
+    expect(client.entry('c:apple-1')?.translations).toEqual(['Apfel'])
+    expect(await driver.all("SELECT pack_id FROM pack WHERE pack_id = 'corpus-bg'")).toEqual([])
+  })
+
+  it('changes nothing when the new pack cannot be fetched (offline)', async () => {
+    const driver = nodeSqliteDriver()
+    const client = await Client.open({ driver, env: testEnv(), l1: 'bg' })
+    await client.installPacks(manifest, fromDisk)
+    await client.startSession()
+    const outcome = await client.changeL1('de', manifest, () => Promise.reject(new Error('offline')))
+    expect(outcome).toEqual({ ok: false, reason: 'unavailable' })
+    expect(client.snapshot.l1).toBe('bg')
+    expect(client.snapshot.corpus?.l1).toBe('bg')
+    expect(await driver.all("SELECT pack_id, status FROM pack WHERE pack_id = 'corpus-bg'")).toEqual([{ pack_id: 'corpus-bg', status: 'active' }])
+  })
+
+  it('the default L1 only applies until the learner sets one explicitly', async () => {
+    const driver = nodeSqliteDriver()
+    const env = testEnv()
+    const client = await Client.open({ driver, env, l1: 'de' })
+    expect(client.snapshot.l1).toBe('de')
+    await client.installPacks(manifest, fromDisk)
+    expect(await client.startSession()).toEqual(['corpus-de'])
+    expect(client.snapshot.corpus?.l1).toBe('de')
+
+    await client.updateSettings({ l1: 'bg' })
+
+    // A second Client on the same store, as a restarted app would open: `settings.l1` now wins over the default.
+    const reopened = await Client.open({ driver, env, l1: 'de' })
+    expect(reopened.snapshot.l1).toBe('bg')
+    await reopened.installPacks(manifest, fromDisk)
+    expect(await reopened.startSession()).toEqual(['corpus-bg'])
+    expect(reopened.snapshot.corpus?.l1).toBe('bg')
   })
 })
 

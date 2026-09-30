@@ -109,4 +109,25 @@ describe('installPacks', () => {
     const report = await installPacks(db, env, manifest, 'es', fromDisk)
     expect(report).toEqual({ staged: [], appUpdateNeeded: [], rejected: [] })
   })
+
+  it('stages a different L1 beside the active one instead of rejecting it as a non-merging pack', async () => {
+    const { db, env } = await open()
+    await installPacks(db, env, manifest, 'bg', fromDisk)
+    await activateStagedPacks(db)
+    const report = await installPacks(db, env, manifest, 'de', fromDisk)
+    expect(report).toEqual({ staged: ['corpus-de'], appUpdateNeeded: [], rejected: [] })
+    expect(await db.all("SELECT pack_id, status FROM pack ORDER BY pack_id")).toEqual([
+      { pack_id: 'corpus-bg', status: 'active' },
+      { pack_id: 'corpus-de', status: 'staged' },
+    ])
+  })
+
+  it('activateStagedPacks drops the other L1s active packs once the staged one takes over', async () => {
+    const { db, env } = await open()
+    await installPacks(db, env, manifest, 'bg', fromDisk)
+    await activateStagedPacks(db)
+    await installPacks(db, env, manifest, 'de', fromDisk)
+    expect(await activateStagedPacks(db)).toEqual(['corpus-de'])
+    expect(await db.all("SELECT pack_id, status FROM pack")).toEqual([{ pack_id: 'corpus-de', status: 'active' }])
+  })
 })
