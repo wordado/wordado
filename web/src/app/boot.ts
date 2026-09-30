@@ -1,6 +1,7 @@
 import { Client, createStore, type ClientEnv, type InstallReport, type PackFetcher, type SqlDriver, type Store, type SyncTransport } from '@wordado/client-data'
-import type { PackManifest } from '@wordado/core'
+import type { L1, PackManifest } from '@wordado/core'
 import { DEMO_FILE, learnerFile, type AccountRecord, type AccountStorage } from '../account/storage'
+import type { Locale } from '../i18n/i18n'
 import type { Backend } from '../storage/protocol'
 
 /** How long letting go waits for a last sync before closing anyway (spec §9.1). Tuning (§15). */
@@ -19,6 +20,15 @@ export type BootState =
    */
   | { readonly status: 'failed'; readonly message: string; readonly reason: 'lock' | 'storage' | 'content' }
 
+/**
+ * The L1 a Client opens with when its settings name none (plan 10): Bulgarian for an account (its own choice, synced,
+ * takes over once set), and for the demo the interface's language when that is an L1 the app teaches from.
+ */
+export function defaultL1(account: AccountRecord | null, locale: Locale): L1 {
+  if (account !== null) return 'bg'
+  return locale === 'de' ? 'de' : 'bg'
+}
+
 /** What Boot needs of the tab lock (Task 5's TabLock). */
 export interface LockPort {
   acquire(): Promise<boolean>
@@ -27,8 +37,8 @@ export interface LockPort {
 
 export interface BootDeps {
   readonly env: ClientEnv
-  /** The learner's L1: which packs to install. Bulgarian in Phase 1a. */
-  readonly l1: string
+  /** The default L1 for the file about to open (the Client's `settings.l1` wins over it): which packs to install. */
+  l1(account: AccountRecord | null): string
   /** Which account this device is signed in to, read at every open. Absent: always the demo. */
   readonly accounts?: AccountStorage
   /** Opens one database file: `demo`, or a learner's `user-<id>`. */
@@ -300,7 +310,7 @@ export class Boot {
     let client: Client
     try {
       const transport = account ? this.deps.transport?.() : undefined
-      client = await Client.open({ driver, env: this.deps.env, l1: this.deps.l1, ...(transport ? { transport } : {}) })
+      client = await Client.open({ driver, env: this.deps.env, l1: this.deps.l1(account), ...(transport ? { transport } : {}) })
     } catch (err) {
       await driver.close().catch(() => undefined)
       throw err
@@ -357,7 +367,7 @@ export class Boot {
     }
     let demo: Client | null = null
     try {
-      demo = await Client.open({ driver: opened.driver, env: this.deps.env, l1: this.deps.l1 })
+      demo = await Client.open({ driver: opened.driver, env: this.deps.env, l1: this.deps.l1(null) })
       return demo.snapshot.userId
     } catch {
       return undefined
@@ -391,7 +401,7 @@ export class Boot {
     let timer: ReturnType<typeof setTimeout> | undefined
     try {
       if (!finished) {
-        demo = await Client.open({ driver: opened.driver, env: this.deps.env, l1: this.deps.l1, transport })
+        demo = await Client.open({ driver: opened.driver, env: this.deps.env, l1: this.deps.l1(null), transport })
         if (demo.snapshot.userId !== account.userId) finished = true
         else {
           const timeout = new Promise<'timeout'>((resolve) => {

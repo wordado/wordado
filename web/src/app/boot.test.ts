@@ -10,7 +10,7 @@ import type { WordId } from '@wordado/core'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { accountStorage, DEMO_FILE, learnerFile, memoryStorage } from '../account/storage'
 import { answerTo, disk, fileDriver, flaky } from '../test/disk'
-import { Boot, type BootDeps, FLUSH_TIMEOUT_MS, type LockPort } from './boot'
+import { Boot, type BootDeps, defaultL1, FLUSH_TIMEOUT_MS, type LockPort } from './boot'
 
 const hello = answerTo('c:hello-1')
 
@@ -42,7 +42,7 @@ function deferred<T>(): { readonly promise: Promise<T>; resolve: (value: T) => v
 function boot(over: Partial<BootDeps> = {}, free = true) {
   const deps: BootDeps = {
     env: testEnv(),
-    l1: 'bg',
+    l1: () => 'bg',
     openDriver: async () => ({ driver: nodeSqliteDriver(), backend: 'opfs' }),
     fetchManifest: async () => sampleManifest,
     fetchPack: sampleFetcher,
@@ -237,7 +237,7 @@ describe('Boot', () => {
     let attempt = 0
     const deps: BootDeps = {
       env: testEnv(),
-      l1: 'bg',
+      l1: () => 'bg',
       openDriver: async () => {
         attempt += 1
         return attempt === 1 ? { driver: failing.driver, backend: 'opfs' } : { driver: nodeSqliteDriver(), backend: 'opfs' }
@@ -264,7 +264,7 @@ describe('Boot', () => {
   it('fails when the lock cannot be acquired', async () => {
     const deps: BootDeps = {
       env: testEnv(),
-      l1: 'bg',
+      l1: () => 'bg',
       openDriver: async () => ({ driver: nodeSqliteDriver(), backend: 'opfs' }),
       fetchManifest: async () => sampleManifest,
       fetchPack: sampleFetcher,
@@ -283,7 +283,7 @@ describe('Boot', () => {
   it('fails when a take-over cannot get the lock', async () => {
     const deps: BootDeps = {
       env: testEnv(),
-      l1: 'bg',
+      l1: () => 'bg',
       openDriver: async () => ({ driver: nodeSqliteDriver(), backend: 'opfs' }),
       fetchManifest: async () => sampleManifest,
       fetchPack: sampleFetcher,
@@ -306,7 +306,7 @@ describe('Boot', () => {
     let acquireCalls = 0
     const deps: BootDeps = {
       env: testEnv(),
-      l1: 'bg',
+      l1: () => 'bg',
       openDriver: async () => ({ driver: nodeSqliteDriver(), backend: 'opfs' }),
       fetchManifest: async () => sampleManifest,
       fetchPack: sampleFetcher,
@@ -333,7 +333,7 @@ describe('Boot', () => {
     let takeOverCalls = 0
     const deps: BootDeps = {
       env: testEnv(),
-      l1: 'bg',
+      l1: () => 'bg',
       openDriver: async () => ({ driver: nodeSqliteDriver(), backend: 'opfs' }),
       fetchManifest: async () => sampleManifest,
       fetchPack: sampleFetcher,
@@ -821,5 +821,36 @@ describe('Boot sweeps files no account owns (spec §8.6)', () => {
     expect(server.events.size).toBe(1)
     expect(await d.listDatabases()).toEqual([learnerFile('u1')])
     expect(accounts.read()).toEqual({ userId: 'u1', email: 'ana@example.com', carryOver: false })
+  })
+})
+
+describe('the default L1 (plan 10)', () => {
+  it('is Bulgarian for an account, and follows a German interface only in the demo', () => {
+    const ana = { userId: 'u1', email: 'ana@example.com' }
+    expect(defaultL1(null, 'de')).toBe('de')
+    expect(defaultL1(null, 'bg')).toBe('bg')
+    expect(defaultL1(null, 'en')).toBe('bg')
+    expect(defaultL1(ana, 'de')).toBe('bg')
+  })
+
+  it('opens the demo with a German interface in German, and a signed-in learner in Bulgarian', async () => {
+    const accounts = accountStorage(memoryStorage())
+    const asked: (string | null)[] = []
+    const { boot: b } = boot({
+      accounts,
+      l1: (account) => {
+        asked.push(account?.userId ?? null)
+        return defaultL1(account, 'de')
+      },
+    })
+    await b.start()
+    expect(ready(b).snapshot.l1).toBe('de')
+    expect(ready(b).snapshot.corpus?.l1).toBe('de')
+    accounts.save({ userId: 'u1', email: 'ana@example.com' })
+    await b.switchTo()
+    expect(ready(b).snapshot.l1).toBe('bg')
+    expect(ready(b).snapshot.corpus?.l1).toBe('bg')
+    expect(asked).toContain(null)
+    expect(asked.at(-1)).toBe('u1')
   })
 })

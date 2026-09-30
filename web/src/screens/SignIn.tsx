@@ -1,11 +1,12 @@
-import { useClient } from '@wordado/client-data'
+import { useClient, useClientSnapshot } from '@wordado/client-data'
+import { isSupportedL1, SUPPORTED_L1S, type L1 } from '@wordado/core'
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { ApiError, OfflineError } from '../account/api'
 import { checkBirthYear } from '../account/ageGate'
 import { countryOptions } from '../account/countries'
 import { pendingSignIn, type PendingSignIn } from '../account/storage'
 import { useApp } from '../app/context'
-import { useT, type MessageKey } from '../i18n/i18n'
+import { languageName, useT, type MessageKey } from '../i18n/i18n'
 import { Link, navigate } from '../router'
 import { useOnline } from '../useOnline'
 
@@ -57,15 +58,19 @@ function Field(props: {
  * Sign-in and sign-up are one flow (spec §8.6): the age gate (spec §11),
  * then a code by email or Google. The server creates the account at the
  * first sign-in, so the gate comes first every time. Only the country is
- * kept; the birth year is checked here and forgotten.
+ * kept; the birth year is checked here and forgotten. The gate also asks
+ * the native language (plan 10), preselected with the one this device
+ * studies from.
  */
 export function SignIn(props: { readonly redirect?: (url: string) => void; readonly pending?: { save(p: PendingSignIn): void } }) {
   const { t, locale } = useT()
   const { api, accounts, account, env } = useApp()
   const client = useClient()
+  const installedL1 = useClientSnapshot().l1
   const online = useOnline()
   const [step, setStep] = useState<Step>({ kind: 'gate' })
   const [country, setCountry] = useState<string | null>(null)
+  const [l1, setL1] = useState<L1>(() => (isSupportedL1(installedL1) ? installedL1 : 'bg'))
   const [year, setYear] = useState('')
   const [email, setEmail] = useState('')
   const [code, setCode] = useState('')
@@ -165,7 +170,7 @@ export function SignIn(props: { readonly redirect?: (url: string) => void; reado
     reset()
     setBusy(true)
     try {
-      pending.save({ country })
+      pending.save({ country, l1 })
       const origin = window.location.origin
       redirect(await api.googleUrl(`${origin}/?signin=google`, `${origin}/?signin=google-error`))
     } catch (err) {
@@ -201,7 +206,7 @@ export function SignIn(props: { readonly redirect?: (url: string) => void; reado
       return
     }
     try {
-      const outcome = await accounts.completeSignIn(country)
+      const outcome = await accounts.completeSignIn(country, l1)
       if (outcome === 'other-account') {
         setFormError(t('signin.otherAccount', { email: account?.email ?? '' }))
         setBusy(false)
@@ -286,6 +291,15 @@ export function SignIn(props: { readonly redirect?: (url: string) => void; reado
               />
             )}
           </Field>
+          <fieldset className="choices">
+            <legend>{t('signin.nativeLanguage')}</legend>
+            {SUPPORTED_L1S.map((code) => (
+              <label key={code} lang={code}>
+                <input type="radio" name="native-language" value={code} checked={l1 === code} onChange={() => setL1(code)} />
+                {languageName(code, code)}
+              </label>
+            ))}
+          </fieldset>
           <button type="submit" className="button primary">
             {t('signin.continue')}
           </button>

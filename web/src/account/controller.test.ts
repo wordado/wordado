@@ -28,7 +28,7 @@ async function app(options: { env?: TestEnv; server?: FakeServer; transport?: Sy
   const boot = new Boot(
     {
       env,
-      l1: 'bg',
+      l1: () => 'bg',
       accounts,
       openDriver: d.openDriver,
       deleteDatabase: d.deleteDatabase,
@@ -217,7 +217,7 @@ describe('signing in again (spec §8.6)', () => {
 describe('Google’s return (spec §8.6)', () => {
   it('completes with the age gate’s country carried across the redirect', async () => {
     const a = await app()
-    a.pending.save({ country: 'DE' })
+    a.pending.save({ country: 'DE', l1: null })
     expect(await a.controller.resumeGoogle('ok')).toBe('signed-in')
     expect(a.api.calls).toContain('setCountry DE')
     expect(a.pending.read()).toBeNull()
@@ -233,7 +233,7 @@ describe('Google’s return (spec §8.6)', () => {
 
   it('says so when Google sent the learner back with an error', async () => {
     const a = await app()
-    a.pending.save({ country: 'BG' })
+    a.pending.save({ country: 'BG', l1: null })
     expect(await a.controller.resumeGoogle('error')).toBeNull()
     expect(a.controller.store.get().notice).toBe('google-failed')
   })
@@ -398,7 +398,7 @@ describe('resumeGoogle reports a failed completion (spec §8.6)', () => {
     const server = new FakeServer({ now: env.now })
     const a = await app({ env, server, transport: flaky(server) })
     await a.client().answer(answerTo('c:hello-1'))
-    a.pending.save({ country: 'BG' })
+    a.pending.save({ country: 'BG', l1: null })
     await expect(a.controller.resumeGoogle('ok')).rejects.toThrow('offline')
     expect(a.controller.store.get().notice).toBe('google-failed')
   })
@@ -418,7 +418,7 @@ describe('Boot must be ready before an account changes (spec §9.1)', () => {
     const boot = new Boot(
       {
         env,
-        l1: 'bg',
+        l1: () => 'bg',
         accounts,
         openDriver: d.openDriver,
         deleteDatabase: async (file) => {
@@ -448,5 +448,54 @@ describe('Boot must be ready before an account changes (spec §9.1)', () => {
     await expect(controller.signOut()).rejects.toBeInstanceOf(NotReady)
     expect(accounts.read()?.userId).toBe('u1')
     expect(deletes).toEqual([])
+  })
+})
+
+describe('the native language chosen at sign-in (plan 10)', () => {
+  it('saves it for a learner whose settings name none', async () => {
+    const a = await app()
+    expect(await a.controller.completeSignIn(null, 'de')).toBe('signed-in')
+    expect(a.boot.store.get()).toMatchObject({ status: 'ready', account: { userId: 'u1' } })
+    expect(a.client().snapshot.settings.l1).toBe('de')
+  })
+
+  it('saves it after a carry-over too', async () => {
+    const a = await app()
+    await a.client().answer(answerTo('c:hello-1'))
+    expect(await a.controller.completeSignIn('BG', 'de')).toBe('carried-over')
+    expect(a.client().snapshot.settings.l1).toBe('de')
+  })
+
+  it('saves it when an expired sign-in is renewed and the learner never chose one', async () => {
+    const a = await app()
+    await a.controller.completeSignIn('BG')
+    a.controller.sessionExpired()
+    expect(await a.controller.completeSignIn(null, 'de')).toBe('signed-in')
+    expect(a.client().snapshot.settings.l1).toBe('de')
+  })
+
+  it('keeps the L1 an account already has, from another device (Review Focus 3)', async () => {
+    const env = testEnv()
+    const server = new FakeServer({ now: env.now })
+    const other = await Client.open({ driver: nodeSqliteDriver(), env, l1: 'bg', transport: server })
+    await other.updateSettings({ l1: 'bg' })
+    await other.sync()
+    await other.close()
+    const a = await app({ env, server })
+    expect(await a.controller.completeSignIn(null, 'de')).toBe('signed-in')
+    expect(a.client().snapshot.settings.l1).toBe('bg')
+  })
+
+  it('changes nothing without a choice', async () => {
+    const a = await app()
+    await a.controller.completeSignIn(null, null)
+    expect(a.client().snapshot.settings.l1).toBeNull()
+  })
+
+  it('carries the choice across Google’s redirect', async () => {
+    const a = await app()
+    a.pending.save({ country: 'DE', l1: 'de' })
+    expect(await a.controller.resumeGoogle('ok')).toBe('signed-in')
+    expect(a.client().snapshot.settings.l1).toBe('de')
   })
 })

@@ -78,8 +78,8 @@ export function fakeAccounts(over: Partial<AccountActions> = {}): AccountActions
   return {
     calls,
     store: createStore<AccountState>({ expired: false, notice: null }),
-    completeSignIn: async (country) => {
-      calls.push(`completeSignIn ${country}`)
+    completeSignIn: async (country, l1) => {
+      calls.push(`completeSignIn ${country} ${l1}`)
       return 'signed-in'
     },
     resumeGoogle: async () => null,

@@ -123,6 +123,10 @@ export const bg: Messages = {
   'settings.audioDownloaded': '{done} от {total} записа са на това устройство',
   'settings.audioOffline': 'Свържете се, за да изтеглите звука.',
 
+  'settings.nativeLanguage': 'Роден език',
+  'settings.nativeLanguageHint': 'Езикът, на който се превеждат думите.',
+  'settings.nativeLanguageConfirm': 'Напредъкът ви се запазва. Думите ще се превеждат на {language}.',
+  'settings.nativeLanguageChange': 'Смени',
   'settings.language': 'Език на интерфейса',
   'settings.languageHint': 'Думите винаги са на английски; това сменя менютата и съобщенията.',
 
@@ -184,6 +188,7 @@ export const bg: Messages = {
   'signin.gateIntro': 'Първо два въпроса, които законът изисква. Пазим само държавата ви.',
   'signin.country': 'Държава, в която живеете',
   'signin.countryUnknown': 'Предпочитам да не казвам',
+  'signin.nativeLanguage': 'Родният ви език',
   'signin.birthYear': 'Година на раждане',
   'signin.birthYearHint': 'Четири цифри, например 1994. Не се пази.',
   'signin.birthYearInvalid': 'Въведете годината, в която сте родени, с четири цифри.',

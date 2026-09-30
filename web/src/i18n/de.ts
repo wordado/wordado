@@ -132,6 +132,10 @@ export const de: Messages = {
   'settings.audioDownloaded': '{done} von {total} Clips auf diesem Gerät',
   'settings.audioOffline': 'Stell eine Verbindung her, um Audio herunterzuladen.',
 
+  'settings.nativeLanguage': 'Muttersprache',
+  'settings.nativeLanguageHint': 'Die Sprache, in die die Wörter übersetzt werden.',
+  'settings.nativeLanguageConfirm': 'Dein Fortschritt bleibt erhalten. Die Wörter werden dann auf {language} übersetzt.',
+  'settings.nativeLanguageChange': 'Wechseln',
   'settings.language': 'Sprache der Oberfläche',
   'settings.languageHint': 'Die Wörter sind immer auf Englisch; das ändert nur die Menüs und Meldungen.',
 
@@ -198,6 +202,7 @@ export const de: Messages = {
   'signin.gateIntro': 'Zuerst zwei Fragen, die wir dir gesetzlich stellen müssen. Nur dein Land wird gespeichert.',
   'signin.country': 'Land, in dem du lebst',
   'signin.countryUnknown': 'Das möchte ich nicht angeben',
+  'signin.nativeLanguage': 'Deine Muttersprache',
   'signin.birthYear': 'Geburtsjahr',
   'signin.birthYearHint': 'Vier Ziffern, zum Beispiel 1994. Es wird nicht gespeichert.',
   'signin.birthYearInvalid': 'Gib dein Geburtsjahr als vier Ziffern ein.',

@@ -8,11 +8,12 @@ import { httpApi } from './account/api'
 import { AccountController } from './account/controller'
 import { accountStorage, browserStorage, pendingSignIn } from './account/storage'
 import { httpTransport } from './account/transport'
-import { Boot } from './app/boot'
+import { Boot, defaultL1 } from './app/boot'
 import { noteInstallReport, refreshAudioOnActivation, startPackChecks } from './app/content'
 import { watchContentFiles } from './app/contentFiles'
 import { Credits } from './app/credits'
 import { FixNotices } from './app/fixNotices'
+import { watchL1 } from './app/l1Watch'
 import { AppLifecycle, watchUpdates, type InstallEvent } from './app/lifecycle'
 import { Root } from './app/Root'
 import { startSyncLoop } from './app/syncLoop'
@@ -21,7 +22,7 @@ import { AudioSwitch } from './content/audioSwitch'
 import { fetchManifest, manifestUrlFor, packFetcher, SAMPLE_MANIFEST_URL } from './content/packs'
 import { fetchSibling } from './content/siblings'
 import { webEnv } from './env'
-import { I18nProvider, LOCALES } from './i18n/i18n'
+import { I18nProvider, initialLocale, LOCALES } from './i18n/i18n'
 import { writeInterfaceLanguage } from './reminders/prefs'
 import { browserPushPlatform, ReminderService } from './reminders/reminders'
 import { deleteDatabase, listDatabases } from './storage/erase'
@@ -61,7 +62,8 @@ const fixNotices = new FixNotices({ storage: browserStorage('localStorage'), fet
 const boot = new Boot(
   {
     env,
-    l1: 'bg',
+    // Read at every open: the demo follows the interface's language, an account starts in Bulgarian (plan 10).
+    l1: (account) => defaultL1(account, initialLocale(browserStorage('localStorage'))),
     accounts,
     openDriver: (file) => openWorkerDriver(file),
     deleteDatabase,
@@ -113,6 +115,25 @@ boot.store.subscribe(() => {
     stopContentWatch = null
     fixNotices.reset()
   }
+})
+
+// The one place that switches packs (plan 10, Decision 2): whenever the learner's L1 setting differs from the installed L1.
+let stopL1Watch: (() => void) | null = null
+boot.store.subscribe(() => {
+  const state = boot.store.get()
+  stopL1Watch?.()
+  stopL1Watch =
+    state.status === 'ready'
+      ? watchL1(
+          state.client,
+          async (l1) => state.client.changeL1(l1, await fetchManifest(manifestUrlFor(state.account)), packFetcher()),
+          () => navigator.onLine,
+          (retry) => {
+            window.addEventListener('online', retry)
+            return () => window.removeEventListener('online', retry)
+          },
+        )
+      : null
 })
 
 startPackChecks({

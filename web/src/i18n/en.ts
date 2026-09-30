@@ -128,6 +128,10 @@ export const en = {
   'settings.audioDownloaded': '{done} of {total} clips on this device',
   'settings.audioOffline': 'Connect to download audio.',
 
+  'settings.nativeLanguage': 'Native language',
+  'settings.nativeLanguageHint': 'The language the words are translated into.',
+  'settings.nativeLanguageConfirm': 'Your progress stays. The words switch to {language} translations.',
+  'settings.nativeLanguageChange': 'Change',
   'settings.language': 'Interface language',
   'settings.languageHint': 'The words are always English; this changes the menus and messages.',
 
@@ -189,6 +193,7 @@ export const en = {
   'signin.gateIntro': 'First, two questions the law asks us. Only your country is kept.',
   'signin.country': 'Country where you live',
   'signin.countryUnknown': 'I’d rather not say',
+  'signin.nativeLanguage': 'Your native language',
   'signin.birthYear': 'Year of birth',
   'signin.birthYearHint': 'Four digits, for example 1994. It is not stored.',
   'signin.birthYearInvalid': 'Enter the year you were born, as four digits.',
