@@ -7,6 +7,8 @@ import { Decisions, QUEUES } from './decisions'
 import { readDraft, runDraft } from './draft'
 import { writeJson } from './files'
 import type { Llm, LlmRequest } from './llm'
+import { readLastPublished } from './lastPublished'
+import { pendingItems } from './queues'
 import { adoptRelease, planRelease, writeRelease } from './release'
 import { LicenceError } from './sources'
 import { SENSES_THEME_IDS, type SenseProposal } from './stages/senses'
@@ -211,5 +213,58 @@ describe('runDraft', () => {
     const llm = sampleLlm()
     await expect(runDraft({ dir, llm, offline: false })).rejects.toThrow(LicenceError)
     expect(llm.calls).toEqual([])
+  })
+})
+
+const nameThemesInGerman = (dir: string) => {
+  const file = join(dir, 'themes.json')
+  const themes = JSON.parse(readFileSync(file, 'utf8')) as { name: Record<string, string>; description: Record<string, string> }[]
+  writeJson(file, themes.map((t) => ({ ...t, name: { ...t.name, de: `DE ${t.name['en']}` }, description: { ...t.description, de: `DE ${t.description['en']}` } })))
+}
+
+describe('adding an L1 (plan 9)', () => {
+  it('drafts German beside a published Bulgarian corpus without changing any Bulgarian word, unit, title or decision', async () => {
+    const dir = await publishedV1()
+    const before = readDraft(dir)
+    nameThemesInGerman(dir)
+    editConfig(dir, { l1s: ['bg', 'de'], accept_unreviewed: ['translation-de', 'title-de'] })
+    const after = await runDraft({ dir, llm: sampleLlm(), offline: false })
+    expect(after.live).toEqual(before.live)
+    const bg = (d: typeof before) => d.entries.map((e) => [e.entry_id, e.headword, e.pos, e.sense_en, e.level, e.english, e.l1['bg']])
+    expect(bg(after)).toEqual(bg(before))
+    expect(after.units.map((u) => [u.unit_id, u.entry_ids, u.titles['bg']])).toEqual(before.units.map((u) => [u.unit_id, u.entry_ids, u.titles['bg']]))
+    // Every Bulgarian review decision still holds: nothing Bulgarian is open again.
+    const pending = pendingItems(after, Decisions.read(dir), ['bg', 'de'])
+    expect(pending.get(QUEUES.translation('bg'))).toEqual([])
+    expect(pending.get(QUEUES.title('bg'))).toEqual([])
+    // German is there for every live entry, and bank's merged sense accepts both German words.
+    const live = new Set(after.live)
+    expect(after.entries.filter((e) => live.has(e.entry_id)).every((e) => e.l1['de'] !== undefined)).toBe(true)
+    expect(after.entries.find((e) => e.entry_id === 'bank-1')!.l1['de']).toMatchObject({ translation: 'Bank', alternates: ['Bankgebäude'] })
+  })
+
+  it('releases a German pack beside an unchanged Bulgarian one, with no new Bulgarian fixes', async () => {
+    const dir = await publishedV1()
+    const v1 = readLastPublished(dir).packs.get('bg')!
+    nameThemesInGerman(dir)
+    editConfig(dir, { l1s: ['bg', 'de'], accept_unreviewed: ['translation-de', 'title-de'] })
+    await runDraft({ dir, llm: sampleLlm(), offline: false })
+    const plan = planRelease(dir, { draft: false, now: '2026-10-05T09:00:00Z' })
+    expect([plan.problems, plan.pending]).toEqual([[], []])
+    expect(plan.outputs.map((o) => o.pack.l1).sort()).toEqual(['bg', 'de'])
+    const bg2 = plan.outputs.find((o) => o.pack.l1 === 'bg')!.pack
+    expect(bg2.entries).toEqual(v1.entries)
+    expect(bg2.units).toEqual(v1.units)
+    expect(plan.fixes.fixes.filter((f) => f.fixed_in === 2)).toEqual([])
+  })
+
+  it('refuses a release whose first L1 was never published: senses merge on it', async () => {
+    const dir = await publishedV1()
+    nameThemesInGerman(dir)
+    editConfig(dir, { l1s: ['de', 'bg'], accept_unreviewed: ['translation-de', 'title-de'] })
+    await runDraft({ dir, llm: sampleLlm(), offline: false })
+    expect(planRelease(dir, { draft: false, now: '2026-10-05T09:00:00Z' }).problems).toContain(
+      "the lead L1 (the first in pipeline.json's l1s) must be one published before: senses merge on it; append a new L1 instead",
+    )
   })
 })

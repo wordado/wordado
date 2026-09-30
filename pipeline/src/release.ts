@@ -56,6 +56,10 @@ export function planRelease(dir: string, opts: { draft: boolean; now: string }):
   const unreviewed: Unreviewed[] = []
   const accepted = new Set(config.accept_unreviewed ?? [])
   for (const l1 of last.packs.keys()) if (!config.l1s.includes(l1)) problems.push(`${l1}: published before, so it must stay in pipeline.json's l1s`)
+  const lead = config.l1s[0]
+  if (last.packs.size > 0 && lead !== undefined && !last.packs.has(lead)) {
+    problems.push("the lead L1 (the first in pipeline.json's l1s) must be one published before: senses merge on it; append a new L1 instead")
+  }
 
   const hasClip = (id: string) => existsSync(paths.clip(id))
   const outputs: BuildOutput[] = []

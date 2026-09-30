@@ -242,6 +242,26 @@ is `llm.model` without `anthropic/` (`claude-sonnet-5`, the model the caches wer
 (`--stage senses|translate|themes` for one). It asks a sample of the draft's live words in a throwaway cache and
 writes `work/compare.md`, its answers beside the draft's. Nothing goes into the content caches.
 
+## Adding an L1
+
+One draft serves every L1: senses, themes, levels, audio, IDs and units are shared, and only translations and unit
+titles are asked per L1. To add one (German, `de`, is the model):
+
+1. **Code** (this repository): a translation guide in `L1_GUIDES` (`pipeline/src/stages/translate.ts`) and unit-group
+   names in `GROUP_NAMES` (`pipeline/src/units.ts`).
+2. **Theme names**: every theme in `themes.json` gets a `name` and a `description` in the new L1. The draft refuses
+   until each has both.
+3. **`pipeline.json`**: append the code to `l1s`. Never put it first: the first L1 is the lead that senses merge on,
+   and a release refuses a lead that was never published. To ship it unreviewed, add `translation-<l1>` and
+   `title-<l1>` to `accept_unreviewed`; otherwise its review files block every release until reviewed.
+4. **Draft** (online). It asks the new L1's translations and unit titles only; the other L1s' caches all hit.
+   Adding an L1 never changes another L1's pack: merged senses stay merged, and the new L1 keeps the first sense's
+   translation with the other senses' words as alternates.
+
+Shared rules to tell reviewers: a `drop` in any L1's file removes the word for every L1, so drop only a wrong English
+sense; a hard-to-translate word gets the best translation and a note. Until reports carry the learner's L1
+(plan 10), a translation report reopens every L1's translation of that word.
+
 ## When something is wrong
 
 - **"pinned entry … is not live: the senses stage no longer proposes it".** The senses stage proposed no sense

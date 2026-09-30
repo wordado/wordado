@@ -23,6 +23,6 @@ Open a file in `review/<queue>/` in Excel, Numbers or Google Sheets. For each ro
 Leave a row's verdict empty to decide later. Save as CSV (UTF-8) with the same name, commit, and open a pull
 request. The pipeline imports it with `corpus import`.
 
-Queues: `translation-bg` (every translation set and its sense gloss), `english` (IPA, spelling variants and example
-sentences), `level` (a sample of CEFR levels, and every level the frequency band disagreed with), `title-bg` (unit
-titles), and `audio` (a sample of every batch, and every clip made again).
+Queues: `translation-<l1>` (every translation set and its sense gloss, one queue per L1), `english` (IPA, spelling
+variants and example sentences), `level` (a sample of CEFR levels, and every level the frequency band disagreed
+with), `title-<l1>` (unit titles, per L1), and `audio` (a sample of every batch, and every clip made again).
