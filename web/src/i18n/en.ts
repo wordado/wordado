@@ -20,6 +20,7 @@ export const en = {
   'account.labelWarning': 'Account: {email}. {warning}',
   'account.settings': 'Account settings',
   'lang.label': 'Interface language',
+  'lang.button': 'Interface language: {language} ({code})',
 
   'boot.starting': 'Opening your words…',
   'boot.failed': 'The words could not be loaded. Check your connection and try again.',

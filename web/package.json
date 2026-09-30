@@ -19,6 +19,7 @@
     "@journeyapps/wa-sqlite": "2.0.5",
     "@wordado/client-data": "workspace:*",
     "@wordado/core": "workspace:*",
+    "lucide-react": "^1.48.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "workbox-precaching": "^7.4.1",

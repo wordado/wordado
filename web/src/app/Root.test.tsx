@@ -74,9 +74,10 @@ describe('Root', () => {
 
   it('switches the interface language', async () => {
     await renderRoot()
+    fireEvent.click(screen.getByRole('button', { name: 'Interface language: English (EN)' }))
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Български' })))
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('10 нови думи')
-    expect(screen.getByRole('button', { name: 'Български' }).getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByRole('button', { name: 'Език на интерфейса: Български (BG)' }).textContent).toBe('BG')
   })
 
   it('shows a storage message when opening the database fails', async () => {

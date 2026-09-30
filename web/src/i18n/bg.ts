@@ -15,6 +15,7 @@ export const bg: Messages = {
   'account.labelWarning': 'Профил: {email}. {warning}',
   'account.settings': 'Настройки на профила',
   'lang.label': 'Език на интерфейса',
+  'lang.button': 'Език на интерфейса: {language} ({code})',
 
   'boot.starting': 'Отваряме думите ви…',
   'boot.failed': 'Думите не можаха да се заредят. Проверете връзката си и опитайте отново.',
