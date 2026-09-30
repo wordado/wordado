@@ -261,10 +261,52 @@ describe('adding an L1 (plan 9)', () => {
   it('refuses a release whose first L1 was never published: senses merge on it', async () => {
     const dir = await publishedV1()
     nameThemesInGerman(dir)
-    editConfig(dir, { l1s: ['de', 'bg'], accept_unreviewed: ['translation-de', 'title-de'] })
+    editConfig(dir, { l1s: ['bg', 'de'], accept_unreviewed: ['translation-de', 'title-de'] })
     await runDraft({ dir, llm: sampleLlm(), offline: false })
+    // The wrong order is set only after the draft has run with the right one, so the release check is what fires.
+    editConfig(dir, { l1s: ['de', 'bg'] })
     expect(planRelease(dir, { draft: false, now: '2026-10-05T09:00:00Z' }).problems).toContain(
       "the lead L1 (the first in pipeline.json's l1s) must be one published before: senses merge on it; append a new L1 instead",
     )
+  })
+
+  it('keeps each L1’s translation fix for one word (a fix on both L1s ships as two fixes)', async () => {
+    const dir = await publishedV1()
+    nameThemesInGerman(dir)
+    editConfig(dir, { l1s: ['bg', 'de'], accept_unreviewed: ['translation-de', 'title-de'] })
+    const draft = await runDraft({ dir, llm: sampleLlm(), offline: false })
+    const o2 = join(mkdtempSync(join(tmpdir(), 'release-')), 'out')
+    writeRelease(dir, o2, planRelease(dir, { draft: false, now: '2026-10-05T09:00:00Z' }))
+    adoptRelease(dir, o2)
+
+    const go = draft.entries.find((e) => e.entry_id === 'go-1')!
+    const d = Decisions.read(dir)
+    d.append(QUEUES.translation('bg'), [{ key: 'go-1', at: '2026-10-06T00:00:00Z', verdict: 'reopen', by: 'reports' }])
+    d.append(QUEUES.translation('bg'), [{ key: 'go-1', at: '2026-10-06T00:00:00Z', verdict: 'fix', proposed: go.l1['bg'], value: { ...go.l1['bg'], alternates: ['ходя', 'вървя'] }, by: 'r' }])
+    d.append(QUEUES.translation('de'), [{ key: 'go-1', at: '2026-10-06T00:00:00Z', verdict: 'reopen', by: 'reports' }])
+    d.append(QUEUES.translation('de'), [{ key: 'go-1', at: '2026-10-06T00:00:00Z', verdict: 'fix', proposed: go.l1['de'], value: { ...go.l1['de'], alternates: [...go.l1['de']!.alternates, 'laufen'] }, by: 'r' }])
+
+    const o3 = join(mkdtempSync(join(tmpdir(), 'release-')), 'out')
+    const plan = planRelease(dir, { draft: false, now: '2026-10-07T09:00:00Z' })
+    writeRelease(dir, o3, plan)
+    const fixes = JSON.parse(readFileSync(join(o3, 'fixes.json'), 'utf8')).fixes as { word_id: string; field: string; fixed_in: number; l1?: string }[]
+    const goFixes = fixes.filter((f) => f.word_id === 'c:go-1' && f.fixed_in === 3 && f.field === 'translation')
+    expect(goFixes.sort((a, b) => (a.l1! < b.l1! ? -1 : 1))).toEqual([
+      { word_id: 'c:go-1', field: 'translation', fixed_in: 3, l1: 'bg' },
+      { word_id: 'c:go-1', field: 'translation', fixed_in: 3, l1: 'de' },
+    ])
+  })
+
+  it('refuses a draft whose first L1 was never published, before any LLM stage runs', async () => {
+    const dir = await publishedV1()
+    nameThemesInGerman(dir)
+    editConfig(dir, { l1s: ['de', 'bg'], accept_unreviewed: ['translation-de', 'title-de'] })
+    const registryBefore = readFileSync(join(dir, 'registry.json'), 'utf8')
+    const llm = sampleLlm()
+    await expect(runDraft({ dir, llm, offline: false })).rejects.toThrow(
+      "the lead L1 (the first in pipeline.json's l1s) must be one published before: senses merge on it; append a new L1 instead",
+    )
+    expect(llm.calls).toEqual([])
+    expect(readFileSync(join(dir, 'registry.json'), 'utf8')).toEqual(registryBefore)
   })
 })
