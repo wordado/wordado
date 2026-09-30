@@ -10,6 +10,10 @@ export const bg: Messages = {
   'nav.themes': 'Теми',
   'nav.progress': 'Напредък',
   'nav.settings': 'Настройки',
+  'account.signIn': 'Вход',
+  'account.label': 'Профил: {email}',
+  'account.labelWarning': 'Профил: {email}. {warning}',
+  'account.settings': 'Настройки на профила',
   'lang.label': 'Език на интерфейса',
 
   'boot.starting': 'Отваряме думите ви…',

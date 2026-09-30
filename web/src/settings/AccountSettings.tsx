@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { ConfirmDialog } from '../app/Confirm'
 import { useApp } from '../app/context'
+import { useSignOut } from '../app/signOut'
 import { saveFile } from '../download'
 import { errorMessageKey } from '../errors'
 import { useT } from '../i18n/i18n'
@@ -12,10 +13,9 @@ export function AccountSettings() {
   const { t } = useT()
   const { account, accounts, api } = useApp()
   const online = useOnline()
-  const [dialog, setDialog] = useState<'unsynced' | 'delete' | null>(null)
+  const [deleting, setDeleting] = useState(false)
   const [understood, setUnderstood] = useState(false)
-  const [signOutError, setSignOutError] = useState<string | null>(null)
-  const [signingOut, setSigningOut] = useState(false)
+  const { signingOut, error: signOutError, start: signOut, dialog: unsyncedDialog } = useSignOut()
   const [exporting, setExporting] = useState(false)
   const [exportError, setExportError] = useState<string | null>(null)
 
@@ -29,24 +29,6 @@ export function AccountSettings() {
         </Link>
       </section>
     )
-  }
-
-  const signOut = async (force: boolean) => {
-    const outcome = await accounts.signOut({ force })
-    if (outcome === 'unsynced') setDialog('unsynced')
-    else navigate({ name: 'home' }, { replace: true })
-  }
-
-  const signOutFromButton = async () => {
-    setSignOutError(null)
-    setSigningOut(true)
-    try {
-      await signOut(false)
-    } catch (err) {
-      setSignOutError(t(errorMessageKey(err)))
-    } finally {
-      setSigningOut(false)
-    }
   }
 
   /** The export names the recorded learner (x-wordado-user), so a session that is someone else's is refused (spec §11). */
@@ -88,7 +70,7 @@ export function AccountSettings() {
           )}
         </li>
         <li>
-          <button type="button" className="button" disabled={signingOut} onClick={() => void signOutFromButton()}>
+          <button type="button" className="button" disabled={signingOut} onClick={() => void signOut()}>
             {t('settings.signOut')}
           </button>
           <p className="note" role="status">
@@ -101,22 +83,14 @@ export function AccountSettings() {
           )}
         </li>
         <li>
-          <button type="button" className="button" disabled={!online} onClick={() => setDialog('delete')}>
+          <button type="button" className="button" disabled={!online} onClick={() => setDeleting(true)}>
             {t('settings.delete')}
           </button>
           {!online && <p className="note">{t('settings.deleteOffline')}</p>}
         </li>
       </ul>
-      {dialog === 'unsynced' && (
-        <ConfirmDialog
-          title={t('settings.unsyncedTitle')}
-          body={<p>{t('settings.unsyncedBody')}</p>}
-          confirmLabel={t('settings.unsyncedConfirm')}
-          onConfirm={() => signOut(true)}
-          onClose={() => setDialog(null)}
-        />
-      )}
-      {dialog === 'delete' && (
+      {unsyncedDialog}
+      {deleting && (
         <ConfirmDialog
           title={t('settings.deleteTitle')}
           body={<p>{t('settings.deleteBody')}</p>}
@@ -127,7 +101,7 @@ export function AccountSettings() {
             navigate({ name: 'home' }, { replace: true })
           }}
           onClose={() => {
-            setDialog(null)
+            setDeleting(false)
             setUnderstood(false)
           }}
         >

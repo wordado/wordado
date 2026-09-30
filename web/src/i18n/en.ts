@@ -15,6 +15,10 @@ export const en = {
   'nav.themes': 'Themes',
   'nav.progress': 'Progress',
   'nav.settings': 'Settings',
+  'account.signIn': 'Sign in',
+  'account.label': 'Account: {email}',
+  'account.labelWarning': 'Account: {email}. {warning}',
+  'account.settings': 'Account settings',
   'lang.label': 'Interface language',
 
   'boot.starting': 'Opening your words…',
