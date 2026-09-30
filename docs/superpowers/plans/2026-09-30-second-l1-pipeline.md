@@ -747,3 +747,17 @@ Commit the draft's results (caches, `registry.json`, `review/`) on the branch an
   - `mergeSenses(senses, l1s)` and `titleUnits(units, l1s, run)` keep their signatures, so `draft.ts` changes nowhere.
   - The fixture's `titles` fake reads `input.l1s`, which Task 3 sends.
 - **Placeholders.** None. Where a test file's local helper may differ, the step says which shape to use.
+
+## Handover to plan 10
+
+Found by plan 9's final review; plan 10 takes them.
+
+- **English unit titles can differ between packs.** A non-lead L1's title takes its English half from the lead L1's
+  raw draft answer (`pipeline/src/stages/titles.ts`), while the lead's pack ships its published or reviewed title
+  (`assemble.ts`, `previousUnits`). Once a `title-bg` reviewer edits `title_en`, the German pack shows the old English.
+  Fix in `assemble`: for a non-lead L1, take `en` from the lead's folded or published title.
+- **Web builds from before plan 9 ignore a fix's `l1`.** Their `validateFixes` drops unknown keys, so they would tell a
+  Bulgarian reporter that a German translation fix is theirs. This matters only once German has a translation fix, well
+  after the current web build has rolled out. Check before German's first reviewed release.
+- **Reports carry no L1 yet** (Decision 7). Plan 10 adds the learner's L1 to `content_report` (core rule, server column,
+  migration) and makes triage reopen only that L1's translation queue.
