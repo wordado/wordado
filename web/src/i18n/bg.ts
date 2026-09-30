@@ -53,6 +53,12 @@ export const bg: Messages = {
   'notice.other-account': 'Това устройство пази напредъка на {email}. Излезте от този профил от настройките, преди да използвате друг.',
   'notice.google-failed': 'Входът с Google не завърши. Опитайте отново или използвайте код по имейл.',
   'notice.dismiss': 'Затвори',
+  'fixed.one': 'Съобщихте за проблем с {field} на „{word}“. Вече е поправен. Благодарим!',
+  'fixed.some': { one: 'Поправихме {count} проблем, за който съобщихте. Благодарим!', other: 'Поправихме {count} проблема, за които съобщихте. Благодарим!' },
+  'fixed.field.translation': 'превода',
+  'fixed.field.example': 'примерното изречение',
+  'fixed.field.audio': 'произношението',
+  'fixed.field.level': 'нивото',
 
   'sync.syncing': 'Синхронизиране…',
   'sync.synced': 'Целият напредък е запазен в профила ви',
@@ -72,6 +78,10 @@ export const bg: Messages = {
   'install.button': 'Инсталирайте',
   'install.later': 'Не сега',
   'settings.app': 'Приложението',
+  'settings.about': 'За приложението',
+  'about.sources': 'Речникът е съставен по данни от тези източници:',
+  'about.ownList': 'Този речник е съставен от Wordado.',
+  'about.unavailable': 'Източниците на речника се показват тук, след като приложението е било онлайн.',
   'privacy.link': 'Политика за поверителност',
 
   'settings.title': 'Настройки',

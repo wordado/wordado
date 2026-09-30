@@ -1,14 +1,16 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { checkPackSuccession, loadCorpus, offeredThemes, themeEntries, validatePack, type Pack, type PackError } from '@wordado/core'
+import { checkPackSuccession, loadCorpus, offeredThemes, themeEntries, validatePack, type CreditsFile, type Pack, type PackError } from '@wordado/core'
 import { audioQueueItems, clipsNeeded, generateClips, readAudioRecords } from './audio'
 import { BuildError, buildPack, type BuildOutput, type ClipFile } from './build'
 import { claudeCodeLlm } from './claudeCode'
 import { COMPARE_STAGES, compareReport, compareStages, type CompareStage } from './compare'
 import { readConfig, reviewQueues, type PipelineConfig } from './config'
+import { checkedCredits } from './credits'
 import { Decisions, QUEUES } from './decisions'
 import { readDraft, runDraft } from './draft'
 import { ffmpegEncoder } from './encoder'
+import { writeJson } from './files'
 import { readSourceDir, writeArtifacts } from './fs'
 import { initContent } from './init'
 import { readLastPublished } from './lastPublished'
@@ -20,6 +22,7 @@ import { reopenReviewed } from './reopen'
 import { exportQueues, importQueues, pendingItems, queueSpecs } from './queues'
 import { adoptRelease, planRelease, writeRelease } from './release'
 import { pgQuery, pullReports, triage } from './reports'
+import { readClearedSources } from './sources'
 import { openRouterTts } from './tts'
 
 const USAGE = `usage: corpus <command>
@@ -37,6 +40,7 @@ const USAGE = `usage: corpus <command>
     triage <dir>                   read content reports (REPORTS_DATABASE_URL) and reopen what they cross
     status <dir>                   what stands between the content and a release
     release <dir> <out> [--draft]  build the next corpus version into <out>
+    credits <dir> <out.json>       the sources' attributions at the last published version (credits.json)
     published <dir> <out>          after a publish: <out> becomes last-published/
     live <dir> <manifest-url>      does the CDN serve last-published/?
   frequency lists (run on a workstation; the output goes into the content repository's sources/):
@@ -285,6 +289,19 @@ function release(dir: string, outDir: string): void {
   if (plan.retired.length > 0) console.log(`retired: ${plan.retired.join(', ')}`)
 }
 
+/** `corpus credits`: refuses to write a file the app would reject (a blank source title), instead of writing it unchecked. */
+function writeCredits(dir: string, file: string): void {
+  let credits: CreditsFile
+  try {
+    credits = checkedCredits(readClearedSources(dir), readLastPublished(dir).manifest.corpus_version)
+  } catch (err) {
+    console.error(err instanceof Error ? err.message : String(err))
+    process.exit(1)
+  }
+  writeJson(file, credits)
+  console.log(`wrote ${file}: ${credits.sources.length} sources at corpus v${credits.corpus_version}`)
+}
+
 async function live(dir: string, url: string): Promise<void> {
   const problems = await liveProblems(dir, url)
   for (const p of problems) console.error(p)
@@ -325,6 +342,9 @@ async function main(): Promise<void> {
       break
     case 'release':
       release(arg(first), arg(second))
+      break
+    case 'credits':
+      writeCredits(arg(first), arg(second))
       break
     case 'published':
       adoptRelease(arg(first), arg(second))

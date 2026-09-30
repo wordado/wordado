@@ -1,11 +1,12 @@
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { checkPackSuccession, MANIFEST_SCHEMA_VERSION, type PackManifest } from '@wordado/core'
+import { checkPackSuccession, MANIFEST_SCHEMA_VERSION, type PackManifest, type CreditsFile } from '@wordado/core'
 import { assemble, type Unreviewed } from './assemble'
 import { audioGate, readAudioRecords } from './audio'
 import { AUDIO_EXT, BuildError, buildPack, type BuildOutput } from './build'
 import { readConfig, readThemes } from './config'
 import { contentPaths } from './content'
+import { creditsFile } from './credits'
 import { Decisions, QUEUES } from './decisions'
 import { readDraft } from './draft'
 import { writeJson } from './files'
@@ -30,6 +31,7 @@ export interface ReleasePlan {
   readonly clipIds: readonly string[]
   readonly manifest: PackManifest
   readonly fixes: FixesFile
+  readonly credits: CreditsFile
   readonly releaseInfo: ReleaseInfo
   readonly problems: readonly string[]
   readonly pending: readonly string[]
@@ -101,12 +103,13 @@ export function planRelease(dir: string, opts: { draft: boolean; now: string }):
   }
   const counts: Record<string, number> = {}
   for (const u of unreviewed) counts[u.queue] = (counts[u.queue] ?? 0) + 1
+  const credits = creditsFile(sources, corpusVersion)
   const releaseInfo: ReleaseInfo = {
     corpus_version: corpusVersion,
     draft: opts.draft,
     built_at: opts.now,
     l1s: config.l1s,
-    attributions: sources.filter((s) => s.record.attribution.trim() !== '').map((s) => ({ source: s.record.title, attribution: s.record.attribution })),
+    attributions: credits.sources,
     ...(unreviewed.length > 0 ? { unreviewed: counts } : {}),
   }
   return {
@@ -115,6 +118,7 @@ export function planRelease(dir: string, opts: { draft: boolean; now: string }):
     clipIds: [...clipIds].sort(),
     manifest,
     fixes: nextFixesFile(last.fixes, fixes, corpusVersion),
+    credits,
     releaseInfo,
     problems,
     pending,
@@ -140,9 +144,10 @@ export function writeRelease(dir: string, outDir: string, plan: ReleasePlan): st
     files.push(`audio/${id}.${AUDIO_EXT}`)
   }
   writeJson(join(outDir, 'fixes.json'), plan.fixes)
+  writeJson(join(outDir, 'credits.json'), plan.credits)
   writeJson(join(outDir, 'release.json'), plan.releaseInfo)
   writeJson(join(outDir, 'manifest.json'), plan.manifest)
-  return [...files, 'fixes.json', 'release.json', 'manifest.json']
+  return [...files, 'fixes.json', 'credits.json', 'release.json', 'manifest.json']
 }
 
 /** After a publish: the release becomes last-published/, the predecessor of the next (Decision 14). Audio stays in audio/. */
