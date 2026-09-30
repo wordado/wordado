@@ -1,6 +1,7 @@
 import type { Api } from '../account/api'
 import type { ReminderPort } from '../account/controller'
 import type { KeyValue } from '../account/storage'
+import type { Locale } from '../i18n/i18n'
 
 /** The learner's reminder choices on this browser (a subscription belongs to one browser). */
 export const REMINDER_KEY = 'wordado.reminder'
@@ -39,7 +40,7 @@ export interface ReminderDeps {
   readonly platform: PushPlatform
   readonly storage: KeyValue
   tzOffsetMin(): number
-  language(): 'bg' | 'en'
+  language(): Locale
 }
 
 const isPrefs = (v: unknown): v is ReminderPrefs =>

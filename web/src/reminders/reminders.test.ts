@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { memoryStorage } from '../account/storage'
+import type { Locale } from '../i18n/i18n'
 import { fakeApi } from '../test/fakeApi'
 import { DEFAULT_REMINDER_MINUTE, ReminderService, type PushPlatform, type PushSub } from './reminders'
 
@@ -36,7 +37,7 @@ function platform(over: Partial<PushPlatform> = {}) {
   return p
 }
 
-function service(options: { platform?: PushPlatform; key?: string | null; language?: 'bg' | 'en'; offset?: number } = {}) {
+function service(options: { platform?: PushPlatform; key?: string | null; language?: Locale; offset?: number } = {}) {
   const puts: unknown[] = []
   const api = fakeApi({
     pushPublicKey: async () => (options.key === undefined ? 'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U' : options.key),

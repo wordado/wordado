@@ -1,4 +1,5 @@
 import type { Fetch } from '../content/packs'
+import type { Locale } from '../i18n/i18n'
 import { expectedUserHeader } from './transport'
 
 /** The server answered, with something other than success. `code` is the body's `error` or Better Auth's `code`. */
@@ -36,7 +37,7 @@ export interface PushSubscriptionBody {
   readonly reminderMinute: number
   /** Minutes to add to UTC, as on every event. */
   readonly tzOffsetMin: number
-  readonly language: 'bg' | 'en'
+  readonly language: Locale
   readonly streakNudge: boolean
 }
 

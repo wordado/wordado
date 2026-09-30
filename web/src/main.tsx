@@ -21,7 +21,7 @@ import { AudioSwitch } from './content/audioSwitch'
 import { fetchManifest, manifestUrlFor, packFetcher, SAMPLE_MANIFEST_URL } from './content/packs'
 import { fetchSibling } from './content/siblings'
 import { webEnv } from './env'
-import { I18nProvider } from './i18n/i18n'
+import { I18nProvider, LOCALES } from './i18n/i18n'
 import { writeInterfaceLanguage } from './reminders/prefs'
 import { browserPushPlatform, ReminderService } from './reminders/reminders'
 import { deleteDatabase, listDatabases } from './storage/erase'
@@ -40,7 +40,9 @@ const reminders = new ReminderService({
   platform: browserPushPlatform(),
   storage: browserStorage('localStorage'),
   tzOffsetMin: env.tzOffsetMin,
-  language: () => (document.documentElement.lang === 'en' ? 'en' : 'bg'),
+  // <html lang> is set from the interface locale (I18nProvider); an unrecognized value falls
+  // back to English, consistent with English now being the default interface language.
+  language: () => LOCALES.find((x) => x === document.documentElement.lang) ?? 'en',
 })
 let controller: AccountController | null = null
 // A 401 from sync means the sign-in expired, a 409 that the session is another learner's (spec §8.6):

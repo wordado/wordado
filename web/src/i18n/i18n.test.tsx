@@ -1,8 +1,9 @@
 import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { bg } from './bg'
+import { de } from './de'
 import { en } from './en'
-import { I18nProvider, LOCALE_KEY, localized, translate, useT, type MessageKey } from './i18n'
+import { I18nProvider, initialLocale, LOCALE_KEY, localized, translate, useT, type MessageKey } from './i18n'
 
 afterEach(cleanup)
 
@@ -12,12 +13,29 @@ const placeholders = (message: string | { one: string; other: string }): string[
 }
 
 describe('the message tables', () => {
-  it('have the same keys, the same shape and the same placeholders in both languages', () => {
-    expect(Object.keys(bg).sort()).toEqual(Object.keys(en).sort())
-    for (const key of Object.keys(en) as MessageKey[]) {
-      expect(typeof bg[key], key).toBe(typeof en[key])
-      expect(placeholders(bg[key]), key).toEqual(placeholders(en[key]))
+  it('have the same keys, the same shape and the same placeholders in every language', () => {
+    for (const table of [bg, de]) {
+      expect(Object.keys(table).sort()).toEqual(Object.keys(en).sort())
+      for (const key of Object.keys(en) as MessageKey[]) {
+        expect(typeof table[key], key).toBe(typeof en[key])
+        expect(placeholders(table[key]), key).toEqual(placeholders(en[key]))
+      }
     }
+  })
+})
+
+describe('initialLocale', () => {
+  it('prefers a saved choice over the browser languages', () => {
+    expect(initialLocale({ getItem: () => 'bg', setItem: () => undefined }, ['de'])).toBe('bg')
+  })
+
+  it('falls back to the first supported browser language', () => {
+    expect(initialLocale(null, ['de-AT', 'en'])).toBe('de')
+    expect(initialLocale(null, ['fr-FR', 'bg'])).toBe('bg')
+  })
+
+  it('falls back to English when nothing is saved or supported', () => {
+    expect(initialLocale(null, ['fr'])).toBe('en')
   })
 })
 
@@ -28,6 +46,11 @@ describe('translate', () => {
     expect(translate('bg', 'home.newWords', { count: 1 })).toBe('1 нова дума')
     expect(translate('bg', 'home.newWords', { count: 5 })).toBe('5 нови думи')
     expect(translate('en', 'home.xp', { today: 30, total: 120 })).toBe('30 XP today, 120 in all')
+  })
+
+  it('picks the German plural form (one for 1, other for 2)', () => {
+    expect(translate('de', 'home.newWords', { count: 1 })).toBe('1 neues Wort')
+    expect(translate('de', 'home.newWords', { count: 2 })).toBe('2 neue Wörter')
   })
 
   it('leaves a placeholder it was not given visible, rather than printing undefined', () => {
@@ -50,7 +73,7 @@ function Probe() {
 }
 
 describe('I18nProvider', () => {
-  it('starts in Bulgarian, switches, remembers the choice and sets the document language', () => {
+  it('with no saved value, starts in English (the default, spec §11.2 Decision 4), switches, remembers the choice and sets the document language', () => {
     const saved = new Map<string, string>()
     const storage = { getItem: (k: string) => saved.get(k) ?? null, setItem: (k: string, v: string) => void saved.set(k, v) }
     render(
@@ -58,31 +81,31 @@ describe('I18nProvider', () => {
         <Probe />
       </I18nProvider>,
     )
-    expect(screen.getByRole('button').textContent).toBe('Днес')
-    expect(document.documentElement.lang).toBe('bg')
-    act(() => screen.getByRole('button').click())
     expect(screen.getByRole('button').textContent).toBe('Today')
     expect(document.documentElement.lang).toBe('en')
-    expect(saved.get(LOCALE_KEY)).toBe('en')
+    act(() => screen.getByRole('button').click())
+    expect(screen.getByRole('button').textContent).toBe('Днес')
+    expect(document.documentElement.lang).toBe('bg')
+    expect(saved.get(LOCALE_KEY)).toBe('bg')
   })
 
-  it('starts in the remembered language, and ignores a value it does not know', () => {
+  it('starts in the remembered language, and falls back to English for a value it does not know', () => {
     const { unmount } = render(
-      <I18nProvider storage={{ getItem: () => 'en', setItem: () => undefined }}>
+      <I18nProvider storage={{ getItem: () => 'bg', setItem: () => undefined }}>
         <Probe />
       </I18nProvider>,
     )
-    expect(screen.getByRole('button').textContent).toBe('Today')
+    expect(screen.getByRole('button').textContent).toBe('Днес')
     unmount()
     render(
       <I18nProvider storage={{ getItem: () => 'xx', setItem: () => undefined }}>
         <Probe />
       </I18nProvider>,
     )
-    expect(screen.getByRole('button').textContent).toBe('Днес')
+    expect(screen.getByRole('button').textContent).toBe('Today')
   })
 
-  it('works when storage throws (a private window)', () => {
+  it('works when storage throws (a private window), falling back to English', () => {
     const storage = {
       getItem: () => {
         throw new Error('denied')
@@ -96,7 +119,8 @@ describe('I18nProvider', () => {
         <Probe />
       </I18nProvider>,
     )
-    act(() => screen.getByRole('button').click())
     expect(screen.getByRole('button').textContent).toBe('Today')
+    act(() => screen.getByRole('button').click())
+    expect(screen.getByRole('button').textContent).toBe('Днес')
   })
 })
