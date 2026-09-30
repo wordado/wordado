@@ -5,7 +5,7 @@ export function LanguageSettings() {
   const { t, locale, setLocale } = useT()
   return (
     <section aria-labelledby="settings-language">
-      <h2 id="settings-language">{t('settings.language')}</h2>
+      <h3 id="settings-language">{t('settings.language')}</h3>
       <fieldset className="choices">
         <legend className="visually-hidden">{t('settings.language')}</legend>
         <p className="note">{t('settings.languageHint')}</p>

@@ -141,7 +141,7 @@ test('carries the demo into a new account, from the demo’s own device, and syn
   // Both answers came from one device, the demo's, and the learner's own file is another.
   expect(new Set(carried.map((e) => e.deviceId)).size).toBe(1)
   await page.reload()
-  await page.goto('/settings')
+  await page.goto('/settings/account')
   await expect(page.getByText(`Signed in as ${email}`)).toBeVisible()
   await ctx.close()
 })
@@ -207,9 +207,9 @@ test('settings follow the learner to another device (spec §9.2)', async ({ brow
   const first = await context(browser)
   const a = await first.newPage()
   await signIn(a, email)
-  await a.goto('/settings')
-  await a.getByLabel('New words a day').fill('5')
-  await a.getByLabel('New words a day').press('Enter')
+  await a.goto('/settings/study')
+  await a.getByLabel('New words a day', { exact: true }).fill('5')
+  await a.getByLabel('New words a day', { exact: true }).press('Enter')
   // Not .uncheck(): the checkbox is controlled by the client's own settings snapshot, which
   // only flips after the save round-trips through client-data (a few tens of ms), so a plain
   // click's native toggle is briefly reverted by React before Playwright's own post-click check
@@ -226,7 +226,7 @@ test('settings follow the learner to another device (spec §9.2)', async ({ brow
   await signIn(b, email)
   await synced(b)
   await expect(heading(b)).toHaveText('5 new words')
-  await b.goto('/settings')
+  await b.goto('/settings/study')
   await expect(b.getByRole('checkbox', { name: 'Count slow answers as “hard”' })).not.toBeChecked()
   await first.close()
   await second.close()
@@ -247,7 +247,7 @@ test('signs out leaving nothing behind, then deletes the account (spec §11)', a
   await expect(heading(page)).toHaveText('10 new words')
 
   await signIn(page, email)
-  await page.goto('/settings')
+  await page.goto('/settings/account')
   await page.getByRole('button', { name: 'Delete your account' }).click()
   await page.getByRole('checkbox', { name: 'I understand that my progress is deleted for good' }).check()
   await page.getByRole('button', { name: 'Delete my account' }).click()
@@ -277,6 +277,8 @@ test('meets WCAG 2.2 A and AA on the account screens, light and dark (spec §11.
   await expect(page).toHaveURL('/')
   await expectAccessible(page, { dark: true })
   await page.goto('/settings')
+  await expectAccessible(page, { dark: true })
+  await page.goto('/settings/account')
   await expectAccessible(page, { dark: true })
   await page.getByRole('button', { name: 'Delete your account' }).click()
   await expect(page.getByRole('dialog')).toBeVisible()

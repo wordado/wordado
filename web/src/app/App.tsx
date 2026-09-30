@@ -45,7 +45,7 @@ function Screen(props: { readonly route: Route }) {
     case 'signin':
       return <SignIn />
     case 'settings':
-      return <Settings />
+      return <Settings section={route.section ?? null} />
     case 'placement':
       return <Placement />
     default:

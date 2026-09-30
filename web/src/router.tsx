@@ -1,6 +1,10 @@
 import type { Mode } from '@wordado/core'
 import { useMemo, useSyncExternalStore, type MouseEvent, type ReactNode } from 'react'
 
+/** The sections of settings, each on its own page (`/settings/<section>`); `/settings` alone is their menu. */
+export const SETTINGS_SECTIONS = ['study', 'words', 'audio', 'reminders', 'languages', 'account', 'app', 'about'] as const
+export type SettingsSection = (typeof SETTINGS_SECTIONS)[number]
+
 export type Route =
   | { readonly name: 'home' }
   | { readonly name: 'study'; readonly mode: Mode | null }
@@ -11,7 +15,7 @@ export type Route =
   | { readonly name: 'themes' }
   | { readonly name: 'progress' }
   | { readonly name: 'signin' }
-  | { readonly name: 'settings' }
+  | { readonly name: 'settings'; readonly section?: SettingsSection }
   | { readonly name: 'placement' }
 
 /** Modes a learner can choose for a run; matching has its own route. */
@@ -45,8 +49,10 @@ export function parseRoute(pathname: string, search: string): Route {
       return { name: 'settings' }
     case '/settings/placement':
       return { name: 'placement' }
-    default:
-      return { name: 'home' }
+    default: {
+      const section = SETTINGS_SECTIONS.find((s) => path === `/settings/${s}`)
+      return section ? { name: 'settings', section } : { name: 'home' }
+    }
   }
 }
 
@@ -66,6 +72,8 @@ export function routeHref(route: Route): string {
       return '/practice/matching'
     case 'placement':
       return '/settings/placement'
+    case 'settings':
+      return route.section ? `/settings/${route.section}` : '/settings'
     default:
       return `/${route.name}`
   }

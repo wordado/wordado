@@ -43,6 +43,13 @@ describe('routes', () => {
     expect(routeHref({ name: 'settings' })).toBe('/settings')
   })
 
+  it('routes each settings section, and nothing else under settings', () => {
+    expect(parseRoute('/settings/study', '')).toEqual({ name: 'settings', section: 'study' })
+    expect(parseRoute('/settings/languages/', '')).toEqual({ name: 'settings', section: 'languages' })
+    expect(routeHref({ name: 'settings', section: 'account' })).toBe('/settings/account')
+    expect(parseRoute('/settings/nonsense', '')).toEqual({ name: 'home' })
+  })
+
   it('routes the placement test under settings', () => {
     expect(parseRoute('/settings/placement', '')).toEqual({ name: 'placement' })
     expect(routeHref({ name: 'placement' })).toBe('/settings/placement')

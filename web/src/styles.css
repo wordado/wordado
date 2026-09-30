@@ -2299,13 +2299,348 @@ dialog.confirm::backdrop {
 
 /* Settings */
 
-.settings {
-  max-width: var(--measure);
+/* A menu of sections and the open section: they take turns on a phone, and sit side by side from 48rem. */
+.app > main > .settings {
+  display: grid;
+  gap: var(--space-3);
+  align-items: start;
+  max-width: none;
 }
 
-.settings > section {
-  padding: var(--space-4) 0;
+.settings-title {
+  margin: 0;
+}
+
+.settings-menu {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.settings-group ul {
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+  overflow: hidden;
+  background: var(--paper-raised);
+  border: 1px solid var(--rule);
+  border-radius: 1.125rem;
+}
+
+.settings-group .eyebrow {
+  margin: 0 var(--space-1);
+  font-size: 0.75rem;
+}
+
+.settings-group li + li {
   border-top: 1px solid var(--rule);
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 3.75rem;
+  padding: var(--space-2) var(--space-3);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.settings-row:hover {
+  background: var(--paper);
+}
+
+.settings-row-icon {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  color: var(--rose);
+  background: var(--paper);
+  border-radius: 0.625rem;
+}
+
+.settings-row-text {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+  min-width: 0;
+}
+
+.settings-row-title {
+  font-weight: 600;
+}
+
+.settings-row-text .note {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.settings-chevron {
+  flex-shrink: 0;
+  color: var(--ink-soft);
+}
+
+.settings-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.settings-back {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: var(--space-1);
+  min-height: 2.75rem;
+  font-weight: 600;
+  color: var(--rose);
+  text-decoration: none;
+}
+
+.settings-section h2 {
+  margin: 0 0 var(--space-3);
+  font: 600 var(--step-2) / 1.2 var(--font-entry);
+}
+
+.settings-section h3 {
+  margin: var(--space-4) 0 var(--space-2);
+  font: 600 var(--step-0) / 1.3 var(--font-ui);
+}
+
+.settings-languages > section + section {
+  margin-top: var(--space-4);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--rule);
+}
+
+.settings-section .field,
+.settings-section .choices {
+  margin: 0;
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--rule);
+}
+
+/* A fieldset's border breaks around its legend; a shadow draws the same line whole. */
+.settings-section .choices {
+  border: 0;
+  box-shadow: 0 -1px 0 var(--rule);
+}
+
+.settings-section .choices legend {
+  float: left;
+  width: 100%;
+  margin-bottom: var(--space-2);
+}
+
+.settings-section .choices legend + * {
+  clear: both;
+}
+
+@media (max-width: 47.99rem) {
+  /* The menu alone, or a section alone with the way back. */
+  .settings:not(.has-section) .settings-page,
+  .settings.has-section .settings-menu {
+    display: none;
+  }
+
+  .settings.has-section .settings-title {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+@media (min-width: 48rem) {
+  .app > main > .settings {
+    grid-template-columns: 20rem minmax(0, 1fr);
+    gap: var(--space-3) 1.5rem;
+  }
+
+  .settings-title {
+    grid-column: 1 / -1;
+  }
+
+  .settings-back {
+    display: none;
+  }
+
+  .settings-row.is-shown {
+    background: var(--rose-soft);
+  }
+
+  .settings-row.is-shown .settings-row-icon {
+    background: var(--paper-raised);
+  }
+}
+
+/* Numbers: − and + beside the field; the hint below. */
+.number-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+
+.number-field > .note,
+.number-field > .field-error {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.number-field > .note:empty {
+  display: none;
+}
+
+.stepper {
+  display: flex;
+  overflow: hidden;
+  border: 1.5px solid var(--rule);
+  border-radius: 0.75rem;
+}
+
+.stepper button {
+  width: 2.75rem;
+  min-height: 2.75rem;
+  font: 500 var(--step-1) / 1 var(--font-ui);
+  color: var(--ink);
+  background: var(--paper-raised);
+  border: 0;
+  cursor: pointer;
+}
+
+.stepper button:disabled {
+  color: var(--rule);
+  cursor: default;
+}
+
+.field .stepper input {
+  width: 3.75rem;
+  min-height: 2.75rem;
+  max-width: none;
+  padding: 0;
+  font-weight: 600;
+  text-align: center;
+  border: 0;
+  border-inline: 1px solid var(--rule);
+  border-radius: 0;
+}
+
+/* One choice among a few, as a row of segments over real radio buttons. */
+.segmented {
+  display: grid;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  background: var(--paper);
+  border-radius: 0.75rem;
+}
+
+.choices .segmented label {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 2.5rem;
+  font-weight: 500;
+  color: var(--ink-soft);
+  border-radius: 0.5625rem;
+  cursor: pointer;
+}
+
+.choices .segmented input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.segmented label:has(input:checked) {
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--paper-raised);
+  box-shadow: 0 1px 3px rgb(20 28 51 / 0.15);
+}
+
+.segmented label:has(input:focus-visible) {
+  outline: 2px solid var(--rose);
+  outline-offset: 2px;
+}
+
+.segmented-field > .note {
+  margin: var(--space-2) 0 0;
+}
+
+/* On and off: a switch on the right, over a real checkbox. */
+.switch-field label.check {
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-4);
+  font-weight: 600;
+}
+
+.switch-field label.check input {
+  flex-shrink: 0;
+  order: 2;
+  appearance: none;
+  position: relative;
+  width: 3.125rem;
+  height: 1.875rem;
+  margin: 0;
+  background: var(--rule);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 150ms ease-out;
+}
+
+.switch-field label.check input::before {
+  content: '';
+  position: absolute;
+  top: 0.125rem;
+  left: 0.125rem;
+  width: 1.625rem;
+  height: 1.625rem;
+  background: #ffffff;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.25);
+  transition: transform 150ms ease-out;
+}
+
+.switch-field label.check input:checked {
+  background: var(--rose);
+}
+
+.switch-field label.check input:checked::before {
+  transform: translateX(1.25rem);
+}
+
+.switch-field label.check input:focus-visible {
+  outline: 2px solid var(--rose);
+  outline-offset: 2px;
+}
+
+.switch-field label.check input:disabled {
+  opacity: 0.6;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .switch-field label.check input,
+  .switch-field label.check input::before {
+    transition: none;
+  }
+}
+
+.switch-field > .note {
+  margin: var(--space-1) 0 0;
 }
 
 .choices {

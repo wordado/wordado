@@ -30,9 +30,10 @@ function useSave(): { save(patch: Partial<Settings>): Promise<void>; status: str
 }
 
 /**
- * A number field saved when it is left or Enter is pressed. What the
- * learner types stays in the field until it is valid; an invalid value is
- * explained at the field and never reaches `updateSettings`.
+ * A number field saved when it is left or Enter is pressed, with − and +
+ * beside it that save one step at once. What the learner types stays in the
+ * field until it is valid; an invalid value is explained at the field and
+ * never reaches `updateSettings`.
  */
 function NumberSetting(props: {
   readonly label: string
@@ -43,6 +44,7 @@ function NumberSetting(props: {
   readonly max: number
   onSave(value: number): Promise<void>
 }) {
+  const { t } = useT()
   const id = useId()
   const hintId = useId()
   const errorId = useId()
@@ -57,24 +59,40 @@ function NumberSetting(props: {
     setError(value === null)
     if (value !== null && value !== props.value) await props.onSave(value)
   }
+  /** One step from what the field shows (or the saved value, while it shows something invalid). */
+  const step = async (by: number) => {
+    const from = parseWholeNumber(text, props.min, props.max) ?? props.value
+    const value = Math.min(props.max, Math.max(props.min, from + by))
+    setText(String(value))
+    setError(false)
+    if (value !== props.value) await props.onSave(value)
+  }
   return (
-    <div className="field">
+    <div className="field number-field">
       <label htmlFor={id}>{props.label}</label>
+      <div className="stepper">
+        <button type="button" aria-label={t('settings.less', { label: props.label })} disabled={props.value <= props.min} onClick={() => void step(-1)}>
+          −
+        </button>
+        <input
+          id={id}
+          inputMode="numeric"
+          value={text}
+          aria-describedby={error ? `${hintId} ${errorId}` : hintId}
+          aria-invalid={error || undefined}
+          onChange={(e) => setText(e.target.value)}
+          onBlur={() => void commit()}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') void commit()
+          }}
+        />
+        <button type="button" aria-label={t('settings.more', { label: props.label })} disabled={props.value >= props.max} onClick={() => void step(1)}>
+          +
+        </button>
+      </div>
       <p className="note" id={hintId}>
         {props.hint}
       </p>
-      <input
-        id={id}
-        inputMode="numeric"
-        value={text}
-        aria-describedby={error ? `${hintId} ${errorId}` : hintId}
-        aria-invalid={error || undefined}
-        onChange={(e) => setText(e.target.value)}
-        onBlur={() => void commit()}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') void commit()
-        }}
-      />
       {error && (
         <p className="field-error" role="alert" id={errorId}>
           {props.invalid}
@@ -93,6 +111,7 @@ export function StudySettings() {
   const { save, status } = useSave()
   const goalHintId = useId()
   const latencyHintId = useId()
+  const retentionHintId = useId()
   // The levels the installed words come in, and the learner's own: a level with no words would teach nothing.
   const shipped = new Set<CefrLevel>(corpus?.units.map((u) => u.level) ?? [])
   shipped.add(settings.declaredLevel)
@@ -100,15 +119,21 @@ export function StudySettings() {
   return (
     <section aria-labelledby="settings-study">
       <h2 id="settings-study">{t('settings.study')}</h2>
-      <fieldset className="choices">
+      <fieldset className="choices segmented-field">
         <legend>{t('settings.level')}</legend>
-        <p className="note">{t('settings.levelHint')}</p>
-        {levels.map((level) => (
-          <label key={level}>
-            <input type="radio" name="level" value={level} checked={settings.declaredLevel === level} onChange={() => void save({ declaredLevel: level })} />
-            {t(`level.${level}` as MessageKey)}
-          </label>
-        ))}
+        <div className="segmented">
+          {levels.map((level) => (
+            <label key={level}>
+              <input type="radio" name="level" value={level} checked={settings.declaredLevel === level} onChange={() => void save({ declaredLevel: level })} />
+              {/* The segment shows the code; its name is the whole label, which begins with it (WCAG 2.5.3). */}
+              <span aria-hidden="true">{level}</span>
+              <span className="visually-hidden">{t(`level.${level}` as MessageKey)}</span>
+            </label>
+          ))}
+        </div>
+        <p className="note">
+          {t(`level.${settings.declaredLevel}` as MessageKey)}. {t('settings.levelHint')}
+        </p>
       </fieldset>
       {placementAvailable(corpus) ? (
         <p>
@@ -135,18 +160,21 @@ export function StudySettings() {
         max={MAX_REVIEW_CAP}
         onSave={(reviewCap) => save({ reviewCap })}
       />
-      <fieldset className="choices">
+      <fieldset className="choices segmented-field" aria-describedby={retentionHintId}>
         <legend>{t('settings.retention')}</legend>
-        {RETENTIONS.map((r) => (
-          <label key={r}>
-            <input type="radio" name="retention" value={r} checked={settings.retention === r} onChange={() => void save({ retention: r })} />
-            <span>
-              {t(`settings.retention.${r}` as MessageKey)} <span className="note">— {t(`settings.retention.${r}Hint` as MessageKey)}</span>
-            </span>
-          </label>
-        ))}
+        <div className="segmented">
+          {RETENTIONS.map((r) => (
+            <label key={r}>
+              <input type="radio" name="retention" value={r} checked={settings.retention === r} onChange={() => void save({ retention: r })} />
+              <span>{t(`settings.retention.${r}` as MessageKey)}</span>
+            </label>
+          ))}
+        </div>
+        <p className="note" id={retentionHintId}>
+          {t(`settings.retention.${settings.retention}Hint` as MessageKey)}
+        </p>
       </fieldset>
-      <div className="field">
+      <div className="field switch-field">
         <label className="check">
           <input
             type="checkbox"
@@ -171,13 +199,13 @@ export function StudySettings() {
           onSave={(dailyGoal) => save({ dailyGoal })}
         />
       )}
-      <div className="field">
+      <div className="field switch-field">
         <label className="check">
           <input type="checkbox" checked={settings.audio} onChange={(e) => void save({ audio: e.target.checked })} />
           {t('settings.audio')}
         </label>
       </div>
-      <div className="field">
+      <div className="field switch-field">
         <label className="check">
           <input
             type="checkbox"

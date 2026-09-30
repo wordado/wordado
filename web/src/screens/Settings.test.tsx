@@ -15,6 +15,9 @@ afterEach(cleanup)
 
 const ana = { userId: 'u1', email: 'ana@example.com' }
 
+/** The open section's page, apart from the menu that summarises it. */
+const page = () => within(document.querySelector<HTMLElement>('.settings-section')!)
+
 /** Types into a number field and leaves it, as a learner does; the value is saved on leaving. */
 async function typeAndLeave(label: string, value: string) {
   const field = screen.getByLabelText(label)
@@ -22,10 +25,44 @@ async function typeAndLeave(label: string, value: string) {
   await act(async () => fireEvent.blur(field))
 }
 
+describe('Settings: the menu', () => {
+  const row = (name: RegExp) => screen.getByRole('link', { name })
+
+  it('lists each section with what it is set to, each on its own page', async () => {
+    const ctx = await setup()
+    renderWith(<Settings section={null} />, ctx)
+    expect(row(/^Studying/).textContent).toContain('A1 · 10 new words a day · Standard')
+    expect(row(/^Studying/).getAttribute('href')).toBe('/settings/study')
+    expect(row(/^Words set aside/).textContent).toContain('None')
+    expect(row(/^Audio for offline study/).textContent).toContain('0 of 60 clips on this device')
+    expect(row(/^Reminders/).textContent).toContain('Reminders come with an account.')
+    expect(row(/^Languages/).textContent).toContain('Translations: Български · Menus: English')
+    expect(row(/^Account/).textContent).toContain('Not signed in')
+    expect(row(/^About and privacy/).getAttribute('href')).toBe('/settings/about')
+  })
+
+  it('names the signed-in learner, and leaves out the app while there is nothing to install', async () => {
+    const ctx = await setup()
+    renderWith(<Settings section={null} />, { ...ctx, account: ana })
+    expect(row(/^Account/).textContent).toContain('ana@example.com')
+    expect(screen.queryByRole('link', { name: /^The app/ })).toBeNull()
+  })
+
+  it('marks the open section and offers the way back to the menu', async () => {
+    const ctx = await setup()
+    renderWith(<Settings section="languages" />, ctx)
+    expect(row(/^Languages/).getAttribute('aria-current')).toBe('page')
+    expect(screen.getByRole('link', { name: 'Settings' }).getAttribute('href')).toBe('/settings')
+    expect(screen.getByRole('heading', { level: 2, name: 'Languages' })).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 3, name: 'Native language' })).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 3, name: 'Interface language' })).toBeTruthy()
+  })
+})
+
 describe('Settings: studying (spec §7.1, §7.4, §11.1)', () => {
   it('shows the current settings', async () => {
     const ctx = await setup()
-    renderWith(<Settings />, ctx)
+    renderWith(<Settings section="study" />, ctx)
     expect((screen.getByLabelText('New words a day') as HTMLInputElement).value).toBe('10')
     expect((screen.getByLabelText('Reviews a day, at most') as HTMLInputElement).value).toBe('100')
     expect((screen.getByRole('radio', { name: /Standard/ }) as HTMLInputElement).checked).toBe(true)
@@ -33,16 +70,26 @@ describe('Settings: studying (spec §7.1, §7.4, §11.1)', () => {
     expect((screen.getByRole('radio', { name: 'A1 · Beginner' }) as HTMLInputElement).checked).toBe(true)
   })
 
+  it('steps a number with − and +, saving at once, and stops at the limits', async () => {
+    const ctx = await setup()
+    renderWith(<Settings section="study" />, ctx)
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'More: New words a day' })))
+    expect(ctx.client.snapshot.settings.newWordLimit).toBe(11)
+    expect((screen.getByLabelText('New words a day') as HTMLInputElement).value).toBe('11')
+    await act(async () => ctx.client.updateSettings({ newWordLimit: 0 }))
+    expect((screen.getByRole('button', { name: 'Less: New words a day' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
   it('saves a valid number when the field is left', async () => {
     const ctx = await setup()
-    renderWith(<Settings />, ctx)
+    renderWith(<Settings section="study" />, ctx)
     await typeAndLeave('New words a day', '15')
     expect(ctx.client.snapshot.settings.newWordLimit).toBe(15)
   })
 
   it.each(['', '45', '-1', '2.5', 'ten'])('refuses %j, says why at the field, and saves nothing', async (value) => {
     const ctx = await setup()
-    renderWith(<Settings />, ctx)
+    renderWith(<Settings section="study" />, ctx)
     await typeAndLeave('New words a day', value)
     const field = screen.getByLabelText('New words a day')
     const alert = screen.getByRole('alert')
@@ -53,7 +100,7 @@ describe('Settings: studying (spec §7.1, §7.4, §11.1)', () => {
 
   it('saves retention, audio and latency grading as they change', async () => {
     const ctx = await setup()
-    renderWith(<Settings />, ctx)
+    renderWith(<Settings section="study" />, ctx)
     await act(async () => fireEvent.click(screen.getByRole('radio', { name: /Intensive/ })))
     await act(async () => fireEvent.click(screen.getByRole('checkbox', { name: 'Play audio, and include listening exercises' })))
     await act(async () => fireEvent.click(screen.getByRole('checkbox', { name: 'Count slow answers as “hard”' })))
@@ -62,7 +109,7 @@ describe('Settings: studying (spec §7.1, §7.4, §11.1)', () => {
 
   it('sets and clears a daily goal', async () => {
     const ctx = await setup()
-    renderWith(<Settings />, ctx)
+    renderWith(<Settings section="study" />, ctx)
     expect(screen.queryByLabelText('Answers a day')).toBeNull()
     await act(async () => fireEvent.click(screen.getByRole('checkbox', { name: 'Set a daily goal' })))
     expect(ctx.client.snapshot.settings.dailyGoal).toBe(20)
@@ -77,7 +124,7 @@ describe('Settings: studying (spec §7.1, §7.4, §11.1)', () => {
 
   it('ties the goal’s and the latency setting’s hints to their checkboxes', async () => {
     const ctx = await setup()
-    renderWith(<Settings />, ctx)
+    renderWith(<Settings section="study" />, ctx)
     const goal = screen.getByRole('checkbox', { name: 'Set a daily goal' })
     expect(document.getElementById(goal.getAttribute('aria-describedby')!)?.textContent).toBe('A day also counts toward your streak once you answer this many.')
     const latency = screen.getByRole('checkbox', { name: 'Count slow answers as “hard”' })
@@ -88,7 +135,7 @@ describe('Settings: studying (spec §7.1, §7.4, §11.1)', () => {
 
   it('offers only the levels the words come in', async () => {
     const ctx = await setup()
-    renderWith(<Settings />, ctx)
+    renderWith(<Settings section="study" />, ctx)
     const levels = within(screen.getByRole('group', { name: 'Your level' })).getAllByRole('radio')
     // The bundled sample is A1 only.
     expect(levels.map((r) => r.getAttribute('value'))).toEqual(['A1'])
@@ -99,7 +146,7 @@ describe('Settings: audio for offline study (spec §9.3)', () => {
   it('downloads every clip of the learner’s level', async () => {
     const ctx = await setup()
     const audio = fakeAudio()
-    renderWith(<Settings />, { ...ctx, audio })
+    renderWith(<Settings section="audio" />, { ...ctx, audio })
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Download A1 audio' })))
     expect(audio.fetched.map((c) => c.clipId).sort()).toEqual(ctx.client.levelClips('A1').map((c) => c.clipId).sort())
   })
@@ -108,7 +155,7 @@ describe('Settings: audio for offline study (spec §9.3)', () => {
 describe('Settings: the account (spec §11)', () => {
   it('offers an account from the demo, and no export or deletion', async () => {
     const ctx = await setup()
-    renderWith(<Settings />, ctx)
+    renderWith(<Settings section="account" />, ctx)
     expect(screen.getByText(/without an account/)).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Create an account' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Download your data (JSON)' })).toBeNull()
@@ -118,7 +165,7 @@ describe('Settings: the account (spec §11)', () => {
     vi.mocked(saveFile).mockClear()
     const ctx = await setup()
     const api = fakeApi()
-    renderWith(<Settings />, { ...ctx, account: ana, api })
+    renderWith(<Settings section="account" />, { ...ctx, account: ana, api })
     expect(screen.getByText('Signed in as ana@example.com')).toBeTruthy()
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Download your data (JSON)' })))
     expect(api.calls).toContain('exportData')
@@ -133,7 +180,7 @@ describe('Settings: the account (spec §11)', () => {
         throw new ApiError(409, 'wrong_user')
       },
     })
-    renderWith(<Settings />, { ...ctx, account: ana, api })
+    renderWith(<Settings section="account" />, { ...ctx, account: ana, api })
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Download your data (JSON)' })))
     expect(screen.getByRole('alert').textContent).toBe('Your sign-in has expired. Sign in again.')
     expect(saveFile).not.toHaveBeenCalled()
@@ -152,7 +199,7 @@ describe('Settings: the account (spec §11)', () => {
         return 'signed-out'
       },
     })
-    renderWith(<Settings />, { ...ctx, account: ana, accounts })
+    renderWith(<Settings section="account" />, { ...ctx, account: ana, accounts })
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Sign out' })))
     expect(screen.getByRole('dialog', { name: 'Some answers haven’t synced' })).toBeTruthy()
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Sign out and delete them' })))
@@ -168,7 +215,7 @@ describe('Settings: the account (spec §11)', () => {
           fail = reject
         }),
     })
-    renderWith(<Settings />, { ...ctx, account: ana, accounts })
+    renderWith(<Settings section="account" />, { ...ctx, account: ana, accounts })
     const button = screen.getByRole('button', { name: 'Sign out' }) as HTMLButtonElement
     await act(async () => fireEvent.click(button))
     expect(button.disabled).toBe(true)
@@ -182,7 +229,7 @@ describe('Settings: the account (spec §11)', () => {
   it('deletes the account only once the learner says they understand', async () => {
     const ctx = await setup()
     const accounts = fakeAccounts()
-    renderWith(<Settings />, { ...ctx, account: ana, accounts })
+    renderWith(<Settings section="account" />, { ...ctx, account: ana, accounts })
     fireEvent.click(screen.getByRole('button', { name: 'Delete your account' }))
     const confirm = screen.getByRole('button', { name: 'Delete my account' }) as HTMLButtonElement
     expect(confirm.disabled).toBe(true)
@@ -196,7 +243,7 @@ describe('Settings: the account (spec §11)', () => {
 describe('Settings: the placement test (spec §7.2)', () => {
   it('says why there is no test on the A1-only sample', async () => {
     const ctx = await setup()
-    renderWith(<Settings />, ctx)
+    renderWith(<Settings section="study" />, ctx)
     expect(screen.queryByRole('link', { name: 'Find your level with a short test' })).toBeNull()
     expect(screen.getByText('A placement test opens once words of more than one level are installed.')).toBeTruthy()
   })
@@ -206,7 +253,7 @@ describe('Settings: words set aside (spec §7.4)', () => {
   it('lists them and brings one back', async () => {
     const ctx = await setup()
     await ctx.client.setFlag('c:hello-1' as WordId, 'suspended')
-    renderWith(<Settings />, ctx)
+    renderWith(<Settings section="words" />, ctx)
     const list = screen.getByRole('region', { name: 'Words set aside' })
     expect(within(list).getByText('hello')).toBeTruthy()
     expect(within(list).getByText('Not now')).toBeTruthy()
@@ -223,14 +270,14 @@ describe('Settings: reminders (spec §8.11)', () => {
 
   it('needs an account', async () => {
     const ctx = await setup()
-    renderWith(<Settings />, ctx)
-    expect(screen.getByText('Reminders come with an account.')).toBeTruthy()
+    renderWith(<Settings section="reminders" />, ctx)
+    expect(page().getByText('Reminders come with an account.')).toBeTruthy()
   })
 
   it('turns on at 19:00, changes the time and the nudge, and turns off', async () => {
     const ctx = await setup()
     const reminders = fakeReminders()
-    renderWith(<Settings />, { ...ctx, account: ana, reminders })
+    renderWith(<Settings section="reminders" />, { ...ctx, account: ana, reminders })
     await act(async () => fireEvent.click(screen.getByRole('checkbox', { name: 'Remind me to study' })))
     const time = screen.getByLabelText('At') as HTMLInputElement
     expect(time.value).toBe('19:00')
@@ -239,13 +286,13 @@ describe('Settings: reminders (spec §8.11)', () => {
     await act(async () => fireEvent.click(screen.getByRole('checkbox', { name: /streak needs today/ })))
     await act(async () => fireEvent.click(screen.getByRole('checkbox', { name: 'Remind me to study' })))
     expect(reminders.calls).toEqual(['enable 1140 false', 'enable 450 false', 'enable 450 true', 'disable'])
-    expect(screen.getByText('Reminders are off.')).toBeTruthy()
+    expect(page().getByText('Reminders are off.')).toBeTruthy()
   })
 
   it('saves the time once per blur, and never disables the time field', async () => {
     const ctx = await setup()
     const reminders = fakeReminders()
-    renderWith(<Settings />, { ...ctx, account: ana, reminders })
+    renderWith(<Settings section="reminders" />, { ...ctx, account: ana, reminders })
     await act(async () => fireEvent.click(screen.getByRole('checkbox', { name: 'Remind me to study' })))
     const time = screen.getByLabelText('At') as HTMLInputElement
     fireEvent.change(time, { target: { value: '07:00' } })
@@ -259,11 +306,11 @@ describe('Settings: reminders (spec §8.11)', () => {
 
   it('says plainly why reminders cannot work here', async () => {
     const ctx = await setup()
-    renderWith(<Settings />, { ...ctx, account: ana, reminders: fakeReminders({ support: () => 'needs-install' }) })
+    renderWith(<Settings section="reminders" />, { ...ctx, account: ana, reminders: fakeReminders({ support: () => 'needs-install' }) })
     const blocked = screen.getByText(/once Wordado is on your home screen/)
     expect(blocked.getAttribute('role')).toBe('status')
     cleanup()
-    renderWith(<Settings />, { ...ctx, account: ana, reminders: fakeReminders({ enable: async () => 'denied' }) })
+    renderWith(<Settings section="reminders" />, { ...ctx, account: ana, reminders: fakeReminders({ enable: async () => 'denied' }) })
     await act(async () => fireEvent.click(screen.getByRole('checkbox', { name: 'Remind me to study' })))
     expect(screen.getByText(/Notifications are blocked/)).toBeTruthy()
     expect((screen.getByRole('checkbox', { name: 'Remind me to study' }) as HTMLInputElement).checked).toBe(false)
@@ -271,7 +318,7 @@ describe('Settings: reminders (spec §8.11)', () => {
 
   it('says the prompt was dismissed, not blocked, and leaves the toggle off', async () => {
     const ctx = await setup()
-    renderWith(<Settings />, { ...ctx, account: ana, reminders: fakeReminders({ enable: async () => 'dismissed' }) })
+    renderWith(<Settings section="reminders" />, { ...ctx, account: ana, reminders: fakeReminders({ enable: async () => 'dismissed' }) })
     await act(async () => fireEvent.click(screen.getByRole('checkbox', { name: 'Remind me to study' })))
     expect(screen.getByText('Reminders stay off: notifications weren’t allowed.')).toBeTruthy()
     expect((screen.getByRole('checkbox', { name: 'Remind me to study' }) as HTMLInputElement).checked).toBe(false)
@@ -281,7 +328,7 @@ describe('Settings: reminders (spec §8.11)', () => {
 describe('Settings: the privacy policy (spec §11)', () => {
   it('links to the policy', async () => {
     const ctx = await setup()
-    renderWith(<Settings />, ctx)
+    renderWith(<Settings section="about" />, ctx)
     expect(screen.getByRole('link', { name: 'Privacy policy' }).getAttribute('href')).toBe('/privacy')
   })
 })

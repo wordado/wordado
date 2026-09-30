@@ -67,7 +67,7 @@ export function ReminderSettings() {
       ) : (
         <>
           <p className="note">{t('reminders.hint')}</p>
-          <div className="field">
+          <div className="field switch-field">
             <label className="check">
               <input
                 type="checkbox"
@@ -94,7 +94,7 @@ export function ReminderSettings() {
                   }}
                 />
               </div>
-              <div className="field">
+              <div className="field switch-field">
                 <label className="check">
                   <input type="checkbox" checked={prefs.streakNudge} disabled={busy} onChange={(e) => void apply({ ...prefs, streakNudge: e.target.checked })} />
                   {t('reminders.nudge')}
