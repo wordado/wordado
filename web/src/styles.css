@@ -120,14 +120,28 @@ p {
 /* The shell */
 
 .app {
+  padding-bottom: var(--space-6);
+}
+
+/* One column for everything: wide enough for Today's two cards, the masthead lined up with it. */
+.masthead-top,
+.nav ul,
+.app > aside,
+.app > main {
+  max-width: 60rem;
+  margin-inline: auto;
+  padding-inline: var(--space-4);
+}
+
+/* Screens of text keep a readable width; Today uses the whole column. */
+.app > main > :not(.home) {
   max-width: 44rem;
-  margin: 0 auto;
-  padding: var(--space-3) var(--space-4) var(--space-6);
 }
 
 .masthead {
   display: flex;
   flex-direction: column;
+  background: var(--paper-raised);
   border-bottom: 1px solid var(--rule);
 }
 
@@ -136,7 +150,8 @@ p {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
-  padding-block: var(--space-2);
+  width: 100%;
+  padding-block: var(--space-3);
 }
 
 .wordmark {
@@ -175,9 +190,10 @@ p {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-5);
+  width: 100%;
   list-style: none;
-  margin: 0;
-  padding: 0;
+  margin-block: 0;
+  padding-block: 0;
 }
 
 .nav a {
@@ -216,6 +232,7 @@ p {
     display: grid;
     grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 0;
+    padding-inline: 0;
   }
 
   .nav a {
@@ -452,24 +469,141 @@ main:focus,
   margin-top: var(--space-4);
 }
 
-/* Today */
+/* Cards: white on the paper, the look every screen shares */
 
-.today {
-  max-width: 14ch;
-  font-size: clamp(var(--step-4), 9vw, var(--step-5));
-  line-height: 1.05;
+.panel {
+  padding: clamp(1.5rem, 4vw, 2.5rem);
+  background: var(--paper-raised);
+  border: 1px solid var(--rule);
+  border-radius: 1.25rem;
 }
 
-.today-more {
-  font: 400 var(--step-2) / 1.25 var(--font-entry);
+.eyebrow {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   color: var(--ink-soft);
 }
 
-.home > .button.primary {
-  margin: var(--space-4) 0;
+/* Today */
+
+.home {
+  display: grid;
+  gap: var(--space-4);
+  align-items: start;
 }
 
-.one-way ul,
+@media (min-width: 48rem) {
+  .home {
+    grid-template-columns: minmax(0, 1fr) 18.75rem;
+    gap: var(--space-5) 1.5rem;
+  }
+}
+
+.home-main {
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+}
+
+.today-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.today-head p {
+  margin: 0;
+}
+
+.today {
+  margin: 0;
+  font-size: clamp(2.125rem, 6vw, 3rem);
+  line-height: 1.05;
+  letter-spacing: -0.015em;
+}
+
+.today-more {
+  font-size: var(--step-1);
+  color: var(--ink-soft);
+}
+
+.home-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.home-actions .button {
+  min-height: 3.25rem;
+  padding-inline: 1.75rem;
+  border-radius: 0.875rem;
+}
+
+.home-actions .button.primary {
+  font-weight: 600;
+}
+
+@media (max-width: 39.99rem) {
+  .home-actions {
+    flex-direction: column;
+  }
+}
+
+.one-way {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-top: 1.75rem;
+  border-top: 1px solid var(--rule);
+}
+
+.one-way h2,
+.motivation h2 {
+  margin: 0;
+  font: 600 var(--step-0) / 1.3 var(--font-ui);
+}
+
+.one-way ul {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(5.5rem, 1fr));
+  gap: var(--space-3);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  height: 100%;
+  padding: var(--space-4);
+  font-weight: 600;
+  color: var(--ink);
+  text-decoration: none;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 0.875rem;
+}
+
+@media (max-width: 39.99rem) {
+  .tile {
+    padding: var(--space-3);
+    font-size: var(--step--1);
+  }
+}
+
+.tile:hover {
+  border-color: var(--ink-soft);
+}
+
+.tile svg {
+  color: var(--rose);
+}
+
 .practice-list {
   display: flex;
   flex-wrap: wrap;
@@ -481,10 +615,46 @@ main:focus,
 }
 
 .motivation {
-  margin-top: var(--space-5);
-  padding-top: var(--space-4);
-  border-top: 1px solid var(--rule);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: 1.75rem;
   color: var(--ink-soft);
+}
+
+.motivation p {
+  margin: 0;
+  font-size: var(--step--1);
+}
+
+.streak {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--rule);
+}
+
+.streak p {
+  font: 600 var(--step-1) / 1.25 var(--font-entry);
+  color: var(--ink);
+}
+
+.streak-badge {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 3rem;
+  height: 3rem;
+  color: var(--amber);
+  background: var(--amber-soft);
+  border-radius: 50%;
+}
+
+.today-counts {
+  display: block;
+  font: 500 var(--step--1) / 1.4 var(--font-ui);
+  color: var(--leaf);
 }
 
 /* The dictionary entry: the one memorable element */
@@ -1100,10 +1270,14 @@ ul.unit-words {
 }
 
 .onboard {
-  margin: var(--space-4) 0;
-  padding: var(--space-4);
+  padding: 1.5rem;
+  background: var(--paper);
   border: 1px solid var(--rule);
-  border-radius: var(--radius);
+  border-radius: 1rem;
+}
+
+.onboard h2 {
+  margin-top: 0;
 }
 
 .onboard-themes {
