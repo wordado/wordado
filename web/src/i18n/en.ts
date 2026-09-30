@@ -128,6 +128,11 @@ export const en = {
   'settings.audioDownloaded': '{done} of {total} clips on this device',
   'settings.audioOffline': 'Connect to download audio.',
 
+  'settings.nativeLanguage': 'Native language',
+  'settings.nativeLanguageHint': 'The language the words are translated into.',
+  'settings.nativeLanguageConfirm': 'Your progress stays. The words switch to {language} translations.',
+  'settings.nativeLanguageChange': 'Change',
+  'settings.nativeLanguagePending': 'Your words switch to {language} as soon as the translations have downloaded.',
   'settings.language': 'Interface language',
   'settings.languageHint': 'The words are always English; this changes the menus and messages.',
 
@@ -186,9 +191,10 @@ export const en = {
 
   'signin.title': 'Create an account or sign in',
   'signin.againTitle': 'Sign in again',
-  'signin.gateIntro': 'First, two questions the law asks us. Only your country is kept.',
+  'signin.gateIntro': 'First, two questions the law asks us. Only your country is kept; your native language is saved with your settings.',
   'signin.country': 'Country where you live',
   'signin.countryUnknown': 'I’d rather not say',
+  'signin.nativeLanguage': 'Your native language',
   'signin.birthYear': 'Year of birth',
   'signin.birthYearHint': 'Four digits, for example 1994. It is not stored.',
   'signin.birthYearInvalid': 'Enter the year you were born, as four digits.',
@@ -295,7 +301,6 @@ export const en = {
   'matching.title': 'Matching',
   'matching.instructions': 'Pick an English word, then its translation.',
   'matching.english': 'English',
-  'matching.translation': 'Bulgarian',
   'matching.miss': '{left} and {right} aren’t a pair.',
   'matching.matched': 'Matched',
   'matching.done': 'All pairs matched.',

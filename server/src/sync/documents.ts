@@ -45,11 +45,21 @@ const unitsOf = (fields: Readonly<Record<string, unknown>>): string[] =>
 /** Keeps the report where account deletion can anonymise it rather than erase it (spec §11). */
 async function saveReport(tx: Queryable, userId: string, key: string, fields: Readonly<Record<string, unknown>>, serverNow: number): Promise<void> {
   await tx.query(
-    `insert into content_report (reporter_id, report_key, word_id, field, note, pack_version, created_at, received_at)
-     values ($1, $2, $3, $4, $5, $6, $7, $8)
+    `insert into content_report (reporter_id, report_key, word_id, field, note, pack_version, created_at, received_at, l1)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      on conflict (reporter_id, report_key) do update set word_id = excluded.word_id, field = excluded.field,
-       note = excluded.note, pack_version = excluded.pack_version, created_at = excluded.created_at`,
-    [userId, key, fields['wordId'], fields['field'], fields['note'], fields['packVersion'], fields['createdAt'], serverNow],
+       note = excluded.note, pack_version = excluded.pack_version, created_at = excluded.created_at, l1 = excluded.l1`,
+    [
+      userId,
+      key,
+      fields['wordId'],
+      fields['field'],
+      fields['note'],
+      fields['packVersion'],
+      fields['createdAt'],
+      serverNow,
+      typeof fields['l1'] === 'string' ? fields['l1'] : null,
+    ],
   )
 }
 

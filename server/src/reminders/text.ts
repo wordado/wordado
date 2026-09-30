@@ -1,4 +1,4 @@
-export const REMINDER_LANGUAGES = ['bg', 'en'] as const
+export const REMINDER_LANGUAGES = ['bg', 'de', 'en'] as const
 export type ReminderLanguage = (typeof REMINDER_LANGUAGES)[number]
 
 export type Reminder = { readonly kind: 'due'; readonly count: number } | { readonly kind: 'streak'; readonly days: number }
@@ -24,7 +24,18 @@ function bulgarian(reminder: Reminder): string {
   return reminder.count === 1 ? 'Имате 1 дума за преговор днес.' : `Имате ${reminder.count} думи за преговор днес.`
 }
 
+function german(reminder: Reminder): string {
+  if (reminder.kind === 'streak') {
+    return reminder.days === 1
+      ? 'Deine Serie von 1 Tag braucht die heutige Übung.'
+      : `Deine Serie von ${reminder.days} Tagen braucht die heutige Übung.`
+  }
+  if (reminder.count === 0) return 'Ein paar Minuten mit neuen Wörtern heute?'
+  return reminder.count === 1 ? 'Du hast heute 1 Wort zu wiederholen.' : `Du hast heute ${reminder.count} Wörter zu wiederholen.`
+}
+
 /** The notification a reminder shows (spec §8.11, §11.2). Plan 8's native review owns the Bulgarian copy. */
 export function reminderText(language: ReminderLanguage, reminder: Reminder): ReminderText {
-  return { title: 'Wordado', body: language === 'bg' ? bulgarian(reminder) : english(reminder) }
+  const body = language === 'bg' ? bulgarian(reminder) : language === 'de' ? german(reminder) : english(reminder)
+  return { title: 'Wordado', body }
 }

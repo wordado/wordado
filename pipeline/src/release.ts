@@ -75,7 +75,8 @@ export function planRelease(dir: string, opts: { draft: boolean; now: string }):
 
   for (const l1 of config.l1s) {
     const previous = last.packs.get(l1) ?? null
-    const a = assemble({ l1, corpusVersion, draft, decisions, themes, records, config, previous, hasClip })
+    const previousLeadUnits = (lead !== undefined ? last.packs.get(lead)?.units : undefined) ?? []
+    const a = assemble({ l1, corpusVersion, draft, decisions, themes, records, config, previous, previousLeadUnits, hasClip })
     problems.push(...a.problems.map((p) => `${l1}: ${p}`))
     pending.push(...a.pending.filter((p) => !pending.includes(p)))
     unreviewed.push(...a.unreviewed.filter((u) => !unreviewed.some((v) => v.line === u.line)))

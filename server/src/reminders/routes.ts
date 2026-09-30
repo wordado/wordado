@@ -30,7 +30,7 @@ function parseSubscription(raw: unknown): Parsed<SubscriptionInput> {
     errors.push('reminderMinute must be a minute of the day, 0–1439')
   }
   if (typeof tzOffsetMin !== 'number' || !isValidTzOffset(tzOffsetMin)) errors.push('tzOffsetMin must be the minutes to add to UTC')
-  if (!(REMINDER_LANGUAGES as readonly unknown[]).includes(language)) errors.push('language must be bg or en')
+  if (!(REMINDER_LANGUAGES as readonly unknown[]).includes(language)) errors.push(`language must be one of ${REMINDER_LANGUAGES.join(', ')}`)
   if (typeof streakNudge !== 'boolean') errors.push('streakNudge must be true or false')
   if (errors.length > 0) return { ok: false, errors }
   return {
@@ -87,7 +87,7 @@ export function reminderRoutes(app: Hono<AppEnv>, deps: ServerDeps, user: Middle
     if (!raw) return invalid(c, ['tz is required'])
     const tz = Number(raw)
     if (!isValidTzOffset(tz)) return invalid(c, ['tz must be the minutes to add to UTC'])
-    const language: ReminderLanguage = c.req.query('lang') === 'bg' ? 'bg' : 'en'
+    const language: ReminderLanguage = REMINDER_LANGUAGES.find((l) => l === c.req.query('lang')) ?? 'en'
     return c.json(reminderText(language, await currentReminder(deps.db, c.get('userId'), deps.now(), tz)))
   })
 }

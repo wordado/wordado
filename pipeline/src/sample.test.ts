@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs'
+import { cpSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
@@ -13,27 +14,28 @@ import {
 } from '@wordado/core'
 import { describe, expect, it } from 'vitest'
 import { buildPack } from './build'
-import { readSourceDir } from './fs'
+import { readSourceDir, writeArtifacts } from './fs'
 
-const DIR = fileURLToPath(new URL('../samples/a1-bg/', import.meta.url))
-const { source, clips } = readSourceDir(DIR)
-const built = buildPack(source, clips)
-const corpus = loadCorpus([built.pack])
+const DIR = fileURLToPath(new URL('../samples/a1/', import.meta.url))
+const { sources, clips } = readSourceDir(DIR)
+const built = sources.map((source) => buildPack(source, clips))
+const bgOut = built.find((o) => o.pack.l1 === 'bg')!
+const deOut = built.find((o) => o.pack.l1 === 'de')!
+const corpus = loadCorpus([bgOut.pack])
 const pool = [...corpus.entries.values()]
 
 describe('the A1 Bulgarian sample pack', () => {
   it('is committed byte for byte as the build produces it', () => {
-    const committed = readFileSync(join(DIR, built.packFile))
-    expect(committed.equals(Buffer.from(built.packBytes))).toBe(true)
-    expect(JSON.parse(readFileSync(join(DIR, 'manifest.json'), 'utf8'))).toEqual(built.manifest)
+    const committed = readFileSync(join(DIR, bgOut.packFile))
+    expect(committed.equals(Buffer.from(bgOut.packBytes))).toBe(true)
   })
 
   it('validates from disk and is version 0 of the Bulgarian corpus pack', () => {
-    const result = validatePack(JSON.parse(readFileSync(join(DIR, built.packFile), 'utf8')))
+    const result = validatePack(JSON.parse(readFileSync(join(DIR, bgOut.packFile), 'utf8')))
     expect(result.status).toBe('ok')
-    expect(built.pack.pack_id).toBe('corpus-bg')
-    expect(built.pack.corpus_version).toBe(0)
-    expect(built.packFile).toBe('corpus-v0-bg.pack')
+    expect(bgOut.pack.pack_id).toBe('corpus-bg')
+    expect(bgOut.pack.corpus_version).toBe(0)
+    expect(bgOut.packFile).toBe('corpus-v0-bg.pack')
   })
 
   it('has 60 A1 entries in three units of 20, 24 themes and a UK clip for every entry', () => {
@@ -75,5 +77,58 @@ describe('the A1 Bulgarian sample pack', () => {
       expect(pickDistractors(e, { pool, encountered, listening: true }, 3, seededRng(2))).toHaveLength(3)
     }
     expect(buildMatchingBoard(pool, 5, seededRng(3))).toHaveLength(5)
+  })
+})
+
+describe('the A1 German sample pack (plan 10)', () => {
+  it('is committed byte for byte as the build produces it, and validates as version 0 of the German corpus pack', () => {
+    const committed = readFileSync(join(DIR, deOut.packFile))
+    expect(committed.equals(Buffer.from(deOut.packBytes))).toBe(true)
+    const result = validatePack(JSON.parse(readFileSync(join(DIR, deOut.packFile), 'utf8')))
+    expect(result.status).toBe('ok')
+    expect(deOut.pack.pack_id).toBe('corpus-de')
+    expect(deOut.pack.corpus_version).toBe(0)
+    expect(deOut.packFile).toBe('corpus-v0-de.pack')
+  })
+
+  it('shares the same entry IDs, units and audio as the Bulgarian pack', () => {
+    expect(deOut.pack.entries.map((e) => e.entry_id).sort()).toEqual(bgOut.pack.entries.map((e) => e.entry_id).sort())
+    expect(deOut.pack.units.map((u) => [u.unit_id, u.entry_ids])).toEqual(bgOut.pack.units.map((u) => [u.unit_id, u.entry_ids]))
+    expect(deOut.pack.audio.map((a) => a.clip_id).sort()).toEqual(bgOut.pack.audio.map((a) => a.clip_id).sort())
+  })
+
+  it('translates hello-1 as hallo', () => {
+    expect(deOut.pack.entries.find((e) => e.entry_id === 'hello-1')?.translation).toBe('hallo')
+  })
+})
+
+describe('the sample manifest (plan 10)', () => {
+  it('lists both packs at version 0', () => {
+    const manifest = JSON.parse(readFileSync(join(DIR, 'manifest.json'), 'utf8')) as { packs: { pack_id: string; l1: string; corpus_version: number }[] }
+    expect(manifest.packs.map((p) => [p.pack_id, p.l1, p.corpus_version]).sort()).toEqual([
+      ['corpus-bg', 'bg', 0],
+      ['corpus-de', 'de', 0],
+    ])
+    expect(manifest).toEqual({
+      schema_version: bgOut.manifest.schema_version,
+      corpus_version: 0,
+      packs: [...bgOut.manifest.packs, ...deOut.manifest.packs].sort((a, b) => (a.l1 < b.l1 ? -1 : 1)),
+    })
+  })
+
+  it('rebuilds byte for byte from a copy of the folder', () => {
+    const root = mkdtempSync(join(tmpdir(), 'sample-'))
+    try {
+      const copy = join(root, 'a1')
+      cpSync(DIR, copy, { recursive: true })
+      const { sources: sources2, clips: clips2 } = readSourceDir(copy)
+      const outs = sources2.map((source) => buildPack(source, clips2))
+      writeArtifacts(copy, outs)
+      // Rebuilding into the copy must reproduce exactly what is committed in DIR, not just be internally consistent.
+      for (const out of outs) expect(readFileSync(join(copy, out.packFile))).toEqual(readFileSync(join(DIR, out.packFile)))
+      expect(JSON.parse(readFileSync(join(copy, 'manifest.json'), 'utf8'))).toEqual(JSON.parse(readFileSync(join(DIR, 'manifest.json'), 'utf8')))
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 })

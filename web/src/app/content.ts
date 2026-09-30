@@ -33,19 +33,22 @@ export function startPackChecks(options: PackCheckOptions): () => void {
 }
 
 /**
- * When a staged pack becomes active (at a session's start), the clips it
- * lists may differ: `AudioStore` re-reads which are cached (6a contract),
- * so listening is offered exactly when it can play.
+ * When a staged pack becomes active (at a session's start), or the native
+ * language changes (a pack of the other L1 swaps in, perhaps at the same
+ * corpus version, plan 10), the clips it lists may differ: `AudioStore`
+ * re-reads which are cached (6a contract), so listening is offered exactly
+ * when it can play.
  */
 export function refreshAudioOnActivation(
-  target: { readonly store: Store<{ readonly packVersion: number | null; readonly corpus: Corpus | null }> },
+  target: { readonly store: Store<{ readonly packVersion: number | null; readonly corpus: Corpus | null; readonly l1: string }> },
   audio: { refresh(corpus: Corpus): Promise<void> },
 ): () => void {
-  let version = target.store.get().packVersion
+  let { packVersion: version, l1: language } = target.store.get()
   return target.store.subscribe(() => {
-    const { packVersion, corpus } = target.store.get()
-    if (packVersion === version) return
+    const { packVersion, corpus, l1 } = target.store.get()
+    if (packVersion === version && l1 === language) return
     version = packVersion
+    language = l1
     if (corpus) void audio.refresh(corpus).catch(() => undefined)
   })
 }

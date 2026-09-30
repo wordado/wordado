@@ -20,7 +20,7 @@ const serveSample: Fetch = async (input) => {
 describe('fetchManifest', () => {
   it('fetches and validates the manifest', async () => {
     const manifest = await fetchManifest(new URL('/content/sample/manifest.json', PAGE).href, serveSample)
-    expect(manifest.packs.map((p) => p.pack_id)).toEqual(['corpus-bg'])
+    expect(manifest.packs.map((p) => p.pack_id).sort()).toEqual(['corpus-bg', 'corpus-de'])
   })
 
   it('refuses a missing, invalid or too-new manifest with a reason', async () => {

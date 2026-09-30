@@ -17,10 +17,12 @@ export interface ReportRow {
   readonly reporter: string
   /** Epoch milliseconds. */
   readonly received_at: number
+  /** The L1 the report was made in, or null for one made before plan 10. */
+  readonly l1: string | null
 }
 
-/** Plan 5's table (server/migrations/0001_init.sql). The role that runs this can select from it and nothing else. */
-export const REPORTS_SQL = 'select id, word_id, field, note, pack_version, reporter_id, received_at from content_report order by id'
+/** Plan 5's table (server/migrations/0001_init.sql), plan 10's l1 column. The role that runs this can select from it and nothing else. */
+export const REPORTS_SQL = 'select id, word_id, field, note, pack_version, reporter_id, received_at, l1 from content_report order by id'
 
 const hash = (s: string) => sha256Hex(new TextEncoder().encode(s)).slice(0, 16)
 
@@ -31,6 +33,7 @@ export async function pullReports(query: (sql: string) => Promise<{ rows: Record
     if (!(REPORT_FIELDS as readonly string[]).includes(field)) return []
     const id = Number(row['id'])
     const reporter = row['reporter_id']
+    const l1 = row['l1']
     return [
       {
         id,
@@ -40,6 +43,7 @@ export async function pullReports(query: (sql: string) => Promise<{ rows: Record
         pack_version: Number(row['pack_version']),
         reporter: typeof reporter === 'string' && reporter !== '' ? hash(reporter) : `deleted:${id}`,
         received_at: Number(row['received_at']),
+        l1: typeof l1 === 'string' && l1 !== '' ? l1 : null,
       },
     ]
   })
@@ -59,11 +63,14 @@ export interface TriageInput {
 const NOTE_LIMIT = 280
 
 /** Which queue a report sends its entry to, which fixes reset its count, and (for translation) which L1 those fixes must be. Audio is handled apart. */
-function routes(field: ReportField, l1s: readonly string[]): { queue: string; fixField: ReportField; l1: string }[] {
+function routes(field: ReportField, l1s: readonly string[], reportL1: string | null): { queue: string; fixField: ReportField; l1: string }[] {
   if (field === 'example') return [{ queue: QUEUES.english, fixField: 'example', l1: '' }]
   if (field === 'level') return [{ queue: QUEUES.level, fixField: 'level', l1: '' }]
-  // A report does not carry the learner's L1, so it reopens every L1's set (Decision 7); each checked against its own L1's fixes.
-  return l1s.map((l1) => ({ queue: QUEUES.translation(l1), fixField: 'translation' as ReportField, l1 }))
+  // A report names the L1 it was made in; one from before plan 10 names none, and counts as Bulgarian (every
+  // report made before plan 10 came from a Bulgarian learner, the same reading core/src/fixes.ts gives a fix
+  // with no l1). A report naming an L1 the pipeline no longer carries reopens no translation queue.
+  const own = [reportL1 ?? LEGACY_L1].filter((l1) => l1s.includes(l1))
+  return own.map((l1) => ({ queue: QUEUES.translation(l1), fixField: 'translation' as ReportField, l1 }))
 }
 
 /**
@@ -91,7 +98,7 @@ export function triage(input: TriageInput): { events: { queue: string; event: De
       audio.set(entryId, [...(audio.get(entryId) ?? []), report])
       continue
     }
-    for (const { queue, fixField, l1 } of routes(report.field, input.l1s)) {
+    for (const { queue, fixField, l1 } of routes(report.field, input.l1s, report.l1)) {
       if (report.pack_version < (lastFix.get(`${report.word_id}|${fixField}|${l1}`) ?? 0)) continue
       const key = `${queue}|${entryId}`
       const g = groups.get(key) ?? { queue, entryId, reports: [] }

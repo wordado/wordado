@@ -1,0 +1,1754 @@
+{
+  "pack_id": "corpus-de",
+  "corpus_version": 0,
+  "l1": "de",
+  "target": "en",
+  "units": [
+    {
+      "unit_id": "a1-01",
+      "level": "A1",
+      "order": 1,
+      "title": {
+        "en": "People and greetings",
+        "l1": "Menschen und Begrüßungen"
+      },
+      "entry_ids": [
+        "hello-1",
+        "goodbye-1",
+        "please-1",
+        "thank_you-1",
+        "yes-1",
+        "no-1",
+        "sorry-1",
+        "name-1",
+        "friend-1",
+        "family-1",
+        "mother-1",
+        "father-1",
+        "brother-1",
+        "sister-1",
+        "child-1",
+        "man-1",
+        "woman-1",
+        "boy-1",
+        "girl-1",
+        "teacher-1"
+      ]
+    },
+    {
+      "unit_id": "a1-02",
+      "level": "A1",
+      "order": 2,
+      "title": {
+        "en": "Food and drink",
+        "l1": "Essen und Trinken"
+      },
+      "entry_ids": [
+        "food-1",
+        "water-1",
+        "bread-1",
+        "milk-1",
+        "coffee-1",
+        "tea-1",
+        "apple-1",
+        "egg-1",
+        "cheese-1",
+        "meat-1",
+        "fish-1",
+        "rice-1",
+        "sugar-1",
+        "salt-1",
+        "breakfast-1",
+        "lunch-1",
+        "dinner-1",
+        "eat-1",
+        "drink-1",
+        "hungry-1"
+      ]
+    },
+    {
+      "unit_id": "a1-03",
+      "level": "A1",
+      "order": 3,
+      "title": {
+        "en": "Home and every day",
+        "l1": "Zu Hause und im Alltag"
+      },
+      "entry_ids": [
+        "house-1",
+        "home-1",
+        "room-1",
+        "door-1",
+        "window-1",
+        "bed-1",
+        "table-1",
+        "chair-1",
+        "kitchen-1",
+        "key-1",
+        "day-1",
+        "night-1",
+        "morning-1",
+        "today-1",
+        "time-1",
+        "week-1",
+        "work-1",
+        "school-1",
+        "shop-1",
+        "money-1"
+      ]
+    }
+  ],
+  "themes": [
+    {
+      "theme_id": "people",
+      "name": {
+        "en": "People and family",
+        "l1": "Familie und Mitmenschen"
+      },
+      "description": {
+        "en": "Family members and the people around you.",
+        "l1": "Familienangehörige und die Menschen um einen herum."
+      }
+    },
+    {
+      "theme_id": "greetings",
+      "name": {
+        "en": "Greetings and politeness",
+        "l1": "Begrüßung und Höflichkeit"
+      },
+      "description": {
+        "en": "Saying hello, thank you and sorry.",
+        "l1": "Hallo, danke und Entschuldigung sagen."
+      }
+    },
+    {
+      "theme_id": "food",
+      "name": {
+        "en": "Food and drink",
+        "l1": "Essen und Trinken"
+      },
+      "description": {
+        "en": "What you eat and drink every day.",
+        "l1": "Was man jeden Tag isst und trinkt."
+      }
+    },
+    {
+      "theme_id": "restaurant",
+      "name": {
+        "en": "Eating out",
+        "l1": "Essen gehen"
+      },
+      "description": {
+        "en": "Ordering, paying and asking for the menu.",
+        "l1": "Bestellen, bezahlen und nach der Speisekarte fragen."
+      }
+    },
+    {
+      "theme_id": "home",
+      "name": {
+        "en": "At home",
+        "l1": "Zu Hause"
+      },
+      "description": {
+        "en": "Rooms, furniture and things around the house.",
+        "l1": "Zimmer, Möbel und Dinge im Haus."
+      }
+    },
+    {
+      "theme_id": "daily-life",
+      "name": {
+        "en": "Daily life",
+        "l1": "Alltag"
+      },
+      "description": {
+        "en": "Your day from morning to night.",
+        "l1": "Der Tag vom Morgen bis zum Abend."
+      }
+    },
+    {
+      "theme_id": "time",
+      "name": {
+        "en": "Time and dates",
+        "l1": "Zeit und Datum"
+      },
+      "description": {
+        "en": "Days, weeks, hours and the calendar.",
+        "l1": "Tage, Wochen, Uhrzeiten und der Kalender."
+      }
+    },
+    {
+      "theme_id": "numbers",
+      "name": {
+        "en": "Numbers and amounts",
+        "l1": "Zahlen und Mengen"
+      },
+      "description": {
+        "en": "Counting, prices and how much.",
+        "l1": "Zählen, Preise und wie viel."
+      }
+    },
+    {
+      "theme_id": "travel",
+      "name": {
+        "en": "Travel and transport",
+        "l1": "Reisen und Verkehr"
+      },
+      "description": {
+        "en": "Trips, tickets, trains and planes.",
+        "l1": "Reisen, Fahrkarten, Züge und Flugzeuge."
+      }
+    },
+    {
+      "theme_id": "directions",
+      "name": {
+        "en": "Places and directions",
+        "l1": "Orte und Wege"
+      },
+      "description": {
+        "en": "Finding your way around town.",
+        "l1": "Sich in der Stadt zurechtfinden."
+      }
+    },
+    {
+      "theme_id": "shopping",
+      "name": {
+        "en": "Shopping and money",
+        "l1": "Einkaufen und Geld"
+      },
+      "description": {
+        "en": "Shops, prices and paying.",
+        "l1": "Geschäfte, Preise und Bezahlen."
+      }
+    },
+    {
+      "theme_id": "work",
+      "name": {
+        "en": "Work and jobs",
+        "l1": "Arbeit und Beruf"
+      },
+      "description": {
+        "en": "Jobs, the office and colleagues.",
+        "l1": "Berufe, das Büro und Kollegen."
+      }
+    },
+    {
+      "theme_id": "school",
+      "name": {
+        "en": "School and study",
+        "l1": "Schule und Studium"
+      },
+      "description": {
+        "en": "Classes, learning and exams.",
+        "l1": "Unterricht, Lernen und Prüfungen."
+      }
+    },
+    {
+      "theme_id": "body",
+      "name": {
+        "en": "Body and health",
+        "l1": "Körper und Gesundheit"
+      },
+      "description": {
+        "en": "Parts of the body and feeling well.",
+        "l1": "Körperteile und Wohlbefinden."
+      }
+    },
+    {
+      "theme_id": "doctor",
+      "name": {
+        "en": "At the doctor",
+        "l1": "Beim Arzt"
+      },
+      "description": {
+        "en": "Symptoms, medicine and appointments.",
+        "l1": "Beschwerden, Medikamente und Termine."
+      }
+    },
+    {
+      "theme_id": "clothes",
+      "name": {
+        "en": "Clothes",
+        "l1": "Kleidung"
+      },
+      "description": {
+        "en": "What you wear, and sizes.",
+        "l1": "Was man trägt, und Größen."
+      }
+    },
+    {
+      "theme_id": "weather",
+      "name": {
+        "en": "Weather and nature",
+        "l1": "Wetter und Natur"
+      },
+      "description": {
+        "en": "Sun, rain, seasons and the outdoors.",
+        "l1": "Sonne, Regen, Jahreszeiten und die Natur draußen."
+      }
+    },
+    {
+      "theme_id": "animals",
+      "name": {
+        "en": "Animals",
+        "l1": "Tiere"
+      },
+      "description": {
+        "en": "Pets, farm animals and wildlife.",
+        "l1": "Haustiere, Nutztiere und Wildtiere."
+      }
+    },
+    {
+      "theme_id": "colours",
+      "name": {
+        "en": "Colours and shapes",
+        "l1": "Farben und Formen"
+      },
+      "description": {
+        "en": "Describing how things look.",
+        "l1": "Beschreiben, wie Dinge aussehen."
+      }
+    },
+    {
+      "theme_id": "feelings",
+      "name": {
+        "en": "Feelings and opinions",
+        "l1": "Gefühle und Meinungen"
+      },
+      "description": {
+        "en": "Saying how you feel and what you think.",
+        "l1": "Sagen, wie man sich fühlt und was man denkt."
+      }
+    },
+    {
+      "theme_id": "hobbies",
+      "name": {
+        "en": "Free time and sport",
+        "l1": "Freizeit und Sport"
+      },
+      "description": {
+        "en": "Hobbies, games and going out.",
+        "l1": "Hobbys, Spiele und Ausgehen."
+      }
+    },
+    {
+      "theme_id": "technology",
+      "name": {
+        "en": "Phones and computers",
+        "l1": "Handys und Computer"
+      },
+      "description": {
+        "en": "Devices, the internet and messages.",
+        "l1": "Geräte, das Internet und Nachrichten."
+      }
+    },
+    {
+      "theme_id": "city",
+      "name": {
+        "en": "Town and city",
+        "l1": "Die Stadt"
+      },
+      "description": {
+        "en": "Streets, buildings and public places.",
+        "l1": "Straßen, Gebäude und öffentliche Orte."
+      }
+    },
+    {
+      "theme_id": "actions",
+      "name": {
+        "en": "Everyday actions",
+        "l1": "Alltägliche Handlungen"
+      },
+      "description": {
+        "en": "Common verbs for what you do.",
+        "l1": "Häufige Verben für das, was man tut."
+      }
+    }
+  ],
+  "entries": [
+    {
+      "entry_id": "hello-1",
+      "headword": "hello",
+      "variants": [],
+      "pos": "intj",
+      "sense": "",
+      "ipa": "həˈləʊ",
+      "level": "A1",
+      "unit_id": "a1-01",
+      "themes": [
+        "greetings"
+      ],
+      "translation": "hallo",
+      "alternates": [
+        "guten Tag"
+      ],
+      "examples": [
+        "Hello, my name is Anna."
+      ],
+      "audio": {
+        "uk": "hello-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "goodbye-1",
+      "headword": "goodbye",
+      "variants": [
+        "good-bye"
+      ],
+      "pos": "intj",
+      "sense": "",
+      "ipa": "ˌɡʊdˈbaɪ",
+      "level": "A1",
+      "unit_id": "a1-01",
+      "themes": [
+        "greetings"
+      ],
+      "translation": "auf Wiedersehen",
+      "alternates": [
+        "tschüss"
+      ],
+      "examples": [
+        "Goodbye! See you tomorrow."
+      ],
+      "audio": {
+        "uk": "goodbye-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "please-1",
+      "headword": "please",
+      "variants": [],
+      "pos": "adv",
+      "sense": "",
+      "ipa": "pliːz",
+      "level": "A1",
+      "unit_id": "a1-01",
+      "themes": [
+        "greetings"
+      ],
+      "translation": "bitte",
+      "alternates": [],
+      "examples": [
+        "A coffee, please."
+      ],
+      "audio": {
+        "uk": "please-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "thank_you-1",
+      "headword": "thank you",
+      "variants": [],
+      "pos": "phrase",
+      "sense": "",
+      "ipa": "ˈθæŋk juː",
+      "level": "A1",
+      "unit_id": "a1-01",
+      "themes": [
+        "greetings"
+      ],
+      "translation": "danke",
+      "alternates": [
+        "danke schön",
+        "vielen Dank"
+      ],
+      "examples": [
+        "Thank you for your help."
+      ],
+      "audio": {
+        "uk": "thank_you-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "yes-1",
+      "headword": "yes",
+      "variants": [],
+      "pos": "adv",
+      "sense": "",
+      "ipa": "jes",
+      "level": "A1",
+      "unit_id": "a1-01",
+      "themes": [
+        "greetings"
+      ],
+      "translation": "ja",
+      "alternates": [],
+      "examples": [
+        "Yes, I am from Sofia."
+      ],
+      "audio": {
+        "uk": "yes-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "no-1",
+      "headword": "no",
+      "variants": [],
+      "pos": "adv",
+      "sense": "",
+      "ipa": "nəʊ",
+      "level": "A1",
+      "unit_id": "a1-01",
+      "themes": [
+        "greetings"
+      ],
+      "translation": "nein",
+      "alternates": [],
+      "examples": [
+        "No, thank you."
+      ],
+      "audio": {
+        "uk": "no-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "sorry-1",
+      "headword": "sorry",
+      "variants": [],
+      "pos": "intj",
+      "sense": "",
+      "ipa": "ˈsɒri",
+      "level": "A1",
+      "unit_id": "a1-01",
+      "themes": [
+        "greetings"
+      ],
+      "translation": "Entschuldigung",
+      "alternates": [
+        "Verzeihung",
+        "tut mir leid"
+      ],
+      "examples": [
+        "Sorry, I am late."
+      ],
+      "audio": {
+        "uk": "sorry-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "name-1",
+      "headword": "name",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "neɪm",
+      "level": "A1",
+      "unit_id": "a1-01",
+      "themes": [
+        "people"
+      ],
+      "translation": "Name",
+      "alternates": [],
+      "examples": [
+        "My name is Peter."
+      ],
+      "audio": {
+        "uk": "name-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "friend-1",
+      "headword": "friend",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "frend",
+      "level": "A1",
+      "unit_id": "a1-01",
+      "themes": [
+        "people"
+      ],
+      "translation": "Freund",
+      "alternates": [
+        "Freundin"
+      ],
+      "examples": [
+        "She is my best friend."
+      ],
+      "audio": {
+        "uk": "friend-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "family-1",
+      "headword": "family",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "ˈfæməli",
+      "level": "A1",
+      "unit_id": "a1-01",
+      "themes": [
+        "people"
+      ],
+      "translation": "Familie",
+      "alternates": [],
+      "examples": [
+        "I have a big family."
+      ],
+      "audio": {
+        "uk": "family-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "mother-1",
+      "headword": "mother",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "ˈmʌðə",
+      "level": "A1",
+      "unit_id": "a1-01",
+      "themes": [
+        "people"
+      ],
+      "translation": "Mutter",
+      "alternates": [
+        "Mama"
+      ],
+      "examples": [
+        "My mother is a doctor."
+      ],
+      "audio": {
+        "uk": "mother-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "father-1",
+      "headword": "father",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "ˈfɑːðə",
+      "level": "A1",
+      "unit_id": "a1-01",
+      "themes": [
+        "people"
+      ],
+      "translation": "Vater",
+      "alternates": [
+        "Papa"
+      ],
+      "examples": [
+        "My father works in a bank."
+      ],
+      "audio": {
+        "uk": "father-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "brother-1",
+      "headword": "brother",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "ˈbrʌðə",
+      "level": "A1",
+      "unit_id": "a1-01",
+      "themes": [
+        "people"
+      ],
+      "translation": "Bruder",
+      "alternates": [],
+      "examples": [
+        "I have one brother."
+      ],
+      "audio": {
+        "uk": "brother-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "sister-1",
+      "headword": "sister",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "ˈsɪstə",
+      "level": "A1",
+      "unit_id": "a1-01",
+      "themes": [
+        "people"
+      ],
+      "translation": "Schwester",
+      "alternates": [],
+      "examples": [
+        "My sister is ten years old."
+      ],
+      "audio": {
+        "uk": "sister-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "child-1",
+      "headword": "child",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "tʃaɪld",
+      "level": "A1",
+      "unit_id": "a1-01",
+      "themes": [
+        "people"
+      ],
+      "translation": "Kind",
+      "alternates": [],
+      "examples": [
+        "The child is playing."
+      ],
+      "audio": {
+        "uk": "child-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "man-1",
+      "headword": "man",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "mæn",
+      "level": "A1",
+      "unit_id": "a1-01",
+      "themes": [
+        "people"
+      ],
+      "translation": "Mann",
+      "alternates": [],
+      "examples": [
+        "The man is reading a book."
+      ],
+      "audio": {
+        "uk": "man-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "woman-1",
+      "headword": "woman",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "ˈwʊmən",
+      "level": "A1",
+      "unit_id": "a1-01",
+      "themes": [
+        "people"
+      ],
+      "translation": "Frau",
+      "alternates": [],
+      "examples": [
+        "The woman is my teacher."
+      ],
+      "audio": {
+        "uk": "woman-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "boy-1",
+      "headword": "boy",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "bɔɪ",
+      "level": "A1",
+      "unit_id": "a1-01",
+      "themes": [
+        "people"
+      ],
+      "translation": "Junge",
+      "alternates": [],
+      "examples": [
+        "The boy is six."
+      ],
+      "audio": {
+        "uk": "boy-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "girl-1",
+      "headword": "girl",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "ɡɜːl",
+      "level": "A1",
+      "unit_id": "a1-01",
+      "themes": [
+        "people"
+      ],
+      "translation": "Mädchen",
+      "alternates": [],
+      "examples": [
+        "The girl has a red bag."
+      ],
+      "audio": {
+        "uk": "girl-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "teacher-1",
+      "headword": "teacher",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "ˈtiːtʃə",
+      "level": "A1",
+      "unit_id": "a1-01",
+      "themes": [
+        "people",
+        "school"
+      ],
+      "translation": "Lehrer",
+      "alternates": [
+        "Lehrerin"
+      ],
+      "examples": [
+        "Our teacher is very kind."
+      ],
+      "audio": {
+        "uk": "teacher-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "food-1",
+      "headword": "food",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "fuːd",
+      "level": "A1",
+      "unit_id": "a1-02",
+      "themes": [
+        "food"
+      ],
+      "translation": "Essen",
+      "alternates": [
+        "Nahrung",
+        "Lebensmittel"
+      ],
+      "examples": [
+        "I like Italian food."
+      ],
+      "audio": {
+        "uk": "food-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "water-1",
+      "headword": "water",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "ˈwɔːtə",
+      "level": "A1",
+      "unit_id": "a1-02",
+      "themes": [
+        "food"
+      ],
+      "translation": "Wasser",
+      "alternates": [],
+      "examples": [
+        "A glass of water, please."
+      ],
+      "audio": {
+        "uk": "water-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "bread-1",
+      "headword": "bread",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "bred",
+      "level": "A1",
+      "unit_id": "a1-02",
+      "themes": [
+        "food"
+      ],
+      "translation": "Brot",
+      "alternates": [],
+      "examples": [
+        "We buy bread every morning."
+      ],
+      "audio": {
+        "uk": "bread-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "milk-1",
+      "headword": "milk",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "mɪlk",
+      "level": "A1",
+      "unit_id": "a1-02",
+      "themes": [
+        "food"
+      ],
+      "translation": "Milch",
+      "alternates": [],
+      "examples": [
+        "The milk is in the fridge."
+      ],
+      "audio": {
+        "uk": "milk-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "coffee-1",
+      "headword": "coffee",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "ˈkɒfi",
+      "level": "A1",
+      "unit_id": "a1-02",
+      "themes": [
+        "food"
+      ],
+      "translation": "Kaffee",
+      "alternates": [],
+      "examples": [
+        "I drink coffee in the morning."
+      ],
+      "audio": {
+        "uk": "coffee-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "tea-1",
+      "headword": "tea",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "tiː",
+      "level": "A1",
+      "unit_id": "a1-02",
+      "themes": [
+        "food"
+      ],
+      "translation": "Tee",
+      "alternates": [],
+      "examples": [
+        "Do you want tea or coffee?"
+      ],
+      "audio": {
+        "uk": "tea-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "apple-1",
+      "headword": "apple",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "ˈæpl",
+      "level": "A1",
+      "unit_id": "a1-02",
+      "themes": [
+        "food"
+      ],
+      "translation": "Apfel",
+      "alternates": [],
+      "examples": [
+        "An apple a day is good for you."
+      ],
+      "audio": {
+        "uk": "apple-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "egg-1",
+      "headword": "egg",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "eɡ",
+      "level": "A1",
+      "unit_id": "a1-02",
+      "themes": [
+        "food"
+      ],
+      "translation": "Ei",
+      "alternates": [],
+      "examples": [
+        "I eat an egg for breakfast."
+      ],
+      "audio": {
+        "uk": "egg-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "cheese-1",
+      "headword": "cheese",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "tʃiːz",
+      "level": "A1",
+      "unit_id": "a1-02",
+      "themes": [
+        "food"
+      ],
+      "translation": "Käse",
+      "alternates": [],
+      "examples": [
+        "This cheese is from Bulgaria."
+      ],
+      "audio": {
+        "uk": "cheese-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "meat-1",
+      "headword": "meat",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "miːt",
+      "level": "A1",
+      "unit_id": "a1-02",
+      "themes": [
+        "food"
+      ],
+      "translation": "Fleisch",
+      "alternates": [],
+      "examples": [
+        "He does not eat meat."
+      ],
+      "audio": {
+        "uk": "meat-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "fish-1",
+      "headword": "fish",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "fɪʃ",
+      "level": "A1",
+      "unit_id": "a1-02",
+      "themes": [
+        "food"
+      ],
+      "translation": "Fisch",
+      "alternates": [],
+      "examples": [
+        "We have fish for dinner."
+      ],
+      "audio": {
+        "uk": "fish-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "rice-1",
+      "headword": "rice",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "raɪs",
+      "level": "A1",
+      "unit_id": "a1-02",
+      "themes": [
+        "food"
+      ],
+      "translation": "Reis",
+      "alternates": [],
+      "examples": [
+        "Rice with vegetables, please."
+      ],
+      "audio": {
+        "uk": "rice-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "sugar-1",
+      "headword": "sugar",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "ˈʃʊɡə",
+      "level": "A1",
+      "unit_id": "a1-02",
+      "themes": [
+        "food"
+      ],
+      "translation": "Zucker",
+      "alternates": [],
+      "examples": [
+        "No sugar in my tea, thanks."
+      ],
+      "audio": {
+        "uk": "sugar-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "salt-1",
+      "headword": "salt",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "sɔːlt",
+      "level": "A1",
+      "unit_id": "a1-02",
+      "themes": [
+        "food"
+      ],
+      "translation": "Salz",
+      "alternates": [],
+      "examples": [
+        "Pass the salt, please."
+      ],
+      "audio": {
+        "uk": "salt-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "breakfast-1",
+      "headword": "breakfast",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "ˈbrekfəst",
+      "level": "A1",
+      "unit_id": "a1-02",
+      "themes": [
+        "food",
+        "daily-life"
+      ],
+      "translation": "Frühstück",
+      "alternates": [],
+      "examples": [
+        "Breakfast is at eight."
+      ],
+      "audio": {
+        "uk": "breakfast-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "lunch-1",
+      "headword": "lunch",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "lʌntʃ",
+      "level": "A1",
+      "unit_id": "a1-02",
+      "themes": [
+        "food",
+        "daily-life"
+      ],
+      "translation": "Mittagessen",
+      "alternates": [],
+      "examples": [
+        "We have lunch at work."
+      ],
+      "audio": {
+        "uk": "lunch-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "dinner-1",
+      "headword": "dinner",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "ˈdɪnə",
+      "level": "A1",
+      "unit_id": "a1-02",
+      "themes": [
+        "food",
+        "daily-life"
+      ],
+      "translation": "Abendessen",
+      "alternates": [
+        "Abendbrot"
+      ],
+      "examples": [
+        "Dinner is ready!"
+      ],
+      "audio": {
+        "uk": "dinner-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "eat-1",
+      "headword": "eat",
+      "variants": [],
+      "pos": "verb",
+      "sense": "",
+      "ipa": "iːt",
+      "level": "A1",
+      "unit_id": "a1-02",
+      "themes": [
+        "food",
+        "daily-life",
+        "actions"
+      ],
+      "translation": "essen",
+      "alternates": [],
+      "examples": [
+        "What do you want to eat?"
+      ],
+      "audio": {
+        "uk": "eat-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "drink-1",
+      "headword": "drink",
+      "variants": [],
+      "pos": "verb",
+      "sense": "",
+      "ipa": "drɪŋk",
+      "level": "A1",
+      "unit_id": "a1-02",
+      "themes": [
+        "food",
+        "daily-life",
+        "actions"
+      ],
+      "translation": "trinken",
+      "alternates": [],
+      "examples": [
+        "Drink some water."
+      ],
+      "audio": {
+        "uk": "drink-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "hungry-1",
+      "headword": "hungry",
+      "variants": [],
+      "pos": "adj",
+      "sense": "",
+      "ipa": "ˈhʌŋɡri",
+      "level": "A1",
+      "unit_id": "a1-02",
+      "themes": [
+        "food"
+      ],
+      "translation": "hungrig",
+      "alternates": [],
+      "examples": [
+        "I am hungry."
+      ],
+      "audio": {
+        "uk": "hungry-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "house-1",
+      "headword": "house",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "haʊs",
+      "level": "A1",
+      "unit_id": "a1-03",
+      "themes": [
+        "home",
+        "daily-life"
+      ],
+      "translation": "Haus",
+      "alternates": [],
+      "examples": [
+        "They live in a small house."
+      ],
+      "audio": {
+        "uk": "house-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "home-1",
+      "headword": "home",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "həʊm",
+      "level": "A1",
+      "unit_id": "a1-03",
+      "themes": [
+        "home",
+        "daily-life"
+      ],
+      "translation": "Zuhause",
+      "alternates": [
+        "Heim"
+      ],
+      "examples": [
+        "I am at home now."
+      ],
+      "audio": {
+        "uk": "home-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "room-1",
+      "headword": "room",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "ruːm",
+      "level": "A1",
+      "unit_id": "a1-03",
+      "themes": [
+        "home",
+        "daily-life"
+      ],
+      "translation": "Zimmer",
+      "alternates": [
+        "Raum"
+      ],
+      "examples": [
+        "My room is small."
+      ],
+      "audio": {
+        "uk": "room-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "door-1",
+      "headword": "door",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "dɔː",
+      "level": "A1",
+      "unit_id": "a1-03",
+      "themes": [
+        "home",
+        "daily-life"
+      ],
+      "translation": "Tür",
+      "alternates": [],
+      "examples": [
+        "Please close the door."
+      ],
+      "audio": {
+        "uk": "door-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "window-1",
+      "headword": "window",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "ˈwɪndəʊ",
+      "level": "A1",
+      "unit_id": "a1-03",
+      "themes": [
+        "home",
+        "daily-life"
+      ],
+      "translation": "Fenster",
+      "alternates": [],
+      "examples": [
+        "Open the window, please."
+      ],
+      "audio": {
+        "uk": "window-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "bed-1",
+      "headword": "bed",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "bed",
+      "level": "A1",
+      "unit_id": "a1-03",
+      "themes": [
+        "home",
+        "daily-life"
+      ],
+      "translation": "Bett",
+      "alternates": [],
+      "examples": [
+        "The cat is on the bed."
+      ],
+      "audio": {
+        "uk": "bed-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "table-1",
+      "headword": "table",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "ˈteɪbl",
+      "level": "A1",
+      "unit_id": "a1-03",
+      "themes": [
+        "home",
+        "daily-life"
+      ],
+      "translation": "Tisch",
+      "alternates": [],
+      "examples": [
+        "The book is on the table."
+      ],
+      "audio": {
+        "uk": "table-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "chair-1",
+      "headword": "chair",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "tʃeə",
+      "level": "A1",
+      "unit_id": "a1-03",
+      "themes": [
+        "home",
+        "daily-life"
+      ],
+      "translation": "Stuhl",
+      "alternates": [],
+      "examples": [
+        "Sit on this chair."
+      ],
+      "audio": {
+        "uk": "chair-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "kitchen-1",
+      "headword": "kitchen",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "ˈkɪtʃɪn",
+      "level": "A1",
+      "unit_id": "a1-03",
+      "themes": [
+        "home",
+        "daily-life"
+      ],
+      "translation": "Küche",
+      "alternates": [],
+      "examples": [
+        "Mum is in the kitchen."
+      ],
+      "audio": {
+        "uk": "kitchen-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "key-1",
+      "headword": "key",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "kiː",
+      "level": "A1",
+      "unit_id": "a1-03",
+      "themes": [
+        "home",
+        "daily-life"
+      ],
+      "translation": "Schlüssel",
+      "alternates": [],
+      "examples": [
+        "Where is my key?"
+      ],
+      "audio": {
+        "uk": "key-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "day-1",
+      "headword": "day",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "deɪ",
+      "level": "A1",
+      "unit_id": "a1-03",
+      "themes": [
+        "time",
+        "daily-life"
+      ],
+      "translation": "Tag",
+      "alternates": [],
+      "examples": [
+        "Have a nice day!"
+      ],
+      "audio": {
+        "uk": "day-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "night-1",
+      "headword": "night",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "naɪt",
+      "level": "A1",
+      "unit_id": "a1-03",
+      "themes": [
+        "time",
+        "daily-life"
+      ],
+      "translation": "Nacht",
+      "alternates": [],
+      "examples": [
+        "Good night!"
+      ],
+      "audio": {
+        "uk": "night-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "morning-1",
+      "headword": "morning",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "ˈmɔːnɪŋ",
+      "level": "A1",
+      "unit_id": "a1-03",
+      "themes": [
+        "time",
+        "daily-life"
+      ],
+      "translation": "Morgen",
+      "alternates": [
+        "Vormittag"
+      ],
+      "examples": [
+        "I get up at seven in the morning."
+      ],
+      "audio": {
+        "uk": "morning-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "today-1",
+      "headword": "today",
+      "variants": [],
+      "pos": "adv",
+      "sense": "",
+      "ipa": "təˈdeɪ",
+      "level": "A1",
+      "unit_id": "a1-03",
+      "themes": [
+        "time",
+        "daily-life"
+      ],
+      "translation": "heute",
+      "alternates": [],
+      "examples": [
+        "Today is Monday."
+      ],
+      "audio": {
+        "uk": "today-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "time-1",
+      "headword": "time",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "taɪm",
+      "level": "A1",
+      "unit_id": "a1-03",
+      "themes": [
+        "time",
+        "daily-life"
+      ],
+      "translation": "Zeit",
+      "alternates": [
+        "Uhrzeit"
+      ],
+      "examples": [
+        "What time is it?"
+      ],
+      "audio": {
+        "uk": "time-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "week-1",
+      "headword": "week",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "wiːk",
+      "level": "A1",
+      "unit_id": "a1-03",
+      "themes": [
+        "time",
+        "daily-life"
+      ],
+      "translation": "Woche",
+      "alternates": [],
+      "examples": [
+        "See you next week."
+      ],
+      "audio": {
+        "uk": "week-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "work-1",
+      "headword": "work",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "wɜːk",
+      "level": "A1",
+      "unit_id": "a1-03",
+      "themes": [
+        "work",
+        "daily-life"
+      ],
+      "translation": "Arbeit",
+      "alternates": [
+        "Job"
+      ],
+      "examples": [
+        "I go to work by bus."
+      ],
+      "audio": {
+        "uk": "work-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "school-1",
+      "headword": "school",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "skuːl",
+      "level": "A1",
+      "unit_id": "a1-03",
+      "themes": [
+        "school",
+        "daily-life"
+      ],
+      "translation": "Schule",
+      "alternates": [],
+      "examples": [
+        "The children are at school."
+      ],
+      "audio": {
+        "uk": "school-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "shop-1",
+      "headword": "shop",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "ʃɒp",
+      "level": "A1",
+      "unit_id": "a1-03",
+      "themes": [
+        "shopping",
+        "daily-life"
+      ],
+      "translation": "Geschäft",
+      "alternates": [
+        "Laden"
+      ],
+      "examples": [
+        "The shop opens at nine."
+      ],
+      "audio": {
+        "uk": "shop-1-uk"
+      },
+      "retired": false
+    },
+    {
+      "entry_id": "money-1",
+      "headword": "money",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "ˈmʌni",
+      "level": "A1",
+      "unit_id": "a1-03",
+      "themes": [
+        "shopping",
+        "daily-life"
+      ],
+      "translation": "Geld",
+      "alternates": [],
+      "examples": [
+        "I have no money."
+      ],
+      "audio": {
+        "uk": "money-1-uk"
+      },
+      "retired": false
+    }
+  ]
+}

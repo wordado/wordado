@@ -39,16 +39,27 @@ describe('content (spec §9.3)', () => {
   })
 
   it('re-reads the audio index when a new pack becomes active, not before', async () => {
-    const store = createStore<{ packVersion: number | null; corpus: Corpus | null }>({ packVersion: 1, corpus: null })
+    const store = createStore<{ packVersion: number | null; corpus: Corpus | null; l1: string }>({ packVersion: 1, corpus: null, l1: 'bg' })
     const refreshed: (Corpus | null)[] = []
     const corpus = {} as Corpus
     const stop = refreshAudioOnActivation({ store }, { refresh: async (c) => void refreshed.push(c) })
-    store.set({ packVersion: 1, corpus })
+    store.set({ packVersion: 1, corpus, l1: 'bg' })
     expect(refreshed).toEqual([])
-    store.set({ packVersion: 2, corpus })
+    store.set({ packVersion: 2, corpus, l1: 'bg' })
     expect(refreshed).toEqual([corpus])
     stop()
-    store.set({ packVersion: 3, corpus })
+    store.set({ packVersion: 3, corpus, l1: 'bg' })
     expect(refreshed).toEqual([corpus])
+  })
+
+  it('re-reads the audio index when the native language changes, even at the same corpus version (plan 10)', () => {
+    const bg = {} as Corpus
+    const de = {} as Corpus
+    const store = createStore<{ packVersion: number | null; corpus: Corpus | null; l1: string }>({ packVersion: 0, corpus: bg, l1: 'bg' })
+    const refreshed: (Corpus | null)[] = []
+    const stop = refreshAudioOnActivation({ store }, { refresh: async (c) => void refreshed.push(c) })
+    store.set({ packVersion: 0, corpus: de, l1: 'de' })
+    expect(refreshed).toEqual([de])
+    stop()
   })
 })

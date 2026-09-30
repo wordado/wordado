@@ -1,6 +1,10 @@
 import { act, cleanup, fireEvent, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { Client } from '@wordado/client-data'
+import { nodeSqliteDriver } from '@wordado/client-data/src/drivers/nodeSqlite'
+import { sampleFetcher, sampleManifest } from '@wordado/client-data/src/testing/sample'
 import { ApiError, OfflineError } from '../account/api'
+import type { PendingSignIn } from '../account/storage'
 import { fakeApi } from '../test/fakeApi'
 import { answerNew, fakeAccounts, renderWith, setup } from '../test/fixtures'
 import { SignIn } from './SignIn'
@@ -15,7 +19,7 @@ async function render(options: Parameters<typeof fakeAccounts>[0] = {}, apiOver:
   const api = fakeApi(apiOver)
   const accounts = fakeAccounts(options)
   const redirects: string[] = []
-  const pending: { country: string | null }[] = []
+  const pending: PendingSignIn[] = []
   renderWith(<SignIn redirect={(url) => redirects.push(url)} pending={{ save: (p) => pending.push(p) }} />, { ...ctx, api, accounts })
   // The country pre-fill arrives from the server.
   await act(async () => undefined)
@@ -104,7 +108,7 @@ describe('SignIn: a code by email (spec §8.6)', () => {
     fireEvent.change(screen.getByLabelText('Code'), { target: { value: '123456' } })
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Sign in' })))
     expect(api.calls).toContain('verifyCode ana@example.com 123456')
-    expect(accounts.calls).toEqual(['completeSignIn BG'])
+    expect(accounts.calls).toEqual(['completeSignIn BG bg'])
     expect(window.location.pathname).toBe('/')
   })
 
@@ -254,7 +258,7 @@ describe('SignIn: Google (spec §8.6)', () => {
     const { redirects, pending } = await render()
     await passGate('BG', 1990)
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue with Google' })))
-    expect(pending).toEqual([{ country: 'BG' }])
+    expect(pending).toEqual([{ country: 'BG', l1: 'bg' }])
     expect(redirects).toEqual(['https://accounts.google.com/o/oauth2/auth'])
   })
 
@@ -272,5 +276,46 @@ describe('SignIn: the privacy policy (spec §11)', () => {
     await render()
     await passGate('BG', 1990)
     expect(screen.getByRole('link', { name: 'Privacy policy' }).getAttribute('href')).toBe('/privacy')
+  })
+})
+
+describe('SignIn: the native language (plan 10)', () => {
+  const choice = (name: string) => screen.getByRole('radio', { name }) as HTMLInputElement
+
+  it('asks for it at the gate, each language named in itself, preselected with the device’s', async () => {
+    await render()
+    const group = screen.getByRole('group', { name: 'Your native language' })
+    expect([...group.querySelectorAll('label')].map((l) => l.textContent)).toEqual(['Български', 'Deutsch'])
+    expect(choice('Български').checked).toBe(true)
+    expect(choice('Deutsch').checked).toBe(false)
+  })
+
+  it('preselects German on a device that studies from German', async () => {
+    const ctx = await setup()
+    const client = await Client.open({ driver: nodeSqliteDriver(), env: ctx.env, l1: 'de' })
+    await client.installPacks(sampleManifest, sampleFetcher)
+    await client.startSession()
+    renderWith(<SignIn redirect={() => undefined} pending={{ save: () => undefined }} />, { ...ctx, client, api: fakeApi(), accounts: fakeAccounts() })
+    await act(async () => undefined)
+    expect(choice('Deutsch').checked).toBe(true)
+  })
+
+  it('keeps the choice for Google’s return', async () => {
+    const { pending } = await render()
+    fireEvent.click(choice('Deutsch'))
+    await passGate('BG', 1990)
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue with Google' })))
+    expect(pending).toEqual([{ country: 'BG', l1: 'de' }])
+  })
+
+  it('completes a code sign-in with the choice', async () => {
+    const { accounts } = await render()
+    fireEvent.click(choice('Deutsch'))
+    await passGate('BG', 1990)
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'ana@example.com' } })
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Email me a code' })))
+    fireEvent.change(screen.getByLabelText('Code'), { target: { value: '123456' } })
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Sign in' })))
+    expect(accounts.calls).toEqual(['completeSignIn BG de'])
   })
 })

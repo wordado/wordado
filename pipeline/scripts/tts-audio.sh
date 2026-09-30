@@ -17,7 +17,7 @@
 set -euo pipefail
 piper="${PIPER:-piper}"
 voice="${PIPER_VOICE:?set PIPER_VOICE to the path of en_GB-cori-high.onnx}"
-dir="$(cd "$(dirname "$0")/../samples/a1-bg" && pwd)"
+dir="$(cd "$(dirname "$0")/../samples/a1" && pwd)"
 mkdir -p "$dir/audio"
 node --input-type=module -e '
 import { readFileSync } from "node:fs"

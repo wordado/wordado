@@ -110,15 +110,17 @@ function tryBuild(source: unknown, clips: readonly ClipFile[]): BuildOutput {
 }
 
 function build(dir: string): void {
-  const { source, clips } = readSourceDir(dir)
-  const out = tryBuild(source, clips)
-  writeArtifacts(dir, out)
-  const corpus = loadCorpus([out.pack])
-  const offered = new Set(offeredThemes(corpus).map((t) => t.themeId))
-  console.log(`wrote ${out.packFile}: ${out.pack.entries.length} entries, ${out.pack.units.length} units, ${clips.length} clips, ${out.packBytes.byteLength} bytes`)
-  for (const t of corpus.themes) {
-    const size = themeEntries(corpus, t.themeId).length
-    console.log(`  ${t.themeId}: ${size} entries${offered.has(t.themeId) ? '' : ' (below the minimum, not offered)'}`)
+  const { sources, clips } = readSourceDir(dir)
+  const outs = sources.map((source) => tryBuild(source, clips))
+  writeArtifacts(dir, outs)
+  for (const out of outs) {
+    const corpus = loadCorpus([out.pack])
+    const offered = new Set(offeredThemes(corpus).map((t) => t.themeId))
+    console.log(`wrote ${out.packFile}: ${out.pack.entries.length} entries, ${out.pack.units.length} units, ${clips.length} clips, ${out.packBytes.byteLength} bytes`)
+    for (const t of corpus.themes) {
+      const size = themeEntries(corpus, t.themeId).length
+      console.log(`  ${t.themeId}: ${size} entries${offered.has(t.themeId) ? '' : ' (below the minimum, not offered)'}`)
+    }
   }
 }
 

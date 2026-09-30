@@ -100,7 +100,7 @@ function ThemeCard(props: { readonly theme: Theme; readonly active: boolean; onC
   const entries = themeEntries(corpus!, theme.themeId)
   const started = entries.filter((e) => states.has(corpusWordId(e.entryId))).length
   const aboveLevel = entries.some((e) => levelIndex(e.level) > levelIndex(settings.declaredLevel))
-  const name = localized(theme.name, locale)
+  const name = localized(theme.name, locale, corpus!.l1)
   const startedText = t('themes.started', { started, count: entries.length })
   const Icon = THEME_ICON[theme.themeId] ?? Tag
   return (
@@ -116,7 +116,7 @@ function ThemeCard(props: { readonly theme: Theme; readonly active: boolean; onC
           </p>
         )}
         <h2>{name}</h2>
-        <p className="note">{localized(theme.description, locale)}</p>
+        <p className="note">{localized(theme.description, locale, corpus!.l1)}</p>
         {aboveLevel && <p className="note">{t('themes.aboveLevel')}</p>}
       </div>
       <div className="theme-progress">

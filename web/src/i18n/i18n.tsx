@@ -1,23 +1,21 @@
 import type { LocalizedText } from '@wordado/core'
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { bg } from './bg'
+import { de } from './de'
 import { en, type Message, type MessageKey, type Messages } from './en'
 
 export type { MessageKey }
 
-export const LOCALES = ['bg', 'en'] as const
+export const LOCALES = ['bg', 'de', 'en'] as const
 export type Locale = (typeof LOCALES)[number]
 
 /** Each language named in itself, as language pickers do. The visible name is the accessible name (WCAG 2.5.3). */
-export const ENDONYM: Readonly<Record<Locale, string>> = { bg: 'Български', en: 'English' }
+export const ENDONYM: Readonly<Record<Locale, string>> = { bg: 'Български', de: 'Deutsch', en: 'English' }
 
 /** The one localStorage key the app uses (spec §11.2: the interface language is the learner's choice). */
 export const LOCALE_KEY = 'wordado.locale'
 
-/** The lead L1 is the default until 6b reads the learner's own (spec §11.2). */
-const DEFAULT_LOCALE: Locale = 'bg'
-
-const MESSAGES: Readonly<Record<Locale, Messages>> = { bg, en }
+const MESSAGES: Readonly<Record<Locale, Messages>> = { bg, de, en }
 
 export type Vars = Readonly<Record<string, string | number>>
 
@@ -35,20 +33,35 @@ export function translate(locale: Locale, key: MessageKey, vars: Vars = {}): str
   })
 }
 
-/** Pack text (unit titles, theme names) in the interface language: `l1` is the pack's own language (plan 3). */
-export function localized(text: LocalizedText, locale: Locale): string {
-  return locale === 'en' ? text.en : text.l1
+/** Pack text (unit titles, theme names) in the pack's own language, but only when the interface speaks that
+ * language (plan 10); otherwise English, so a German speaker never sees Bulgarian unit or theme names. */
+export function localized(text: LocalizedText, locale: Locale, packL1: string): string {
+  return locale === packL1 ? text.l1 : text.en
+}
+
+/** A language's name, in `locale`, capitalised (plan 10): for headings such as the Matching translation column. */
+export function languageName(code: string, locale: Locale): string {
+  const name = new Intl.DisplayNames([locale], { type: 'language' }).of(code) ?? code
+  return name.charAt(0).toUpperCase() + name.slice(1)
 }
 
 type LocaleStorage = Pick<Storage, 'getItem' | 'setItem'>
 
-function readLocale(storage: LocaleStorage | null): Locale {
+/** The interface language to start with (plan 10, Decision 4): a saved choice, else the browser's first supported language, else English. */
+export function initialLocale(storage: LocaleStorage | null, languages: readonly string[] = globalThis.navigator?.languages ?? []): Locale {
   try {
     const saved = storage?.getItem(LOCALE_KEY)
-    return LOCALES.find((l) => l === saved) ?? DEFAULT_LOCALE
+    const found = LOCALES.find((l) => l === saved)
+    if (found) return found
   } catch {
-    return DEFAULT_LOCALE
+    // Storage refused: fall through to the browser's languages.
   }
+  for (const tag of languages) {
+    const base = tag.toLowerCase().split('-')[0]
+    const match = LOCALES.find((l) => l === base)
+    if (match) return match
+  }
+  return 'en'
 }
 
 interface I18nValue {
@@ -69,7 +82,7 @@ function defaultStorage(): LocaleStorage | null {
 
 export function I18nProvider(props: { readonly storage?: LocaleStorage | null; readonly onLocale?: (locale: Locale) => void; readonly children?: ReactNode }) {
   const storage = props.storage === undefined ? defaultStorage() : props.storage
-  const [locale, setState] = useState<Locale>(() => readLocale(storage))
+  const [locale, setState] = useState<Locale>(() => initialLocale(storage))
   useEffect(() => {
     document.documentElement.lang = locale
     props.onLocale?.(locale)

@@ -181,6 +181,7 @@ function UnitItem(props: {
 }) {
   const { t, locale } = useT()
   const client = useClient()
+  const { corpus } = useClientSnapshot()
   const { unit, status, progress } = props
   const Icon = ICON[status]
   let words: ReactNode = null
@@ -212,7 +213,7 @@ function UnitItem(props: {
       </div>
       <div className="unit-card">
         <div className="unit-head">
-          <h3>{localized(unit.title, locale)}</h3>
+          <h3>{localized(unit.title, locale, corpus?.l1 ?? '')}</h3>
           <p className="unit-status">{t(UNIT_STATUS[status])}</p>
         </div>
         {status !== 'locked' && progress && (

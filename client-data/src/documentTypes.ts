@@ -3,6 +3,7 @@ import {
   ENTITLEMENT_SOURCES,
   ENTITLEMENT_TIERS,
   REPORT_FIELDS,
+  isSupportedL1,
   isWordId,
   settingsFromFields,
   validateSettingsPatch,
@@ -107,6 +108,8 @@ export interface ContentReportInput {
   readonly field: ReportField
   readonly note: string
   readonly packVersion: number
+  /** The learner's L1 when reporting (spec §8.10, plan 10). */
+  readonly l1?: string
 }
 
 /** A report works offline and syncs like any document (spec §8.10). Returns its key. */
@@ -120,10 +123,16 @@ export async function addContentReport(tx: SqlDriver, env: ClientEnv, report: Co
 export async function readReports(driver: SqlDriver): Promise<ReportRecord[]> {
   const out: ReportRecord[] = []
   for (const doc of await listDocuments(driver, DOC.contentReport)) {
-    const { wordId, field, packVersion } = doc.fields
+    const { wordId, field, packVersion, l1 } = doc.fields
     if (doc.deleted || typeof wordId !== 'string' || !isWordId(wordId)) continue
     if (typeof field !== 'string' || !(REPORT_FIELDS as readonly string[]).includes(field)) continue
-    out.push({ key: doc.key, wordId, field: field as ReportRecord['field'], packVersion: typeof packVersion === 'number' ? packVersion : 0 })
+    out.push({
+      key: doc.key,
+      wordId,
+      field: field as ReportRecord['field'],
+      packVersion: typeof packVersion === 'number' ? packVersion : 0,
+      ...(isSupportedL1(l1) ? { l1 } : {}),
+    })
   }
   return out
 }

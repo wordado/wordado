@@ -25,7 +25,7 @@ async function renderRoot(options: { free?: boolean; backend?: Backend } = {}) {
   const boot = new Boot(
     {
       env,
-      l1: 'bg',
+      l1: () => 'bg',
       openDriver: async () => ({ driver: nodeSqliteDriver(), backend: options.backend ?? 'opfs' }),
       fetchManifest: async () => sampleManifest,
       fetchPack: sampleFetcher,
@@ -99,7 +99,7 @@ describe('Root', () => {
     const boot = new Boot(
       {
         env,
-        l1: 'bg',
+        l1: () => 'bg',
         openDriver: async () => {
           throw new Error('disk unavailable')
         },
@@ -128,7 +128,7 @@ describe('Root', () => {
       takeOver: async () => undefined,
     }
     const boot = new Boot(
-      { env, l1: 'bg', openDriver: async () => ({ driver: nodeSqliteDriver(), backend: 'opfs' }), fetchManifest: async () => sampleManifest, fetchPack: sampleFetcher },
+      { env, l1: () => 'bg', openDriver: async () => ({ driver: nodeSqliteDriver(), backend: 'opfs' }), fetchManifest: async () => sampleManifest, fetchPack: sampleFetcher },
       () => lock,
     )
     render(

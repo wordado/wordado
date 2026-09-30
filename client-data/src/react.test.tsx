@@ -12,7 +12,7 @@ import { ClientProvider, useClient, useProgress, useSessionPlan, useSyncStatus }
 import { testEnv } from './testing/testEnv'
 
 // happy-dom replaces the global URL class, so the path is built from the string form of import.meta.url.
-const SAMPLE_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'pipeline', 'samples', 'a1-bg')
+const SAMPLE_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'pipeline', 'samples', 'a1')
 const manifest = JSON.parse(readFileSync(join(SAMPLE_DIR, 'manifest.json'), 'utf8')) as PackManifest
 const fromDisk: PackFetcher = async (d) => new Uint8Array(readFileSync(join(SAMPLE_DIR, d.url)))
 

@@ -89,7 +89,7 @@ export async function installPacks(
 ): Promise<InstallReport> {
   const installed = await installedPacks(db)
   const selection = selectPacks({ manifest, l1, installed, supportedSchemaVersions: [PACK_SCHEMA_VERSION] })
-  const others = await activePacks(db.driver)
+  const others = (await activePacks(db.driver)).filter((p) => p.l1 === l1)
   const staged: string[] = []
   const rejected: { packId: string; reason: string }[] = []
   for (const descriptor of selection.fetch) {
@@ -120,15 +120,41 @@ export async function installPacks(
   return { staged, appUpdateNeeded: selection.appUpdateNeeded, rejected }
 }
 
-/** Swaps staged packs in. Call at the start of a session, never in the middle of one (spec §5.1). */
-export async function activateStagedPacks(db: Database): Promise<string[]> {
+/**
+ * Swaps `l1`'s staged packs in. Call at the start of a session, never in the
+ * middle of one (spec §5.1), with the L1 the caller is about to serve (the
+ * installed L1, or the one `changeL1` is switching to). Scoped to that one
+ * L1 so an unrelated staged pack — a background upgrade of the *other*
+ * language, or a leftover from an interrupted `changeL1` — can never be
+ * promoted by mistake and brick the corpus (a pack merge refuses to mix
+ * L1s). A staged pack of another L1 is dropped rather than left to be
+ * activated later by surprise. The active packs of other L1s are dropped
+ * too, but only once `l1` itself ends up active: if `l1`'s pack could not be
+ * promoted (nothing staged and none already active), whatever was active
+ * stays untouched, so a `changeL1` that finds nothing to activate changes
+ * nothing (spec §8.6).
+ */
+export async function activateStagedPacks(db: Database, l1: string): Promise<string[]> {
   return db.transaction(async (tx) => {
-    const staged = await tx.all<{ pack_id: string }>("SELECT pack_id FROM pack WHERE status = 'staged' ORDER BY pack_id")
-    for (const { pack_id } of staged) {
-      await tx.run("DELETE FROM pack WHERE pack_id = ? AND status = 'active'", [pack_id])
-      await tx.run("UPDATE pack SET status = 'active' WHERE pack_id = ? AND status = 'staged'", [pack_id])
+    const staged = await tx.all<{ pack_id: string; json: string }>("SELECT pack_id, json FROM pack WHERE status = 'staged' ORDER BY pack_id")
+    const promoted: string[] = []
+    for (const row of staged) {
+      if ((JSON.parse(row.json) as Pack).l1 === l1) {
+        await tx.run("DELETE FROM pack WHERE pack_id = ? AND status = 'active'", [row.pack_id])
+        await tx.run("UPDATE pack SET status = 'active' WHERE pack_id = ? AND status = 'staged'", [row.pack_id])
+        promoted.push(row.pack_id)
+      } else {
+        // Another L1's staged pack: never ours to activate, and not left behind to surprise a later call.
+        await tx.run("DELETE FROM pack WHERE pack_id = ? AND status = 'staged'", [row.pack_id])
+      }
     }
-    return staged.map((s) => s.pack_id)
+    const active = await tx.all<{ pack_id: string; json: string }>("SELECT pack_id, json FROM pack WHERE status = 'active'")
+    if (active.some((r) => (JSON.parse(r.json) as Pack).l1 === l1)) {
+      for (const row of active) {
+        if ((JSON.parse(row.json) as Pack).l1 !== l1) await tx.run("DELETE FROM pack WHERE pack_id = ? AND status = 'active'", [row.pack_id])
+      }
+    }
+    return promoted
   })
 }
 

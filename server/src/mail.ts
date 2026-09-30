@@ -17,7 +17,7 @@ export interface ResendOptions {
 
 /**
  * Sign-in codes through Resend's HTTP API. The email carries the code and
- * nothing else (spec §11), in both interface languages, since the learner's
+ * nothing else (spec §11), in each interface language, since the learner's
  * choice is not known before they sign in.
  */
 export function resendMailer(options: ResendOptions): Mailer {
@@ -31,7 +31,7 @@ export function resendMailer(options: ResendOptions): Mailer {
           from: options.from,
           to: [email],
           subject: `Wordado: ${code}`,
-          text: `Your Wordado sign-in code is ${code}. It expires in 5 minutes.\n\nВашият код за вход в Wordado е ${code}. Валиден е 5 минути.`,
+          text: `Your Wordado sign-in code is ${code}. It expires in 5 minutes.\n\nВашият код за вход в Wordado е ${code}. Валиден е 5 минути.\n\nDein Wordado-Anmeldecode ist ${code}. Er ist 5 Minuten gültig.`,
         }),
       })
       if (!response.ok) throw new Error(`Resend refused the email: ${response.status}`)

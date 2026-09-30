@@ -1,4 +1,4 @@
-import { validateSettingsPatch } from './settings'
+import { isSupportedL1, validateSettingsPatch } from './settings'
 import type { DocumentWrite } from './syncProtocol'
 import { ID } from './validation'
 import { isWordId } from './wordId'
@@ -80,7 +80,7 @@ function checkFields(type: string, key: string, fields: Readonly<Record<string, 
       ]
     }
     case DOCUMENT_TYPES.contentReport: {
-      const { wordId, field, note, packVersion, createdAt } = fields
+      const { wordId, field, note, packVersion, createdAt, l1 } = fields
       return [
         ...(ID.test(key) ? [] : ['a report key must be an ID']),
         ...(typeof wordId === 'string' && isWordId(wordId) ? [] : ['wordId must be a word ID']),
@@ -88,7 +88,8 @@ function checkFields(type: string, key: string, fields: Readonly<Record<string, 
         ...(typeof note === 'string' && note.length <= MAX_REPORT_NOTE_LENGTH ? [] : [`note must be text of at most ${MAX_REPORT_NOTE_LENGTH} characters`]),
         ...(isCount(packVersion) && (packVersion as number) <= MAX_PACK_VERSION ? [] : [`packVersion must be an integer from 0 to ${MAX_PACK_VERSION}`]),
         ...(isCount(createdAt) ? [] : ['createdAt must be a time']),
-        ...unknownFields(fields, ['wordId', 'field', 'note', 'packVersion', 'createdAt']),
+        ...(l1 === undefined || isSupportedL1(l1) ? [] : ['l1 must be a supported L1']),
+        ...unknownFields(fields, ['wordId', 'field', 'note', 'packVersion', 'createdAt', 'l1']),
       ]
     }
     default:

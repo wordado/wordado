@@ -1,4 +1,4 @@
-import { norm, type Accent, type Pack, type PackEntry } from '@wordado/core'
+import { norm, type Accent, type Pack, type PackEntry, type PackUnit } from '@wordado/core'
 import { currentClips, voiceKey, type AudioRecord } from './audio'
 import type { CuratedTheme, PipelineConfig, TtsVoice } from './config'
 import { foldField, QUEUES, type Decisions } from './decisions'
@@ -16,6 +16,8 @@ export interface AssembleInput {
   readonly config: PipelineConfig
   /** This L1's last published pack, or null for an L1 never published. */
   readonly previous: Pack | null
+  /** The lead L1's (config.l1s[0]) last published units, for a non-lead pack's title.en when the unit is not live (Decision: every L1's title shares the lead's English). Empty when the lead was never published. */
+  readonly previousLeadUnits: readonly PackUnit[]
   readonly hasClip: (clipId: string) => boolean
 }
 
@@ -114,7 +116,9 @@ export function assemble(input: AssembleInput): Assembled {
   const byUnit = new Map<string, string[]>()
   for (const e of entries) byUnit.set(e.unit_id, [...(byUnit.get(e.unit_id) ?? []), e.entry_id])
   const previousUnits = new Map((input.previous?.units ?? []).map((u) => [u.unit_id, u]))
+  const previousLeadUnits = new Map(input.previousLeadUnits.map((u) => [u.unit_id, u]))
   const draftUnits = new Map(draft.units.map((u) => [u.unit_id, u]))
+  const lead = config.l1s[0]
   const unitIds = new Set(byUnit.keys())
   const ordered = inPathOrder(
     [...unitIds].map((id) => ({ unit_id: id, level: (draftUnits.get(id) ?? previousUnits.get(id))!.level, entry_ids: [] as string[] })),
@@ -134,6 +138,14 @@ export function assemble(input: AssembleInput): Assembled {
     if (!title) {
       problems.push(`unit ${u.unit_id}: has no ${l1} title`)
       title = { en: u.unit_id, l1: u.unit_id }
+    } else if (lead !== undefined && l1 !== lead) {
+      // Every L1's title shares the lead's English (titleUnits): a decision that changes the lead's own title
+      // is folded only into the lead's pack, so a non-lead pack picks up the lead's current English here.
+      const leadProposed = draftUnits.get(u.unit_id)?.titles[lead]
+      const leadTitle = hasLive && leadProposed
+        ? foldField(leadProposed, decisions.for(QUEUES.title(lead), u.unit_id)).value
+        : previousLeadUnits.get(u.unit_id)?.title
+      if (leadTitle) title = { en: leadTitle.en, l1: title.l1 }
     }
     return { unit_id: u.unit_id, level: u.level, order: i + 1, title, entry_ids }
   })

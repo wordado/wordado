@@ -4,6 +4,7 @@ import { AccountSettings } from '../settings/AccountSettings'
 import { AppSettings } from '../settings/AppSettings'
 import { AudioDownload } from '../settings/AudioDownload'
 import { LanguageSettings } from '../settings/LanguageSettings'
+import { NativeLanguageSettings } from '../settings/NativeLanguageSettings'
 import { ReminderSettings } from '../settings/ReminderSettings'
 import { SetAsideWords } from '../settings/SetAsideWords'
 import { StudySettings } from '../settings/StudySettings'
@@ -18,6 +19,7 @@ export function Settings() {
       <SetAsideWords />
       <AudioDownload />
       <ReminderSettings />
+      <NativeLanguageSettings />
       <LanguageSettings />
       <AccountSettings />
       <AppSettings />

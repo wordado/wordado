@@ -139,3 +139,69 @@ test('meets WCAG 2.2 A and AA on every screen (spec §11.1)', async ({ page }) =
     await expectAccessible(page, { dark: true })
   }
 })
+
+// Plan 10: a second L1 (German) beside Bulgarian, and changing the native language in Settings.
+
+test('a German browser opens the demo in German, and a studied word’s translation is German', async ({ browser }) => {
+  // A fresh context, not the English one `beforeEach` forces: no saved locale, so the interface follows
+  // the browser's German (spec §11.2, plan 10 Decision 4), and the demo's L1 follows the interface.
+  const context = await browser.newContext({ locale: 'de-DE' })
+  try {
+    const page = await context.newPage()
+    await page.goto('/')
+    await expect(heading(page)).toHaveText('10 neue Wörter')
+
+    // Forcing the mode (as the mode-matrix tests above do) sidesteps the mode/direction randomness for a brand-new
+    // word (core/src/modeSelection.ts): a flashcard always reveals the translation.
+    await page.goto('/study?mode=flashcard')
+    await expect(page.locator('.card')).toHaveAttribute('data-mode', 'flashcard')
+    await page.waitForTimeout(SETTLE_MS)
+    await page.keyboard.press('Space')
+    await expect(page.locator('.card[data-phase="revealed"]')).toBeVisible()
+    await expect(page.getByText('hallo')).toBeVisible()
+  } finally {
+    await context.close()
+  }
+})
+
+test('changing the native language in Settings keeps progress and switches translations', async ({ page }) => {
+  // A word studied before the change (the demo's first word, "hello") stays counted afterwards.
+  await studyNew(page, 1)
+  await page.goto('/path')
+  await expect(page.getByText('1 of 20 started')).toBeVisible()
+
+  await page.goto('/settings')
+  await page.getByRole('group', { name: 'Native language' }).getByRole('radio', { name: 'Deutsch' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Native language' })
+  await expect(dialog).toContainText('Your progress stays. The words switch to German translations.')
+  await dialog.getByRole('button', { name: 'Change' }).click()
+  await expect(dialog).toBeHidden()
+
+  // The interface was English, not the old native language, so it stays English (spec §8.6): only the pack
+  // switches, in the background (`web/src/app/l1Watch.ts`). Nothing in the UI flags that install as it runs, so
+  // the only reliable signal is the translation itself: retry a fresh flashcard of the next new word ("goodbye")
+  // until it reveals the German pack's translation.
+  await expect
+    .poll(
+      async () => {
+        // No throwing `expect` in here: a throw ends the poll at once instead of retrying it.
+        await page.goto('/study?mode=flashcard')
+        await page.locator('.card[data-phase="prompt"]').waitFor()
+        await page.waitForTimeout(SETTLE_MS)
+        await page.keyboard.press('Space')
+        const revealed = await page
+          .locator('.card[data-phase="revealed"]')
+          .waitFor({ timeout: 2_000 })
+          .then(() => true)
+          .catch(() => false)
+        return revealed ? page.locator('.card .translation').innerText() : null
+      },
+      { timeout: 15_000 },
+    )
+    .toBe('auf Wiedersehen')
+
+  // Progress from before the change is still here: studying the new word above didn't rate it, so the count
+  // of started words in the first unit is unchanged.
+  await page.goto('/path')
+  await expect(page.getByText('1 of 20 started')).toBeVisible()
+})
