@@ -387,23 +387,68 @@ describe('Client.changeL1 (spec §8.6)', () => {
     expect(await driver.all('SELECT pack_id, status FROM pack')).toEqual([{ pack_id: 'corpus-de', status: 'active' }])
   })
 
-  it('the default L1 only applies until the learner sets one explicitly', async () => {
+  it('the default L1 only applies until the learner sets one explicitly, and only chooses the first install', async () => {
     const driver = nodeSqliteDriver()
     const env = testEnv()
     const client = await Client.open({ driver, env, l1: 'de' })
     expect(client.snapshot.l1).toBe('de')
-    await client.installPacks(manifest, fromDisk)
-    expect(await client.startSession()).toEqual(['corpus-de'])
-    expect(client.snapshot.corpus?.l1).toBe('de')
-
     await client.updateSettings({ l1: 'bg' })
+    // Nothing is installed yet: the setting decides which language the first install fetches.
+    expect(client.snapshot.l1).toBe('bg')
 
-    // A second Client on the same store, as a restarted app would open: `settings.l1` now wins over the default.
     const reopened = await Client.open({ driver, env, l1: 'de' })
     expect(reopened.snapshot.l1).toBe('bg')
     await reopened.installPacks(manifest, fromDisk)
     expect(await reopened.startSession()).toEqual(['corpus-bg'])
     expect(reopened.snapshot.corpus?.l1).toBe('bg')
+  })
+
+  it('a change made offline survives a relaunch as pending: the installed pack still decides the L1 (final review)', async () => {
+    const driver = nodeSqliteDriver()
+    const env = testEnv()
+    const client = await Client.open({ driver, env, l1: 'bg' })
+    await client.installPacks(manifest, fromDisk)
+    await client.startSession()
+    await client.updateSettings({ l1: 'de' })
+    expect(await client.changeL1('de', manifest, () => Promise.reject(new Error('offline')))).toEqual({ ok: false, reason: 'unavailable' })
+
+    const reopened = await Client.open({ driver, env, l1: 'bg' })
+    expect(reopened.snapshot.settings.l1).toBe('de')
+    expect(reopened.snapshot.l1).toBe('bg')
+    expect(reopened.snapshot.corpus?.l1).toBe('bg')
+    expect(reopened.l1).toBe('bg')
+
+    // A report is about the Bulgarian words the learner sees.
+    const key = await reopened.report({ wordId: 'c:hello-1', field: 'translation', note: '', packVersion: 0 })
+    expect((await reopened.reports()).find((r) => r.key === key)?.l1).toBe('bg')
+
+    // Pack checks keep serving Bulgarian, and a staged Bulgarian upgrade is activated, not dropped.
+    const next = await nextBgVersion(env)
+    expect((await reopened.installPacks(next.manifest, next.fetch)).staged).toEqual(['corpus-bg'])
+    expect(await reopened.startSession()).toEqual(['corpus-bg'])
+    expect(reopened.snapshot.packVersion).toBe(1)
+
+    // Once online, the pending change goes through.
+    expect(await reopened.changeL1('de', manifest, fromDisk)).toEqual({ ok: true })
+    expect(reopened.snapshot.l1).toBe('de')
+    expect(reopened.snapshot.corpus?.l1).toBe('de')
+  })
+
+  it('a demo installed in German stays German when reopened with another default L1 (final review)', async () => {
+    const driver = nodeSqliteDriver()
+    const env = testEnv()
+    const demo = await Client.open({ driver, env, l1: 'de' })
+    await demo.installPacks(manifest, fromDisk)
+    await demo.startSession()
+    expect(demo.snapshot.corpus?.l1).toBe('de')
+
+    // The interface language changed to Bulgarian, so boot's default is now 'bg'.
+    const reopened = await Client.open({ driver, env, l1: 'bg' })
+    expect(reopened.snapshot.l1).toBe('de')
+    await reopened.installPacks(manifest, fromDisk)
+    expect(await reopened.startSession()).toEqual([])
+    expect(reopened.snapshot.l1).toBe('de')
+    expect(reopened.snapshot.corpus?.l1).toBe('de')
   })
 })
 

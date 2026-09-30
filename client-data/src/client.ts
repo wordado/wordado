@@ -36,7 +36,10 @@ import { INITIAL_SYNC_STATUS, readPulledXp, SyncEngine, type PulledXp, type Sync
 export interface ClientOptions {
   readonly driver: SqlDriver
   readonly env: ClientEnv
-  /** The default L1, used when `settings.l1` is null (spec §8.6). */
+  /**
+   * The default L1 (spec §8.6): used only while no pack is installed and `settings.l1` is null, so it chooses at most
+   * the first install. Once a pack is active its L1 is the Client's.
+   */
   readonly l1: string
   /** Absent in demo mode and before sign-in: `sync` is then skipped. */
   readonly transport?: SyncTransport
@@ -70,7 +73,7 @@ export interface ClientSnapshot {
   readonly entitlement: Entitlement | null
   readonly xp: ClientXp
   readonly sync: SyncStatus
-  /** The installed L1 (spec §8.6): `settings.l1 ?? options.l1`. */
+  /** The installed L1 (spec §8.6): see `Client.l1`. */
   readonly l1: string
 }
 
@@ -98,8 +101,6 @@ export class Client {
   private corpus: Corpus | null = null
   private packVersion: number | null = null
   private settings!: Settings
-  /** The installed L1: `settings.l1 ?? defaultL1`, mutable so `changeL1` can update it in place. */
-  private _l1!: string
   private flags: Map<WordId, WordFlag> = new Map()
   private unlocked: Set<string> = new Set()
   private entitlement: Entitlement | null = null
@@ -133,7 +134,6 @@ export class Client {
     client.userId = await getUserId(db)
     client.xp = await readPulledXp(db.driver)
     await client.reloadDocuments()
-    client.l1 = client.settings.l1 ?? client.defaultL1
     client.refresh()
     return client
   }
@@ -142,13 +142,15 @@ export class Client {
     return this.store.get()
   }
 
-  /** The installed L1 (spec §8.6): `settings.l1 ?? options.l1`. */
+  /**
+   * The installed L1 (spec §8.6): the active pack's L1 whenever one is installed, whatever `settings.l1` says. A
+   * setting that differs from it is a change still pending (offline, or the pack not yet fetched): only `changeL1`
+   * moves this, so reports, pack checks and `startSession` keep serving the words the learner actually sees. Before
+   * any pack is active it is `settings.l1 ?? options.l1`: the language the first install fetches.
+   */
   get l1(): string {
-    return this._l1
-  }
-
-  private set l1(value: string) {
-    this._l1 = value
+    // `settings` is unset only for the constructor's first snapshot, which `open` replaces at once.
+    return this.corpus?.l1 ?? (this.settings as Settings | undefined)?.l1 ?? this.defaultL1
   }
 
   private async reloadDocuments(): Promise<void> {
@@ -273,8 +275,8 @@ export class Client {
       const has = report.staged.length > 0 || installed.some((p) => p.pack_id === `corpus-${l1}`)
       if (!has) return { ok: false, reason: 'unavailable' }
       await activateStagedPacks(this.db, l1)
-      this.l1 = l1
       // Reload what `open` loads from the active packs (corpus, pack version, session plan), as `startSession` does.
+      // The new corpus's L1 is now `this.l1`.
       await this.reloadCorpus()
       this.refresh()
       return { ok: true }

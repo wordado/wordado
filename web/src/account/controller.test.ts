@@ -533,4 +533,37 @@ describe('the native language chosen at sign-in (plan 10)', () => {
     }
     expect(a.client().snapshot.settings.l1).toBe('bg')
   })
+
+  /** A sync success on `client`'s status, as the sync loop's would publish it: what wakes a deferred `saveL1`. */
+  const syncedOn = (client: Client, at: number) =>
+    client.store.set({ ...client.snapshot, sync: { ...client.snapshot.sync, phase: 'idle', failures: 0, lastSyncAt: at } })
+
+  it('drops the deferred write once Boot opens another Client (final review)', async () => {
+    const env = testEnv()
+    const server = new FakeServer({ now: env.now })
+    const transport = flaky(server)
+    const a = await app({ env, server, transport })
+    expect(await a.controller.completeSignIn(null, 'de')).toBe('signed-in')
+    const old = a.client()
+    const sync = vi.spyOn(old, 'sync')
+    await a.boot.switchTo()
+    expect(a.client()).not.toBe(old)
+    syncedOn(old, env.now() + 1)
+    await Promise.resolve()
+    expect(sync).not.toHaveBeenCalled()
+  })
+
+  it('drops the deferred write once Boot leaves ready (final review)', async () => {
+    const env = testEnv()
+    const server = new FakeServer({ now: env.now })
+    const transport = flaky(server)
+    const a = await app({ env, server, transport })
+    expect(await a.controller.completeSignIn(null, 'de')).toBe('signed-in')
+    const old = a.client()
+    const sync = vi.spyOn(old, 'sync')
+    a.boot.store.set({ status: 'starting' })
+    syncedOn(old, env.now() + 1)
+    await Promise.resolve()
+    expect(sync).not.toHaveBeenCalled()
+  })
 })

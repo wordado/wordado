@@ -22,7 +22,8 @@ export type BootState =
 
 /**
  * The L1 a Client opens with when its settings name none (plan 10): Bulgarian for an account (its own choice, synced,
- * takes over once set), and for the demo the interface's language when that is an L1 the app teaches from.
+ * takes over once set), and for the demo the interface's language when that is an L1 the app teaches from. It only
+ * chooses the first install: once a pack is installed, its L1 is the Client's (`Client.l1`), whatever this says.
  */
 export function defaultL1(account: AccountRecord | null, locale: Locale): L1 {
   if (account !== null) return 'bg'
@@ -37,7 +38,7 @@ export interface LockPort {
 
 export interface BootDeps {
   readonly env: ClientEnv
-  /** The default L1 for the file about to open (the Client's `settings.l1` wins over it): which packs to install. */
+  /** The default L1 for the file about to open: which packs the first install fetches (an installed pack, then the Client's `settings.l1`, win over it). */
   l1(account: AccountRecord | null): string
   /** Which account this device is signed in to, read at every open. Absent: always the demo. */
   readonly accounts?: AccountStorage

@@ -1,4 +1,7 @@
-import { createStore, type ChangeL1Outcome } from '@wordado/client-data'
+import { Client, createStore, type ChangeL1Outcome } from '@wordado/client-data'
+import { nodeSqliteDriver } from '@wordado/client-data/src/drivers/nodeSqlite'
+import { sampleFetcher, sampleManifest } from '@wordado/client-data/src/testing/sample'
+import { testEnv } from '@wordado/client-data/src/testing/testEnv'
 import type { L1 } from '@wordado/core'
 import { describe, expect, it } from 'vitest'
 import { watchL1 } from './l1Watch'
@@ -169,5 +172,34 @@ describe('watchL1 (plan 10, Decision 2)', () => {
     h.choose('de')
     expect(h.calls).toEqual(['de'])
   })
-})
 
+  it('installs at start after a relaunch when a change made offline is still pending (final review)', async () => {
+    const driver = nodeSqliteDriver()
+    const env = testEnv()
+    const before = await Client.open({ driver, env, l1: 'bg' })
+    await before.installPacks(sampleManifest, sampleFetcher)
+    await before.startSession()
+    await before.updateSettings({ l1: 'de' })
+    await before.changeL1('de', sampleManifest, () => Promise.reject(new Error('offline')))
+
+    // The relaunch: `settings.l1` names German while the Bulgarian pack is still the installed one.
+    const client = await Client.open({ driver, env, l1: 'bg' })
+    const calls: L1[] = []
+    let done!: Promise<ChangeL1Outcome>
+    const stop = watchL1(
+      client,
+      (l1) => {
+        calls.push(l1)
+        done = client.changeL1(l1, sampleManifest, sampleFetcher)
+        return done
+      },
+      () => true,
+      () => () => undefined,
+    )
+    expect(calls).toEqual(['de'])
+    expect(await done).toEqual({ ok: true })
+    expect(client.snapshot.l1).toBe('de')
+    expect(client.snapshot.corpus?.l1).toBe('de')
+    stop()
+  })
+})

@@ -109,28 +109,45 @@ export class AccountController {
     const state = this.deps.boot.store.get()
     if (state.status !== 'ready' || state.account === null) return
     const client = state.client
+    /** Set once the deferred wait below is given up: a sync then in flight writes nothing. */
+    let stopped = false
     /** True once a pull has completed and the choice was settled; `Client.sync` resolves after re-reading settings. */
     const attempt = async (): Promise<boolean> => {
       const outcome = await client.sync({ force: true }).catch(() => 'failed' as const)
       if (outcome !== 'synced') return false
-      if (client.snapshot.settings.l1 === null) await client.updateSettings({ l1 }).catch(() => undefined)
+      if (!stopped && client.snapshot.settings.l1 === null) await client.updateSettings({ l1 }).catch(() => undefined)
       return true
     }
     if (await attempt()) return
+    const holds = () => {
+      const now = this.deps.boot.store.get()
+      return now.status === 'ready' && now.client === client
+    }
+    if (!holds()) return
     // A later sync that completes (the sync loop's, or any other) shows as a fresh success in the status. The store
     // updates before `Client.sync` has re-read the pulled settings, so `attempt` syncs again rather than trust them.
     const mark = () => `${client.snapshot.sync.lastSyncAt}|${client.snapshot.sync.failures}`
     let seen = mark()
     let busy = false
+    const stop = () => {
+      stopped = true
+      unsubscribe()
+      unwatchBoot()
+    }
     const unsubscribe = client.store.subscribe(() => {
       const { failures, phase } = client.snapshot.sync
-      if (busy || phase !== 'idle' || failures !== 0 || mark() === seen) return
+      if (stopped || busy || phase !== 'idle' || failures !== 0 || mark() === seen) return
       busy = true
       void attempt().then((done) => {
         busy = false
         seen = mark()
-        if (done) unsubscribe()
+        if (done) stop()
       })
+    })
+    // The wait is this Client's alone: once Boot leaves 'ready', or holds another Client (a switch, a sign-out), the
+    // Client watched here is closing or closed, and whichever opens next makes its own choices.
+    const unwatchBoot = this.deps.boot.store.subscribe(() => {
+      if (!holds()) stop()
     })
   }
 

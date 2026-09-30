@@ -127,6 +127,7 @@ export const bg: Messages = {
   'settings.nativeLanguageHint': 'Езикът, на който се превеждат думите.',
   'settings.nativeLanguageConfirm': 'Напредъкът ви се запазва. Думите ще се превеждат на {language}.',
   'settings.nativeLanguageChange': 'Сменете',
+  'settings.nativeLanguagePending': 'Думите ви ще се превеждат на {language}, щом преводите бъдат изтеглени.',
   'settings.language': 'Език на интерфейса',
   'settings.languageHint': 'Думите винаги са на английски; това сменя менютата и съобщенията.',
 

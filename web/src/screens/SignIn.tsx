@@ -66,11 +66,13 @@ export function SignIn(props: { readonly redirect?: (url: string) => void; reado
   const { t, locale } = useT()
   const { api, accounts, account, env } = useApp()
   const client = useClient()
-  const installedL1 = useClientSnapshot().l1
+  // The learner's choice so far: a change still pending (its pack not yet installed) counts, as Settings shows it.
+  const snapshot = useClientSnapshot()
+  const chosenL1 = snapshot.settings.l1 ?? snapshot.l1
   const online = useOnline()
   const [step, setStep] = useState<Step>({ kind: 'gate' })
   const [country, setCountry] = useState<string | null>(null)
-  const [l1, setL1] = useState<L1>(() => (isSupportedL1(installedL1) ? installedL1 : 'bg'))
+  const [l1, setL1] = useState<L1>(() => (isSupportedL1(chosenL1) ? chosenL1 : 'bg'))
   const [year, setYear] = useState('')
   const [email, setEmail] = useState('')
   const [code, setCode] = useState('')

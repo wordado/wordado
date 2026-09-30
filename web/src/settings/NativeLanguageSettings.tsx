@@ -14,6 +14,10 @@ export function NativeLanguageSettings() {
   const { settings, l1: installed } = useClientSnapshot()
   const current = settings.l1 ?? installed
   const [target, setTarget] = useState<L1 | null>(null)
+  // Intl's own form of the name, as it sits mid-sentence: "German", "Deutsch", "немски".
+  const inSentence = (l1: L1) => new Intl.DisplayNames([locale], { type: 'language' }).of(l1) ?? l1
+  /** A setting the installed pack does not match yet: `watchL1` installs it once it can (offline, it waits). */
+  const pending = settings.l1 !== null && settings.l1 !== installed ? settings.l1 : null
 
   const change = async (l1: L1) => {
     await client.updateSettings({ l1 })
@@ -33,11 +37,11 @@ export function NativeLanguageSettings() {
           </label>
         ))}
       </fieldset>
+      {pending !== null && <p className="note">{t('settings.nativeLanguagePending', { language: inSentence(pending) })}</p>}
       {target !== null && (
         <ConfirmDialog
           title={t('settings.nativeLanguage')}
-          // Intl's own form of the name, as it sits mid-sentence: "German", "Deutsch", "немски".
-          body={<p>{t('settings.nativeLanguageConfirm', { language: new Intl.DisplayNames([locale], { type: 'language' }).of(target) ?? target })}</p>}
+          body={<p>{t('settings.nativeLanguageConfirm', { language: inSentence(target) })}</p>}
           confirmLabel={t('settings.nativeLanguageChange')}
           onConfirm={() => change(target)}
           onClose={() => setTarget(null)}
