@@ -97,6 +97,6 @@ describe('the corpus pipeline, end to end (spec §13)', () => {
     expect(checkPackSuccession(v1, v2)).toEqual([])
     expect(v2.entries.find((e) => e.entry_id === 'go-1')!.alternates).toEqual(['ходя', 'ида'])
     const fixes = JSON.parse(readFileSync(join(v2Dir, 'fixes.json'), 'utf8'))
-    expect(fixes.fixes.filter((f: { fixed_in: number }) => f.fixed_in === 2)).toEqual([{ word_id: 'c:go-1', field: 'translation', fixed_in: 2 }])
+    expect(fixes.fixes.filter((f: { fixed_in: number }) => f.fixed_in === 2)).toEqual([{ word_id: 'c:go-1', field: 'translation', fixed_in: 2, l1: 'bg' }])
   }, 30_000)
 })

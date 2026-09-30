@@ -50,29 +50,46 @@ function parse(asked: readonly string[], l1s: readonly string[]) {
   }
 }
 
-/** A title per unit, per L1. A unit whose words change is named again, and its title goes back to review. */
+/**
+ * A title per unit, per L1, asked one L1 at a time (plan 9, Decision 2): a Bulgarian title's cache key is the one
+ * a Bulgarian-only draft wrote, so adding an L1 asks only that L1. Every L1's title takes its English from the lead
+ * L1's answer. A unit whose words change is named again, and its title goes back to review.
+ */
 export async function titleUnits(units: readonly TitleUnit[], l1s: readonly string[], run: StageRun): Promise<Map<string, Titles>> {
-  const titles = await cachedBatch({
-    cache: run.cache,
-    stage: 'titles',
-    version: TITLES_VERSION,
-    items: units,
-    keyInput: (u) => ({ level: u.level, words: [...u.words].sort(), l1s }),
-    batchSize: 10,
-    concurrency: run.concurrency,
-    offline: run.offline,
-    model: run.llm.model,
-    run: (batch) =>
-      run.llm.json({
-        name: 'titles',
-        system: SYSTEM(l1s),
-        input: { units: batch.map((u) => ({ unit: u.unit_id, level: u.level, words: u.words })) },
-        schema: schema(l1s),
-        parse: parse(
-          batch.map((u) => u.unit_id),
-          l1s,
-        ),
+  const byL1 = new Map<string, Titles[]>()
+  for (const l1 of l1s) {
+    const one = [l1]
+    byL1.set(
+      l1,
+      await cachedBatch({
+        cache: run.cache,
+        stage: 'titles',
+        version: TITLES_VERSION,
+        items: units,
+        keyInput: (u) => ({ level: u.level, words: [...u.words].sort(), l1s: one }),
+        batchSize: 10,
+        concurrency: run.concurrency,
+        offline: run.offline,
+        model: run.llm.model,
+        run: (batch) =>
+          run.llm.json({
+            name: 'titles',
+            system: SYSTEM(one),
+            input: { l1s: one, units: batch.map((u) => ({ unit: u.unit_id, level: u.level, words: u.words })) },
+            schema: schema(one),
+            parse: parse(
+              batch.map((u) => u.unit_id),
+              one,
+            ),
+          }),
       }),
-  })
-  return new Map(units.map((u, i) => [u.unit_id, titles[i]!]))
+    )
+  }
+  const lead = l1s[0]
+  return new Map(
+    units.map((u, i) => {
+      const en = lead === undefined ? '' : byL1.get(lead)![i]![lead]!.en
+      return [u.unit_id, Object.fromEntries(l1s.map((l1) => [l1, { en, l1: byL1.get(l1)![i]![l1]!.l1 }]))]
+    }),
+  )
 }

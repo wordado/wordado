@@ -17,7 +17,8 @@ export function diffFixes(previous: Pack | null, next: Pack): Fix[] {
     const old = before.get(e.entry_id)
     if (!old) continue
     for (const [field, value] of FIELDS) {
-      if (canonicalJson(value(old)) !== canonicalJson(value(e))) out.push({ word_id: `c:${e.entry_id}`, field, fixed_in: next.corpus_version })
+      if (canonicalJson(value(old)) !== canonicalJson(value(e)))
+        out.push({ word_id: `c:${e.entry_id}`, field, fixed_in: next.corpus_version, ...(field === 'translation' ? { l1: next.l1 } : {}) })
     }
   }
   return out
