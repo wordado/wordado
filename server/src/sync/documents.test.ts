@@ -119,6 +119,19 @@ describe('document writes (spec §9.2)', () => {
     expect(rows).toEqual([{ reporter_id: s.userId, report_key: 'rep-1', word_id: 'c:hello-1', field: 'audio', note: 'robotic', pack_version: 0 }])
   })
 
+  it('keeps the learner\'s L1 on a report, or none when it is not given (plan 10)', async () => {
+    const h = harness()
+    const s = await h.signIn()
+    const report = { wordId: 'c:hello-1', field: 'audio', note: 'robotic', packVersion: 0, createdAt: h.clock.now }
+    await push(h, s, [write('content_report', 'rep-1', { ...report, l1: 'de' })])
+    await push(h, s, [write('content_report', 'rep-2', report)])
+    const rows = await h.deps.db.query('select report_key, l1 from content_report order by report_key')
+    expect(rows).toEqual([
+      { report_key: 'rep-1', l1: 'de' },
+      { report_key: 'rep-2', l1: null },
+    ])
+  })
+
   it('marks the learner for a full re-derivation when an alias changes, and asks the queue (spec §6.1)', async () => {
     const h = harness()
     const s = await h.signIn()

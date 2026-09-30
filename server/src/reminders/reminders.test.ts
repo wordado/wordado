@@ -216,6 +216,17 @@ describe('GET /v1/reminder', () => {
     expect((await s.get('/v1/reminder?tz=')).status).toBe(400)
     expect((await s.get('/v1/reminder?tz=900')).status).toBe(400)
   })
+
+  it('accepts a German subscription and answers German; an unknown language falls back to English (plan 10)', async () => {
+    const h = await withReminders()
+    const s = await h.signIn()
+    await subscribe(s, { language: 'de' })
+    expect(await h.deps.db.query('select language from push_subscription')).toEqual([{ language: 'de' }])
+    at(h, 0, 9, 5)
+    await dueWords(h, s, ['c:w-1', 'c:w-2', 'c:w-3'])
+    expect((await s.get('/v1/reminder?tz=0&lang=de')).body).toEqual({ title: 'Wordado', body: 'Du hast heute 3 Wörter zu wiederholen.' })
+    expect((await s.get('/v1/reminder?tz=0&lang=xx')).body.body).toBe('You have 3 words to review today.')
+  })
 })
 
 describe('reminderText', () => {
@@ -225,5 +236,13 @@ describe('reminderText', () => {
     expect(reminderText('bg', { kind: 'due', count: 1 }).body).toBe('Имате 1 дума за преговор днес.')
     expect(reminderText('bg', { kind: 'streak', days: 1 }).body).toBe('Поредицата ви от 1 ден има нужда от днешното упражнение.')
     expect(reminderText('bg', { kind: 'streak', days: 5 }).body).toBe('Поредицата ви от 5 дни има нужда от днешното упражнение.')
+  })
+
+  it('says one word and many words properly in German (plan 10)', () => {
+    expect(reminderText('de', { kind: 'due', count: 3 }).body).toBe('Du hast heute 3 Wörter zu wiederholen.')
+    expect(reminderText('de', { kind: 'due', count: 1 }).body).toBe('Du hast heute 1 Wort zu wiederholen.')
+    expect(reminderText('de', { kind: 'due', count: 0 }).body).toBe('Ein paar Minuten mit neuen Wörtern heute?')
+    expect(reminderText('de', { kind: 'streak', days: 1 }).body).toBe('Deine Serie von 1 Tag braucht die heutige Übung.')
+    expect(reminderText('de', { kind: 'streak', days: 5 }).body).toBe('Deine Serie von 5 Tagen braucht die heutige Übung.')
   })
 })
