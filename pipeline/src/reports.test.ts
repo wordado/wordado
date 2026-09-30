@@ -64,6 +64,18 @@ describe('triage (spec §8.10, Decision 13)', () => {
     const rec: AudioRecord = { clip_id: 'go-1-uk-2', entry_id: 'go-1', accent: 'uk', text: 'go', voice_key: 'k', generation: 2, batch: 'b', reason: 'redo', created_at: '2026-10-06T00:00:00Z', seconds: 0.5 }
     expect(triage(input([r({ word_id: 'u:abc' }), r({ word_id: 'u:abc', reporter: 'b' }), r({ word_id: 'c:gone-1' }), r({ word_id: 'c:gone-1', reporter: 'b' }), r({ field: 'audio' })], { records: [rec] })).events).toEqual([])
   })
+
+  it('is language-aware: a German translation fix does not suppress a Bulgarian translation report (plan 9)', () => {
+    const fixes = [{ word_id: 'c:go-1', field: 'translation' as const, fixed_in: 3, l1: 'de' }]
+    const out = triage(input([r({ pack_version: 1 }), r({ pack_version: 1, reporter: 'b' })], { fixes, l1s: ['bg', 'de'] }))
+    expect(out.events.map((e) => e.queue)).toEqual(['translation-bg'])
+  })
+
+  it('treats a legacy translation fix (no l1) as Bulgarian: it suppresses bg but not de (plan 9)', () => {
+    const fixes = [{ word_id: 'c:go-1', field: 'translation' as const, fixed_in: 3 }]
+    const out = triage(input([r({ pack_version: 1 }), r({ pack_version: 1, reporter: 'b' })], { fixes, l1s: ['bg', 'de'] }))
+    expect(out.events.map((e) => e.queue)).toEqual(['translation-de'])
+  })
 })
 
 describe('pullReports', () => {

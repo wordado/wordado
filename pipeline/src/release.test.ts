@@ -127,7 +127,7 @@ describe('planRelease and writeRelease', () => {
     const fixes = JSON.parse(readFileSync(join(o2, 'fixes.json'), 'utf8'))
     expect(fixes.corpus_version).toBe(2)
     expect(fixes.fixes.slice(0, fixesV1.fixes.length)).toEqual(fixesV1.fixes)
-    expect(fixes.fixes.slice(fixesV1.fixes.length)).toEqual([{ word_id: 'c:go-1', field: 'translation', fixed_in: 2 }])
+    expect(fixes.fixes.slice(fixesV1.fixes.length)).toEqual([{ word_id: 'c:go-1', field: 'translation', fixed_in: 2, l1: 'bg' }])
   })
 
   it('carries, retired, an entry only the last published pack knows', async () => {
