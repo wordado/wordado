@@ -106,6 +106,8 @@ test('meets WCAG 2.2 A and AA on every screen (spec §11.1)', async ({ page }) =
   await page.keyboard.press('1')
   await expect(page.locator('.card[data-phase="feedback"]')).toBeVisible()
   await expectAccessible(page)
+  await page.getByRole('button', { name: 'More' }).click()
+  await expectAccessible(page)
   await page.getByRole('button', { name: 'Report a problem' }).click()
   await expect(page.getByRole('dialog')).toBeVisible()
   await expectAccessible(page)

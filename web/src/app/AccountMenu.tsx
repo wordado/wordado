@@ -1,9 +1,9 @@
-import { useEffect, useId, useRef, useState } from 'react'
 import { useT } from '../i18n/i18n'
-import { Link, useRoute } from '../router'
+import { Link } from '../router'
 import { SyncLine, useSyncMessage } from './Banners'
 import { useApp } from './context'
 import { useSignOut } from './signOut'
+import { usePopover } from './usePopover'
 
 /**
  * Who is signed in, at the end of the masthead: a circle with the first
@@ -16,23 +16,7 @@ export function AccountMenu() {
   const { account } = useApp()
   const message = useSyncMessage()
   const { signingOut, error, start: signOut, dialog } = useSignOut()
-  const [open, setOpen] = useState(false)
-  const root = useRef<HTMLDivElement>(null)
-  const circle = useRef<HTMLButtonElement>(null)
-  const panelId = useId()
-  const route = useRoute()
-
-  // Choosing an item navigates; the menu closes behind it.
-  useEffect(() => setOpen(false), [route])
-
-  useEffect(() => {
-    if (!open) return
-    const outside = (event: PointerEvent) => {
-      if (!(event.target instanceof Node) || !root.current?.contains(event.target)) setOpen(false)
-    }
-    document.addEventListener('pointerdown', outside)
-    return () => document.removeEventListener('pointerdown', outside)
-  }, [open])
+  const { open, root, trigger, onKeyDown, triggerProps, panelId } = usePopover()
 
   if (account === null) {
     return (
@@ -43,33 +27,20 @@ export function AccountMenu() {
   }
 
   const warning = message?.tone === 'warning' ? t(message.key, message.vars) : null
-  const close = () => {
-    setOpen(false)
-    circle.current?.focus()
-  }
-
   return (
-    <div
-      className="account"
-      ref={root}
-      onKeyDown={(event) => {
-        if (event.key === 'Escape' && open) close()
-      }}
-    >
+    <div className="account" ref={root} onKeyDown={onKeyDown}>
       <button
-        ref={circle}
+        ref={trigger}
         type="button"
         className="account-circle"
         aria-label={warning === null ? t('account.label', { email: account.email }) : t('account.labelWarning', { email: account.email, warning })}
-        aria-expanded={open}
-        aria-controls={panelId}
-        onClick={() => setOpen(!open)}
+        {...triggerProps}
       >
         <span aria-hidden="true">{account.email.charAt(0).toUpperCase()}</span>
         {warning !== null && <span className="account-dot" aria-hidden="true" />}
       </button>
       {open && (
-        <div className="account-panel" id={panelId}>
+        <div className="popover-panel account-panel" id={panelId}>
           <p className="account-email">{account.email}</p>
           <SyncLine />
           <ul>

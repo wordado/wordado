@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useApp } from '../app/context'
 import { errorMessageKey } from '../errors'
 import { useT } from '../i18n/i18n'
+import { Link } from '../router'
 import { RunView } from '../study/RunView'
 
 /** A session or a practice run (spec §7.4), in one mode or mixed. */
@@ -37,7 +38,16 @@ export function Study(props: { readonly kind: RunKind; readonly mode: Mode | nul
     }
   }, [client, env, audio, kind, mode])
 
-  if (error !== null) return <p role="alert">{t('study.error', { message: error })}</p>
+  // Focus mode hides the navigation, so a run that cannot start offers the way back itself.
+  if (error !== null)
+    return (
+      <section className="study">
+        <p role="alert">{t('study.error', { message: error })}</p>
+        <Link className="button" to={{ name: 'home' }}>
+          {t('done.home')}
+        </Link>
+      </section>
+    )
   if (!run) return <p role="status">{t('study.loading')}</p>
   return <RunView key={`${kind}:${mode ?? 'mixed'}`} run={run} kind={kind} />
 }

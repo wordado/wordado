@@ -14,7 +14,8 @@ export async function answer(page: Page): Promise<string> {
   const prompt = page.locator('.card[data-phase="prompt"]')
   await expect(prompt).toBeVisible()
   const mode = (await prompt.getAttribute('data-mode'))!
-  const before = Number(((await page.locator('.study-bar p').textContent()) ?? '0').split(' ')[0])
+  const progress = page.getByRole('progressbar', { name: 'Session progress' })
+  const before = Number(await progress.getAttribute('aria-valuenow'))
   await page.waitForTimeout(SETTLE_MS)
   if (mode === 'flashcard') {
     await page.keyboard.press('Space')
@@ -27,7 +28,7 @@ export async function answer(page: Page): Promise<string> {
     await page.waitForTimeout(SETTLE_MS)
     await page.keyboard.press('Enter')
   }
-  await expect(page.locator('.study-bar p', { hasText: new RegExp(`^${before + 1} done`) }).or(page.locator('.done'))).toBeVisible()
+  await expect(page.locator(`[role="progressbar"][aria-valuenow="${before + 1}"]`).or(page.locator('.done'))).toBeVisible()
   return mode
 }
 
