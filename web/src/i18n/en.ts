@@ -235,6 +235,8 @@ export const en = {
 
   'study.loading': 'Getting your words ready…',
   'study.progress': '{answered} done, {remaining} to go',
+  'study.progressLabel': 'Session progress',
+  'study.more': 'More',
   'study.finish': 'Stop for now',
   'study.reveal': 'Show answer',
   'study.rateLabel': 'How well did you know it?',
