@@ -1322,13 +1322,6 @@ dialog.report textarea {
   background: var(--leaf);
 }
 
-.themes {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  border-top: 1px solid var(--rule);
-}
-
 .units {
   margin: 0;
   padding: 0;
@@ -1488,21 +1481,160 @@ dialog.report textarea {
   }
 }
 
-/* Themes */
+/* Themes: a row per theme on a phone, a grid of cards from 48rem */
 
-.theme {
-  padding: var(--space-4) 0;
-  border-bottom: 1px solid var(--rule);
+.app > main > .themes-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: none;
 }
 
-.theme h2 {
-  margin: 0 0 var(--space-1);
-  font: 500 var(--step-2) / 1.2 var(--font-entry);
+.themes-head h1 {
+  margin: 0;
 }
 
-.theme.active {
-  padding-left: var(--space-3);
-  border-left: 3px solid var(--rose);
+.themes-head .lede {
+  margin: var(--space-2) 0 0;
+}
+
+.theme-grid {
+  display: grid;
+  gap: 0.625rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.theme-card {
+  display: grid;
+  grid-template-columns: 2.75rem minmax(0, 1fr) auto;
+  grid-template-areas:
+    'icon text action'
+    '. progress progress';
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-4);
+}
+
+.theme-card.is-active {
+  grid-template-areas:
+    'icon text text'
+    '. progress progress'
+    'action action action';
+  border: 1.5px solid var(--rose);
+}
+
+.theme-icon {
+  display: grid;
+  grid-area: icon;
+  align-self: start;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  color: var(--rose);
+  background: var(--paper);
+  border-radius: 0.75rem;
+}
+
+.is-active .theme-icon {
+  background: var(--rose-soft);
+}
+
+.theme-text {
+  display: flex;
+  flex-direction: column;
+  grid-area: text;
+  gap: 0.125rem;
+}
+
+.theme-text h2 {
+  margin: 0;
+  font: 600 var(--step-1) / 1.2 var(--font-entry);
+}
+
+.theme-text p,
+.theme-progress p {
+  margin: 0;
+}
+
+.theme-text .theme-active {
+  align-self: flex-start;
+  margin-bottom: var(--space-1);
+  padding: 0.125rem 0.625rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--rose);
+  background: var(--rose-soft);
+  border-radius: 999px;
+}
+
+.theme-progress {
+  display: flex;
+  flex-direction: column;
+  grid-area: progress;
+  gap: var(--space-1);
+}
+
+.theme-card:not(.is-active) .theme-progress .bar span {
+  background: var(--leaf);
+}
+
+.theme-action {
+  grid-area: action;
+}
+
+.is-active .theme-action {
+  width: 100%;
+}
+
+.theme-choose {
+  font-weight: 600;
+}
+
+.theme-choose .label-long {
+  display: none;
+}
+
+@media (min-width: 48rem) {
+  .theme-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-4);
+  }
+
+  .theme-card,
+  .theme-card.is-active {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-3);
+    padding: 1.25rem;
+  }
+
+  .theme-icon {
+    width: 3rem;
+    height: 3rem;
+    border-radius: 0.875rem;
+  }
+
+  .theme-action {
+    width: 100%;
+    margin-top: auto;
+  }
+
+  .theme-choose {
+    color: var(--paper);
+    background: var(--ink);
+    border-color: var(--ink);
+  }
+
+  .theme-choose .label-long {
+    display: inline;
+  }
+
+  .theme-choose .label-short {
+    display: none;
+  }
 }
 
 /* Progress: the words and levels, then how well they are remembered and the motivation */

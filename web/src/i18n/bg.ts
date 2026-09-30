@@ -318,12 +318,15 @@ export const bg: Messages = {
 
   'themes.title': 'Теми',
   'themes.intro': 'Изберете тема и думите ѝ идват първи. Прегледите ви остават същите.',
-  'themes.count': { one: '{count} дума', other: '{count} думи' },
   'themes.aboveLevel': 'Включва думи над вашето ниво',
   'themes.choose': 'Учете тази тема',
   'themes.active': 'Учите сега',
   'themes.clear': 'Обратно към пътя',
   'themes.none': 'Все още няма достатъчно големи теми.',
+  'themes.all': 'Всички теми',
+  'themes.chooseShort': 'Учете',
+  'themes.chooseNamed': 'Учете тази тема: {name}',
+  'themes.started': 'Започнати {started} от {count} думи',
 
   'progress.title': 'Напредък',
   'progress.tiers': 'Вашите думи',
