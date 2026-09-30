@@ -8,7 +8,7 @@ const NOW = '2026-10-10T00:00:00Z'
 const DAY = 86_400_000
 const t0 = Date.parse('2026-10-05T00:00:00Z')
 let nextId = 1
-const r = (extra: Partial<ReportRow>): ReportRow => ({ id: nextId++, word_id: 'c:go-1', field: 'translation', note: '', pack_version: 1, reporter: 'a', received_at: t0, ...extra })
+const r = (extra: Partial<ReportRow>): ReportRow => ({ id: nextId++, word_id: 'c:go-1', field: 'translation', note: '', pack_version: 1, reporter: 'a', received_at: t0, l1: null, ...extra })
 const input = (reports: ReportRow[], extra: Partial<Parameters<typeof triage>[0]> = {}) => ({
   reports,
   decisions: Decisions.read(makeContent()),
@@ -76,19 +76,30 @@ describe('triage (spec §8.10, Decision 13)', () => {
     const out = triage(input([r({ pack_version: 1 }), r({ pack_version: 1, reporter: 'b' })], { fixes, l1s: ['bg', 'de'] }))
     expect(out.events.map((e) => e.queue)).toEqual(['translation-de'])
   })
+
+  it('triages a German translation report to translation-de only, leaving translation-bg alone (plan 10)', () => {
+    const out = triage(input([r({ l1: 'de' }), r({ l1: 'de', reporter: 'b' })], { l1s: ['bg', 'de'] }))
+    expect(out.events.map((e) => e.queue)).toEqual(['translation-de'])
+  })
+
+  it('reopens every L1 when a translation report names none (a report from before plan 10)', () => {
+    const out = triage(input([r({ l1: null }), r({ l1: null, reporter: 'b' })], { l1s: ['bg', 'de'] }))
+    expect(out.events.map((e) => e.queue).sort()).toEqual(['translation-bg', 'translation-de'])
+  })
 })
 
 describe('pullReports', () => {
   it('hashes every reporter and keeps no raw user ID', async () => {
     const rows = await pullReports(async () => ({
       rows: [
-        { id: '7', word_id: 'c:go-1', field: 'translation', note: 'x', pack_version: 1, reporter_id: 'user_123', received_at: '1760000000000' },
-        { id: 8, word_id: 'c:go-1', field: 'audio', note: '', pack_version: 1, reporter_id: null, received_at: 1760000000001 },
+        { id: '7', word_id: 'c:go-1', field: 'translation', note: 'x', pack_version: 1, reporter_id: 'user_123', received_at: '1760000000000', l1: 'de' },
+        { id: 8, word_id: 'c:go-1', field: 'audio', note: '', pack_version: 1, reporter_id: null, received_at: 1760000000001, l1: null },
       ],
     }))
     expect(rows.map((x) => x.reporter)).toEqual([expect.stringMatching(/^[0-9a-f]{16}$/), 'deleted:8'])
     expect(JSON.stringify(rows)).not.toContain('user_123')
-    expect(rows[0]).toMatchObject({ id: 7, received_at: 1760000000000 })
+    expect(rows[0]).toMatchObject({ id: 7, received_at: 1760000000000, l1: 'de' })
+    expect(rows[1]).toMatchObject({ l1: null })
   })
 
   it('skips a row with a field this build does not know', async () => {

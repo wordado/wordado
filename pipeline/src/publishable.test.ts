@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { publishProblems } from './publishable'
 
-const DIR = fileURLToPath(new URL('../samples/a1-bg/', import.meta.url))
+const DIR = fileURLToPath(new URL('../samples/a1/', import.meta.url))
 
 /** Reads the sample, with some files replaced (bytes) or removed (null). */
 function sample(over: Record<string, Uint8Array | null> = {}) {
@@ -34,10 +34,11 @@ describe('publishProblems (spec §4.4: never a manifest whose files are not all 
     expect(publishProblems(sample({ 'corpus-v0-bg.pack': tampered }))).toEqual(['corpus-v0-bg.pack: sha256 does not match the manifest'])
   })
 
-  it('names a missing or truncated clip', () => {
+  it('names a missing or truncated clip, once per pack that lists it (the sample’s two packs share audio/)', () => {
     const clip = new Uint8Array(readFileSync(join(DIR, 'audio/hello-1-uk.m4a')))
-    expect(publishProblems(sample({ 'audio/hello-1-uk.m4a': null }))).toEqual(['audio/hello-1-uk.m4a: missing'])
+    expect(publishProblems(sample({ 'audio/hello-1-uk.m4a': null }))).toEqual(['audio/hello-1-uk.m4a: missing', 'audio/hello-1-uk.m4a: missing'])
     expect(publishProblems(sample({ 'audio/hello-1-uk.m4a': clip.slice(0, 100) }))).toEqual([
+      `audio/hello-1-uk.m4a: ${100} bytes, the pack says ${clip.length}`,
       `audio/hello-1-uk.m4a: ${100} bytes, the pack says ${clip.length}`,
     ])
   })

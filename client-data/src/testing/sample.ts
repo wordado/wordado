@@ -11,7 +11,7 @@ import { testEnv, type TestEnv } from './testEnv'
  * The bundled A1 Bulgarian sample (plan 3). Node only. Built from the string
  * form of import.meta.url: happy-dom replaces the global URL class.
  */
-export const SAMPLE_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'pipeline', 'samples', 'a1-bg')
+export const SAMPLE_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'pipeline', 'samples', 'a1')
 
 export const sampleManifest = JSON.parse(readFileSync(join(SAMPLE_DIR, 'manifest.json'), 'utf8')) as PackManifest
 

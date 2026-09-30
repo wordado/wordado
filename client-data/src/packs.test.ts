@@ -9,7 +9,7 @@ import { activateStagedPacks, installedPacks, installPacks, loadActiveCorpus, ty
 import { migrate } from './schema'
 import { testEnv } from './testing/testEnv'
 
-const SAMPLE_DIR = fileURLToPath(new URL('../../pipeline/samples/a1-bg/', import.meta.url))
+const SAMPLE_DIR = fileURLToPath(new URL('../../pipeline/samples/a1/', import.meta.url))
 const manifest = JSON.parse(readFileSync(join(SAMPLE_DIR, 'manifest.json'), 'utf8')) as PackManifest
 const fromDisk: PackFetcher = async (d) => new Uint8Array(readFileSync(join(SAMPLE_DIR, d.url)))
 

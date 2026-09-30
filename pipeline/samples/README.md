@@ -1,8 +1,9 @@
 # Sample content
 
-`a1-bg/` is a small hand-made A1 English–Bulgarian sample pack: 60 entries with their
-translations, example sentences, units, themes and audio. Wordado's demo mode studies it, and
-every test suite uses it.
+`a1/` is a small hand-made A1 sample corpus: 60 entries with their example sentences, units,
+themes and audio, translated into Bulgarian (`corpus-v0-bg.pack`) and German
+(`corpus-v0-de.pack`). Wordado's demo mode studies the Bulgarian pack, and every test suite
+uses both.
 
 ## Terms
 
@@ -15,8 +16,9 @@ redistribute it, or use it in another product, without permission.
 
 ## Audio
 
-The 60 clips in `a1-bg/audio/` (one British English pronunciation per headword, AAC in m4a,
-mono, 48 kbit/s) are made by [`pipeline/scripts/tts-audio.sh`](../scripts/tts-audio.sh) with:
+The 60 clips in `a1/audio/` (one British English pronunciation per headword, AAC in m4a,
+mono, 48 kbit/s), shared by both packs, are made by
+[`pipeline/scripts/tts-audio.sh`](../scripts/tts-audio.sh) with:
 
 - **Engine:** [Piper](https://github.com/OHF-Voice/piper1-gpl), the `piper-tts` 1.8.0 Python
   package, which is GPL-3.0-or-later. The GPL covers the program, not the audio it produces

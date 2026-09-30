@@ -11,7 +11,7 @@ export function contentType(file: string): string {
   return TYPES[extname(file)] ?? 'application/octet-stream'
 }
 
-/** Every file of the sample the manifest can reach, relative and with forward slashes; not the pipeline's `source.json`. */
+/** Every file of the sample the manifest can reach, relative and with forward slashes; not the pipeline's `source*.json` (one per L1). */
 export function sampleFiles(dir: string): string[] {
   const out: string[] = []
   const walk = (at: string) => {
@@ -22,7 +22,7 @@ export function sampleFiles(dir: string): string[] {
     }
   }
   walk(dir)
-  return out.filter((file) => file !== 'source.json')
+  return out.filter((file) => !/^source.*\.json$/.test(file))
 }
 
 /**

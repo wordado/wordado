@@ -90,7 +90,7 @@ pnpm --filter @wordado/server exec vitest run src/<path>.test.ts    # needs Dock
   `client-data/src/schema.ts`, and must upgrade a database from every shipped version.
 - **Sync protocol changes** bump `SYNC_PROTOCOL_VERSION` in `core/src/syncProtocol.ts`, and the server must accept the old
   version until clients have updated (spec §4.3).
-- **Sample content**: after editing `pipeline/samples/a1-bg/source.json`, rebuild with `pnpm sample-pack`
+- **Sample content**: after editing `pipeline/samples/a1/source.json`, rebuild with `pnpm sample-pack`
   and commit the pack and manifest it writes.
 - **The corpus pipeline** (`pipeline/README.md`) is tested on fixtures: `pnpm --filter @wordado/pipeline test`.
   Its encoder tests need ffmpeg (`brew install ffmpeg`) and are skipped without it; CI installs it. Real runs need the

@@ -9,6 +9,7 @@ describe('sampleFiles', () => {
     expect(files).toContain('corpus-v0-bg.pack')
     expect(files.filter((f) => f.startsWith('audio/') && f.endsWith('.m4a'))).toHaveLength(60)
     expect(files).not.toContain('source.json')
+    expect(files).not.toContain('source-de.json')
   })
 
   it('names content types the browser needs', () => {

@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { assignIds, registryFromSample, slugOf, type Registry } from './registry'
 
 const samplePack = (() => {
-  const file = fileURLToPath(new URL('../samples/a1-bg/corpus-v0-bg.pack', import.meta.url))
+  const file = fileURLToPath(new URL('../samples/a1/corpus-v0-bg.pack', import.meta.url))
   const r = validatePack(JSON.parse(readFileSync(file, 'utf8')))
   if (r.status !== 'ok') throw new Error('sample invalid')
   return r.pack as Pack

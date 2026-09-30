@@ -297,6 +297,28 @@ describe('adding an L1 (plan 9)', () => {
     ])
   })
 
+  it('carries a title-bg fix’s English into the German title too (plan 10)', async () => {
+    const dir = await publishedV1()
+    const before = readDraft(dir)
+    const unit = before.units.find((u) => u.unit_id === 'a1-01')!
+    const d = Decisions.read(dir)
+    d.append(QUEUES.title('bg'), [
+      { key: 'a1-01', at: '2026-10-03T00:00:00Z', verdict: 'fix', proposed: unit.titles['bg'], value: { ...unit.titles['bg'], en: 'People and greetings' }, by: 'r' },
+    ])
+    nameThemesInGerman(dir)
+    editConfig(dir, { l1s: ['bg', 'de'], accept_unreviewed: ['translation-de', 'title-de'] })
+    await runDraft({ dir, llm: sampleLlm(), offline: false })
+    const plan = planRelease(dir, { draft: false, now: '2026-10-05T09:00:00Z' })
+    expect([plan.problems, plan.pending]).toEqual([[], []])
+    const bg = plan.outputs.find((o) => o.pack.l1 === 'bg')!.pack
+    const de = plan.outputs.find((o) => o.pack.l1 === 'de')!.pack
+    const bgTitle = bg.units.find((u) => u.unit_id === 'a1-01')!.title
+    const deTitle = de.units.find((u) => u.unit_id === 'a1-01')!.title
+    expect(bgTitle.en).toBe('People and greetings')
+    expect(deTitle.en).toBe(bgTitle.en)
+    expect(deTitle.l1).toBe('Lektion a1-01')
+  })
+
   it('refuses a draft whose first L1 was never published, before any LLM stage runs', async () => {
     const dir = await publishedV1()
     nameThemesInGerman(dir)

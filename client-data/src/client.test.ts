@@ -14,7 +14,7 @@ import { accountIsEmpty, UpgradeRequiredError } from './sync'
 import { FakeServer } from './testing/fakeServer'
 import { testEnv, type TestEnv } from './testing/testEnv'
 
-const SAMPLE_DIR = fileURLToPath(new URL('../../pipeline/samples/a1-bg/', import.meta.url))
+const SAMPLE_DIR = fileURLToPath(new URL('../../pipeline/samples/a1/', import.meta.url))
 const manifest = JSON.parse(readFileSync(join(SAMPLE_DIR, 'manifest.json'), 'utf8')) as PackManifest
 const fromDisk: PackFetcher = async (d) => new Uint8Array(readFileSync(join(SAMPLE_DIR, d.url)))
 const answer = (wordId: string, over: Partial<AnswerInput> = {}): AnswerInput => ({

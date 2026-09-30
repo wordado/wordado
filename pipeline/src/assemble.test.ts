@@ -19,7 +19,7 @@ describe('assemble', () => {
     const config = readConfig(dir)
     const out = assemble({
       l1: 'bg', corpusVersion: 1, draft: noGloss, decisions: Decisions.read(dir), themes: readThemes(dir, ['bg']),
-      records: readAudioRecords(dir), config, previous: readLastPublished(dir).packs.get('bg') ?? null, hasClip: () => true,
+      records: readAudioRecords(dir), config, previous: readLastPublished(dir).packs.get('bg') ?? null, previousLeadUnits: [], hasClip: () => true,
     })
     expect(out.problems).toEqual(['bank-2: bank (noun) has 2 live entries, so it needs a bg sense gloss'])
   })

@@ -1,12 +1,12 @@
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { Pack } from '@wordado/core'
+import type { Pack, PackManifest } from '@wordado/core'
 import { contentPaths } from './content'
 import { writeJson } from './files'
 import { registryFromSample } from './registry'
 
-export const SAMPLE_DIR = fileURLToPath(new URL('../samples/a1-bg/', import.meta.url))
+export const SAMPLE_DIR = fileURLToPath(new URL('../samples/a1/', import.meta.url))
 export const TEMPLATE_DIR = fileURLToPath(new URL('../template/', import.meta.url))
 
 /**
@@ -28,6 +28,8 @@ export function initContent(dir: string): void {
   )
   mkdirSync(paths.lastPublished, { recursive: true })
   cpSync(join(SAMPLE_DIR, packFile), join(paths.lastPublished, packFile))
-  cpSync(join(SAMPLE_DIR, 'manifest.json'), join(paths.lastPublished, 'manifest.json'))
+  // The sample's manifest lists every L1 it carries (plan 10); a new content directory starts from Bulgarian alone.
+  const sampleManifest = JSON.parse(readFileSync(join(SAMPLE_DIR, 'manifest.json'), 'utf8')) as PackManifest
+  writeJson(join(paths.lastPublished, 'manifest.json'), { ...sampleManifest, packs: sampleManifest.packs.filter((p) => p.l1 === 'bg') })
   writeJson(join(paths.lastPublished, 'fixes.json'), { schema_version: 1, corpus_version: 0, fixes: [] })
 }

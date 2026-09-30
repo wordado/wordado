@@ -7,7 +7,7 @@ import { samplePack } from './vite/samplePack'
 /** The Worker of plan 5, which 6b's transport calls through this proxy: one origin, no CORS. */
 const API = 'http://localhost:8787'
 
-const SAMPLE_DIR = fileURLToPath(new URL('../pipeline/samples/a1-bg/', import.meta.url))
+const SAMPLE_DIR = fileURLToPath(new URL('../pipeline/samples/a1/', import.meta.url))
 
 export default defineConfig({
   plugins: [

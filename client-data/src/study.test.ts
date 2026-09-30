@@ -10,7 +10,7 @@ import { migrate } from './schema'
 import { availableModes, dayCompleteInput, newUnlocks, progressView, sessionPlan, type StudyContext } from './study'
 import { testEnv, type TestEnv } from './testing/testEnv'
 
-const SAMPLE = fileURLToPath(new URL('../../pipeline/samples/a1-bg/corpus-v0-bg.pack', import.meta.url))
+const SAMPLE = fileURLToPath(new URL('../../pipeline/samples/a1/corpus-v0-bg.pack', import.meta.url))
 const parsed = validatePack(JSON.parse(readFileSync(SAMPLE, 'utf8')))
 const corpus: Corpus = loadCorpus([parsed.status === 'ok' ? parsed.pack : (() => { throw new Error('sample invalid') })()])
 
