@@ -247,7 +247,7 @@ export class Client {
    * is over, so this is the other place it is made.
    */
   async startSession(): Promise<string[]> {
-    const activated = await activateStagedPacks(this.db)
+    const activated = await activateStagedPacks(this.db, this.l1)
     if (activated.length > 0 || !this.corpus) await this.reloadCorpus()
     try {
       const ctx = this.context()
@@ -272,7 +272,7 @@ export class Client {
       const installed = await installedPacks(this.db)
       const has = report.staged.length > 0 || installed.some((p) => p.pack_id === `corpus-${l1}`)
       if (!has) return { ok: false, reason: 'unavailable' }
-      await activateStagedPacks(this.db)
+      await activateStagedPacks(this.db, l1)
       this.l1 = l1
       // Reload what `open` loads from the active packs (corpus, pack version, session plan), as `startSession` does.
       await this.reloadCorpus()

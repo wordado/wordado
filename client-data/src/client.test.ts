@@ -1,15 +1,16 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { Grade, type PackManifest } from '@wordado/core'
+import { canonicalJson, Grade, type Pack, type PackDescriptor, type PackManifest } from '@wordado/core'
 import { describe, expect, it } from 'vitest'
 import { Client, ClientClosed } from './client'
+import { Database } from './database'
 import { DOC } from './documentTypes'
 import { writeLocalPatch } from './documents'
 import type { SqlDriver } from './driver'
 import { nodeSqliteDriver } from './drivers/nodeSqlite'
 import type { AnswerInput } from './learner'
-import type { PackFetcher } from './packs'
+import { installPacks, type PackFetcher } from './packs'
 import { accountIsEmpty, UpgradeRequiredError } from './sync'
 import { FakeServer } from './testing/fakeServer'
 import { testEnv, type TestEnv } from './testing/testEnv'
@@ -26,6 +27,14 @@ async function openClient(env: TestEnv = testEnv(), server?: FakeServer): Promis
   await client.installPacks(manifest, fromDisk)
   await client.startSession()
   return client
+}
+
+/** The sample Bulgarian pack at a higher corpus version, with its manifest, as the CDN would serve it (a background upgrade check). */
+async function nextBgVersion(env: TestEnv): Promise<{ manifest: PackManifest; fetch: PackFetcher }> {
+  const pack = JSON.parse(readFileSync(join(SAMPLE_DIR, 'corpus-v0-bg.pack'), 'utf8')) as Pack
+  const bytes = new TextEncoder().encode(canonicalJson({ ...pack, corpus_version: 1 }))
+  const descriptor: PackDescriptor = { ...manifest.packs[0]!, corpus_version: 1, url: 'corpus-v1-bg.pack', sha256: await env.sha256(bytes), bytes: bytes.byteLength }
+  return { manifest: { ...manifest, corpus_version: 1, packs: [descriptor] }, fetch: async () => bytes }
 }
 
 describe('Client', () => {
@@ -273,6 +282,26 @@ describe('Client.reports', () => {
     const reports = await client.reports()
     expect(reports.find((r) => r.key === key)).toEqual({ key, wordId: 'c:apple-1', field: 'translation', packVersion: 0, l1: 'de' })
   })
+
+  it('reads an old stored report with no l1 field as one with l1 absent (fix round 1)', async () => {
+    const driver = nodeSqliteDriver()
+    const client = await Client.open({ driver, env: testEnv(), l1: 'bg' })
+    await client.installPacks(manifest, fromDisk)
+    await client.startSession()
+    await writeLocalPatch(driver, DOC.contentReport, 'legacy', { wordId: 'c:hello-1', field: 'translation', packVersion: 0 })
+    const reports = await client.reports()
+    expect(reports.find((r) => r.key === 'legacy')).toEqual({ key: 'legacy', wordId: 'c:hello-1', field: 'translation', packVersion: 0 })
+  })
+
+  it('drops a stored l1 this build does not support (fix round 1)', async () => {
+    const driver = nodeSqliteDriver()
+    const client = await Client.open({ driver, env: testEnv(), l1: 'bg' })
+    await client.installPacks(manifest, fromDisk)
+    await client.startSession()
+    await writeLocalPatch(driver, DOC.contentReport, 'foreign', { wordId: 'c:hello-1', field: 'translation', packVersion: 0, l1: 'es' })
+    const reports = await client.reports()
+    expect(reports.find((r) => r.key === 'foreign')).toEqual({ key: 'foreign', wordId: 'c:hello-1', field: 'translation', packVersion: 0 })
+  })
 })
 
 describe('Client.changeL1 (spec §8.6)', () => {
@@ -314,6 +343,48 @@ describe('Client.changeL1 (spec §8.6)', () => {
     expect(client.snapshot.l1).toBe('bg')
     expect(client.snapshot.corpus?.l1).toBe('bg')
     expect(await driver.all("SELECT pack_id, status FROM pack WHERE pack_id = 'corpus-bg'")).toEqual([{ pack_id: 'corpus-bg', status: 'active' }])
+  })
+
+  it('succeeds and leaves only the new L1 active even when a newer pack of the old L1 is staged (fix round 1)', async () => {
+    const env = testEnv()
+    const driver = nodeSqliteDriver()
+    const client = await Client.open({ driver, env, l1: 'bg' })
+    await client.installPacks(manifest, fromDisk)
+    await client.startSession()
+    // A background upgrade check (boot's own `installPacks`) staged a newer corpus-bg, never activated.
+    const next = await nextBgVersion(env)
+    await client.installPacks(next.manifest, next.fetch)
+    expect(await driver.all("SELECT pack_id, status, corpus_version FROM pack WHERE pack_id = 'corpus-bg' ORDER BY status")).toEqual([
+      { pack_id: 'corpus-bg', status: 'active', corpus_version: 0 },
+      { pack_id: 'corpus-bg', status: 'staged', corpus_version: 1 },
+    ])
+
+    expect(await client.changeL1('de', manifest, fromDisk)).toEqual({ ok: true })
+
+    expect(client.snapshot.l1).toBe('de')
+    expect(client.snapshot.corpus?.l1).toBe('de')
+    expect(await driver.all('SELECT pack_id, status FROM pack')).toEqual([{ pack_id: 'corpus-de', status: 'active' }])
+
+    // A reopen (what every later `Client.open` does) must not throw: the bricking bug left both packs active.
+    const reopened = await Client.open({ driver, env, l1: 'de' })
+    expect(reopened.snapshot.corpus?.l1).toBe('de')
+  })
+
+  it('is picked up from an earlier, interrupted attempt even when this fetch fails', async () => {
+    const env = testEnv()
+    const driver = nodeSqliteDriver()
+    const client = await Client.open({ driver, env, l1: 'bg' })
+    await client.installPacks(manifest, fromDisk)
+    await client.startSession()
+    // An earlier `changeL1('de', …)` staged the pack but the app was killed before `activateStagedPacks` ran.
+    await installPacks(new Database(driver), env, manifest, 'de', fromDisk)
+    expect(await driver.all("SELECT pack_id, status FROM pack WHERE pack_id = 'corpus-de'")).toEqual([{ pack_id: 'corpus-de', status: 'staged' }])
+
+    const outcome = await client.changeL1('de', manifest, () => Promise.reject(new Error('offline')))
+
+    expect(outcome).toEqual({ ok: true })
+    expect(client.snapshot.l1).toBe('de')
+    expect(await driver.all('SELECT pack_id, status FROM pack')).toEqual([{ pack_id: 'corpus-de', status: 'active' }])
   })
 
   it('the default L1 only applies until the learner sets one explicitly', async () => {
