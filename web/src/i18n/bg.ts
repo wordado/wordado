@@ -230,6 +230,8 @@ export const bg: Messages = {
 
   'study.loading': 'Подготвяме думите ви…',
   'study.progress': '{answered} готови, остават {remaining}',
+  'study.progressLabel': 'Напредък в урока',
+  'study.more': 'Още',
   'study.finish': 'Спрете засега',
   'study.reveal': 'Покажете отговора',
   'study.rateLabel': 'Колко добре я знаехте?',

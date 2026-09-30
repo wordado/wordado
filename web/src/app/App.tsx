@@ -53,10 +53,13 @@ function Screen(props: { readonly route: Route }) {
   }
 }
 
+/** Routes that run a study session: the shell steps aside so the card has the screen (focus mode). */
+const FOCUS: ReadonlySet<Route['name']> = new Set(['study', 'practice-words'])
+
 /**
  * The shell: the masthead's first row (the icon and wordmark, the language,
  * the account), the navigation (a second row, or the tab bar on a phone),
- * banners, and the routed screen.
+ * banners, and the routed screen. While studying, only the screen.
  */
 export function App(props: { readonly resumed: boolean }) {
   const { t } = useT()
@@ -76,41 +79,46 @@ export function App(props: { readonly resumed: boolean }) {
     main.current?.focus()
   }, [route])
 
+  const focus = FOCUS.has(route.name)
   return (
-    <div className="app">
+    <div className={focus ? 'app is-focus' : 'app'}>
       <a className="skip" href="#main">
         {t('nav.skip')}
       </a>
-      <header className="masthead">
-        <div className="masthead-top">
-          <Link className="wordmark" to={{ name: 'home' }}>
-            <img src="/icon.svg" alt="" width="36" height="36" />
-            {t('app.name')}
-          </Link>
-          <div className="masthead-actions">
-            <LanguageMenu />
-            <AccountMenu />
+      {!focus && (
+        <header className="masthead">
+          <div className="masthead-top">
+            <Link className="wordmark" to={{ name: 'home' }}>
+              <img src="/icon.svg" alt="" width="36" height="36" />
+              {t('app.name')}
+            </Link>
+            <div className="masthead-actions">
+              <LanguageMenu />
+              <AccountMenu />
+            </div>
           </div>
-        </div>
-        <nav className="nav" aria-label={t('nav.label')}>
-          <ul>
-            {NAV.map((item) => (
-              <li key={item.label}>
-                <Link
-                  to={item.route}
-                  aria-current={item.route.name === route.name || (item.route.name === 'settings' && route.name === 'placement') ? 'page' : undefined}
-                >
-                  <item.icon aria-hidden="true" className="nav-icon" size={24} strokeWidth={1.75} />
-                  <span>{t(item.label)}</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </nav>
-      </header>
-      <aside aria-label={t('banner.label')}>
-        <Banners />
-      </aside>
+          <nav className="nav" aria-label={t('nav.label')}>
+            <ul>
+              {NAV.map((item) => (
+                <li key={item.label}>
+                  <Link
+                    to={item.route}
+                    aria-current={item.route.name === route.name || (item.route.name === 'settings' && route.name === 'placement') ? 'page' : undefined}
+                  >
+                    <item.icon aria-hidden="true" className="nav-icon" size={24} strokeWidth={1.75} />
+                    <span>{t(item.label)}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        </header>
+      )}
+      {!focus && (
+        <aside aria-label={t('banner.label')}>
+          <Banners />
+        </aside>
+      )}
       <main id="main" ref={main} tabIndex={-1}>
         <Screen route={route} />
       </main>

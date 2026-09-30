@@ -69,7 +69,20 @@ describe('Root', () => {
     expect(screen.getByRole('link', { name: 'Path' }).getAttribute('aria-current')).toBe('page')
     await act(async () => fireEvent.click(screen.getByRole('link', { name: 'Wordado' })))
     await act(async () => fireEvent.click(screen.getByRole('link', { name: 'Start studying' })))
-    expect(await screen.findByText(/done, \d+ to go/)).toBeTruthy()
+    expect(await screen.findByRole('progressbar', { name: 'Session progress' })).toBeTruthy()
+  })
+
+  it('hides the masthead, navigation and banners while studying, and brings them back after', async () => {
+    await renderRoot()
+    expect(screen.getByRole('navigation', { name: 'Main' })).toBeTruthy()
+    await act(async () => fireEvent.click(screen.getByRole('link', { name: 'Start studying' })))
+    await screen.findByRole('progressbar', { name: 'Session progress' })
+    expect(screen.queryByRole('navigation', { name: 'Main' })).toBeNull()
+    expect(screen.queryByRole('banner')).toBeNull()
+    expect(screen.queryByText(/You are trying Wordado/)).toBeNull()
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Stop for now' })))
+    await act(async () => fireEvent.click(screen.getByRole('link', { name: 'Back to today' })))
+    expect(screen.getByRole('navigation', { name: 'Main' })).toBeTruthy()
   })
 
   it('switches the interface language', async () => {

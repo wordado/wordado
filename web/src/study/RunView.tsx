@@ -1,7 +1,9 @@
 import { useClientSnapshot, type RunKind, type RunSnapshot, type StudyRun } from '@wordado/client-data'
 import { entryClips, Grade, isAboveLevel, type ChoiceItem, type CorpusEntry } from '@wordado/core'
-import { useEffect, useId, useRef, useState } from 'react'
+import { Check, Clock, Ellipsis, Flag, Flame, LockOpen, Play, Volume2, X } from 'lucide-react'
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { useApp } from '../app/context'
+import { usePopover } from '../app/usePopover'
 import { ClipSuperseded } from '../content/audio'
 import { localized, useT } from '../i18n/i18n'
 import { GRADE_LABEL } from '../labels'
@@ -65,41 +67,119 @@ export function RunView(props: { readonly run: StudyRun; readonly kind: RunKind 
   if (snapshot.phase === 'done') return <Done snapshot={snapshot} kind={props.kind} />
   if (!item) return null
 
+  const total = snapshot.answered + snapshot.remaining
+  const settingAside = snapshot.phase === 'prompt' || snapshot.phase === 'revealed'
+  /** The card: the prompt's frame, with its ⋯ menu; each mode fills it and adds its actions below. */
+  const frame = (children: ReactNode) => (
+    <div className="card" ref={card} tabIndex={-1} data-mode={item.mode} data-phase={snapshot.phase}>
+      <MoreMenu
+        onKnown={settingAside ? () => void run.setAside('known') : null}
+        onNotNow={settingAside ? () => void run.setAside('suspended') : null}
+        onReport={() => setReporting(true)}
+      />
+      {isAboveLevel(item.entry.level, settings.declaredLevel) && <p className="note above-level">{t('study.aboveLevel', { level: item.entry.level })}</p>}
+      {children}
+      {snapshot.error !== null && <p role="alert">{t('study.error', { message: snapshot.error })}</p>}
+    </div>
+  )
+
   return (
     <section className="study" aria-label={t('app.name')}>
       <div className="study-bar">
-        <p>{t('study.progress', { answered: snapshot.answered, remaining: snapshot.remaining })}</p>
-        <button type="button" className="link-button" onClick={() => run.finish()}>
-          {t('study.finish')}
+        <button type="button" className="study-close" aria-label={t('study.finish')} onClick={() => run.finish()}>
+          <X aria-hidden="true" size={20} strokeWidth={2} />
         </button>
+        <div
+          className="study-progress"
+          role="progressbar"
+          aria-label={t('study.progressLabel')}
+          aria-valuemin={0}
+          aria-valuemax={total}
+          aria-valuenow={snapshot.answered}
+          aria-valuetext={t('study.progress', { answered: snapshot.answered, remaining: snapshot.remaining })}
+        >
+          <span style={{ width: `${total === 0 ? 0 : (100 * snapshot.answered) / total}%` }} />
+        </div>
+        <p className="study-count" aria-hidden="true">
+          {snapshot.answered} / {total}
+        </p>
       </div>
-      <div className="card" ref={card} tabIndex={-1} data-mode={item.mode} data-phase={snapshot.phase}>
-        {isAboveLevel(item.entry.level, settings.declaredLevel) && (
-          <p className="note above-level">{t('study.aboveLevel', { level: item.entry.level })}</p>
-        )}
-        {item.mode === 'flashcard' ? <Flashcard run={run} snapshot={snapshot} entry={item.entry} /> : <Choice run={run} snapshot={snapshot} item={item} />}
-        {snapshot.error !== null && <p role="alert">{t('study.error', { message: snapshot.error })}</p>}
-        <button type="button" className="link-button report-open" onClick={() => setReporting(true)}>
-          {t('report.open')}
-        </button>
-        {(snapshot.phase === 'prompt' || snapshot.phase === 'revealed') && (
-          <div className="set-aside" role="group" aria-label={t('study.setAsideLabel')}>
-            <button type="button" className="link-button" onClick={() => void run.setAside('known')}>
-              {t('study.known')}
-            </button>
-            <button type="button" className="link-button" onClick={() => void run.setAside('suspended')}>
-              {t('study.notNow')}
-            </button>
-          </div>
-        )}
-      </div>
+      {item.mode === 'flashcard' ? <Flashcard run={run} snapshot={snapshot} entry={item.entry} frame={frame} /> : <Choice run={run} snapshot={snapshot} item={item} frame={frame} />}
       <p className="note keys-hint">{t('study.keysHint')}</p>
       {reporting && <ReportDialog wordId={item.wordId} entry={item.entry} onClose={() => setReporting(false)} />}
     </section>
   )
 }
 
-function Flashcard(props: { readonly run: StudyRun; readonly snapshot: RunSnapshot; readonly entry: CorpusEntry }) {
+/** Setting the word aside and reporting it: rarer than answering, so behind the card's ⋯ button. */
+function MoreMenu(props: { readonly onKnown: (() => void) | null; readonly onNotNow: (() => void) | null; readonly onReport: () => void }) {
+  const { t } = useT()
+  const { open, close, root, trigger, onKeyDown, triggerProps, panelId } = usePopover()
+  const choose = (action: () => void) => () => {
+    close()
+    action()
+  }
+  return (
+    <div className="card-more" ref={root} onKeyDown={onKeyDown}>
+      <button ref={trigger} type="button" className="card-more-button" aria-label={t('study.more')} {...triggerProps}>
+        <Ellipsis aria-hidden="true" size={22} />
+      </button>
+      {open && (
+        <ul className="popover-panel menu-panel" id={panelId}>
+          {props.onKnown && (
+            <li>
+              <button type="button" onClick={choose(props.onKnown)}>
+                <Check aria-hidden="true" size={18} className="menu-icon-known" />
+                {t('study.known')}
+              </button>
+            </li>
+          )}
+          {props.onNotNow && (
+            <li>
+              <button type="button" onClick={choose(props.onNotNow)}>
+                <Clock aria-hidden="true" size={18} />
+                {t('study.notNow')}
+              </button>
+            </li>
+          )}
+          <li className="menu-separated">
+            <button type="button" onClick={choose(props.onReport)}>
+              <Flag aria-hidden="true" size={18} />
+              {t('report.open')}
+            </button>
+          </li>
+        </ul>
+      )}
+    </div>
+  )
+}
+
+/** Plays the word on a flashcard, offered only when its clip can play now (spec §11.1). */
+function PlayWord(props: { readonly entry: CorpusEntry }) {
+  const { t } = useT()
+  const { audio } = useApp()
+  const { corpus, settings } = useClientSnapshot()
+  const [failed, setFailed] = useState(false)
+  useEffect(() => setFailed(false), [props.entry])
+  const clip = corpus ? entryClips(corpus, props.entry)[0] : undefined
+  if (!settings.audio || !clip || !(audio.streamable() || audio.cachedClips().has(clip.clipId))) return null
+  const play = () => {
+    setFailed(false)
+    audio.play(clip).catch((err: unknown) => {
+      if (!(err instanceof ClipSuperseded)) setFailed(true)
+    })
+  }
+  return (
+    <>
+      <button type="button" className="play-word" aria-label={t('study.play')} onClick={play}>
+        <Volume2 aria-hidden="true" size={24} strokeWidth={2} />
+      </button>
+      {failed && <p className="note">{t('study.audioFailed')}</p>}
+    </>
+  )
+}
+
+function Flashcard(props: { readonly run: StudyRun; readonly snapshot: RunSnapshot; readonly entry: CorpusEntry; readonly frame: (children: ReactNode) => ReactNode }) {
   const { t } = useT()
   const { corpus } = useClientSnapshot()
   const { entry, snapshot, run } = props
@@ -112,23 +192,30 @@ function Flashcard(props: { readonly run: StudyRun; readonly snapshot: RunSnapsh
   }, [snapshot.phase, entry])
   return (
     <>
-      <Headword entry={entry} />
-      {snapshot.phase === 'prompt' ? (
-        <button type="button" className="button primary" onClick={() => run.reveal()}>
-          {t('study.reveal')}
-        </button>
-      ) : (
+      {props.frame(
         <>
-          <div className="revealed" role="region" ref={answer} tabIndex={-1} aria-labelledby={answerId}>
-            <p className="prompt-text" id={answerId}>
-              <Translation entry={entry} lang={corpus?.l1 ?? 'bg'} />
-            </p>
-            {entry.examples[0] !== undefined && (
-              <p className="example" lang="en">
-                {entry.examples[0]}
+          <Headword entry={entry} />
+          <PlayWord entry={entry} />
+          {snapshot.phase !== 'prompt' && (
+            <div className="revealed" role="region" ref={answer} tabIndex={-1} aria-labelledby={answerId}>
+              <p className="prompt-text" id={answerId}>
+                <Translation entry={entry} lang={corpus?.l1 ?? 'bg'} />
               </p>
-            )}
-          </div>
+              {entry.examples[0] !== undefined && (
+                <p className="example" lang="en">
+                  {entry.examples[0]}
+                </p>
+              )}
+            </div>
+          )}
+        </>,
+      )}
+      <div className="study-actions">
+        {snapshot.phase === 'prompt' ? (
+          <button type="button" className="button primary study-main" onClick={() => run.reveal()}>
+            {t('study.reveal')}
+          </button>
+        ) : (
           <div className="ratings" role="group" aria-labelledby={rateLabelId}>
             <p id={rateLabelId}>{t('study.rateLabel')}</p>
             {GRADES.map((grade) => (
@@ -140,8 +227,8 @@ function Flashcard(props: { readonly run: StudyRun; readonly snapshot: RunSnapsh
               </button>
             ))}
           </div>
-        </>
-      )}
+        )}
+      </div>
     </>
   )
 }
@@ -187,7 +274,7 @@ function useListening(item: ChoiceItem, run: StudyRun): { replay: () => void; fa
   return { replay: play, failed }
 }
 
-function Choice(props: { readonly run: StudyRun; readonly snapshot: RunSnapshot; readonly item: ChoiceItem }) {
+function Choice(props: { readonly run: StudyRun; readonly snapshot: RunSnapshot; readonly item: ChoiceItem; readonly frame: (children: ReactNode) => ReactNode }) {
   const { t } = useT()
   const { corpus } = useClientSnapshot()
   const { run, snapshot, item } = props
@@ -204,68 +291,74 @@ function Choice(props: { readonly run: StudyRun; readonly snapshot: RunSnapshot;
 
   return (
     <>
-      {listening ? (
-        <>
-          <button type="button" className="button play" onClick={replay}>
-            <span aria-hidden="true">▶ </span>
-            {t('study.playAgain')}
-          </button>
-          <p className="instruction">{t('study.listenPrompt')}</p>
-          {failed && <p className="note">{t('study.audioFailed')}</p>}
-        </>
-      ) : item.direction === 'en_to_l1' ? (
-        <>
-          <Headword entry={item.entry} />
-          <p className="instruction">{t('study.chooseTranslation')}</p>
-        </>
-      ) : (
-        <>
-          <p className="prompt-text">
-            <Translation entry={item.entry} lang={l1} />
-          </p>
-          <p className="instruction">{t('study.chooseWord')}</p>
-        </>
+      {props.frame(
+        listening ? (
+          <>
+            <button type="button" className="button play" onClick={replay}>
+              <Play aria-hidden="true" size={20} />
+              {t('study.playAgain')}
+            </button>
+            <p className="instruction">{t('study.listenPrompt')}</p>
+            {failed && <p className="note">{t('study.audioFailed')}</p>}
+          </>
+        ) : item.direction === 'en_to_l1' ? (
+          <>
+            <Headword entry={item.entry} />
+            <p className="instruction">{t('study.chooseTranslation')}</p>
+          </>
+        ) : (
+          <>
+            <p className="prompt-text">
+              <Translation entry={item.entry} lang={l1} />
+            </p>
+            <p className="instruction">{t('study.chooseWord')}</p>
+          </>
+        ),
       )}
 
-      <ol className="options">
-        {item.options.map((option, index) => {
-          const isAnswer = feedback !== null && index === item.answerIndex
-          const isWrong = feedback !== null && !feedback.correct && index === feedback.chosen
-          return (
-            <li key={option.entryId}>
-              <button
-                type="button"
-                className={`option${isAnswer ? ' is-answer' : ''}${isWrong ? ' is-wrong' : ''}`}
-                disabled={feedback !== null}
-                onClick={() => void run.choose(index)}
-              >
-                <span className="option-key" aria-hidden="true">
-                  {index + 1}
-                </span>{' '}
-                {showsTranslations ? <Translation entry={option} lang={l1} /> : <span lang="en">{option.headword}</span>}
-                {isAnswer && <span aria-hidden="true"> ✓</span>}
-                {isWrong && <span aria-hidden="true"> ✗</span>}
-              </button>
-            </li>
-          )
-        })}
-      </ol>
+      <div className="study-actions">
+        <ol className="options">
+          {item.options.map((option, index) => {
+            const isAnswer = feedback !== null && index === item.answerIndex
+            const isWrong = feedback !== null && !feedback.correct && index === feedback.chosen
+            return (
+              <li key={option.entryId}>
+                <button
+                  type="button"
+                  className={`option${isAnswer ? ' is-answer' : ''}${isWrong ? ' is-wrong' : ''}`}
+                  disabled={feedback !== null}
+                  onClick={() => void run.choose(index)}
+                >
+                  <span className="option-key" aria-hidden="true">
+                    {index + 1}
+                  </span>{' '}
+                  <span className="option-text">{showsTranslations ? <Translation entry={option} lang={l1} /> : <span lang="en">{option.headword}</span>}</span>
+                  {isAnswer && <span aria-hidden="true"> ✓</span>}
+                  {isWrong && <span aria-hidden="true"> ✗</span>}
+                </button>
+              </li>
+            )
+          })}
+        </ol>
 
-      <div className="feedback" role="status">
-        {feedback && (
-          <p className={feedback.correct ? 'correct' : 'incorrect'}>
-            <span aria-hidden="true">{feedback.correct ? '✓' : '✗'}</span>{' '}
-            {feedback.correct
-              ? `${t('study.correct')}${feedback.grade === Grade.Hard ? `. ${t('study.slow')}` : ''}`
-              : t('study.incorrect', { answer: answerText ?? '' })}
-          </p>
-        )}
+        <div className={`feedback-sheet${feedback ? (feedback.correct ? ' is-correct' : ' is-incorrect') : ''}`}>
+          <div className="feedback" role="status">
+            {feedback && (
+              <p className={feedback.correct ? 'correct' : 'incorrect'}>
+                <span aria-hidden="true">{feedback.correct ? '✓' : '✗'}</span>{' '}
+                {feedback.correct
+                  ? `${t('study.correct')}${feedback.grade === Grade.Hard ? `. ${t('study.slow')}` : ''}`
+                  : t('study.incorrect', { answer: answerText ?? '' })}
+              </p>
+            )}
+          </div>
+          {feedback && (
+            <button type="button" ref={continueButton} className="button study-main study-continue" onClick={() => run.next()}>
+              {t('study.continue')}
+            </button>
+          )}
+        </div>
       </div>
-      {feedback && (
-        <button type="button" ref={continueButton} className="button primary" onClick={() => run.next()}>
-          {t('study.continue')}
-        </button>
-      )}
     </>
   )
 }
@@ -286,21 +379,38 @@ function Done(props: { readonly snapshot: RunSnapshot; readonly kind: RunKind })
   }
   return (
     <section className="done" aria-labelledby="done-title">
-      <h1 id="done-title" ref={heading} tabIndex={-1}>
-        {t(props.kind === 'practice' ? 'done.practice' : 'done.session')}
-      </h1>
-      <p>{snapshot.answered === 0 ? t('done.nothing') : t('done.answered', { count: snapshot.answered })}</p>
-      {snapshot.dayCompleted && <p>{t('done.dayComplete')}</p>}
+      <div className="panel done-card">
+        <span className="done-badge" aria-hidden="true">
+          <Check size={42} strokeWidth={2.25} />
+        </span>
+        <h1 id="done-title" ref={heading} tabIndex={-1}>
+          {t(props.kind === 'practice' ? 'done.practice' : 'done.session')}
+        </h1>
+        <p>{snapshot.answered === 0 ? t('done.nothing') : t('done.answered', { count: snapshot.answered })}</p>
+      </div>
+      {snapshot.dayCompleted && (
+        <p className="done-line">
+          <span className="done-icon done-icon-streak" aria-hidden="true">
+            <Flame size={22} strokeWidth={1.75} />
+          </span>
+          {t('done.dayComplete')}
+        </p>
+      )}
       {snapshot.unlocked.map((unitId) => (
-        <p key={unitId}>{t('done.unlocked', { title: unitTitle(unitId) })}</p>
+        <p key={unitId} className="done-line">
+          <span className="done-icon done-icon-unit" aria-hidden="true">
+            <LockOpen size={22} strokeWidth={1.75} />
+          </span>
+          {t('done.unlocked', { title: unitTitle(unitId) })}
+        </p>
       ))}
-      {snapshot.setAside > 0 && <p>{t('done.setAside', { count: snapshot.setAside })}</p>}
-      <div className="actions">
-        <Link className="button primary" to={{ name: 'practice' }}>
-          {t('done.practiceMore')}
-        </Link>
-        <Link className="button" to={{ name: 'home' }}>
+      {snapshot.setAside > 0 && <p className="done-line done-note">{t('done.setAside', { count: snapshot.setAside })}</p>}
+      <div className="done-actions">
+        <Link className="button primary study-main" to={{ name: 'home' }}>
           {t('done.home')}
+        </Link>
+        <Link className="button study-main" to={{ name: 'practice' }}>
+          {t('done.practiceMore')}
         </Link>
       </div>
     </section>
