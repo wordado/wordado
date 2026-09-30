@@ -45,7 +45,7 @@ export function AccountMenu() {
           <SyncLine />
           <ul>
             <li>
-              <Link to={{ name: 'settings' }}>{t('account.settings')}</Link>
+              <Link to={{ name: 'settings', section: 'account' }}>{t('account.settings')}</Link>
             </li>
             <li>
               <button type="button" className="link-button" disabled={signingOut} onClick={() => void signOut()}>

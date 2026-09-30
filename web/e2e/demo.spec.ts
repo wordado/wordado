@@ -89,7 +89,7 @@ test('serves the privacy policy, not the app, once the service worker controls t
 })
 
 test('Settings › About says the demo’s word list is Wordado’s own, from the bundled sample’s credits', async ({ page }) => {
-  await page.goto('/settings')
+  await page.goto('/settings/about')
   await expect(page.getByRole('heading', { name: 'About' })).toBeVisible()
   await expect(page.getByText('This word list was prepared by Wordado.')).toBeVisible()
 })
@@ -133,7 +133,7 @@ test('meets WCAG 2.2 A and AA on every screen (spec §11.1)', async ({ page }) =
   await expect(page.locator('.card[data-phase="prompt"]')).toBeVisible()
   await expectAccessible(page)
 
-  for (const path of ['/settings', '/signin', '/settings/placement']) {
+  for (const path of ['/settings', '/settings/study', '/settings/languages', '/signin', '/settings/placement']) {
     await page.goto(path)
     await expect(heading(page)).toBeVisible()
     await expectAccessible(page, { dark: true })
@@ -170,7 +170,7 @@ test('changing the native language in Settings keeps progress and switches trans
   await page.goto('/path')
   await expect(page.getByText('1 of 20 started')).toBeVisible()
 
-  await page.goto('/settings')
+  await page.goto('/settings/languages')
   await page.getByRole('group', { name: 'Native language' }).getByRole('radio', { name: 'Deutsch' }).click()
   const dialog = page.getByRole('dialog', { name: 'Native language' })
   await expect(dialog).toContainText('Your progress stays. The words switch to German translations.')

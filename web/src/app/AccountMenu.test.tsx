@@ -32,7 +32,7 @@ describe('AccountMenu', () => {
     fireEvent.click(circle)
     expect(circle.getAttribute('aria-expanded')).toBe('true')
     expect(screen.getByText('ana@example.com')).toBeTruthy()
-    expect(screen.getByRole('link', { name: 'Account settings' }).getAttribute('href')).toBe('/settings')
+    expect(screen.getByRole('link', { name: 'Account settings' }).getAttribute('href')).toBe('/settings/account')
     expect(screen.getByRole('button', { name: 'Sign out' })).toBeTruthy()
     fireEvent.keyDown(screen.getByRole('link', { name: 'Account settings' }), { key: 'Escape' })
     expect(screen.queryByRole('button', { name: 'Sign out' })).toBeNull()

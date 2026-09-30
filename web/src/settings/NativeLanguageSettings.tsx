@@ -26,7 +26,7 @@ export function NativeLanguageSettings() {
 
   return (
     <section aria-labelledby="settings-native-language">
-      <h2 id="settings-native-language">{t('settings.nativeLanguage')}</h2>
+      <h3 id="settings-native-language">{t('settings.nativeLanguage')}</h3>
       <fieldset className="choices">
         <legend className="visually-hidden">{t('settings.nativeLanguage')}</legend>
         <p className="note">{t('settings.nativeLanguageHint')}</p>
