@@ -160,7 +160,8 @@ export const en = {
   'setup.downloadFailed': 'The words could not be downloaded. Check your connection and try again.',
   'setup.retry': 'Try again',
   'setup.savedOffline': 'Your choice is saved: the words switch as soon as you are online.',
-  'setup.back': 'Back',
+
+  'common.back': 'Back',
 
   'settings.account': 'Account',
   'settings.signedInAs': 'Signed in as {email}',

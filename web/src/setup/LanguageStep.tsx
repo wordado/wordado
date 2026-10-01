@@ -32,22 +32,46 @@ export function LanguageStep(props: { readonly mode: 'setup' | 'change'; onDone(
   // Intl's own form of the name, as it sits mid-sentence: "German", "Deutsch", "немски".
   const inSentence = (l1: L1) => new Intl.DisplayNames([locale], { type: 'language' }).of(l1) ?? l1
 
-  useEffect(() => heading.current?.focus(), [])
+  /** True while a go or retry runs: a second click before React re-renders the disabled button does nothing. */
+  const going = useRef(false)
+  /** False once the step is gone (the learner followed Sign in or Back mid-install): nothing happens after that. */
+  const mounted = useRef(true)
 
+  useEffect(() => {
+    mounted.current = true
+    heading.current?.focus()
+    return () => {
+      mounted.current = false
+    }
+  }, [])
+
+  /** Installs `l1`; the caller has set `going`. */
   const install = async (l1: L1) => {
     setAttempt({ phase: 'installing', l1 })
     const outcome = await packs.install(client, account, l1)
+    going.current = false
+    if (!mounted.current) return
     if (outcome.ok) props.onDone()
     else setAttempt({ phase: 'failed', l1 })
   }
 
   const go = async () => {
+    if (going.current) return
+    going.current = true
     const l1 = chosen
     setSaveError(null)
+    setAttempt({ phase: 'installing', l1 })
     try {
       await client.updateSettings({ l1 })
     } catch (err) {
+      going.current = false
+      if (!mounted.current) return
+      setAttempt({ phase: 'idle' })
       setSaveError(t('settings.saveFailed', { message: t(errorMessageKey(err)) }))
+      return
+    }
+    if (!mounted.current) {
+      going.current = false
       return
     }
     // An interface that spoke the old native language follows the new one (plan 10).
@@ -57,7 +81,10 @@ export function LanguageStep(props: { readonly mode: 'setup' | 'change'; onDone(
   }
 
   const retry = async (l1: L1) => {
-    packs.reset()
+    if (going.current) return
+    going.current = true
+    // Only a failure is cleared: a download that is running (`watchL1`'s, say) is left alone.
+    if (packs.store.get().phase === 'failed') packs.reset()
     await install(l1)
   }
 
@@ -72,9 +99,16 @@ export function LanguageStep(props: { readonly mode: 'setup' | 'change'; onDone(
 
   return (
     <section className="language-step" aria-labelledby="language-step-title">
-      <h1 id="language-step-title" ref={heading} tabIndex={-1}>
-        {props.mode === 'setup' ? t('setup.language.title') : t('settings.nativeLanguage')}
-      </h1>
+      {/* In the setup, the setup's wrapper owns the page's h1; as Settings' language page, this is the page. */}
+      {props.mode === 'setup' ? (
+        <h2 id="language-step-title" ref={heading} tabIndex={-1}>
+          {t('setup.language.title')}
+        </h2>
+      ) : (
+        <h1 id="language-step-title" ref={heading} tabIndex={-1}>
+          {t('settings.nativeLanguage')}
+        </h1>
+      )}
       <fieldset className="choices" disabled={busy}>
         <legend className="visually-hidden">{props.mode === 'setup' ? t('setup.language.title') : t('settings.nativeLanguage')}</legend>
         <p className="note">{props.mode === 'setup' ? t('setup.language.hint') : t('settings.nativeLanguageHint')}</p>
@@ -88,6 +122,7 @@ export function LanguageStep(props: { readonly mode: 'setup' | 'change'; onDone(
               onChange={() => {
                 setChosen(l1)
                 setAttempt({ phase: 'idle' })
+                setSaveError(null)
               }}
             />
             {languageName(l1, l1)}
@@ -137,7 +172,7 @@ export function LanguageStep(props: { readonly mode: 'setup' | 'change'; onDone(
         {props.mode === 'setup' ? (
           <Link to={{ name: 'signin' }}>{t('setup.haveAccount')}</Link>
         ) : (
-          <Link to={{ name: 'settings', section: 'languages' }}>{t('setup.back')}</Link>
+          <Link to={{ name: 'settings', section: 'languages' }}>{t('common.back')}</Link>
         )}
       </div>
     </section>

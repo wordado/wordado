@@ -164,7 +164,8 @@ export const de: Messages = {
   'setup.downloadFailed': 'Die Wörter konnten nicht heruntergeladen werden. Prüf deine Verbindung und versuch es noch einmal.',
   'setup.retry': 'Erneut versuchen',
   'setup.savedOffline': 'Deine Wahl ist gespeichert: Die Wörter wechseln, sobald du online bist.',
-  'setup.back': 'Zurück',
+
+  'common.back': 'Zurück',
 
   'settings.account': 'Konto',
   'settings.signedInAs': 'Angemeldet als {email}',

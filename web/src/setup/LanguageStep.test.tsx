@@ -56,7 +56,8 @@ describe('LanguageStep, setup mode (plan 11)', () => {
   it('gives its heading focus when it appears', async () => {
     const ctx = await setup()
     renderWith(<LanguageStep mode="setup" onDone={() => undefined} />, ctx)
-    expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Which language do you speak?' }))
+    // The setup's wrapper owns the page's h1; the step's own heading is an h2 (plan 11 review).
+    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 2, name: 'Which language do you speak?' }))
   })
 
   it('links to Sign in for a returning learner', async () => {
@@ -129,6 +130,59 @@ describe('LanguageStep, setup mode (plan 11)', () => {
     expect(screen.getByRole('alert').textContent).toBe('The words could not be downloaded. Check your connection and try again.')
     expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy()
   })
+
+  it('acts once on a double click: one settings write, one install, one onDone (review, fix 1)', async () => {
+    const ctx = await setup()
+    const fake = controlledPacks()
+    const write = vi.spyOn(ctx.client, 'updateSettings')
+    const onDone = vi.fn()
+    renderWith(<LanguageStep mode="setup" onDone={onDone} />, { ...ctx, packs: fake.packs })
+    const button = screen.getByRole('button', { name: 'Continue' })
+    await act(async () => {
+      fireEvent.click(button)
+      fireEvent.click(button)
+    })
+    expect(write).toHaveBeenCalledTimes(1)
+    expect(fake.calls).toEqual(['bg'])
+    await fake.settle({ ok: true })
+    expect(onDone).toHaveBeenCalledTimes(1)
+  })
+
+  it('does nothing after it is gone: an install settling after unmount calls no onDone (review, fix 1)', async () => {
+    const ctx = await setup()
+    const fake = controlledPacks()
+    const onDone = vi.fn()
+    const { unmount } = renderWith(<LanguageStep mode="setup" onDone={onDone} />, { ...ctx, packs: fake.packs })
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue' })))
+    expect(fake.calls).toEqual(['bg'])
+    unmount()
+    await fake.settle({ ok: true })
+    expect(onDone).not.toHaveBeenCalled()
+  })
+
+  it('shows no bar for a download of another language than its own (review, fix 1)', async () => {
+    const ctx = await setup()
+    const fake = controlledPacks()
+    renderWith(<LanguageStep mode="setup" onDone={() => undefined} />, { ...ctx, packs: fake.packs })
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue' })))
+    act(() => fake.packs.store.set({ phase: 'downloading', l1: 'de', received: 50, total: 100 }))
+    expect(screen.queryByRole('progressbar')).toBeNull()
+  })
+
+  it('says why when the setting cannot be saved, and installs nothing (review, fix 1)', async () => {
+    const ctx = await setup()
+    const fake = controlledPacks()
+    vi.spyOn(ctx.client, 'updateSettings').mockRejectedValue(new Error('disk full'))
+    const onDone = vi.fn()
+    renderWith(<LanguageStep mode="setup" onDone={onDone} />, { ...ctx, packs: fake.packs })
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue' })))
+    expect(screen.getByRole('alert').textContent).toMatch(/^Your change wasn’t saved/)
+    expect(fake.calls).toEqual([])
+    expect(onDone).not.toHaveBeenCalled()
+    // Choosing again clears it.
+    fireEvent.click(choice('Deutsch'))
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
 })
 
 describe('LanguageStep, change mode (plan 11)', () => {
@@ -138,7 +192,17 @@ describe('LanguageStep, change mode (plan 11)', () => {
     expect(choice('Български').checked).toBe(true)
     expect(screen.getByRole('link', { name: 'Zurück' }).getAttribute('href')).toBe('/settings/languages')
     expect(screen.queryByRole('link', { name: 'Ich habe schon ein Konto' })).toBeNull()
-    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1 }))
+    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1, name: 'Muttersprache' }))
+  })
+
+  it('hides Change again when the installed language is chosen again (review, fix 1)', async () => {
+    const ctx = await setup()
+    renderWith(<LanguageStep mode="change" onDone={() => undefined} />, ctx)
+    fireEvent.click(choice('Deutsch'))
+    expect(screen.getByRole('button', { name: 'Change' })).toBeTruthy()
+    fireEvent.click(choice('Български'))
+    expect(screen.queryByRole('button', { name: 'Change' })).toBeNull()
+    expect(screen.queryByText('Your progress stays. The words switch to German translations.')).toBeNull()
   })
 
   it('asks before changing, then writes the setting, installs and is done', async () => {
