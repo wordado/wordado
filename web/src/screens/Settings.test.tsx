@@ -329,6 +329,6 @@ describe('Settings: the privacy policy (spec §11)', () => {
   it('links to the policy', async () => {
     const ctx = await setup()
     renderWith(<Settings section="about" />, ctx)
-    expect(screen.getByRole('link', { name: 'Privacy policy' }).getAttribute('href')).toBe('/privacy')
+    expect(screen.getByRole('link', { name: 'Privacy policy' }).getAttribute('href')).toBe('https://wordado.com/en/privacy/')
   })
 })

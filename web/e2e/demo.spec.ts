@@ -81,18 +81,11 @@ test('plays a matching board once five words are known', async ({ page }) => {
   await expect(page.getByRole('status')).toHaveText('✓ All pairs matched.')
 })
 
-test('serves the privacy policy, not the app, once the service worker controls the page', async ({ page }) => {
+test('Settings › About links to the privacy policy on the website, in the interface language', async ({ page }) => {
   await page.goto('/')
-  await page.evaluate(async () => {
-    await navigator.serviceWorker.ready
-  })
-  await page.reload()
-  expect(await page.evaluate(() => navigator.serviceWorker.controller !== null)).toBe(true)
-
-  await page.goto('/privacy')
-  await expect(heading(page)).toHaveText('Privacy policy')
-  await expect(page.locator('.nav')).toHaveCount(0)
-  await expectAccessible(page, { dark: true })
+  await finishSetup(page)
+  await page.goto('/settings/about')
+  await expect(page.getByRole('link', { name: 'Privacy policy', exact: true })).toHaveAttribute('href', 'https://wordado.com/en/privacy/')
 })
 
 test('Settings › About says the demo’s word list is Wordado’s own, from the bundled sample’s credits', async ({ page }) => {

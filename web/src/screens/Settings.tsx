@@ -3,6 +3,7 @@ import type { L1 } from '@wordado/core'
 import { BookOpen, ChevronLeft, ChevronRight, Globe, Info, Package, Smartphone, User, Bell, Volume2, type LucideIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { useApp } from '../app/context'
+import { privacyUrl } from '../app/site'
 import { ENDONYM, languageName, useT, type MessageKey } from '../i18n/i18n'
 import { Link, type Route, type SettingsSection } from '../router'
 import { AboutSettings } from '../settings/AboutSettings'
@@ -116,7 +117,7 @@ export function Settings(props: { readonly section: SettingsSection | null; read
 }
 
 function SectionPage(props: { readonly section: SettingsSection }) {
-  const { t } = useT()
+  const { t, locale } = useT()
   const page: Readonly<Record<SettingsSection, ReactNode>> = {
     study: <StudySettings />,
     words: <SetAsideWords />,
@@ -135,7 +136,7 @@ function SectionPage(props: { readonly section: SettingsSection }) {
       <>
         <AboutSettings />
         <p className="privacy-link">
-          <a href="/privacy">{t('privacy.link')}</a>
+          <a href={privacyUrl(locale)}>{t('privacy.link')}</a>
         </p>
       </>
     ),
