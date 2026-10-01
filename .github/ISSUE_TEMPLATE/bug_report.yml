@@ -1,0 +1,79 @@
+name: Bug report
+description: Something in Wordado doesn't work or looks wrong.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! This repository is public, so this issue is too: leave out email addresses,
+        sign-in codes and anything else personal, and blur them in screenshots.
+
+        A wrong translation, example or audio for a word? Use **Report a problem** on the word's card in the app instead.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      placeholder: After I tapped “Show answer”, the rating buttons didn’t appear.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+      placeholder: The four rating buttons (Again, Hard, Good, Easy).
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open Today and tap Start studying
+        2. Tap Show answer
+        3. …
+  - type: dropdown
+    id: screen
+    attributes:
+      label: Where in the app?
+      options:
+        - Today
+        - Studying (flashcards, multiple choice, listening)
+        - Practice or Matching
+        - Path
+        - Themes
+        - Progress
+        - Settings
+        - Sign-in
+        - First-run setup
+        - Placement test
+        - Header, menus or navigation
+        - Somewhere else
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device and browser
+      placeholder: iPhone 15, Safari · Windows laptop, Chrome · installed app on Android
+    validations:
+      required: true
+  - type: dropdown
+    id: account
+    attributes:
+      label: Demo or signed in?
+      options:
+        - The demo (no account)
+        - Signed in
+        - Not sure
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots or a screen recording
+      description: Drag images or a video here. Blur email addresses and other personal details.
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Before you submit
+      options:
+        - label: I left out email addresses, sign-in codes and other personal details.
+          required: true
