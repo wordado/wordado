@@ -19,15 +19,20 @@ export const REDERIVE_RETRY_MS = 3_600_000
  */
 export async function requestStaleRederivations(deps: ServerDeps): Promise<number> {
   const now = deps.now()
+  // The selection is materialized once. Inside `where user_id in (…)` Postgres may rescan it per learner (a
+  // nested-loop semi join), and each rescan skips the rows this statement has already updated, so the limit moves on
+  // and every stale learner is requested at once.
   const rows = await deps.db.query<{ user_id: string }>(
-    `update learner set rederive_requested_at = $2
-     where user_id in (
+    `with picked as materialized (
        select user_id from learner
        where derived_scheduler_version <> $1 and (rederive_requested_at is null or rederive_requested_at < $3)
        order by user_id
        limit $4
        for update skip locked)
-     returning user_id`,
+     update learner set rederive_requested_at = $2
+     from picked
+     where learner.user_id = picked.user_id
+     returning learner.user_id`,
     [SCHEDULER_VERSION, now, now - REDERIVE_RETRY_MS, REDERIVE_BATCH],
   )
   if (rows.length > 0) await deps.jobs.sendBatch(rows.map((r): Job => ({ kind: 'rederive', userId: r.user_id })))
