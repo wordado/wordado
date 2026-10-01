@@ -1,5 +1,4 @@
 import { accountIsEmpty, createStore, type Client, type Store, type SyncTransport } from '@wordado/client-data'
-import type { L1 } from '@wordado/core'
 import type { BootState, SwitchOptions } from '../app/boot'
 import type { Api } from './api'
 import { DEMO_FILE, learnerFile, type AccountRecord, type AccountStorage, type PendingSignIn } from './storage'
@@ -98,59 +97,6 @@ export class AccountController {
     this.announce(await boot.switchTo(carryOver ? {} : { deleteFiles: [DEMO_FILE] }), { expired: false, notice: 'carried-over' })
   }
 
-  /**
-   * The native language chosen at sign-in (plan 10), once a learner's Client is ready: saved only after a sync whose
-   * pull completed and left the account's settings naming none, so an account's own choice from another device is
-   * never overridden by a local write made before it arrived. When the pull fails (offline), the write waits for the
-   * next sync that completes, once. `watchL1` then switches the pack. Never fails the sign-in.
-   */
-  private async saveL1(l1: L1 | null): Promise<void> {
-    if (l1 === null) return
-    const state = this.deps.boot.store.get()
-    if (state.status !== 'ready' || state.account === null) return
-    const client = state.client
-    /** Set once the deferred wait below is given up: a sync then in flight writes nothing. */
-    let stopped = false
-    /** True once a pull has completed and the choice was settled; `Client.sync` resolves after re-reading settings. */
-    const attempt = async (): Promise<boolean> => {
-      const outcome = await client.sync({ force: true }).catch(() => 'failed' as const)
-      if (outcome !== 'synced') return false
-      if (!stopped && client.snapshot.settings.l1 === null) await client.updateSettings({ l1 }).catch(() => undefined)
-      return true
-    }
-    if (await attempt()) return
-    const holds = () => {
-      const now = this.deps.boot.store.get()
-      return now.status === 'ready' && now.client === client
-    }
-    if (!holds()) return
-    // A later sync that completes (the sync loop's, or any other) shows as a fresh success in the status. The store
-    // updates before `Client.sync` has re-read the pulled settings, so `attempt` syncs again rather than trust them.
-    const mark = () => `${client.snapshot.sync.lastSyncAt}|${client.snapshot.sync.failures}`
-    let seen = mark()
-    let busy = false
-    const stop = () => {
-      stopped = true
-      unsubscribe()
-      unwatchBoot()
-    }
-    const unsubscribe = client.store.subscribe(() => {
-      const { failures, phase } = client.snapshot.sync
-      if (stopped || busy || phase !== 'idle' || failures !== 0 || mark() === seen) return
-      busy = true
-      void attempt().then((done) => {
-        busy = false
-        seen = mark()
-        if (done) stop()
-      })
-    })
-    // The wait is this Client's alone: once Boot leaves 'ready', or holds another Client (a switch, a sign-out), the
-    // Client watched here is closing or closed, and whichever opens next makes its own choices.
-    const unwatchBoot = this.deps.boot.store.subscribe(() => {
-      if (!holds()) stop()
-    })
-  }
-
   /** From the transport: the server answered 401. Only a signed-in learner can have an expired sign-in. */
   sessionExpired(): void {
     if (this.deps.accounts.read() !== null && !this.store.get().expired) this.set({ expired: true })
@@ -163,8 +109,8 @@ export class AccountController {
   /**
    * Runs once the server holds a session for this browser: after a verified
    * code, or back from Google. `country` is the age gate's (spec §11), the
-   * only thing kept of it; `l1` the native language chosen there (plan 10),
-   * saved once the learner's Client is ready unless the account has one.
+   * only thing kept of it; the native language is asked by the first-run
+   * setup once the account is signed in, not here (plan 11).
    *
    * - Signed in as someone else: refuse, and sign the new session out — this
    *   device's answers belong to its learner, and are neither pushed nor
@@ -186,13 +132,7 @@ export class AccountController {
    * or while `Boot` is not `'ready'` (spec §9.1): a sign-in landing mid-open
    * must never guess whether the database it cannot yet see holds progress.
    */
-  async completeSignIn(country: string | null, l1: L1 | null = null): Promise<SignInOutcome> {
-    const outcome = await this.signIn(country)
-    if (outcome !== 'other-account') await this.saveL1(l1)
-    return outcome
-  }
-
-  private async signIn(country: string | null): Promise<SignInOutcome> {
+  async completeSignIn(country: string | null): Promise<SignInOutcome> {
     const { api, accounts, boot } = this.deps
     const me = await api.me()
     if (!me) throw new Error('The sign-in did not complete')
@@ -253,7 +193,7 @@ export class AccountController {
       return null
     }
     try {
-      return await this.completeSignIn(pending.country, pending.l1)
+      return await this.completeSignIn(pending.country)
     } catch (err) {
       this.set({ notice: 'google-failed' })
       throw err

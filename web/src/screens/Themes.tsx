@@ -1,62 +1,7 @@
 import { useClient, useClientSnapshot } from '@wordado/client-data'
 import { corpusWordId, levelIndex, offeredThemes, themeEntries, type Theme } from '@wordado/core'
-import {
-  Bike,
-  Briefcase,
-  Building2,
-  Clock,
-  CloudSun,
-  Footprints,
-  GraduationCap,
-  Hash,
-  HeartPulse,
-  House,
-  MapPin,
-  MessageCircle,
-  Palette,
-  PawPrint,
-  Plane,
-  Shirt,
-  ShoppingBag,
-  Smartphone,
-  Smile,
-  Soup,
-  Stethoscope,
-  Sun,
-  Tag,
-  Users,
-  UtensilsCrossed,
-  type LucideIcon,
-} from 'lucide-react'
 import { localized, useT } from '../i18n/i18n'
-
-/** A picture for each theme the packs define; one added later gets the plain tag until it has its own. */
-const THEME_ICON: Readonly<Record<string, LucideIcon>> = {
-  people: Users,
-  greetings: MessageCircle,
-  food: Soup,
-  restaurant: UtensilsCrossed,
-  home: House,
-  'daily-life': Sun,
-  time: Clock,
-  numbers: Hash,
-  travel: Plane,
-  directions: MapPin,
-  shopping: ShoppingBag,
-  work: Briefcase,
-  school: GraduationCap,
-  body: HeartPulse,
-  doctor: Stethoscope,
-  clothes: Shirt,
-  weather: CloudSun,
-  animals: PawPrint,
-  colours: Palette,
-  feelings: Smile,
-  hobbies: Bike,
-  technology: Smartphone,
-  city: Building2,
-  actions: Footprints,
-}
+import { ThemeIcon } from '../themes/icons'
 
 /** Theme collections (spec §8.9): choosing one puts its words first; nothing else changes. */
 export function Themes() {
@@ -102,11 +47,10 @@ function ThemeCard(props: { readonly theme: Theme; readonly active: boolean; onC
   const aboveLevel = entries.some((e) => levelIndex(e.level) > levelIndex(settings.declaredLevel))
   const name = localized(theme.name, locale, corpus!.l1)
   const startedText = t('themes.started', { started, count: entries.length })
-  const Icon = THEME_ICON[theme.themeId] ?? Tag
   return (
     <li className={active ? 'panel theme-card is-active' : 'panel theme-card'}>
       <span className="theme-icon" aria-hidden="true">
-        <Icon size={24} strokeWidth={1.75} />
+        <ThemeIcon themeId={theme.themeId} size={24} />
       </span>
       <div className="theme-text">
         {active && (

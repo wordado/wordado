@@ -1,10 +1,8 @@
-import { isSupportedL1, type L1 } from '@wordado/core'
-
 /** The demo's database file (6a decision of 2026-09-24). */
 export const DEMO_FILE = 'demo'
 /** Which account this device is signed in to: the one record that decides which file opens. */
 export const ACCOUNT_KEY = 'wordado.account'
-/** The age gate's country and the native language chosen there, carried across the Google redirect in this tab only. */
+/** The age gate's country, carried across the Google redirect in this tab only. */
 export const SIGNIN_KEY = 'wordado.signin'
 
 export type KeyValue = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>
@@ -91,17 +89,16 @@ export function accountStorage(storage: KeyValue = browserStorage('localStorage'
 
 export interface PendingSignIn {
   readonly country: string | null
-  /** The native language chosen at the gate (plan 10); null when none was. */
-  readonly l1: L1 | null
 }
 
-/** As stored: a pending sign-in saved before plan 10 has no `l1`. */
-type StoredPending = Omit<PendingSignIn, 'l1'> & { readonly l1?: L1 | null }
+/** As stored: a pending sign-in saved before the setup moved the native language off the gate (plan 10, plan 11) may
+ * still carry an `l1`; it is accepted and ignored. */
+type StoredPending = PendingSignIn & { readonly l1?: unknown }
 
 const isPending = (v: unknown): v is StoredPending => {
   if (typeof v !== 'object' || v === null) return false
-  const { country, l1 } = v as StoredPending
-  return (country === null || typeof country === 'string') && (l1 === undefined || l1 === null || isSupportedL1(l1))
+  const { country } = v as StoredPending
+  return country === null || typeof country === 'string'
 }
 
 export function pendingSignIn(storage: KeyValue = browserStorage('sessionStorage')) {
@@ -109,7 +106,7 @@ export function pendingSignIn(storage: KeyValue = browserStorage('sessionStorage
   return {
     read(): PendingSignIn | null {
       const stored = key.read()
-      return stored === null ? null : { country: stored.country, l1: stored.l1 ?? null }
+      return stored === null ? null : { country: stored.country }
     },
     save: (value: PendingSignIn): void => key.save(value),
     clear: (): void => key.clear(),

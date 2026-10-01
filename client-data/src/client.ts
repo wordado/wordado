@@ -264,12 +264,16 @@ export class Client {
   /**
    * Switches the installed L1 (spec §8.6): stages the new language's pack beside the current one, then swaps it in
    * and removes the other language's pack in one transaction. Review state is keyed by entry, so all progress
-   * carries over. Nothing changes when the pack cannot be had (offline): the caller tries again later.
+   * carries over. Nothing changes when the pack cannot be had (offline): the caller tries again later. Also installs
+   * a learner's first pack (the setup's Language step): with no pack yet active, this always fetches and installs,
+   * even when `l1` already equals `Client.l1` (which follows `settings.l1` before any pack exists).
    */
   changeL1(l1: L1, manifest: PackManifest, fetchPack: PackFetcher): Promise<ChangeL1Outcome> {
     return this.guarded(async () => {
       if (!isSupportedL1(l1)) return { ok: false, reason: 'unsupported' }
-      if (l1 === this.l1) return { ok: true }
+      // Compared with the active corpus, not `this.l1`: with no pack yet, `this.l1` follows the setting, and the first
+      // install (the setup's Language step) must still fetch.
+      if (this.corpus !== null && l1 === this.corpus.l1) return { ok: true }
       const report = await installPacks(this.db, this.env, manifest, l1, fetchPack)
       const installed = await installedPacks(this.db)
       const has = report.staged.length > 0 || installed.some((p) => p.pack_id === `corpus-${l1}`)

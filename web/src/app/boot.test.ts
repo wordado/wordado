@@ -1,16 +1,16 @@
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { Client, SqlDriver, SyncTransport } from '@wordado/client-data'
+import { Client, type PackFetcher, type SqlDriver, type SyncTransport } from '@wordado/client-data'
 import { nodeSqliteDriver } from '@wordado/client-data/src/drivers/nodeSqlite'
 import { sampleFetcher, sampleManifest } from '@wordado/client-data/src/testing/sample'
-import { testEnv } from '@wordado/client-data/src/testing/testEnv'
+import { testEnv, type TestEnv } from '@wordado/client-data/src/testing/testEnv'
 import { FakeServer } from '@wordado/client-data/src/testing/fakeServer'
 import type { WordId } from '@wordado/core'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { accountStorage, DEMO_FILE, learnerFile, memoryStorage } from '../account/storage'
-import { answerTo, disk, fileDriver, flaky } from '../test/disk'
-import { Boot, type BootDeps, defaultL1, FLUSH_TIMEOUT_MS, type LockPort } from './boot'
+import { answerTo, chosenL1, disk, fileDriver, flaky } from '../test/disk'
+import { Boot, type BootDeps, defaultL1, FLUSH_TIMEOUT_MS, type LockPort, SETUP_PULL_TIMEOUT_MS } from './boot'
 
 const hello = answerTo('c:hello-1')
 
@@ -38,12 +38,29 @@ function deferred<T>(): { readonly promise: Promise<T>; resolve: (value: T) => v
   return { promise, resolve }
 }
 
-/** A boot over an in-memory database and the sample; `release` plays another tab taking over. */
+/** A new in-memory database: the first-run setup's (plan 11). */
+const fresh = async () => ({ driver: nodeSqliteDriver(), backend: 'opfs' as const })
+
+/** A new in-memory database whose learner has chosen Bulgarian (`chosenL1`): it opens the ordinary way, without the setup. */
+const chosen = async () => ({ driver: await chosenL1(nodeSqliteDriver()), backend: 'opfs' as const })
+
+/** `openDriver`, each new file it opens naming Bulgarian (`chosenL1`), so it opens without the setup. */
+const choosing =
+  (openDriver: BootDeps['openDriver']): BootDeps['openDriver'] =>
+  async (file) => {
+    const opened = await openDriver(file)
+    return { ...opened, driver: await chosenL1(opened.driver) }
+  }
+
+/**
+ * A boot over an in-memory database and the sample; `release` plays another tab taking over. Its database names
+ * Bulgarian already, so it opens without the first-run setup unless a test passes its own `openDriver`.
+ */
 function boot(over: Partial<BootDeps> = {}, free = true) {
   const deps: BootDeps = {
     env: testEnv(),
     l1: () => 'bg',
-    openDriver: async () => ({ driver: nodeSqliteDriver(), backend: 'opfs' }),
+    openDriver: chosen,
     fetchManifest: async () => sampleManifest,
     fetchPack: sampleFetcher,
     ...over,
@@ -128,7 +145,7 @@ describe('Boot', () => {
 
   it('starts offline from the pack it already has', async () => {
     const file = join(mkdtempSync(join(tmpdir(), 'wordado-boot-')), 'demo.sqlite')
-    const first = boot({ openDriver: async () => ({ driver: await fileDriver(file), backend: 'opfs' }) })
+    const first = boot({ openDriver: async () => ({ driver: await chosenL1(await fileDriver(file)), backend: 'opfs' }) })
     await first.boot.start()
     await first.release()
     const offline = boot({
@@ -215,7 +232,7 @@ describe('Boot', () => {
     const { boot: b } = boot({
       openDriver: async () => {
         attempt += 1
-        return attempt === 1 ? { driver: failing.driver, backend: 'opfs' } : { driver: nodeSqliteDriver(), backend: 'opfs' }
+        return attempt === 1 ? { driver: failing.driver, backend: 'opfs' } : chosen()
       },
     })
     await b.start()
@@ -240,7 +257,7 @@ describe('Boot', () => {
       l1: () => 'bg',
       openDriver: async () => {
         attempt += 1
-        return attempt === 1 ? { driver: failing.driver, backend: 'opfs' } : { driver: nodeSqliteDriver(), backend: 'opfs' }
+        return attempt === 1 ? { driver: failing.driver, backend: 'opfs' } : chosen()
       },
       fetchManifest: async () => sampleManifest,
       fetchPack: sampleFetcher,
@@ -265,7 +282,7 @@ describe('Boot', () => {
     const deps: BootDeps = {
       env: testEnv(),
       l1: () => 'bg',
-      openDriver: async () => ({ driver: nodeSqliteDriver(), backend: 'opfs' }),
+      openDriver: chosen,
       fetchManifest: async () => sampleManifest,
       fetchPack: sampleFetcher,
     }
@@ -284,7 +301,7 @@ describe('Boot', () => {
     const deps: BootDeps = {
       env: testEnv(),
       l1: () => 'bg',
-      openDriver: async () => ({ driver: nodeSqliteDriver(), backend: 'opfs' }),
+      openDriver: chosen,
       fetchManifest: async () => sampleManifest,
       fetchPack: sampleFetcher,
     }
@@ -307,7 +324,7 @@ describe('Boot', () => {
     const deps: BootDeps = {
       env: testEnv(),
       l1: () => 'bg',
-      openDriver: async () => ({ driver: nodeSqliteDriver(), backend: 'opfs' }),
+      openDriver: chosen,
       fetchManifest: async () => sampleManifest,
       fetchPack: sampleFetcher,
     }
@@ -334,7 +351,7 @@ describe('Boot', () => {
     const deps: BootDeps = {
       env: testEnv(),
       l1: () => 'bg',
-      openDriver: async () => ({ driver: nodeSqliteDriver(), backend: 'opfs' }),
+      openDriver: chosen,
       fetchManifest: async () => sampleManifest,
       fetchPack: sampleFetcher,
     }
@@ -463,8 +480,16 @@ describe('Boot with accounts (spec §8.6, §9.1)', () => {
     const accounts = accountStorage(memoryStorage())
     accounts.save({ userId: 'u1', email: 'ana@example.com' })
     const hung = hangingServer()
-    const { boot: b, release } = boot({ env, accounts, openDriver: d.openDriver, deleteDatabase: d.deleteDatabase, transport: () => hung.transport, flushTimeoutMs: 20 })
+    // The server answers the open's first pull (plan 11), then hangs.
+    const server = new FakeServer({ now: env.now })
+    let hanging = false
+    const transport: SyncTransport = {
+      push: (page) => (hanging ? hung.transport.push(page) : server.push(page)),
+      pull: (request) => (hanging ? hung.transport.pull(request) : server.pull(request)),
+    }
+    const { boot: b, release } = boot({ env, accounts, openDriver: choosing(d.openDriver), deleteDatabase: d.deleteDatabase, transport: () => transport, flushTimeoutMs: 20 })
     await b.start()
+    hanging = true
     await ready(b).answer(hello)
     hung.calls.length = 0
     const delays = timerDelays()
@@ -647,7 +672,7 @@ describe('Boot with accounts (spec §8.6, §9.1)', () => {
     const { boot: b } = boot({
       env,
       accounts,
-      openDriver: d.openDriver,
+      openDriver: choosing(d.openDriver),
       deleteDatabase: d.deleteDatabase,
       transport: () => server,
       fetchManifest: async (account) => {
@@ -716,8 +741,8 @@ describe('Boot with accounts (spec §8.6, §9.1)', () => {
     const { boot: b, release } = boot({ env, accounts, openDriver: d.openDriver, deleteDatabase: d.deleteDatabase, transport: () => transport })
     await b.start()
     const client = ready(b)
-    // A failed sync sets a backoff the flush must ignore.
-    expect(await client.sync()).toBe('failed')
+    // The open's first pull (plan 11) failed, which set a backoff the flush must ignore.
+    expect(client.snapshot.sync.lastError).not.toBeNull()
     expect(client.snapshot.sync.nextAttemptAt).not.toBeNull()
     await client.answer(hello)
     fail = false
@@ -742,7 +767,16 @@ describe('Boot with accounts (spec §8.6, §9.1)', () => {
     const env = testEnv()
     const accounts = accountStorage(memoryStorage())
     const hung = hangingServer(() => b.store.get().status)
-    const { boot: b } = boot({ env, accounts, openDriver: d.openDriver, deleteDatabase: d.deleteDatabase, transport: () => hung.transport, flushTimeoutMs: 20 })
+    // The learner's new file waits for its first pull (plan 11) only briefly too.
+    const { boot: b } = boot({
+      env,
+      accounts,
+      openDriver: choosing(d.openDriver),
+      deleteDatabase: d.deleteDatabase,
+      transport: () => hung.transport,
+      flushTimeoutMs: 20,
+      setupPullTimeoutMs: 20,
+    })
     await b.start()
     await ready(b).answer(hello)
     await ready(b).attachUser('u1')
@@ -838,19 +872,257 @@ describe('the default L1 (plan 10)', () => {
     const asked: (string | null)[] = []
     const { boot: b } = boot({
       accounts,
+      openDriver: fresh,
       l1: (account) => {
         asked.push(account?.userId ?? null)
         return defaultL1(account, 'de')
       },
     })
     await b.start()
+    // A new demo opens in the setup (plan 11), whose Language page starts from the default.
+    expect(b.store.get()).toMatchObject({ status: 'ready', setup: true })
     expect(ready(b).snapshot.l1).toBe('de')
-    expect(ready(b).snapshot.corpus?.l1).toBe('de')
     accounts.save({ userId: 'u1', email: 'ana@example.com' })
     await b.switchTo()
     expect(ready(b).snapshot.l1).toBe('bg')
     expect(ready(b).snapshot.corpus?.l1).toBe('bg')
     expect(asked).toContain(null)
     expect(asked.at(-1)).toBe('u1')
+  })
+})
+
+/** A fetcher over the sample that records each pack it was asked for. */
+function recordingFetcher(): { readonly fetchPack: PackFetcher; readonly fetched: string[] } {
+  const fetched: string[] = []
+  return {
+    fetchPack: async (d) => {
+      fetched.push(d.pack_id)
+      return sampleFetcher(d)
+    },
+    fetched,
+  }
+}
+
+/** A server holding what another device of the learner's has synced: `seed` runs on that device's Client first. */
+async function seededServer(env: TestEnv, seed: (other: Client) => Promise<void>): Promise<FakeServer> {
+  const server = new FakeServer({ now: env.now })
+  const other = await Client.open({ driver: nodeSqliteDriver(), env, l1: 'bg', transport: server })
+  await seed(other)
+  expect(await other.sync({ force: true })).toBe('synced')
+  await other.close()
+  return server
+}
+
+const ana = { userId: 'u1', email: 'ana@example.com' }
+
+describe('the first-run setup (plan 11)', () => {
+  it('opens a new demo in the setup without fetching a pack, prepares it, and leaves onReady to finishSetup', async () => {
+    const calls: string[] = []
+    const { fetchPack, fetched } = recordingFetcher()
+    const { boot: b } = boot({
+      openDriver: fresh,
+      fetchPack,
+      prepare: async () => {
+        calls.push(`prepare while ${b.store.get().status}`)
+      },
+      onReady: async () => {
+        calls.push('onReady')
+      },
+    })
+    await b.start()
+    expect(b.store.get()).toMatchObject({ status: 'ready', account: null, setup: true })
+    expect(fetched).toEqual([])
+    expect(ready(b).snapshot.corpus).toBeNull()
+    expect(calls).toEqual(['prepare while starting'])
+
+    const client = ready(b)
+    expect(await client.changeL1('bg', sampleManifest, fetchPack)).toEqual({ ok: true })
+    b.finishSetup()
+    expect(b.store.get()).toMatchObject({ status: 'ready', setup: false })
+    expect(ready(b)).toBe(client)
+    await Promise.resolve()
+    expect(calls).toEqual(['prepare while starting', 'onReady'])
+    // Only once: a second call finds no setup to finish.
+    b.finishSetup()
+    await Promise.resolve()
+    expect(calls).toEqual(['prepare while starting', 'onReady'])
+  })
+
+  it('opens a demo that already has a pack without the setup', async () => {
+    const d = disk()
+    const first = boot({ openDriver: d.openDriver })
+    await first.boot.start()
+    expect(await ready(first.boot).changeL1('bg', sampleManifest, sampleFetcher)).toEqual({ ok: true })
+    await first.release()
+
+    const again = boot({ openDriver: d.openDriver })
+    await again.boot.start()
+    expect(again.boot.store.get()).toMatchObject({ status: 'ready', setup: false })
+    expect(ready(again.boot).snapshot.corpus?.l1).toBe('bg')
+  })
+
+  it('installs the chosen language without asking again when the tab closed during its download (Review Focus 3)', async () => {
+    const d = disk()
+    const first = boot({ openDriver: d.openDriver })
+    await first.boot.start()
+    await ready(first.boot).updateSettings({ l1: 'de' })
+    await first.release()
+
+    const { fetchPack, fetched } = recordingFetcher()
+    const again = boot({ openDriver: d.openDriver, fetchPack })
+    await again.boot.start()
+    expect(again.boot.store.get()).toMatchObject({ status: 'ready', setup: false })
+    expect(ready(again.boot).snapshot.corpus?.l1).toBe('de')
+    expect(fetched).toEqual(['corpus-de'])
+  })
+
+  it('opens a new account in the setup once its first pull finds nothing, without fetching a pack', async () => {
+    const env = testEnv()
+    const server = new FakeServer({ now: env.now })
+    const accounts = accountStorage(memoryStorage())
+    accounts.save(ana)
+    const d = disk()
+    const { fetchPack, fetched } = recordingFetcher()
+    const log: string[] = []
+    const { boot: b } = boot({
+      env,
+      accounts,
+      openDriver: d.openDriver,
+      transport: () => server,
+      fetchPack,
+      startSync: () => {
+        log.push('start')
+        return () => log.push('stop')
+      },
+    })
+    await b.start()
+    expect(b.store.get()).toMatchObject({ status: 'ready', account: { userId: 'u1' }, setup: true })
+    expect(fetched).toEqual([])
+    expect(ready(b).snapshot.corpus).toBeNull()
+    expect(log).toEqual(['start'])
+  })
+
+  it('syncs an account at once when its setup finishes, so the chosen language reaches it (final review)', async () => {
+    const env = testEnv()
+    const server = new FakeServer({ now: env.now })
+    const accounts = accountStorage(memoryStorage())
+    accounts.save(ana)
+    const { boot: b } = boot({ env, accounts, openDriver: disk().openDriver, transport: () => server, startSync: () => () => undefined })
+    await b.start()
+    const client = ready(b)
+    expect(await client.changeL1('de', sampleManifest, sampleFetcher)).toEqual({ ok: true })
+    await client.updateSettings({ l1: 'de' })
+    const sync = vi.spyOn(client, 'sync')
+    b.finishSetup()
+    expect(sync).toHaveBeenCalledTimes(1)
+    await sync.mock.results[0]!.value
+    const other = await Client.open({ driver: nodeSqliteDriver(), env, l1: 'bg', transport: server })
+    expect(await other.sync({ force: true })).toBe('synced')
+    expect(other.snapshot.settings.l1).toBe('de')
+    await other.close()
+  })
+
+  it('does not sync a demo when its setup finishes (final review)', async () => {
+    const { boot: b } = boot({ openDriver: fresh })
+    await b.start()
+    const client = ready(b)
+    expect(await client.changeL1('bg', sampleManifest, sampleFetcher)).toEqual({ ok: true })
+    const sync = vi.spyOn(client, 'sync')
+    b.finishSetup()
+    expect(sync).not.toHaveBeenCalled()
+  })
+
+  it('installs a returning learner’s own language on a new device, without the setup', async () => {
+    const env = testEnv()
+    const server = await seededServer(env, async (other) => {
+      await other.updateSettings({ l1: 'de' })
+    })
+    const accounts = accountStorage(memoryStorage())
+    accounts.save(ana)
+    const { fetchPack, fetched } = recordingFetcher()
+    const { boot: b } = boot({ env, accounts, openDriver: disk().openDriver, transport: () => server, fetchPack })
+    await b.start()
+    expect(b.store.get()).toMatchObject({ status: 'ready', setup: false })
+    expect(ready(b).snapshot.corpus?.l1).toBe('de')
+    expect(fetched).toEqual(['corpus-de'])
+  })
+
+  it('installs Bulgarian, without the setup, for an account with progress from before plan 10 (Review Focus 2)', async () => {
+    const env = testEnv()
+    const server = await seededServer(env, async (other) => {
+      await other.installPacks(sampleManifest, sampleFetcher)
+      await other.startSession()
+      await other.answer(hello)
+    })
+    expect(server.events.size).toBe(1)
+    const accounts = accountStorage(memoryStorage())
+    accounts.save(ana)
+    const { fetchPack, fetched } = recordingFetcher()
+    const { boot: b } = boot({ env, accounts, openDriver: disk().openDriver, transport: () => server, fetchPack })
+    await b.start()
+    expect(b.store.get()).toMatchObject({ status: 'ready', setup: false })
+    expect(ready(b).snapshot.settings.l1).toBeNull()
+    expect(ready(b).snapshot.corpus?.l1).toBe('bg')
+    expect(fetched).toEqual(['corpus-bg'])
+  })
+
+  it('takes the ordinary path, installing the default language, when the first pull times out (Review Focus 1)', async () => {
+    const hung = hangingServer()
+    const accounts = accountStorage(memoryStorage())
+    accounts.save(ana)
+    const { fetchPack, fetched } = recordingFetcher()
+    const delays = timerDelays()
+    const { boot: b } = boot({ accounts, openDriver: disk().openDriver, transport: () => hung.transport, fetchPack, setupPullTimeoutMs: 20 })
+    await b.start()
+    expect(hung.calls).toContain('pull')
+    expect(delays()).toContain(20)
+    expect(delays()).not.toContain(SETUP_PULL_TIMEOUT_MS)
+    expect(b.store.get()).toMatchObject({ status: 'ready', setup: false })
+    expect(ready(b).snapshot.corpus?.l1).toBe('bg')
+    expect(fetched).toEqual(['corpus-bg'])
+  })
+
+  it('takes the ordinary path when the first pull fails', async () => {
+    const env = testEnv()
+    const transport = flaky(new FakeServer({ now: env.now }))
+    const accounts = accountStorage(memoryStorage())
+    accounts.save(ana)
+    const { boot: b } = boot({ env, accounts, openDriver: disk().openDriver, transport: () => transport })
+    await b.start()
+    expect(b.store.get()).toMatchObject({ status: 'ready', setup: false })
+    expect(ready(b).snapshot.corpus?.l1).toBe('bg')
+  })
+
+  it('switches from a demo in the setup to a recorded account like any other switch (Review Focus 5)', async () => {
+    const env = testEnv()
+    const server = await seededServer(env, async (other) => {
+      await other.updateSettings({ l1: 'de' })
+    })
+    const accounts = accountStorage(memoryStorage())
+    const d = disk()
+    const log: string[] = []
+    const { boot: b } = boot({
+      env,
+      accounts,
+      openDriver: d.openDriver,
+      deleteDatabase: d.deleteDatabase,
+      transport: () => server,
+      startSync: () => {
+        log.push('start')
+        return () => log.push('stop')
+      },
+    })
+    await b.start()
+    expect(b.store.get()).toMatchObject({ status: 'ready', account: null, setup: true })
+    const demo = ready(b)
+
+    accounts.save(ana)
+    expect(await b.switchTo({ deleteFiles: [DEMO_FILE] })).toBe(true)
+    expect(b.store.get()).toMatchObject({ status: 'ready', account: { userId: 'u1' }, setup: false })
+    expect(ready(b)).not.toBe(demo)
+    expect(ready(b).snapshot.corpus?.l1).toBe('de')
+    expect(d.exists(DEMO_FILE)).toBe(false)
+    expect(log).toEqual(['start'])
+    await expect(demo.updateSettings({ newWordLimit: 5 })).rejects.toThrow()
   })
 })

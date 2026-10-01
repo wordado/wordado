@@ -22,7 +22,7 @@ export interface PackCheckOptions {
 export function startPackChecks(options: PackCheckOptions): () => void {
   const timer = setInterval(() => {
     const client = options.client()
-    if (!client || !options.online()) return
+    if (!client || !client.snapshot.corpus || !options.online()) return
     void options
       .fetchManifest()
       .then((manifest) => client.installPacks(manifest, options.fetchPack))

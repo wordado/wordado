@@ -1,6 +1,6 @@
-import { act, cleanup, fireEvent, screen, within } from '@testing-library/react'
+import { act, cleanup, screen, within } from '@testing-library/react'
 import { DAY_MS } from '@wordado/core'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { answerNew, fakeAudio, renderWith, setup } from '../test/fixtures'
 import { Home } from './Home'
 
@@ -73,39 +73,14 @@ describe('Home', () => {
   })
 })
 
-describe('Home: the onboarding question (spec §8.6)', () => {
-  it('asks what English is for, once nothing is studied, and makes the chosen theme come first', async () => {
+describe('Home: no onboarding question (plan 11)', () => {
+  it('asks a fresh learner nothing about themes: the first-run setup does that now', async () => {
     const ctx = await setup()
     renderWith(<Home />, ctx)
-    const question = screen.getByRole('group', { name: 'What do you want English for?' })
-    await act(async () => fireEvent.click(within(question).getByRole('button', { name: 'Daily life' })))
-    expect(ctx.client.snapshot.settings.activeTheme).toBe('daily-life')
-    expect(screen.queryByRole('group', { name: 'What do you want English for?' })).toBeNull()
-    // The block went with the button pressed: focus moves to Today's heading (spec §11.1).
-    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1 }))
-  })
-
-  it('can be skipped, and is gone once a word is studied', async () => {
-    const ctx = await setup()
-    const { unmount } = renderWith(<Home />, ctx)
-    fireEvent.click(screen.getByRole('button', { name: 'Skip' }))
-    expect(screen.queryByRole('group', { name: 'What do you want English for?' })).toBeNull()
-    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1 }))
+    expect(ctx.client.snapshot.states.size).toBe(0)
     expect(ctx.client.snapshot.settings.activeTheme).toBeNull()
-    unmount()
-    await answerNew(ctx.client, ctx.env, 1)
-    renderWith(<Home />, ctx)
-    expect(screen.queryByRole('group', { name: 'What do you want English for?' })).toBeNull()
-  })
-
-  it('shows a saved-failed alert in the onboarding block when choosing a theme fails (spec §11.1)', async () => {
-    const ctx = await setup()
-    vi.spyOn(ctx.client, 'updateSettings').mockRejectedValue(new Error('disk full'))
-    renderWith(<Home />, ctx)
-    const question = screen.getByRole('group', { name: 'What do you want English for?' })
-    await act(async () => fireEvent.click(within(question).getByRole('button', { name: 'Daily life' })))
-    expect(within(question).getByRole('alert').textContent).toBe('Your change wasn’t saved: Something went wrong. Try again.')
-    expect(ctx.client.snapshot.settings.activeTheme).toBeNull()
+    expect(screen.queryByText('What do you want English for?')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Skip' })).toBeNull()
   })
 })
 

@@ -1,75 +1,66 @@
-import { act, cleanup, fireEvent, screen, within } from '@testing-library/react'
+import { cleanup, screen } from '@testing-library/react'
+import { Client } from '@wordado/client-data'
+import { nodeSqliteDriver } from '@wordado/client-data/src/drivers/nodeSqlite'
+import { sampleFetcher, sampleManifest } from '@wordado/client-data/src/testing/sample'
 import { afterEach, describe, expect, it } from 'vitest'
 import { renderWith, setup } from '../test/fixtures'
 import { NativeLanguageSettings } from './NativeLanguageSettings'
 
 afterEach(cleanup)
 
-const choice = (name: string) => screen.getByRole('radio', { name }) as HTMLInputElement
-
-describe('Settings: the native language (plan 10)', () => {
-  it('shows the current native language, each named in itself', async () => {
+describe('Settings: the native language (plan 11)', () => {
+  it('shows the current native language, named in itself, and a hint', async () => {
     const ctx = await setup()
     renderWith(<NativeLanguageSettings />, ctx)
     expect(screen.getByRole('heading', { name: 'Native language' })).toBeTruthy()
     expect(screen.getByText('The language the words are translated into.')).toBeTruthy()
-    expect(choice('Български').checked).toBe(true)
-    expect(choice('Deutsch').checked).toBe(false)
+    expect(screen.getByText('Български')).toBeTruthy()
   })
 
-  it('asks before changing it, says progress stays, then writes the setting', async () => {
+  it('shows "Deutsch" when German is installed', async () => {
+    const ctx = await setup()
+    const client = await Client.open({ driver: nodeSqliteDriver(), env: ctx.env, l1: 'de' })
+    await client.installPacks(sampleManifest, sampleFetcher)
+    await client.startSession()
+    renderWith(<NativeLanguageSettings />, { ...ctx, client })
+    expect(screen.getByText('Deutsch')).toBeTruthy()
+  })
+
+  it('"Change" links to the language page, with a descriptive accessible name (fix round 1)', async () => {
     const ctx = await setup()
     renderWith(<NativeLanguageSettings />, ctx)
-    fireEvent.click(choice('Deutsch'))
-    const dialog = screen.getByRole('dialog', { name: 'Native language' })
-    expect(dialog.textContent).toContain('Your progress stays. The words switch to German translations.')
-    expect(ctx.client.snapshot.settings.l1).toBeNull()
-    await act(async () => fireEvent.click(within(dialog).getByRole('button', { name: 'Change' })))
-    expect(ctx.client.snapshot.settings.l1).toBe('de')
-    expect(choice('Deutsch').checked).toBe(true)
-    // The interface was English, not the old native language: it stays English.
-    expect(screen.getByRole('heading', { name: 'Native language' })).toBeTruthy()
+    const link = screen.getByRole('link', { name: 'Change native language' })
+    expect(link.getAttribute('href')).toBe('/settings/native-language')
+    expect(link.textContent).toBe('Change')
   })
 
-  it('changes nothing when the learner cancels', async () => {
+  it('names the "Change" link with its visible text, in every interface language (WCAG 2.5.3, final review)', async () => {
+    const ctx = await setup()
+    for (const locale of ['en', 'bg', 'de'] as const) {
+      const { unmount } = renderWith(<NativeLanguageSettings />, { ...ctx, locale })
+      const link = screen.getByRole('link')
+      const name = link.getAttribute('aria-label') ?? ''
+      expect(name.toLocaleLowerCase(locale)).toContain((link.textContent ?? '').toLocaleLowerCase(locale))
+      unmount()
+    }
+  })
+
+  it('says a change is pending until the new language is installed', async () => {
+    const ctx = await setup()
+    await ctx.client.updateSettings({ l1: 'de' })
+    renderWith(<NativeLanguageSettings />, ctx)
+    expect(screen.getByText('Your words switch to German as soon as the translations have downloaded.')).toBeTruthy()
+    // The chosen language shows at once; the note is what says the Bulgarian pack is still the one installed.
+    expect(screen.getByText('Deutsch')).toBeTruthy()
+  })
+
+  it('shows no pending note once the setting matches what is installed', async () => {
     const ctx = await setup()
     renderWith(<NativeLanguageSettings />, ctx)
-    fireEvent.click(choice('Deutsch'))
-    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancel' }))
-    expect(ctx.client.snapshot.settings.l1).toBeNull()
-    expect(choice('Български').checked).toBe(true)
+    expect(screen.queryByText(/as soon as the translations have downloaded/)).toBeNull()
   })
 
-  it('switches the interface too when it spoke the old native language', async () => {
-    const ctx = await setup()
-    renderWith(<NativeLanguageSettings />, { ...ctx, locale: 'bg' })
-    expect(screen.getByRole('heading', { name: 'Роден език' })).toBeTruthy()
-    fireEvent.click(choice('Deutsch'))
-    const dialog = screen.getByRole('dialog')
-    expect(dialog.textContent).toContain('Думите ще се превеждат на немски.')
-    await act(async () => fireEvent.click(within(dialog).getByRole('button', { name: 'Сменете' })))
-    expect(ctx.client.snapshot.settings.l1).toBe('de')
-    expect(screen.getByRole('heading', { name: 'Muttersprache' })).toBeTruthy()
-  })
-
-  it('says a change is pending until the new language is installed, with the chosen one selected (final review)', async () => {
-    const ctx = await setup()
-    renderWith(<NativeLanguageSettings />, ctx)
-    const pending = 'Your words switch to German as soon as the translations have downloaded.'
-    expect(screen.queryByText(pending)).toBeNull()
-    fireEvent.click(choice('Deutsch'))
-    await act(async () => fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Change' })))
-    // No `watchL1` runs here: the Bulgarian pack stays installed, as it does offline.
-    expect(ctx.client.snapshot.l1).toBe('bg')
-    expect(screen.getByText(pending)).toBeTruthy()
-    expect(choice('Deutsch').checked).toBe(true)
-    // Choosing the installed language again ends the pending change.
-    fireEvent.click(choice('Български'))
-    await act(async () => fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Change' })))
-    expect(screen.queryByText(pending)).toBeNull()
-  })
-
-  it('words the pending note in the interface language (final review)', async () => {
+  it('words the pending note in the interface language', async () => {
     const ctx = await setup()
     await ctx.client.updateSettings({ l1: 'de' })
     const { unmount } = renderWith(<NativeLanguageSettings />, { ...ctx, locale: 'bg' })

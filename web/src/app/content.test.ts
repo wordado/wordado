@@ -1,5 +1,7 @@
-import { createStore } from '@wordado/client-data'
+import { Client, createStore } from '@wordado/client-data'
+import { nodeSqliteDriver } from '@wordado/client-data/src/drivers/nodeSqlite'
 import { openSampleClient, sampleFetcher, sampleManifest } from '@wordado/client-data/src/testing/sample'
+import { testEnv } from '@wordado/client-data/src/testing/testEnv'
 import type { Corpus, PackDescriptor } from '@wordado/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { memoryStorage } from '../account/storage'
@@ -36,6 +38,23 @@ describe('content (spec §9.3)', () => {
     await vi.advanceTimersByTimeAsync(PACK_CHECK_INTERVAL_MS)
     expect(reports).toHaveLength(1)
     stop()
+  })
+
+  it('installs nothing for a client with no corpus yet (the new setup has not finished the language step)', async () => {
+    const client = await Client.open({ driver: nodeSqliteDriver(), env: testEnv(), l1: 'bg' })
+    expect(client.snapshot.corpus).toBeNull()
+    const installPacks = vi.spyOn(client, 'installPacks')
+    const stop = startPackChecks({
+      client: () => client,
+      fetchManifest: async () => sampleManifest,
+      fetchPack: sampleFetcher,
+      online: () => true,
+      onReport: () => undefined,
+    })
+    await vi.advanceTimersByTimeAsync(PACK_CHECK_INTERVAL_MS)
+    expect(installPacks).not.toHaveBeenCalled()
+    stop()
+    await client.close()
   })
 
   it('re-reads the audio index when a new pack becomes active, not before', async () => {

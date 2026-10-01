@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test'
 import { WORKER_LOG } from './accounts.setup'
-import { expectAccessible, heading, studyNew } from './helpers'
+import { expectAccessible, finishSetup, heading, studyNew, today } from './helpers'
 
 let clientIp = 0
 // The second octet, one per run: Better Auth's own per-IP-and-path rate limit (window 60s,
@@ -13,9 +13,9 @@ let clientIp = 0
 const RUN = Math.floor(Math.random() * 250)
 
 /** A context in English, with its own client address: Better Auth limits code requests per address (plan 5). */
-async function context(browser: Browser): Promise<BrowserContext> {
+async function context(browser: Browser, options: { readonly serviceWorkers?: 'allow' | 'block' } = {}): Promise<BrowserContext> {
   clientIp += 1
-  const ctx = await browser.newContext()
+  const ctx = await browser.newContext(options)
   await ctx.setExtraHTTPHeaders({ 'cf-connecting-ip': `10.${RUN}.${Math.floor(clientIp / 250)}.${(clientIp % 250) + 1}` })
   await ctx.addInitScript(() => {
     if (localStorage.getItem('wordado.locale') === null) localStorage.setItem('wordado.locale', 'en')
@@ -131,6 +131,7 @@ test('carries the demo into a new account, from the demo’s own device, and syn
   const ctx = await context(browser)
   const page = await ctx.newPage()
   await page.goto('/')
+  await finishSetup(page)
   await studyNew(page, 2)
   const email = address('carry')
   await signIn(page, email)
@@ -155,6 +156,7 @@ test('studies offline, then syncs on reconnecting (spec §13)', async ({ browser
     await navigator.serviceWorker.ready
   })
   await signIn(page, address('offline'))
+  await finishSetup(page)
   await ctx.setOffline(true)
   await studyNew(page, 1)
   await page.goto('/')
@@ -182,6 +184,7 @@ test('deletes the demo when signing in to an account that has progress, and merg
   const first = await context(browser)
   const a = await first.newPage()
   await signIn(a, email)
+  await finishSetup(a)
   await studyNew(a, 1)
   await a.goto('/')
   await synced(a)
@@ -189,6 +192,7 @@ test('deletes the demo when signing in to an account that has progress, and merg
   const second = await context(browser)
   const b = await second.newPage()
   await b.goto('/')
+  await finishSetup(b)
   await studyNew(b, 3)
   await b.goto('/signin')
   await b.getByLabel('Year of birth').fill('1990')
@@ -207,6 +211,7 @@ test('settings follow the learner to another device (spec §9.2)', async ({ brow
   const first = await context(browser)
   const a = await first.newPage()
   await signIn(a, email)
+  await finishSetup(a)
   await a.goto('/settings/study')
   await a.getByLabel('New words a day', { exact: true }).fill('5')
   await a.getByLabel('New words a day', { exact: true }).press('Enter')
@@ -237,6 +242,7 @@ test('signs out leaving nothing behind, then deletes the account (spec §11)', a
   const page = await ctx.newPage()
   const email = address('leave')
   await signIn(page, email)
+  await finishSetup(page)
   await studyNew(page, 1)
   // The end of a session is in focus mode: back to Today, where the masthead is.
   await page.getByRole('link', { name: 'Back to today' }).click()
@@ -244,7 +250,8 @@ test('signs out leaving nothing behind, then deletes the account (spec §11)', a
   await page.getByRole('button', { name: 'Sign out' }).click()
   await expect(page.getByRole('link', { name: 'Sign in' })).toBeVisible()
   await expect(page.getByText('You are signed out. Nothing of your account is left on this device.')).toBeVisible()
-  await expect(heading(page)).toHaveText('10 new words')
+  // What is left is a new demo, which opens in the setup (plan 11), under the notice.
+  await expect(heading(page)).toHaveText('Set up Wordado')
 
   await signIn(page, email)
   await page.goto('/settings/account')
@@ -275,6 +282,10 @@ test('meets WCAG 2.2 A and AA on the account screens, light and dark (spec §11.
   await page.getByLabel('Code').fill(await codeFor(email))
   await page.getByRole('button', { name: 'Sign in' }).click()
   await expect(page).toHaveURL('/')
+  // A new account opens in the setup.
+  await expect(page.getByRole('heading', { name: 'Which language do you speak?' })).toBeVisible()
+  await expectAccessible(page, { dark: true })
+  await finishSetup(page)
   await expectAccessible(page, { dark: true })
   await page.goto('/settings')
   await expectAccessible(page, { dark: true })
@@ -295,6 +306,7 @@ test('brings a learner’s progress back after the browser’s storage was clear
   const first = await context(browser)
   const page = await first.newPage()
   await signIn(page, email)
+  await finishSetup(page)
   await studyNew(page, 3)
   await page.goto('/')
   await synced(page)
@@ -304,10 +316,94 @@ test('brings a learner’s progress back after the browser’s storage was clear
   const cleared = await context(browser)
   const again = await cleared.newPage()
   await again.goto('/')
-  await expect(heading(again)).toHaveText('10 new words')
+  // A browser with nothing kept is a new demo: it opens in the setup, and its Sign in link is the way back.
+  await expect(heading(again)).toHaveText('Set up Wordado')
   await signIn(again, email)
+  await expect(again.getByRole('heading', { name: 'Set up Wordado' })).toHaveCount(0)
   await expect(heading(again)).toHaveText('7 new words', { timeout: 15_000 })
   await again.goto('/path')
   await expect(again.getByText('3 of 20 started')).toBeVisible()
   await cleared.close()
+})
+
+// Plan 11: a new account opens in the first-run setup; a returning one does not.
+
+test('a new account opens in the setup, downloads its words with progress, and ends on Home (plan 11)', async ({ browser }) => {
+  // No service worker, so the pack request reaches the network, where this test holds it.
+  const ctx = await context(browser, { serviceWorkers: 'block' })
+  const page = await ctx.newPage()
+  await signIn(page, address('setup'))
+  await expect(heading(page)).toHaveText('Set up Wordado')
+  // Signing in is a navigation; in the setup, the step's heading takes focus, as each step's does (App.tsx).
+  await expect(page.getByRole('heading', { name: 'Which language do you speak?' })).toBeFocused()
+  await expect(page.getByRole('heading', { name: 'Which language do you speak?' })).toBeVisible()
+  await expect(page.getByRole('radio', { name: 'Български' })).toBeChecked()
+
+  // Record every state the progress bar takes: the pack is small, so it fills almost at once.
+  await page.evaluate(() => {
+    const seen: string[] = []
+    ;(window as unknown as { __bars: string[] }).__bars = seen
+    new MutationObserver(() => {
+      for (const bar of document.querySelectorAll('[role="progressbar"]')) {
+        seen.push(`${bar.getAttribute('aria-label')} ${bar.getAttribute('aria-valuenow')}/${bar.getAttribute('aria-valuemax')}`)
+      }
+    }).observe(document.body, { subtree: true, childList: true, attributes: true })
+  })
+  let release!: () => void
+  const held = new Promise<void>((resolve) => (release = resolve))
+  await page.route('**/content/sample/corpus-v0-bg.pack', async (route) => {
+    await held
+    await route.continue()
+  })
+  await page.getByRole('button', { name: 'Continue' }).click()
+  // While the words download, the step says so, and its choices and Continue wait.
+  await expect(page.getByRole('status').filter({ hasText: 'Getting your words ready' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Continue' })).toBeDisabled()
+  release()
+
+  await expect(page.getByRole('heading', { name: 'What do you want English for?' })).toBeFocused()
+  const bars = await page.evaluate(() => (window as unknown as { __bars: string[] }).__bars)
+  expect(bars.length).toBeGreaterThan(0)
+  for (const bar of bars) expect(bar).toMatch(/^Getting your words ready \d+\/[1-9]\d*$/)
+  expect(bars.at(-1)).toMatch(/^Getting your words ready (\d+)\/\1$/)
+
+  await page.getByRole('button', { name: 'Start studying' }).click()
+  await expect(today(page)).toHaveText('10 new words')
+  await ctx.close()
+})
+
+test('a returning account signing in on a fresh browser lands on Home, without the setup (plan 11)', async ({ browser }) => {
+  const email = address('returning')
+  const first = await context(browser)
+  const a = await first.newPage()
+  await signIn(a, email)
+  await finishSetup(a, 'Deutsch')
+  // A settings change waits for the next sync (at start, on hiding the page, or every five minutes:
+  // web/src/app/syncLoop.ts), as the settings test above has it: a reload is the start of one. Then the
+  // native language the setup wrote is in the account's settings document.
+  await a.goto('/')
+  await synced(a)
+  await expect
+    .poll(
+      async () => {
+        // No throwing `expect` in here (as `exported` has): a throw ends the poll at once instead of retrying it.
+        const response = await a.request.get('/v1/export')
+        if (response.status() !== 200) return false
+        const { documents } = (await response.json()) as { documents: { fields: Record<string, unknown> }[] }
+        return documents.some((d) => d.fields['l1'] === 'de')
+      },
+      { timeout: 20_000 },
+    )
+    .toBe(true)
+  await first.close()
+
+  const fresh = await context(browser)
+  const b = await fresh.newPage()
+  await signIn(b, email)
+  await expect(today(b)).toHaveText('10 new words', { timeout: 15_000 })
+  await expect(b.getByRole('heading', { name: 'Set up Wordado' })).toHaveCount(0)
+  // The account's native language came with it.
+  await b.goto('/settings/languages')
+  await expect(b.getByRole('region', { name: 'Native language' }).getByText('Deutsch', { exact: true })).toBeVisible()
+  await fresh.close()
 })

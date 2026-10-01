@@ -37,11 +37,40 @@ export async function fetchManifest(manifestUrl: string, fetchFn: Fetch = (i, in
 }
 
 /** client-data's PackFetcher on the web: the pack's URL as `fetchManifest` resolved it. Throws on any failure. */
-export function packFetcher(fetchFn: Fetch = (i, init) => fetch(i, init)): PackFetcher {
+export function packFetcher(
+  fetchFn: Fetch = (i, init) => fetch(i, init),
+  onProgress?: (received: number, total: number) => void,
+): PackFetcher {
   return async (descriptor) => {
     const response = await fetchFn(descriptor.url)
     if (!response.ok) throw new Error(`The pack could not be fetched (${response.status})`)
-    return new Uint8Array(await response.arrayBuffer())
+    const total = descriptor.bytes
+    onProgress?.(0, total)
+    if (!response.body) {
+      const bytes = new Uint8Array(await response.arrayBuffer())
+      onProgress?.(bytes.byteLength, total)
+      return bytes
+    }
+    // Read in chunks so the setup can show how far the download is (plan 11, Decision 8); the integrity check that
+    // follows (`installPacks`) still compares the size and checksum with the manifest.
+    const chunks: Uint8Array[] = []
+    let received = 0
+    const reader = response.body.getReader()
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      chunks.push(value)
+      received += value.byteLength
+      onProgress?.(received, total)
+    }
+    const bytes = new Uint8Array(received)
+    let offset = 0
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset)
+      offset += chunk.byteLength
+    }
+    if (received !== total) onProgress?.(received, total)
+    return bytes
   }
 }
 

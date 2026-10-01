@@ -10,7 +10,7 @@ import { answerTo, disk, flaky } from '../test/disk'
 import { fakeApi } from '../test/fakeApi'
 import { OfflineError, type Me } from './api'
 import { AccountController, NotReady, SignOutOffline } from './controller'
-import { accountStorage, DEMO_FILE, learnerFile, memoryStorage, pendingSignIn } from './storage'
+import { accountStorage, DEMO_FILE, learnerFile, memoryStorage, pendingSignIn, SIGNIN_KEY } from './storage'
 
 const ANA: Me = { userId: 'u1', email: 'ana@example.com', country: null, createdAt: 0 }
 
@@ -217,7 +217,7 @@ describe('signing in again (spec §8.6)', () => {
 describe('Google’s return (spec §8.6)', () => {
   it('completes with the age gate’s country carried across the redirect', async () => {
     const a = await app()
-    a.pending.save({ country: 'DE', l1: null })
+    a.pending.save({ country: 'DE' })
     expect(await a.controller.resumeGoogle('ok')).toBe('signed-in')
     expect(a.api.calls).toContain('setCountry DE')
     expect(a.pending.read()).toBeNull()
@@ -233,7 +233,7 @@ describe('Google’s return (spec §8.6)', () => {
 
   it('says so when Google sent the learner back with an error', async () => {
     const a = await app()
-    a.pending.save({ country: 'BG', l1: null })
+    a.pending.save({ country: 'BG' })
     expect(await a.controller.resumeGoogle('error')).toBeNull()
     expect(a.controller.store.get().notice).toBe('google-failed')
   })
@@ -398,7 +398,7 @@ describe('resumeGoogle reports a failed completion (spec §8.6)', () => {
     const server = new FakeServer({ now: env.now })
     const a = await app({ env, server, transport: flaky(server) })
     await a.client().answer(answerTo('c:hello-1'))
-    a.pending.save({ country: 'BG', l1: null })
+    a.pending.save({ country: 'BG' })
     await expect(a.controller.resumeGoogle('ok')).rejects.toThrow('offline')
     expect(a.controller.store.get().notice).toBe('google-failed')
   })
@@ -451,119 +451,20 @@ describe('Boot must be ready before an account changes (spec §9.1)', () => {
   })
 })
 
-describe('the native language chosen at sign-in (plan 10)', () => {
-  it('saves it for a learner whose settings name none', async () => {
+describe('the native language is no longer completeSignIn’s to save (plan 11, fix round 1)', () => {
+  it('writes no settings.l1 on an ordinary sign-in', async () => {
     const a = await app()
-    expect(await a.controller.completeSignIn(null, 'de')).toBe('signed-in')
-    expect(a.boot.store.get()).toMatchObject({ status: 'ready', account: { userId: 'u1' } })
-    expect(a.client().snapshot.settings.l1).toBe('de')
-  })
-
-  it('saves it after a carry-over too', async () => {
-    const a = await app()
-    await a.client().answer(answerTo('c:hello-1'))
-    expect(await a.controller.completeSignIn('BG', 'de')).toBe('carried-over')
-    expect(a.client().snapshot.settings.l1).toBe('de')
-  })
-
-  it('saves it when an expired sign-in is renewed and the learner never chose one', async () => {
-    const a = await app()
-    await a.controller.completeSignIn('BG')
-    a.controller.sessionExpired()
-    expect(await a.controller.completeSignIn(null, 'de')).toBe('signed-in')
-    expect(a.client().snapshot.settings.l1).toBe('de')
-  })
-
-  it('keeps the L1 an account already has, from another device (Review Focus 3)', async () => {
-    const env = testEnv()
-    const server = new FakeServer({ now: env.now })
-    const other = await Client.open({ driver: nodeSqliteDriver(), env, l1: 'bg', transport: server })
-    await other.updateSettings({ l1: 'bg' })
-    await other.sync()
-    await other.close()
-    const a = await app({ env, server })
-    expect(await a.controller.completeSignIn(null, 'de')).toBe('signed-in')
-    expect(a.client().snapshot.settings.l1).toBe('bg')
-  })
-
-  it('changes nothing without a choice', async () => {
-    const a = await app()
-    await a.controller.completeSignIn(null, null)
+    expect(await a.controller.completeSignIn('BG')).toBe('signed-in')
     expect(a.client().snapshot.settings.l1).toBeNull()
   })
 
-  it('carries the choice across Google’s redirect', async () => {
+  it('writes no settings.l1 resuming Google from a record stored before plan 11, which could carry an l1', async () => {
     const a = await app()
-    a.pending.save({ country: 'DE', l1: 'de' })
-    expect(await a.controller.resumeGoogle('ok')).toBe('signed-in')
-    expect(a.client().snapshot.settings.l1).toBe('de')
-  })
-
-  it('writes nothing while the pull fails, then writes it after a later sync that completes', async () => {
-    const env = testEnv()
-    const server = new FakeServer({ now: env.now })
-    const transport = flaky(server)
-    const a = await app({ env, server, transport })
-    expect(await a.controller.completeSignIn(null, 'de')).toBe('signed-in')
+    const raw = memoryStorage()
+    raw.setItem(SIGNIN_KEY, JSON.stringify({ country: 'DE', l1: 'de' }))
+    const controller = new AccountController({ api: a.api, boot: a.boot, accounts: a.accounts, pending: pendingSignIn(raw), transport: () => a.server })
+    expect(await controller.resumeGoogle('ok')).toBe('signed-in')
     expect(a.client().snapshot.settings.l1).toBeNull()
-    transport.online = true
-    env.advance(60_000)
-    expect(await a.client().sync({ force: true })).toBe('synced')
-    await vi.waitFor(() => expect(a.client().snapshot.settings.l1).toBe('de'))
-  })
-
-  it('writes nothing when the sync that completes later brings the account’s own L1', async () => {
-    const env = testEnv()
-    const server = new FakeServer({ now: env.now })
-    const transport = flaky(server)
-    const a = await app({ env, server, transport })
-    expect(await a.controller.completeSignIn(null, 'de')).toBe('signed-in')
-    const other = await Client.open({ driver: nodeSqliteDriver(), env, l1: 'bg', transport: server })
-    await other.updateSettings({ l1: 'bg' })
-    await other.sync()
-    await other.close()
-    transport.online = true
-    env.advance(60_000)
-    expect(await a.client().sync({ force: true })).toBe('synced')
-    await vi.waitFor(() => expect(a.client().snapshot.settings.l1).toBe('bg'))
-    // Let a deferred write, were there one, run and reach the server.
-    for (let i = 0; i < 3; i += 1) {
-      env.advance(60_000)
-      await a.client().sync({ force: true })
-    }
-    expect(a.client().snapshot.settings.l1).toBe('bg')
-  })
-
-  /** A sync success on `client`'s status, as the sync loop's would publish it: what wakes a deferred `saveL1`. */
-  const syncedOn = (client: Client, at: number) =>
-    client.store.set({ ...client.snapshot, sync: { ...client.snapshot.sync, phase: 'idle', failures: 0, lastSyncAt: at } })
-
-  it('drops the deferred write once Boot opens another Client (final review)', async () => {
-    const env = testEnv()
-    const server = new FakeServer({ now: env.now })
-    const transport = flaky(server)
-    const a = await app({ env, server, transport })
-    expect(await a.controller.completeSignIn(null, 'de')).toBe('signed-in')
-    const old = a.client()
-    const sync = vi.spyOn(old, 'sync')
-    await a.boot.switchTo()
-    expect(a.client()).not.toBe(old)
-    syncedOn(old, env.now() + 1)
-    await Promise.resolve()
-    expect(sync).not.toHaveBeenCalled()
-  })
-
-  it('drops the deferred write once Boot leaves ready (final review)', async () => {
-    const env = testEnv()
-    const server = new FakeServer({ now: env.now })
-    const transport = flaky(server)
-    const a = await app({ env, server, transport })
-    expect(await a.controller.completeSignIn(null, 'de')).toBe('signed-in')
-    const old = a.client()
-    const sync = vi.spyOn(old, 'sync')
-    a.boot.store.set({ status: 'starting' })
-    syncedOn(old, env.now() + 1)
-    await Promise.resolve()
-    expect(sync).not.toHaveBeenCalled()
   })
 })
+

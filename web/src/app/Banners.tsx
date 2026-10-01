@@ -25,20 +25,13 @@ const NOTICE: Readonly<Record<AccountNotice, MessageKey>> = {
 export function Banners() {
   const { t } = useT()
   const { backend, account, accounts } = useApp()
-  const { expired, notice } = useStore(accounts.store)
+  const { expired } = useStore(accounts.store)
   const [leaving, setLeaving] = useState(false)
   return (
     <div className="banners">
       <UpdateBanner />
       <InstallBanner />
-      {notice !== null && (
-        <div className="banner notice-line" role="status">
-          <p>{t(NOTICE[notice], { email: account?.email ?? '' })}</p>
-          <button type="button" className="link-button" onClick={() => accounts.dismissNotice()}>
-            {t('notice.dismiss')}
-          </button>
-        </div>
-      )}
+      <NoticeLine />
       <FixBanner />
       {account === null ? (
         <div className={`banner${backend === 'memory' ? ' warning' : ''}`}>
@@ -70,6 +63,25 @@ export function Banners() {
           onClose={() => setLeaving(false)}
         />
       )}
+    </div>
+  )
+}
+
+/**
+ * The last account notice, alone: also all the shell shows of the banners during the first-run setup (plan 11),
+ * since signing out, deleting the account or leaving the demo each start a new demo, which opens in the setup.
+ */
+export function NoticeLine() {
+  const { t } = useT()
+  const { account, accounts } = useApp()
+  const { notice } = useStore(accounts.store)
+  if (notice === null) return null
+  return (
+    <div className="banner notice-line" role="status">
+      <p>{t(NOTICE[notice], { email: account?.email ?? '' })}</p>
+      <button type="button" className="link-button" onClick={() => accounts.dismissNotice()}>
+        {t('notice.dismiss')}
+      </button>
     </div>
   )
 }

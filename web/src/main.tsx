@@ -15,6 +15,7 @@ import { Credits } from './app/credits'
 import { FixNotices } from './app/fixNotices'
 import { watchL1 } from './app/l1Watch'
 import { AppLifecycle, watchUpdates, type InstallEvent } from './app/lifecycle'
+import { PackSwitcher } from './app/packSwitch'
 import { Root } from './app/Root'
 import { startSyncLoop } from './app/syncLoop'
 import { AudioStore } from './content/audio'
@@ -58,6 +59,11 @@ const credits = new Credits({
 })
 /** What the learner reported that is fixed now (spec §8.10). */
 const fixNotices = new FixNotices({ storage: browserStorage('localStorage'), fetchFixes: (url) => fetchSibling(url, 'fixes.json', validateFixes) })
+/** The one place that installs a language's pack (plan 11): the L1 watcher, the setup's Language step and Settings. */
+const packs = new PackSwitcher({
+  fetchManifest: (account) => fetchManifest(manifestUrlFor(account)),
+  fetcher: (onProgress) => packFetcher(undefined, onProgress),
+})
 
 const boot = new Boot(
   {
@@ -126,7 +132,7 @@ boot.store.subscribe(() => {
     state.status === 'ready'
       ? watchL1(
           state.client,
-          async (l1) => state.client.changeL1(l1, await fetchManifest(manifestUrlFor(state.account)), packFetcher()),
+          (l1) => packs.install(state.client, state.account, l1),
           () => navigator.onLine,
           (retry) => {
             window.addEventListener('online', retry)
@@ -214,7 +220,7 @@ createRoot(document.getElementById('root')!).render(
         localeMounted = true
       }}
     >
-      <Root boot={boot} services={{ env, audio, afterRun, api, accounts: controller!, reminders, lifecycle, credits, fixNotices }} />
+      <Root boot={boot} services={{ env, audio, afterRun, api, accounts: controller!, reminders, lifecycle, credits, fixNotices, packs }} />
     </I18nProvider>
   </StrictMode>,
 )

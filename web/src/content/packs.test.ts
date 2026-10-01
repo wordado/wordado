@@ -48,6 +48,53 @@ describe('packFetcher and clipUrl', () => {
   })
 })
 
+describe('packFetcher progress (plan 11)', () => {
+  const descriptor = { pack_id: 'p', l1: 'bg', corpus_version: 1, schema_version: 1, url: 'https://x.test/p.pack', sha256: '0'.repeat(64), bytes: 5 }
+
+  it('reports progress as chunks arrive: once before the first chunk, once per chunk, once at the end', async () => {
+    const fetchFn: Fetch = async () =>
+      new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.enqueue(new Uint8Array(3))
+            controller.enqueue(new Uint8Array(2))
+            controller.close()
+          },
+        }),
+      )
+    const seen: Array<[number, number]> = []
+    const bytes = await packFetcher(fetchFn, (received, total) => seen.push([received, total]))(descriptor)
+    expect(bytes.byteLength).toBe(5)
+    expect(seen).toEqual([
+      [0, 5],
+      [3, 5],
+      [5, 5],
+    ])
+  })
+
+  it('falls back to arrayBuffer and reports only the start and the end when there is no readable body', async () => {
+    const payload = new Uint8Array(5)
+    const fetchFn: Fetch = async () =>
+      ({ ok: true, status: 200, body: null, arrayBuffer: async () => payload.buffer }) as unknown as Response
+    const seen: Array<[number, number]> = []
+    const got = await packFetcher(fetchFn, (received, total) => seen.push([received, total]))(descriptor)
+    expect(got.byteLength).toBe(5)
+    expect(seen).toEqual([
+      [0, 5],
+      [5, 5],
+    ])
+  })
+
+  it('throws on a failed fetch before reporting any progress', async () => {
+    const fetchFn: Fetch = async () => new Response('', { status: 404 })
+    const seen: Array<[number, number]> = []
+    await expect(
+      packFetcher(fetchFn, (received, total) => seen.push([received, total]))(descriptor),
+    ).rejects.toThrow('The pack could not be fetched (404)')
+    expect(seen).toEqual([])
+  })
+})
+
 describe('learner content (plan 7)', () => {
   it('resolves every pack against its manifest once, so one fetcher serves any manifest', async () => {
     const manifest = { schema_version: 1, corpus_version: 3, packs: [{ pack_id: 'corpus-bg', l1: 'bg', corpus_version: 3, schema_version: 1, url: 'corpus-v3-bg.pack', sha256: 'a'.repeat(64), bytes: 10 }] }
