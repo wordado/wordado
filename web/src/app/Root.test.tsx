@@ -133,6 +133,13 @@ describe('Root', () => {
     expect(screen.getByRole('button', { name: 'Interface language: English (EN)' })).toBeTruthy()
   })
 
+  it('gives the setup step’s heading focus on a resumed mount, not main (final review)', async () => {
+    await renderRoot({ free: false, fresh: true })
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Use Wordado here' })))
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Set up Wordado')
+    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 2, name: 'Which language do you speak?' }))
+  })
+
   it('still says what just happened to the account during the setup, as signing out or deleting leaves a new demo (plan 11)', async () => {
     const accounts = fakeAccounts({ store: createStore<AccountState>({ expired: false, notice: 'signed-out' }) })
     await renderRoot({ fresh: true, accounts })

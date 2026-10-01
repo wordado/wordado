@@ -3,6 +3,8 @@ import type { ChangeL1Outcome } from '@wordado/client-data'
 import type { L1 } from '@wordado/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AccountRecord } from '../account/storage'
+import { sampleFetcher, sampleManifest } from '@wordado/client-data/src/testing/sample'
+import { PackSwitcher } from '../app/packSwitch'
 import { fakePacks, renderWith, setup } from '../test/fixtures'
 import { LanguageStep } from './LanguageStep'
 
@@ -29,8 +31,10 @@ function controlledPacks() {
     reset,
     /** Settles the oldest pending install, as the real switcher's store would. */
     async settle(outcome: ChangeL1Outcome) {
-      const l1 = calls[calls.length - pending.length]!
-      packs.store.set(outcome.ok ? { phase: 'idle' } : { phase: 'failed', l1 })
+      const index = calls.length - pending.length
+      const l1 = calls[index]!
+      const client = vi.mocked(packs.install).mock.calls[index]![0]
+      packs.store.set(outcome.ok ? { phase: 'idle' } : { phase: 'failed', client, l1 })
       await act(async () => pending.shift()!(outcome))
     },
   }
@@ -66,6 +70,33 @@ describe('LanguageStep, setup mode (plan 11)', () => {
     expect(screen.getByRole('link', { name: 'I already have an account' }).getAttribute('href')).toBe('/signin')
   })
 
+  it('offers no Sign in link to a learner already signed in (final review)', async () => {
+    const ctx = await setup()
+    renderWith(<LanguageStep mode="setup" onDone={() => undefined} />, { ...ctx, account })
+    expect(screen.queryByRole('link', { name: 'I already have an account' })).toBeNull()
+  })
+
+  it('syncs an account at once after the install, so the chosen language reaches it (final review)', async () => {
+    const ctx = await setup()
+    const fake = controlledPacks()
+    const sync = vi.spyOn(ctx.client, 'sync').mockResolvedValue('synced')
+    renderWith(<LanguageStep mode="setup" onDone={() => undefined} />, { ...ctx, account, packs: fake.packs })
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue' })))
+    expect(sync).not.toHaveBeenCalled()
+    await fake.settle({ ok: true })
+    expect(sync).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not sync the demo after the install (final review)', async () => {
+    const ctx = await setup()
+    const fake = controlledPacks()
+    const sync = vi.spyOn(ctx.client, 'sync')
+    renderWith(<LanguageStep mode="setup" onDone={() => undefined} />, { ...ctx, packs: fake.packs })
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue' })))
+    await fake.settle({ ok: true })
+    expect(sync).not.toHaveBeenCalled()
+  })
+
   it('Continue writes the setting, installs that pack, and is done once it is installed', async () => {
     const ctx = await setup()
     const fake = controlledPacks()
@@ -88,10 +119,10 @@ describe('LanguageStep, setup mode (plan 11)', () => {
     expect(screen.queryByRole('progressbar')).toBeNull()
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue' })))
     // Before the manifest arrives the total is unknown: the status says so, and there is no bar yet.
-    act(() => fake.packs.store.set({ phase: 'downloading', l1: 'bg', received: 0, total: 0 }))
+    act(() => fake.packs.store.set({ phase: 'downloading', client: ctx.client, l1: 'bg', received: 0, total: 0 }))
     expect(screen.getByRole('status').textContent).toContain('Getting your words ready')
     expect(screen.queryByRole('progressbar')).toBeNull()
-    act(() => fake.packs.store.set({ phase: 'downloading', l1: 'bg', received: 50, total: 100 }))
+    act(() => fake.packs.store.set({ phase: 'downloading', client: ctx.client, l1: 'bg', received: 50, total: 100 }))
     const bar = screen.getByRole('progressbar', { name: 'Getting your words ready' })
     expect(bar.getAttribute('aria-valuenow')).toBe('50')
     expect(bar.getAttribute('aria-valuemax')).toBe('100')
@@ -100,7 +131,7 @@ describe('LanguageStep, setup mode (plan 11)', () => {
     expect((screen.getByRole('button', { name: 'Continue' }) as HTMLButtonElement).disabled).toBe(true)
   })
 
-  it('says why on failure, keeps Sign in reachable, and Try again resets and installs again (Review Focus 4)', async () => {
+  it('says why on failure, and Try again resets and installs again (Review Focus 4)', async () => {
     const ctx = await setup()
     const fake = controlledPacks()
     const onDone = vi.fn()
@@ -108,7 +139,6 @@ describe('LanguageStep, setup mode (plan 11)', () => {
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue' })))
     await fake.settle({ ok: false, reason: 'unavailable' })
     expect(screen.getByRole('alert').textContent).toBe('The words could not be downloaded. Check your connection and try again.')
-    expect(screen.getByRole('link', { name: 'I already have an account' })).toBeTruthy()
     expect(onDone).not.toHaveBeenCalled()
     // The saved-choice note belongs to changing the language later, not to the setup.
     expect(screen.queryByText('Your choice is saved: the words switch as soon as you are online.')).toBeNull()
@@ -121,7 +151,7 @@ describe('LanguageStep, setup mode (plan 11)', () => {
     expect(onDone).toHaveBeenCalledTimes(1)
   })
 
-  it('shows the same failure in the demo, where Try again is the remedy', async () => {
+  it('shows the same failure in the demo, where Try again is the remedy and Sign in stays reachable (Review Focus 4)', async () => {
     const ctx = await setup()
     const fake = controlledPacks()
     renderWith(<LanguageStep mode="setup" onDone={() => undefined} />, { ...ctx, packs: fake.packs })
@@ -129,6 +159,7 @@ describe('LanguageStep, setup mode (plan 11)', () => {
     await fake.settle({ ok: false, reason: 'unavailable' })
     expect(screen.getByRole('alert').textContent).toBe('The words could not be downloaded. Check your connection and try again.')
     expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'I already have an account' })).toBeTruthy()
   })
 
   it('acts once on a double click: one settings write, one install, one onDone (review, fix 1)', async () => {
@@ -165,8 +196,20 @@ describe('LanguageStep, setup mode (plan 11)', () => {
     const fake = controlledPacks()
     renderWith(<LanguageStep mode="setup" onDone={() => undefined} />, { ...ctx, packs: fake.packs })
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue' })))
-    act(() => fake.packs.store.set({ phase: 'downloading', l1: 'de', received: 50, total: 100 }))
+    act(() => fake.packs.store.set({ phase: 'downloading', client: ctx.client, l1: 'de', received: 50, total: 100 }))
     expect(screen.queryByRole('progressbar')).toBeNull()
+  })
+
+  it('shows no bar for another client’s download of the same language (final review)', async () => {
+    const ctx = await setup()
+    const other = await setup()
+    const fake = controlledPacks()
+    renderWith(<LanguageStep mode="setup" onDone={() => undefined} />, { ...ctx, packs: fake.packs })
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue' })))
+    act(() => fake.packs.store.set({ phase: 'downloading', client: other.client, l1: 'bg', received: 50, total: 100 }))
+    expect(screen.queryByRole('progressbar')).toBeNull()
+    act(() => fake.packs.store.set({ phase: 'downloading', client: ctx.client, l1: 'bg', received: 50, total: 100 }))
+    expect(screen.getByRole('progressbar')).toBeTruthy()
   })
 
   it('says why when the setting cannot be saved, and installs nothing (review, fix 1)', async () => {
@@ -209,6 +252,30 @@ describe('LanguageStep, change mode (plan 11)', () => {
     fireEvent.click(choice('Български'))
     expect(screen.queryByRole('button', { name: 'Change' })).toBeNull()
     expect(screen.queryByText('Your progress stays. The words switch to German translations.')).toBeNull()
+  })
+
+  it('cancels a pending change: choosing the installed language again writes it back, fetches nothing and is done (final review)', async () => {
+    const ctx = await setup()
+    await ctx.client.updateSettings({ l1: 'de' })
+    const fetched: string[] = []
+    const packs = new PackSwitcher({
+      fetchManifest: async () => sampleManifest,
+      fetcher: () => async (d) => {
+        fetched.push(d.url)
+        return sampleFetcher(d)
+      },
+    })
+    const onDone = vi.fn()
+    renderWith(<LanguageStep mode="change" onDone={onDone} />, { ...ctx, packs })
+    // The pending choice is the one shown: nothing to change yet.
+    expect(choice('Deutsch').checked).toBe(true)
+    expect(screen.queryByRole('button', { name: 'Change' })).toBeNull()
+    fireEvent.click(choice('Български'))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Change' })))
+    await vi.waitFor(() => expect(onDone).toHaveBeenCalledTimes(1))
+    expect(ctx.client.snapshot.settings.l1).toBe('bg')
+    expect(ctx.client.snapshot.corpus?.l1).toBe('bg')
+    expect(fetched).toEqual([])
   })
 
   it('asks before changing, then writes the setting, installs and is done', async () => {

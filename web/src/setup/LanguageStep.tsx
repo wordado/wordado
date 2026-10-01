@@ -25,9 +25,10 @@ export function LanguageStep(props: { readonly mode: 'setup' | 'change'; readonl
   const download = useStore(packs.store)
   const heading = useRef<HTMLHeadingElement>(null)
   const installed: L1 | null = isSupportedL1(installedText) ? installedText : null
-  const [chosen, setChosen] = useState<L1>(() =>
-    props.mode === 'change' ? (installed ?? 'bg') : (settings.l1 ?? (locale === 'de' ? 'de' : 'bg')),
-  )
+  // In `change` mode the current choice is the setting, even while it is pending (offline): choosing the installed
+  // language again then cancels that change.
+  const current: L1 = settings.l1 ?? installed ?? 'bg'
+  const [chosen, setChosen] = useState<L1>(() => (props.mode === 'change' ? current : (settings.l1 ?? (locale === 'de' ? 'de' : 'bg'))))
   const [attempt, setAttempt] = useState<Attempt>({ phase: 'idle' })
   const [saveError, setSaveError] = useState<string | null>(null)
   // Intl's own form of the name, as it sits mid-sentence: "German", "Deutsch", "немски".
@@ -52,7 +53,11 @@ export function LanguageStep(props: { readonly mode: 'setup' | 'change'; readonl
     const outcome = await packs.install(client, account, l1)
     going.current = false
     if (!mounted.current) return
-    if (outcome.ok) props.onDone()
+    if (outcome.ok) {
+      // The chosen language reaches the account now, not at the next sync.
+      if (account !== null) void client.sync().catch(() => undefined)
+      props.onDone()
+    }
     else setAttempt({ phase: 'failed', l1 })
   }
 
@@ -85,18 +90,20 @@ export function LanguageStep(props: { readonly mode: 'setup' | 'change'; readonl
     if (going.current) return
     going.current = true
     // Only a failure is cleared: a download that is running (`watchL1`'s, say) is left alone.
-    if (packs.store.get().phase === 'failed') packs.reset()
+    const state = packs.store.get()
+    if (state.phase === 'failed' && state.client === client) packs.reset()
     await install(l1)
   }
 
   const busy = attempt.phase === 'installing'
   const failed = attempt.phase === 'failed' ? attempt.l1 : null
   // The bar shows only once the total is known, so `aria-valuemax` is never 0.
-  const progress = busy && download.phase === 'downloading' && download.l1 === attempt.l1 && download.total > 0 ? download : null
+  const progress =
+    busy && download.phase === 'downloading' && download.client === client && download.l1 === attempt.l1 && download.total > 0 ? download : null
   const percent = progress
     ? new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 0 }).format(Math.min(1, progress.received / progress.total))
     : null
-  const changing = props.mode === 'change' && chosen !== installed && !busy && failed === null
+  const changing = props.mode === 'change' && chosen !== current && !busy && failed === null
 
   return (
     <section className="language-step" aria-labelledby="language-step-title">
@@ -165,7 +172,8 @@ export function LanguageStep(props: { readonly mode: 'setup' | 'change'; readonl
           )
         )}
         {props.mode === 'setup' ? (
-          <Link to={{ name: 'signin' }}>{t('setup.haveAccount')}</Link>
+          // A signed-in account has nothing to sign in to: the link would be a dead end.
+          account === null && <Link to={{ name: 'signin' }}>{t('setup.haveAccount')}</Link>
         ) : (
           (props.ownBack ?? true) && <Link to={{ name: 'settings', section: 'languages' }}>{t('common.back')}</Link>
         )}

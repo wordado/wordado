@@ -2,10 +2,11 @@ import { ClientClosed, createStore, type ChangeL1Outcome, type Client, type Pack
 import type { L1, PackManifest } from '@wordado/core'
 import type { AccountRecord } from '../account/storage'
 
+/** A download or failure names its client, so a screen shows only its own (a demo's and an account's can overlap). */
 export type PackSwitchState =
   | { readonly phase: 'idle' }
-  | { readonly phase: 'downloading'; readonly l1: L1; readonly received: number; readonly total: number }
-  | { readonly phase: 'failed'; readonly l1: L1 }
+  | { readonly phase: 'downloading'; readonly client: Client; readonly l1: L1; readonly received: number; readonly total: number }
+  | { readonly phase: 'failed'; readonly client: Client; readonly l1: L1 }
 
 export interface PackSwitchDeps {
   fetchManifest(account: AccountRecord | null): Promise<PackManifest>
@@ -52,17 +53,17 @@ export class PackSwitcher {
 
   private async run(client: Client, account: AccountRecord | null, l1: L1): Promise<ChangeL1Outcome> {
     // Published before the manifest fetch too, so a retry never leaves a previous attempt's `failed` on screen.
-    this.store.set({ phase: 'downloading', l1, received: 0, total: 0 })
+    this.store.set({ phase: 'downloading', client, l1, received: 0, total: 0 })
     try {
       const manifest = await this.deps.fetchManifest(account)
-      const fetchPack = this.deps.fetcher((received, total) => this.store.set({ phase: 'downloading', l1, received, total }))
+      const fetchPack = this.deps.fetcher((received, total) => this.store.set({ phase: 'downloading', client, l1, received, total }))
       const outcome = await client.changeL1(l1, manifest, fetchPack)
-      this.store.set(outcome.ok ? { phase: 'idle' } : { phase: 'failed', l1 })
+      this.store.set(outcome.ok ? { phase: 'idle' } : { phase: 'failed', client, l1 })
       return outcome
     } catch (error) {
       // The client closed under us (an account switch mid-install, spec §8.6): that is not this L1's failure to
       // report, and showing `failed` here would be stale as soon as the new client takes over. Idle, not failed.
-      this.store.set(error instanceof ClientClosed ? { phase: 'idle' } : { phase: 'failed', l1 })
+      this.store.set(error instanceof ClientClosed ? { phase: 'idle' } : { phase: 'failed', client, l1 })
       return { ok: false, reason: 'unavailable' }
     }
   }

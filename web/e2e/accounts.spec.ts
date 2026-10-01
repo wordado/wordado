@@ -334,8 +334,8 @@ test('a new account opens in the setup, downloads its words with progress, and e
   const page = await ctx.newPage()
   await signIn(page, address('setup'))
   await expect(heading(page)).toHaveText('Set up Wordado')
-  // Signing in is a navigation, so the new screen (main) has focus, as after every navigation (App.tsx).
-  await expect(page.locator('#main')).toBeFocused()
+  // Signing in is a navigation; in the setup, the step's heading takes focus, as each step's does (App.tsx).
+  await expect(page.getByRole('heading', { name: 'Which language do you speak?' })).toBeFocused()
   await expect(page.getByRole('heading', { name: 'Which language do you speak?' })).toBeVisible()
   await expect(page.getByRole('radio', { name: 'Български' })).toBeChecked()
 

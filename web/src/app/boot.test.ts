@@ -1002,6 +1002,36 @@ describe('the first-run setup (plan 11)', () => {
     expect(log).toEqual(['start'])
   })
 
+  it('syncs an account at once when its setup finishes, so the chosen language reaches it (final review)', async () => {
+    const env = testEnv()
+    const server = new FakeServer({ now: env.now })
+    const accounts = accountStorage(memoryStorage())
+    accounts.save(ana)
+    const { boot: b } = boot({ env, accounts, openDriver: disk().openDriver, transport: () => server, startSync: () => () => undefined })
+    await b.start()
+    const client = ready(b)
+    expect(await client.changeL1('de', sampleManifest, sampleFetcher)).toEqual({ ok: true })
+    await client.updateSettings({ l1: 'de' })
+    const sync = vi.spyOn(client, 'sync')
+    b.finishSetup()
+    expect(sync).toHaveBeenCalledTimes(1)
+    await sync.mock.results[0]!.value
+    const other = await Client.open({ driver: nodeSqliteDriver(), env, l1: 'bg', transport: server })
+    expect(await other.sync({ force: true })).toBe('synced')
+    expect(other.snapshot.settings.l1).toBe('de')
+    await other.close()
+  })
+
+  it('does not sync a demo when its setup finishes (final review)', async () => {
+    const { boot: b } = boot({ openDriver: fresh })
+    await b.start()
+    const client = ready(b)
+    expect(await client.changeL1('bg', sampleManifest, sampleFetcher)).toEqual({ ok: true })
+    const sync = vi.spyOn(client, 'sync')
+    b.finishSetup()
+    expect(sync).not.toHaveBeenCalled()
+  })
+
   it('installs a returning learner’s own language on a new device, without the setup', async () => {
     const env = testEnv()
     const server = await seededServer(env, async (other) => {

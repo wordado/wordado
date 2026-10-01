@@ -84,10 +84,10 @@ describe('PackSwitcher (plan 11)', () => {
     const outcome = await switcher.install(client, null, 'bg')
     expect(outcome).toEqual({ ok: true })
     expect(seen).toEqual([
-      { phase: 'downloading', l1: 'bg', received: 0, total: 0 },
-      { phase: 'downloading', l1: 'bg', received: 0, total: 100 },
-      { phase: 'downloading', l1: 'bg', received: 50, total: 100 },
-      { phase: 'downloading', l1: 'bg', received: 100, total: 100 },
+      { phase: 'downloading', client, l1: 'bg', received: 0, total: 0 },
+      { phase: 'downloading', client, l1: 'bg', received: 0, total: 100 },
+      { phase: 'downloading', client, l1: 'bg', received: 50, total: 100 },
+      { phase: 'downloading', client, l1: 'bg', received: 100, total: 100 },
       { phase: 'idle' },
     ])
     expect(switcher.store.get()).toEqual({ phase: 'idle' })
@@ -173,12 +173,30 @@ describe('PackSwitcher (plan 11)', () => {
     expect(await third).toEqual({ ok: true })
   })
 
+  it('names the client in every downloading and failed state, so a screen shows only its own (final review)', async () => {
+    const switcher = harness({ reports: [[50, 100]] })
+    const first = fakeClient({ de: { ok: false, reason: 'unsupported' } }).client
+    const second = fakeClient().client
+    const seen: unknown[] = []
+    switcher.store.subscribe(() => seen.push(switcher.store.get()))
+    await switcher.install(first, null, 'de')
+    await switcher.install(second, null, 'de')
+    expect(seen).toEqual([
+      { phase: 'downloading', client: first, l1: 'de', received: 0, total: 0 },
+      { phase: 'downloading', client: first, l1: 'de', received: 50, total: 100 },
+      { phase: 'failed', client: first, l1: 'de' },
+      { phase: 'downloading', client: second, l1: 'de', received: 0, total: 0 },
+      { phase: 'downloading', client: second, l1: 'de', received: 50, total: 100 },
+      { phase: 'idle' },
+    ])
+  })
+
   it('a changeL1 that returns ok:false leaves the store failed with that L1', async () => {
     const switcher = harness()
     const { client } = fakeClient({ de: { ok: false, reason: 'unsupported' } })
     const outcome = await switcher.install(client, null, 'de')
     expect(outcome).toEqual({ ok: false, reason: 'unsupported' })
-    expect(switcher.store.get()).toEqual({ phase: 'failed', l1: 'de' })
+    expect(switcher.store.get()).toEqual({ phase: 'failed', client, l1: 'de' })
   })
 
   it('never throws: a failing manifest fetch resolves unavailable and leaves the store failed; reset returns it to idle', async () => {
@@ -186,7 +204,7 @@ describe('PackSwitcher (plan 11)', () => {
     const { client } = fakeClient()
     const outcome = await switcher.install(client, null, 'de')
     expect(outcome).toEqual({ ok: false, reason: 'unavailable' })
-    expect(switcher.store.get()).toEqual({ phase: 'failed', l1: 'de' })
+    expect(switcher.store.get()).toEqual({ phase: 'failed', client, l1: 'de' })
     switcher.reset()
     expect(switcher.store.get()).toEqual({ phase: 'idle' })
   })

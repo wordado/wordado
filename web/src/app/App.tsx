@@ -88,19 +88,24 @@ export function App(props: { readonly resumed: boolean; readonly setup: boolean;
     setupBefore.current = props.setup
   }, [props.setup])
 
+  const inSetup = props.setup && route.name !== 'signin'
+
   // After an in-app navigation, focus the new screen, as a page load would
   // (spec §11.1). The shell itself also mounts fresh after a take-over or a
   // retry — not on the first load — so it focuses itself right away then too.
+  // In the setup, the current step's heading takes focus instead (plan 11): the
+  // step has already focused it (child effects run first), and main must not take it back.
   useEffect(() => {
+    const target = (): HTMLElement | null =>
+      (inSetup ? main.current?.querySelector<HTMLElement>('.setup h2[tabindex="-1"]') : null) ?? main.current
     if (first.current) {
       first.current = false
-      if (props.resumed) main.current?.focus()
+      if (props.resumed) target()?.focus()
       return
     }
-    main.current?.focus()
+    target()?.focus()
   }, [route])
 
-  const inSetup = props.setup && route.name !== 'signin'
   // The setup is never a study session, whatever the address says: it keeps the masthead.
   const focus = !inSetup && FOCUS.has(route.name)
   // Whatever address the setup was reached on, it ends on today.

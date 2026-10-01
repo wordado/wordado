@@ -152,7 +152,7 @@ export const de: Messages = {
   'settings.nativeLanguageHint': 'Die Sprache, in die die Wörter übersetzt werden.',
   'settings.nativeLanguageConfirm': 'Dein Fortschritt bleibt erhalten. Die Wörter werden dann auf {language} übersetzt.',
   'settings.nativeLanguageChange': 'Wechseln',
-  'settings.nativeLanguageChangeLink': 'Muttersprache ändern',
+  'settings.nativeLanguageChangeLink': 'Muttersprache wechseln',
   'settings.nativeLanguagePending': 'Sobald die Übersetzungen heruntergeladen sind, erscheinen deine Wörter auf {language}.',
   'settings.language': 'Sprache der Oberfläche',
   'settings.languageHint': 'Die Wörter sind immer auf Englisch; das ändert nur die Menüs und Meldungen.',

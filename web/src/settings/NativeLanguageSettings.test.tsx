@@ -34,6 +34,17 @@ describe('Settings: the native language (plan 11)', () => {
     expect(link.textContent).toBe('Change')
   })
 
+  it('names the "Change" link with its visible text, in every interface language (WCAG 2.5.3, final review)', async () => {
+    const ctx = await setup()
+    for (const locale of ['en', 'bg', 'de'] as const) {
+      const { unmount } = renderWith(<NativeLanguageSettings />, { ...ctx, locale })
+      const link = screen.getByRole('link')
+      const name = link.getAttribute('aria-label') ?? ''
+      expect(name.toLocaleLowerCase(locale)).toContain((link.textContent ?? '').toLocaleLowerCase(locale))
+      unmount()
+    }
+  })
+
   it('says a change is pending until the new language is installed', async () => {
     const ctx = await setup()
     await ctx.client.updateSettings({ l1: 'de' })

@@ -338,13 +338,15 @@ export class Boot {
 
   /**
    * The setup is over (plan 11): the app's own screens take over, and the background work the ordinary open starts
-   * once ready (`onReady`, such as prefetching audio) starts now that a pack is installed.
+   * once ready (`onReady`, such as prefetching audio) starts now that a pack is installed. An account syncs at once, so
+   * the native language the setup chose reaches it now rather than at the next sync.
    */
   finishSetup(): void {
     const state = this.store.get()
     if (state.status !== 'ready' || !state.setup) return
     this.store.set({ ...state, setup: false })
     void this.deps.onReady?.(state.client, state.account).catch(() => undefined)
+    if (state.account) void state.client.sync().catch(() => undefined)
   }
 
   /**
