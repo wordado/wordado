@@ -84,6 +84,9 @@ describe('Root', () => {
     // The same has-section layout as any other section page (not a bare page that CSS would hide on a phone,
     // or push into the menu column on desktop): the menu and the page both render, with Languages current.
     expect(document.querySelector('.settings.has-section')).toBeTruthy()
+    // One h1, Settings' own; the language page is a section, so its heading is an h2 like every other (Task 7a fix 1).
+    expect(screen.getAllByRole('heading', { level: 1 }).map((h) => h.textContent)).toEqual(['Settings'])
+    expect(screen.getByRole('heading', { level: 2, name: 'Native language' })).toBeTruthy()
     // Its own Back goes one level up, to Languages, not all the way to the Settings menu.
     expect(screen.getByRole('link', { name: 'Languages' }).getAttribute('href')).toBe('/settings/languages')
     // The top nav's Settings item is current, as for every other Settings page.

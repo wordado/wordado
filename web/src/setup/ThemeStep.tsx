@@ -4,7 +4,7 @@ import { ChevronRight } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { errorMessageKey } from '../errors'
 import { localized, useT } from '../i18n/i18n'
-import { ThemeIcon } from '../screens/Themes'
+import { ThemeIcon } from '../themes/icons'
 import { StepActions, useStepHeading, type StepProps } from './step'
 
 /**

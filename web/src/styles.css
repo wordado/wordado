@@ -41,6 +41,8 @@
   --space-6: 3rem;
 
   --measure: 36rem;
+  /* A Settings section page from 48rem, and the first-run setup's card (plan 11): one width for both. */
+  --section-width: 36.5rem;
   --radius: 0.5rem;
   color-scheme: light dark;
 }
@@ -2240,7 +2242,7 @@ dialog.report textarea {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  max-width: 36.5rem;
+  max-width: var(--section-width);
 }
 
 .setup-head h1 {
@@ -2417,6 +2419,12 @@ button.settings-row {
   cursor: pointer;
 }
 
+/* The lists clip their corners (overflow: hidden), so a row's focus ring is drawn inside it, where it shows whole. */
+.settings-row:focus-visible {
+  outline-offset: -3px;
+  border-radius: 1.125rem;
+}
+
 .settings-row:hover {
   background: var(--paper);
 }
@@ -2478,7 +2486,6 @@ button.settings-row {
 }
 
 /* A section's look, shared by Settings' section pages and the first-run setup's card (.form-section, plan 11). */
-.settings-section h1,
 .settings-section h2,
 .form-section h2 {
   margin: 0 0 var(--space-3);
@@ -2545,7 +2552,7 @@ button.settings-row {
 
 @media (min-width: 48rem) {
   .app > main > .settings {
-    grid-template-columns: 20rem minmax(0, 1fr);
+    grid-template-columns: 20rem minmax(0, var(--section-width));
     gap: var(--space-3) 1.5rem;
   }
 

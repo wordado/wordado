@@ -192,7 +192,7 @@ describe('LanguageStep, change mode (plan 11)', () => {
     expect(choice('Български').checked).toBe(true)
     expect(screen.getByRole('link', { name: 'Zurück' }).getAttribute('href')).toBe('/settings/languages')
     expect(screen.queryByRole('link', { name: 'Ich habe schon ein Konto' })).toBeNull()
-    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1, name: 'Muttersprache' }))
+    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 2, name: 'Muttersprache' }))
   })
 
   it('omits its own Back link when the page around it already has one (Task 7)', async () => {

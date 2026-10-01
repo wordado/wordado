@@ -100,16 +100,10 @@ export function LanguageStep(props: { readonly mode: 'setup' | 'change'; readonl
 
   return (
     <section className="language-step" aria-labelledby="language-step-title">
-      {/* In the setup, the setup's wrapper owns the page's h1; as Settings' language page, this is the page. */}
-      {props.mode === 'setup' ? (
-        <h2 id="language-step-title" ref={heading} tabIndex={-1}>
-          {t('setup.language.title')}
-        </h2>
-      ) : (
-        <h1 id="language-step-title" ref={heading} tabIndex={-1}>
-          {t('settings.nativeLanguage')}
-        </h1>
-      )}
+      {/* The page's h1 is the setup's, or Settings' own: either way this is a section under it, headed by an h2. */}
+      <h2 id="language-step-title" ref={heading} tabIndex={-1}>
+        {props.mode === 'setup' ? t('setup.language.title') : t('settings.nativeLanguage')}
+      </h2>
       <fieldset className="choices" disabled={busy}>
         <legend className="visually-hidden">{props.mode === 'setup' ? t('setup.language.title') : t('settings.nativeLanguage')}</legend>
         <p className="note">{props.mode === 'setup' ? t('setup.language.hint') : t('settings.nativeLanguageHint')}</p>
