@@ -1297,8 +1297,10 @@ on their next pull. That failure is far worse than the cheating it prevents.
 - **Age gate.** The launch L1s put the primary markets inside the GDPR, where
   the age of digital consent is set per member state — 16 in Germany, 15 in
   France, 14 in Spain and Bulgaria — not the COPPA figure of 13. Sign-up asks
-  for birth year and applies a per-country threshold: the member-state age in
-  the EEA (16 where the country is unknown), 13 elsewhere. Country is
+  the learner to confirm they are at least the per-country threshold ("I'm 16
+  or older"): the member-state age in the EEA (16 where the country is
+  unknown), 13 elsewhere. No birth date is asked; like the country, the age is
+  self-declared (decided 2026-10-01, replacing the birth-year question). Country is
   self-declared at sign-up, pre-filled from the request's country as reported
   by the hosting platform; only the country is kept. There is no
   parental-consent flow at launch; learners below the threshold are turned

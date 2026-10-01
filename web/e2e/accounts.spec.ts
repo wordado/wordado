@@ -57,7 +57,7 @@ interface GateTrace {
 
 /**
  * Clicks Continue on the age gate, recording what reached the page. In Firefox on CI the click
- * has twice done nothing: no step change, no error, focus left on the year. When that happens
+ * has twice done nothing: no step change, no error. When that happens
  * the test now fails at once with the events the page saw, instead of timing out without a clue.
  * The gate's submit handler calls preventDefault, so a submit reaching the window already
  * prevented means the handler ran. Test-only: the app is unchanged.
@@ -100,10 +100,10 @@ async function continuePastGate(page: Page): Promise<void> {
 }
 
 /** Through the age gate and an emailed code, as a learner would (spec §8.6, §11). */
-async function signIn(page: Page, email: string, gate: { country?: string; year?: number } = {}): Promise<void> {
+async function signIn(page: Page, email: string, gate: { country?: string } = {}): Promise<void> {
   await page.goto('/signin')
   await page.getByLabel('Country where you live').selectOption(gate.country ?? 'BG')
-  await page.getByLabel('Year of birth').fill(String(gate.year ?? 1990))
+  await page.getByRole('checkbox', { name: /^I’m \d+ or older$/ }).check()
   await continuePastGate(page)
   await page.getByLabel('Email').fill(email)
   await page.getByRole('button', { name: 'Email me a code' }).click()
@@ -172,8 +172,7 @@ test('turns away a learner below their country’s age, before any code is sent 
   const page = await ctx.newPage()
   await page.goto('/signin')
   await page.getByLabel('Country where you live').selectOption('DE')
-  await page.getByLabel('Year of birth').fill(String(new Date().getFullYear() - 15))
-  await page.getByRole('button', { name: 'Continue' }).click()
+  await page.getByRole('button', { name: 'I’m younger than 16' }).click()
   await expect(heading(page)).toHaveText('Sorry, you can’t create an account yet')
   await expect(page.getByLabel('Email')).toHaveCount(0)
   await ctx.close()
@@ -195,7 +194,7 @@ test('deletes the demo when signing in to an account that has progress, and merg
   await finishSetup(b)
   await studyNew(b, 3)
   await b.goto('/signin')
-  await b.getByLabel('Year of birth').fill('1990')
+  await b.getByRole('checkbox', { name: /^I’m \d+ or older$/ }).check()
   await b.getByRole('button', { name: 'Continue' }).click()
   await expect(b.getByText(/the words you studied in the demo are deleted/)).toBeVisible()
   await signIn(b, email)
@@ -269,10 +268,7 @@ test('meets WCAG 2.2 A and AA on the account screens, light and dark (spec §11.
   const email = address('a11y')
   await page.goto('/signin')
   await expectAccessible(page, { dark: true })
-  await page.getByRole('button', { name: 'Continue' }).click()
-  await expect(page.getByRole('alert')).toBeVisible()
-  await expectAccessible(page, { dark: true })
-  await page.getByLabel('Year of birth').fill('1990')
+  await page.getByRole('checkbox', { name: /^I’m \d+ or older$/ }).check()
   await page.getByRole('button', { name: 'Continue' }).click()
   await expectAccessible(page, { dark: true })
   await page.getByLabel('Email').fill(email)
