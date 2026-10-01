@@ -156,6 +156,16 @@ export const de: Messages = {
   'settings.language': 'Sprache der Oberfläche',
   'settings.languageHint': 'Die Wörter sind immer auf Englisch; das ändert nur die Menüs und Meldungen.',
 
+  'setup.language.title': 'Welche Sprache sprichst du?',
+  'setup.language.hint': 'Die Wörter werden in dieser Sprache erklärt. Du kannst sie später in den Einstellungen ändern.',
+  'setup.continue': 'Weiter',
+  'setup.haveAccount': 'Ich habe schon ein Konto',
+  'setup.downloading': 'Deine Wörter werden vorbereitet',
+  'setup.downloadFailed': 'Die Wörter konnten nicht heruntergeladen werden. Prüf deine Verbindung und versuch es noch einmal.',
+  'setup.retry': 'Erneut versuchen',
+  'setup.savedOffline': 'Deine Wahl ist gespeichert: Die Wörter wechseln, sobald du online bist.',
+  'setup.back': 'Zurück',
+
   'settings.account': 'Konto',
   'settings.signedInAs': 'Angemeldet als {email}',
   'settings.export': 'Deine Daten herunterladen (JSON)',

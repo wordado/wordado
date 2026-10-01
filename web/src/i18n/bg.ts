@@ -147,6 +147,16 @@ export const bg: Messages = {
   'settings.language': 'Език на интерфейса',
   'settings.languageHint': 'Думите винаги са на английски; това сменя менютата и съобщенията.',
 
+  'setup.language.title': 'Кой език говорите?',
+  'setup.language.hint': 'Думите се обясняват на този език. Можете да го смените по-късно в Настройки.',
+  'setup.continue': 'Напред',
+  'setup.haveAccount': 'Вече имам профил',
+  'setup.downloading': 'Подготвяме думите ви',
+  'setup.downloadFailed': 'Думите не можаха да бъдат изтеглени. Проверете връзката си и опитайте отново.',
+  'setup.retry': 'Опитайте отново',
+  'setup.savedOffline': 'Изборът ви е запазен: думите ще се сменят, щом сте онлайн.',
+  'setup.back': 'Назад',
+
   'settings.account': 'Профил',
   'settings.signedInAs': 'Влезли сте като {email}',
   'settings.export': 'Изтеглете данните си (JSON)',

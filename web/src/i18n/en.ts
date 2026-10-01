@@ -152,6 +152,16 @@ export const en = {
   'settings.language': 'Interface language',
   'settings.languageHint': 'The words are always English; this changes the menus and messages.',
 
+  'setup.language.title': 'Which language do you speak?',
+  'setup.language.hint': 'Words are explained in this language. You can change it later in Settings.',
+  'setup.continue': 'Continue',
+  'setup.haveAccount': 'I already have an account',
+  'setup.downloading': 'Getting your words ready',
+  'setup.downloadFailed': 'The words could not be downloaded. Check your connection and try again.',
+  'setup.retry': 'Try again',
+  'setup.savedOffline': 'Your choice is saved: the words switch as soon as you are online.',
+  'setup.back': 'Back',
+
   'settings.account': 'Account',
   'settings.signedInAs': 'Signed in as {email}',
   'settings.export': 'Download your data (JSON)',

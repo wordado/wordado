@@ -1668,6 +1668,17 @@ dialog.report textarea {
   gap: var(--space-1);
 }
 
+/* The language step's pack download (plan 11). */
+.download-progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.download-progress p {
+  margin: 0;
+}
+
 .theme-card:not(.is-active) .theme-progress .bar span {
   background: var(--leaf);
 }
