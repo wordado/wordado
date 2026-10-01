@@ -5,6 +5,7 @@ import { consentAge } from '../account/ageGate'
 import { countryOptions } from '../account/countries'
 import { pendingSignIn, type PendingSignIn } from '../account/storage'
 import { useApp } from '../app/context'
+import { privacyUrl } from '../app/site'
 import { useT, type MessageKey } from '../i18n/i18n'
 import { Link, navigate } from '../router'
 import { useOnline } from '../useOnline'
@@ -333,7 +334,7 @@ export function SignIn(props: { readonly redirect?: (url: string) => void; reado
               {t('signin.google')}
             </button>
             <p className="privacy-link">
-              <a href="/privacy">{t('privacy.link')}</a>
+              <a href={privacyUrl(locale)}>{t('privacy.link')}</a>
             </p>
           </>
         )}

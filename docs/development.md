@@ -158,7 +158,7 @@ If `main` has moved on, GitHub asks you to **Update branch** before merging.
    The preview is shared, so with several pull requests open it shows the last one deployed.
 2. Merge the pull request. `main`'s CI runs again, across all five browsers.
 3. **Approve the production deploy**: Actions › the run › **Review deployments** › `production` ›
-   **Approve and deploy**. `https://wordado.com` updates a few minutes later.
+   **Approve and deploy**. `https://app.wordado.com` updates a few minutes later.
 
 If a release goes wrong, see *Everyday* in [`deploy.md`](deploy.md) for the rollback.
 

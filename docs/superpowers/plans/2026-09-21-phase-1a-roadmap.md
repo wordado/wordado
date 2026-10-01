@@ -32,9 +32,10 @@ review cleared; its first real run waits for it.
   candidate frequency lists and of the LLM and TTS output, and the per-country age-of-consent table the age gate
   in plan 6 needs.
   The age gate ships with a provisional table (`web/src/account/ageGate.ts`) that the review must confirm before the beta opens.
-  The privacy policy (`web/public/privacy.html`, served at `/privacy`) names its controller as `[Controller name]`,
-  `[Address]` and `[Contact email]`: the review fills them in and checks the legal bases and the transfer to the US
-  (the page's opening comment). Until then, Google's app stays in **Testing** (Google Auth Platform › Audience):
+  The privacy policy now lives on the website (`wordado/wordado-site`, `src/content/<lang>/privacy.md`, served at
+  `https://wordado.com/<lang>/privacy/`) with the terms and the Impressum; all three name the controller as
+  `[Controller name]`, `[Address]` and `[Contact email]`, and the website stays out of search engines (`noindex`)
+  until the review has filled them in (`pnpm launch-check`). Until then, Google's app stays in **Testing** (Google Auth Platform › Audience):
   only its listed test users, at most 100, can sign in with Google, and they sign in again every 7 days. The order
   before the beta is announced: fill in the controller, the legal review, then **Publish app**.
 - **Docker** — resolved 2026-09-23: Docker Desktop is installed, and plan 5 runs Postgres in it (spec §4.4).
