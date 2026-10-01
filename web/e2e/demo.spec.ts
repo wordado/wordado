@@ -104,6 +104,8 @@ test('Settings › About says the demo’s word list is Wordado’s own, from th
 })
 
 test('meets WCAG 2.2 A and AA on every screen (spec §11.1)', async ({ page }) => {
+  // One axe scan per screen, after the setup: Firefox on CI came within reach of the 30 s default (plan 11).
+  test.slow()
   await page.goto('/')
   await finishSetup(page)
   await expect(heading(page)).toHaveText('10 new words')
