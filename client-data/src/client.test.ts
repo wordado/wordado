@@ -450,6 +450,45 @@ describe('Client.changeL1 (spec §8.6)', () => {
     expect(reopened.snapshot.l1).toBe('de')
     expect(reopened.snapshot.corpus?.l1).toBe('de')
   })
+
+  it('installs the first pack, the default L1, even though l1 already equals it (setup’s Language step)', async () => {
+    const driver = nodeSqliteDriver()
+    const client = await Client.open({ driver, env: testEnv(), l1: 'bg' })
+    expect(client.snapshot.corpus).toBeNull()
+    let calls = 0
+    const counting: PackFetcher = async (d) => {
+      calls += 1
+      return fromDisk(d)
+    }
+
+    expect(await client.changeL1('bg', manifest, counting)).toEqual({ ok: true })
+
+    expect(client.snapshot.corpus?.l1).toBe('bg')
+    expect(calls).toBe(1)
+  })
+
+  it('installs the first pack in the settings L1', async () => {
+    const driver = nodeSqliteDriver()
+    const client = await Client.open({ driver, env: testEnv(), l1: 'bg' })
+    await client.updateSettings({ l1: 'de' })
+
+    expect(await client.changeL1('de', manifest, fromDisk)).toEqual({ ok: true })
+
+    expect(client.snapshot.corpus?.l1).toBe('de')
+  })
+
+  it('does nothing, and never fetches, when the active corpus is already in l1', async () => {
+    const client = await openClient()
+    let calls = 0
+    const counting: PackFetcher = async (d) => {
+      calls += 1
+      return fromDisk(d)
+    }
+
+    expect(await client.changeL1('bg', manifest, counting)).toEqual({ ok: true })
+
+    expect(calls).toBe(0)
+  })
 })
 
 describe('levelClips (spec §9.3)', () => {
