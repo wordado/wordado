@@ -1,12 +1,14 @@
 # Deploying Wordado
 
 The web app and the API are one Cloudflare Worker (`server/wrangler.jsonc`): `wordado` on
-`https://wordado.com` (production) and `wordado-preview` on `https://wordado-preview.<subdomain>.workers.dev`
+`https://app.wordado.com` (production) and `wordado-preview` on `https://wordado-preview.<subdomain>.workers.dev`
 (preview). Every push to `main` deploys production once CI is green and a reviewer approves it (the
 `production` environment's required reviewer). Every pull request from this
 repository deploys the preview and runs one learner's life against it (`smoke:remote`). Content (packs
 and audio) lives in the R2 bucket `wordado-content`, served at `https://content.wordado.com`, and is
 published by the **Corpus** workflow of the private `wordado/wordado-content` repository (`pipeline/README.md`).
+
+The public website at `https://wordado.com` is a separate Worker from the private repo `wordado/wordado-site`; it serves the privacy policy and redirects the app's old paths here.
 
 Nothing deploys until the repository variable `DEPLOY_ENABLED` is `true` (step 10).
 
@@ -17,7 +19,7 @@ GitHub environments or with Cloudflare.
 
 | What | Preview | Production |
 |---|---|---|
-| Worker and address | `wordado-preview`, `https://wordado-preview.danchom.workers.dev` | `wordado`, `https://wordado.com` |
+| Worker and address | `wordado-preview`, `https://wordado-preview.danchom.workers.dev` | `wordado`, `https://app.wordado.com` |
 | Neon branch (project `wordado`, Frankfurt, Postgres 18) | `preview` | the project's main branch |
 | Hyperdrive | `wordado-preview` | `wordado` |
 | Queue | `wordado-jobs-preview` | `wordado-jobs` |
@@ -26,21 +28,21 @@ GitHub environments or with Cloudflare.
 Shared: the R2 bucket `wordado-content` (Western Europe) at `https://content.wordado.com`, readable from
 both addresses, with the sample pack published; the rate-limit rule on `/v1/sync/*`; `main` protected.
 Sign-in, since 2026-09-27: Resend sends codes from `codes@wordado.com` (a sending-only key limited to
-wordado.com), and Google's app (redirect `https://wordado.com/api/auth/callback/google`) is in **Testing**: only its listed test users can sign in with Google, until the privacy policy is final (roadmap).
+wordado.com), and Google's app (redirect `https://app.wordado.com/api/auth/callback/google`) is in **Testing**: only its listed test users can sign in with Google, until the privacy policy is final (roadmap).
 Mail DNS, since 2026-09-27: DMARC is `v=DMARC1; p=none; rua=mailto:<id>@dmarc-reports.cloudflare.net;`, its
 reports read on the dashboard (wordado.com › Email › DMARC Management). Once a week or two of reports show every
 real sender passing, tighten it to `p=quarantine`. The apex MX, `10 inbound-smtp.eu-west-1.amazonaws.com`, is
 Resend's receiving record, but receiving is not enabled, so mail to `@wordado.com` is refused at once. Keep it
 until the support address below decides how wordado.com receives: no MX would leave senders retrying for days,
 and a null MX (`0 .`) can make some providers distrust mail *from* wordado.com, the sign-in codes included.
-Not yet: a redirect from `www.wordado.com` to `https://wordado.com`
+Not yet: a redirect from `www.wordado.com` to `https://wordado.com`, which is the website
 (before the beta is announced): a proxied `AAAA www 100::` record and the Redirect Rules template *Redirect from
-WWW to root* (301, query string kept). Never serve the app on `www` too: its local data, sign-in cookie and
-installed app would be separate from the apex's. A public support address, such as `support@wordado.com`
+WWW to root* (301, query string kept). Never serve the app on `www` too, nor on the main domain: its local data, sign-in cookie and
+installed app would be separate from `app.wordado.com`'s. The app is only ever on `app.wordado.com`. A public support address, such as `support@wordado.com`
 (before Google's app is published): either Resend receiving (enable wordado.com under Receiving; it uses the
 present MX) or Cloudflare Email Routing, which replaces the MX with its own and forwards to a personal inbox. Google's **User support email** (Branding) is a dropdown of the signed-in account and the Google Groups it
 manages, so it needs a Google Group or a Google account for that address; until then it shows the personal
-address to test users only. The same address can fill the privacy policy's `[Contact email]`.
+address to test users only. The same address can fill the privacy policy's `[Contact email]` (the website's, `https://wordado.com/<lang>/privacy/`).
 
 ## Provisioning, once
 
@@ -156,3 +158,27 @@ private `wordado/wordado-research`, cloned into `docs/research/` and ignored her
 - Offline in Safari (macOS and iOS): study, go offline, reload, study, reconnect, and see the answers sync.
   Playwright's WebKit cannot load a page offline, so CI skips this there.
 - On an iPhone, install the app to the home screen, turn reminders on, and receive one.
+
+## Moving the app to app.wordado.com (2026-10)
+
+Done once, in one sitting, in this order. The website must already be built and checked on its preview
+address (wordado-site `docs/deploy.md`). Its legal pages need not be final yet: until its launch check passes,
+it deploys with `noindex` on every page, so it is reachable but kept out of search engines (decided
+2026-10-01: the app moves before the legal review).
+
+1. **Google Auth Platform › Clients › the web client:** add the authorised JavaScript origin
+   `https://app.wordado.com` and the redirect URI `https://app.wordado.com/api/auth/callback/google`.
+   Keep the old ones for now.
+2. **R2 › `wordado-content` › Settings › CORS policy:** add `https://app.wordado.com` to `AllowedOrigins`.
+   Keep `https://wordado.com` for now.
+3. **GitHub › Settings › Environments › `production`:** set `APP_ORIGIN` to `https://app.wordado.com`.
+4. **Merge the move's pull request** and approve its production deploy. Wrangler attaches the custom domain
+   `app.wordado.com` (it creates the DNS record itself).
+5. **Check the app:** open `https://app.wordado.com`, sign in by emailed code and by Google, study one card,
+   and see it sync (`pnpm --filter @wordado/server smoke:remote https://app.wordado.com production`).
+6. **Free the main domain:** Cloudflare › Workers & Pages › `wordado` › Settings › Domains & Routes: remove
+   `wordado.com` if it is still listed.
+7. **Deploy the website** to `wordado.com` (wordado-site: set `PRODUCTION_ENABLED`, run Deploy).
+8. **Check the redirects:** `curl -sI https://wordado.com/` (302 to a language), `curl -sI https://wordado.com/study`
+   (301 to `https://app.wordado.com/study`), `curl -sI https://wordado.com/privacy` (302 to `/<lang>/privacy/`).
+9. **Remove the old values:** `https://wordado.com` from Google's origins and redirects, and from R2's CORS.

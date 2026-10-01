@@ -50,7 +50,7 @@
     "production": {
       "name": "wordado",
       "workers_dev": false,
-      "routes": [{ "pattern": "wordado.com", "custom_domain": true }],
+      "routes": [{ "pattern": "app.wordado.com", "custom_domain": true }],
       "assets": {
         "directory": "../web/dist",
         "not_found_handling": "single-page-application",

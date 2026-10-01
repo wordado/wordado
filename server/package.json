@@ -13,7 +13,7 @@
     "vapid-keys": "tsx scripts/vapid-keys.ts",
     "test": "pnpm db:up && vitest run",
     "typecheck": "tsc -p tsconfig.json",
-    "deploy:check": "wrangler deploy --dry-run --env preview --outdir dist/preview --var BASE_URL:https://preview.invalid && wrangler deploy --dry-run --env production --outdir dist/production --var BASE_URL:https://wordado.com"
+    "deploy:check": "wrangler deploy --dry-run --env preview --outdir dist/preview --var BASE_URL:https://preview.invalid && wrangler deploy --dry-run --env production --outdir dist/production --var BASE_URL:https://app.wordado.com"
   },
   "dependencies": {
     "@wordado/core": "workspace:*",
