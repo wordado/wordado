@@ -5,6 +5,7 @@ import { testEnv } from '@wordado/client-data/src/testing/testEnv'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { I18nProvider } from '../i18n/i18n'
 import { fakeAccounts, fakeAudio, fakeCredits, fakeFixNotices, fakeLifecycle, fakePacks, fakeReminders } from '../test/fixtures'
+import { chosenL1 } from '../test/disk'
 import { fakeApi } from '../test/fakeApi'
 import type { Backend } from '../storage/protocol'
 import { Boot, type LockPort } from './boot'
@@ -26,7 +27,8 @@ async function renderRoot(options: { free?: boolean; backend?: Backend } = {}) {
     {
       env,
       l1: () => 'bg',
-      openDriver: async () => ({ driver: nodeSqliteDriver(), backend: options.backend ?? 'opfs' }),
+      // The learner has chosen Bulgarian already, so the app opens without the first-run setup (plan 11).
+      openDriver: async () => ({ driver: await chosenL1(nodeSqliteDriver()), backend: options.backend ?? 'opfs' }),
       fetchManifest: async () => sampleManifest,
       fetchPack: sampleFetcher,
     },

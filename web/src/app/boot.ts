@@ -7,12 +7,25 @@ import type { Backend } from '../storage/protocol'
 /** How long letting go waits for a last sync before closing anyway (spec §9.1). Tuning (§15). */
 export const FLUSH_TIMEOUT_MS = 3_000
 
+/** How long a new device waits for an account's first pull before deciding on the first-run setup (plan 11). Tuning (§15). */
+export const SETUP_PULL_TIMEOUT_MS = 5_000
+
 export type BootState =
   | { readonly status: 'starting' }
   /** Another tab owns the database (spec §9.1). */
   | { readonly status: 'elsewhere' }
-  /** `resumed` is true once the shell appears after a take-over or a retry, rather than the first load, so `App` knows to move focus itself. */
-  | { readonly status: 'ready'; readonly client: Client; readonly backend: Backend; readonly resumed: boolean; readonly account: AccountRecord | null }
+  /**
+   * `resumed` is true once the shell appears after a take-over or a retry, rather than the first load, so `App` knows to move focus itself.
+   * `setup` is true while the first-run setup is owed (plan 11): no pack is installed yet, and `Boot.finishSetup()` ends it.
+   */
+  | {
+      readonly status: 'ready'
+      readonly client: Client
+      readonly backend: Backend
+      readonly resumed: boolean
+      readonly account: AccountRecord | null
+      readonly setup: boolean
+    }
   /**
    * 'lock' — the tab lock could not be taken; 'storage' — opening the
    * database or the Client on it failed; 'content' — no pack could be
@@ -54,6 +67,8 @@ export interface BootDeps {
   startSync?(client: Client, backend: Backend): () => void
   /** Tests shorten FLUSH_TIMEOUT_MS. */
   readonly flushTimeoutMs?: number
+  /** Tests shorten SETUP_PULL_TIMEOUT_MS. */
+  readonly setupPullTimeoutMs?: number
   /** The manifest to install from: the demo's (the bundled sample) or a learner's (the CDN, plan 7). */
   fetchManifest(account: AccountRecord | null): Promise<PackManifest>
   readonly fetchPack: PackFetcher
@@ -269,6 +284,17 @@ export class Boot {
     }
     try {
       const client = this.client!
+      if (await this.needsSetup(client, generation)) {
+        if (generation !== this.generation) return
+        await client.startSession()
+        if (generation !== this.generation) return
+        await this.deps.prepare?.(client, this.account).catch(() => undefined)
+        if (generation !== this.generation) return
+        if (this.account && this.deps.startSync) this.stopSync = this.deps.startSync(client, this.backend)
+        this.store.set({ status: 'ready', client, backend: this.backend, resumed, account: this.account, setup: true })
+        return
+      }
+      if (generation !== this.generation) return
       let installFailure: unknown = null
       try {
         const report = await client.installPacks(await this.deps.fetchManifest(this.account), this.deps.fetchPack)
@@ -282,11 +308,43 @@ export class Boot {
       await this.deps.prepare?.(client, this.account).catch(() => undefined)
       if (generation !== this.generation) return
       if (this.account && this.deps.startSync) this.stopSync = this.deps.startSync(client, this.backend)
-      this.store.set({ status: 'ready', client, backend: this.backend, resumed, account: this.account })
+      this.store.set({ status: 'ready', client, backend: this.backend, resumed, account: this.account, setup: false })
       void this.deps.onReady?.(client, this.account).catch(() => undefined)
     } catch (err) {
       if (generation === this.generation) this.store.set({ status: 'failed', message: messageOf(err), reason: 'content' })
     }
+  }
+
+  /**
+   * The first-run setup (plan 11, Decision 1): this file has no pack, its settings name no L1, and nothing has been
+   * studied. For an account those facts count only after a pull completes, so a returning learner's own settings and
+   * progress decide. A pull that fails or times out takes the ordinary path. Even without the setup, a completed pull
+   * has done its other job: `settings.l1` now chooses the first install.
+   */
+  private async needsSetup(client: Client, generation: number): Promise<boolean> {
+    if (client.snapshot.corpus !== null) return false
+    if (this.account) {
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const timeout = new Promise<'timeout'>((resolve) => {
+        timer = setTimeout(() => resolve('timeout'), this.deps.setupPullTimeoutMs ?? SETUP_PULL_TIMEOUT_MS)
+      })
+      const outcome = await Promise.race([client.sync({ force: true }).catch(() => 'failed' as const), timeout])
+      clearTimeout(timer)
+      if (generation !== this.generation || outcome !== 'synced') return false
+    }
+    const { settings, states } = client.snapshot
+    return settings.l1 === null && states.size === 0
+  }
+
+  /**
+   * The setup is over (plan 11): the app's own screens take over, and the background work the ordinary open starts
+   * once ready (`onReady`, such as prefetching audio) starts now that a pack is installed.
+   */
+  finishSetup(): void {
+    const state = this.store.get()
+    if (state.status !== 'ready' || !state.setup) return
+    this.store.set({ ...state, setup: false })
+    void this.deps.onReady?.(state.client, state.account).catch(() => undefined)
   }
 
   /**

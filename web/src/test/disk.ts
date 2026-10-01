@@ -1,9 +1,10 @@
 import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { SqlDriver, SyncTransport } from '@wordado/client-data'
+import { Client, type SqlDriver, type SyncTransport } from '@wordado/client-data'
 import { nodeSqliteDriver } from '@wordado/client-data/src/drivers/nodeSqlite'
 import type { FakeServer } from '@wordado/client-data/src/testing/fakeServer'
+import { testEnv } from '@wordado/client-data/src/testing/testEnv'
 import { Grade, type WordId } from '@wordado/core'
 
 /**
@@ -21,6 +22,19 @@ import { Grade, type WordId } from '@wordado/core'
 export async function fileDriver(path: string): Promise<SqlDriver> {
   const driver = nodeSqliteDriver(path)
   await driver.exec('PRAGMA synchronous = OFF; PRAGMA journal_mode = MEMORY')
+  return driver
+}
+
+/**
+ * `driver`, its file now naming `l1` as the learner's native language when it was new: no pack, no L1 chosen, nothing
+ * studied. That is what the setup's Language page leaves if the tab closes during the download, so `Boot` skips the
+ * first-run setup (plan 11) and installs `l1` the ordinary way. For the tests of the ordinary open.
+ */
+export async function chosenL1(driver: SqlDriver, l1 = 'bg'): Promise<SqlDriver> {
+  const client = await Client.open({ driver: { ...driver, close: async () => undefined }, env: testEnv(), l1 })
+  const { corpus, settings, states } = client.snapshot
+  if (corpus === null && settings.l1 === null && states.size === 0) await client.updateSettings({ l1 })
+  await client.close()
   return driver
 }
 
