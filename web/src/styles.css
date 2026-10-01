@@ -2233,14 +2233,51 @@ dialog.report textarea {
   outline: none;
 }
 
-/* The first-run setup (plan 11): one step at a time, at reading width */
+/* The first-run setup (plan 11): one step at a time, on one card in the Settings look (.form-section). Its title and
+   step counter sit above the card, as Settings' title does; the card is as wide as a Settings section page. */
 
-.setup {
-  max-width: var(--measure);
+.app > main > .setup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-width: 36.5rem;
+}
+
+.setup-head h1 {
+  margin: 0;
+}
+
+.setup-head .eyebrow {
+  margin-top: var(--space-1);
 }
 
 .setup h2:focus {
   outline: none;
+}
+
+/* A step's ways on: stacked on a phone, the primary first; in a row on the right from 48rem. */
+.form-section .actions {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+.form-section .actions .link-button,
+.form-section .actions > a {
+  display: inline-flex;
+  align-items: center;
+  align-self: center;
+  min-height: 2.75rem;
+}
+
+@media (min-width: 48rem) {
+  .form-section .actions {
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--space-3);
+  }
 }
 
 .privacy-link {
@@ -2338,7 +2375,9 @@ dialog.confirm::backdrop {
   gap: var(--space-3);
 }
 
-.settings-group ul {
+/* A list of rows on one card: the menu's groups, and the setup's themes (plan 11). */
+.settings-group ul,
+.settings-rows {
   margin: var(--space-2) 0 0;
   padding: 0;
   list-style: none;
@@ -2353,7 +2392,8 @@ dialog.confirm::backdrop {
   font-size: 0.75rem;
 }
 
-.settings-group li + li {
+.settings-group li + li,
+.settings-rows li + li {
   border-top: 1px solid var(--rule);
 }
 
@@ -2365,6 +2405,16 @@ dialog.confirm::backdrop {
   padding: var(--space-2) var(--space-3);
   color: var(--ink);
   text-decoration: none;
+}
+
+/* A row that does something here rather than go somewhere: a real button, laid out as the links are. */
+button.settings-row {
+  width: 100%;
+  font: inherit;
+  text-align: start;
+  background: none;
+  border: 0;
+  cursor: pointer;
 }
 
 .settings-row:hover {
@@ -2399,6 +2449,11 @@ dialog.confirm::backdrop {
   text-overflow: ellipsis;
 }
 
+/* A theme's description is what it is about, not a summary: it wraps rather than being cut. */
+.settings-rows .settings-row-text .note {
+  white-space: normal;
+}
+
 .settings-chevron {
   flex-shrink: 0;
   color: var(--ink-soft);
@@ -2422,12 +2477,16 @@ dialog.confirm::backdrop {
   text-decoration: none;
 }
 
-.settings-section h2 {
+/* A section's look, shared by Settings' section pages and the first-run setup's card (.form-section, plan 11). */
+.settings-section h1,
+.settings-section h2,
+.form-section h2 {
   margin: 0 0 var(--space-3);
   font: 600 var(--step-2) / 1.2 var(--font-entry);
 }
 
-.settings-section h3 {
+.settings-section h3,
+.form-section h3 {
   margin: var(--space-4) 0 var(--space-2);
   font: 600 var(--step-0) / 1.3 var(--font-ui);
 }
@@ -2439,25 +2498,31 @@ dialog.confirm::backdrop {
 }
 
 .settings-section .field,
-.settings-section .choices {
+.settings-section .choices,
+.form-section .field,
+.form-section .choices {
   margin: 0;
   padding: var(--space-3) 0;
   border-top: 1px solid var(--rule);
 }
 
 /* A fieldset's border breaks around its legend; a shadow draws the same line whole. */
-.settings-section .choices {
+.settings-section .choices,
+.form-section .choices {
   border: 0;
   box-shadow: 0 -1px 0 var(--rule);
 }
 
-.settings-section .choices legend {
+/* A legend kept for screen readers alone stays out of the layout: at full width it would widen the page. */
+.settings-section .choices legend:not(.visually-hidden),
+.form-section .choices legend:not(.visually-hidden) {
   float: left;
   width: 100%;
   margin-bottom: var(--space-2);
 }
 
-.settings-section .choices legend + * {
+.settings-section .choices legend + *,
+.form-section .choices legend + * {
   clear: both;
 }
 
@@ -2704,7 +2769,7 @@ label.check input {
   padding-inline-start: 1.25rem;
 }
 
-/* Set-aside words, and the setup's theme question */
+/* Set-aside words */
 
 .unit-words ul,
 ul.unit-words {
@@ -2786,12 +2851,3 @@ ul.unit-words {
   flex-basis: 100%;
 }
 
-
-.onboard-themes {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  margin: var(--space-3) 0;
-  padding: 0;
-  list-style: none;
-}

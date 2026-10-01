@@ -24,7 +24,8 @@ function stepsFor(corpus: Corpus | null): readonly StepName[] {
  * The first-run setup (plan 11): Language → Level → Theme → Goal. The language comes first and is the one step that
  * cannot be skipped, since nothing can be studied without its words; which of the others show is decided once those
  * words are installed (the corpus is null before), and the counter counts only those. Every later step has Skip and
- * Start studying, which calls `onFinish`. This owns the page's h1; each step's h2 takes focus as it appears.
+ * Start studying, which calls `onFinish`. This owns the page's h1, above the one card the steps take turns on (in
+ * Settings' look: `form-section` shares `settings-section`'s rules); each step's h2 takes focus as it appears.
  */
 export function Setup(props: { onFinish(): void }) {
   const { t } = useT()
@@ -39,20 +40,25 @@ export function Setup(props: { onFinish(): void }) {
 
   return (
     <section className="setup" aria-labelledby="setup-title">
-      <h1 id="setup-title">{t('setup.title')}</h1>
-      {steps !== null && <p className="eyebrow">{t('setup.step', { n: index + 1, count: steps.length })}</p>}
-      {step === 'language' && (
-        <LanguageStep
-          mode="setup"
-          onDone={() => {
-            setSteps(stepsFor(client.snapshot.corpus))
-            setIndex(1)
-          }}
-        />
-      )}
-      {step === 'level' && <LevelStep key="level" {...stepProps} />}
-      {step === 'theme' && <ThemeStep key="theme" {...stepProps} />}
-      {step === 'goal' && <GoalStep key="goal" {...stepProps} />}
+      <div className="setup-head">
+        <h1 id="setup-title">{t('setup.title')}</h1>
+        {steps !== null && <p className="eyebrow">{t('setup.step', { n: index + 1, count: steps.length })}</p>}
+      </div>
+      {/* One card in the Settings look, as a Settings section page is. */}
+      <div className="panel form-section">
+        {step === 'language' && (
+          <LanguageStep
+            mode="setup"
+            onDone={() => {
+              setSteps(stepsFor(client.snapshot.corpus))
+              setIndex(1)
+            }}
+          />
+        )}
+        {step === 'level' && <LevelStep key="level" {...stepProps} />}
+        {step === 'theme' && <ThemeStep key="theme" {...stepProps} />}
+        {step === 'goal' && <GoalStep key="goal" {...stepProps} />}
+      </div>
     </section>
   )
 }

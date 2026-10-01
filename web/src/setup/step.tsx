@@ -20,7 +20,11 @@ export function useStepHeading() {
   return heading
 }
 
-/** A step's way on: its own primary action (if any), Start studying, and Skip; on the last step, Start studying alone. */
+/**
+ * A step's way on: its own primary action (if any), Start studying, and Skip; on the last step, Start studying alone.
+ * Start studying is the primary button unless the step brings its own (Continue). The setup's styles stack them on a
+ * phone, primary first, and set them in a row on the right on a wide screen.
+ */
 export function StepActions(props: StepProps & { readonly primary?: ReactNode }) {
   const { t } = useT()
   if (props.last) {
@@ -35,7 +39,7 @@ export function StepActions(props: StepProps & { readonly primary?: ReactNode })
   return (
     <div className="actions">
       {props.primary}
-      <button type="button" className="button" onClick={props.finish}>
+      <button type="button" className={props.primary ? 'button' : 'button primary'} onClick={props.finish}>
         {t('setup.start')}
       </button>
       <button type="button" className="link-button" onClick={props.next}>

@@ -66,6 +66,34 @@ describe('Setup, the demo (plan 11)', () => {
     expect(screen.queryByText(/^Step /)).toBeNull()
   })
 
+  it('is one card in the Settings look, under its title (Task 7a)', async () => {
+    const ctx = await fresh()
+    renderWith(<Setup onFinish={() => undefined} />, ctx)
+    const card = screen.getByRole('heading', { level: 2, name: 'Which language do you speak?' }).closest('.panel')
+    expect(card?.classList.contains('form-section')).toBe(true)
+    expect(card?.contains(screen.getByRole('heading', { level: 1, name: 'Set up Wordado' }))).toBe(false)
+    await pastLanguage()
+    const theme = screen.getByRole('heading', { level: 2, name: 'What do you want English for?' })
+    expect(theme.closest('.panel')?.classList.contains('form-section')).toBe(true)
+    expect(screen.getByText('Step 2 of 3').closest('.panel')).toBeNull()
+  })
+
+  it('shows each theme as a row button, named by the theme and described by its description (Task 7a)', async () => {
+    const ctx = await fresh()
+    renderWith(<Setup onFinish={() => undefined} />, ctx)
+    await pastLanguage()
+    const row = screen.getByRole('button', { name: 'Daily life' })
+    expect(row.classList.contains('settings-row')).toBe(true)
+    expect(row.closest('ul')?.classList.contains('settings-rows')).toBe(true)
+    expect(row.querySelector('.settings-row-icon svg')).not.toBeNull()
+    const note = document.getElementById(row.getAttribute('aria-describedby')!)
+    expect(note?.textContent).not.toBe('')
+    expect(row.contains(note)).toBe(true)
+    // With no Continue of its own, the step's primary way on is Start studying.
+    expect(screen.getByRole('button', { name: 'Start studying' }).classList.contains('primary')).toBe(true)
+    expect(screen.getByRole('button', { name: 'Skip' }).classList.contains('link-button')).toBe(true)
+  })
+
   it('goes from the language to the theme, skipping the level the sample does not have, and counts only the steps that show', async () => {
     const ctx = await fresh()
     renderWith(<Setup onFinish={() => undefined} />, ctx)
@@ -149,12 +177,20 @@ describe('Setup, a corpus with two levels (plan 11)', () => {
     await pastLanguage()
     expect(document.activeElement).toBe(screen.getByRole('heading', { level: 2, name: 'Your English level' }))
     expect(screen.getByText('Step 2 of 4')).toBeTruthy()
-    expect(screen.getByText('Not sure? You can take a short placement test later in Settings.')).toBeTruthy()
+    expect(screen.getByText('A1 · Beginner. Not sure? You can take a short placement test later in Settings.')).toBeTruthy()
     const a1 = screen.getByRole('radio', { name: /^A1/ }) as HTMLInputElement
     expect(a1.checked).toBe(true)
+    // Settings' segmented level control (Task 7a): every radio in one segmented group.
+    const group = a1.closest('.segmented')
+    expect(group?.closest('fieldset')?.classList.contains('segmented-field')).toBe(true)
+    expect(group?.querySelectorAll('input[type="radio"]').length).toBe(screen.getAllByRole('radio').length)
+    // Continue is the step's primary: Start studying is not a second one.
+    expect(screen.getByRole('button', { name: 'Continue' }).classList.contains('primary')).toBe(true)
+    expect(screen.getByRole('button', { name: 'Start studying' }).classList.contains('primary')).toBe(false)
     expect(screen.queryByRole('radio', { name: /^A2/ })).toBeNull()
     await act(async () => fireEvent.click(screen.getByRole('radio', { name: /^B1/ })))
     expect(ctx.client.snapshot.settings.declaredLevel).toBe('B1')
+    expect(screen.getByText(/^B1 · Intermediate\. Not sure\?/)).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
     expect(screen.getByRole('heading', { level: 2, name: 'What do you want English for?' })).toBeTruthy()
     expect(screen.getByText('Step 3 of 4')).toBeTruthy()
