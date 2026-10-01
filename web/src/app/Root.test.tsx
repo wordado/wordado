@@ -4,10 +4,12 @@ import { sampleFetcher, sampleManifest } from '@wordado/client-data/src/testing/
 import { testEnv } from '@wordado/client-data/src/testing/testEnv'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { I18nProvider } from '../i18n/i18n'
+import { createStore } from '@wordado/client-data'
 import { fakeAccounts, fakeAudio, fakeCredits, fakeFixNotices, fakeLifecycle, fakePacks, fakeReminders } from '../test/fixtures'
 import { chosenL1 } from '../test/disk'
 import { fakeApi } from '../test/fakeApi'
 import type { Backend } from '../storage/protocol'
+import type { AccountActions, AccountState } from '../account/controller'
 import { Boot, type LockPort } from './boot'
 import { PackSwitcher } from './packSwitch'
 import { Root } from './Root'
@@ -15,7 +17,7 @@ import { Root } from './Root'
 beforeEach(() => window.history.replaceState(null, '', '/'))
 afterEach(cleanup)
 
-async function renderRoot(options: { free?: boolean; backend?: Backend; fresh?: boolean; packs?: PackSwitcher } = {}) {
+async function renderRoot(options: { free?: boolean; backend?: Backend; fresh?: boolean; packs?: PackSwitcher; accounts?: AccountActions } = {}) {
   let owner = options.free ?? true
   const lock: LockPort = {
     acquire: async () => owner,
@@ -37,7 +39,7 @@ async function renderRoot(options: { free?: boolean; backend?: Backend; fresh?: 
   )
   render(
     <I18nProvider storage={{ getItem: () => 'en', setItem: () => undefined }}>
-      <Root boot={boot} services={{ env, audio: fakeAudio(), afterRun: () => undefined, api: fakeApi(), accounts: fakeAccounts(), reminders: fakeReminders(), lifecycle: fakeLifecycle(), credits: fakeCredits(), fixNotices: fakeFixNotices(), packs: options.packs ?? (options.fresh ? samplePacks() : fakePacks()) }} />
+      <Root boot={boot} services={{ env, audio: fakeAudio(), afterRun: () => undefined, api: fakeApi(), accounts: options.accounts ?? fakeAccounts(), reminders: fakeReminders(), lifecycle: fakeLifecycle(), credits: fakeCredits(), fixNotices: fakeFixNotices(), packs: options.packs ?? (options.fresh ? samplePacks() : fakePacks()) }} />
     </I18nProvider>,
   )
   await act(() => boot.start())
@@ -129,6 +131,17 @@ describe('Root', () => {
     expect(screen.getByText('Wordado', { selector: '.wordmark' })).toBeTruthy()
     expect(screen.queryByRole('link', { name: 'Wordado' })).toBeNull()
     expect(screen.getByRole('button', { name: 'Interface language: English (EN)' })).toBeTruthy()
+  })
+
+  it('still says what just happened to the account during the setup, as signing out or deleting leaves a new demo (plan 11)', async () => {
+    const accounts = fakeAccounts({ store: createStore<AccountState>({ expired: false, notice: 'signed-out' }) })
+    await renderRoot({ fresh: true, accounts })
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Set up Wordado')
+    expect(screen.getByText('You are signed out. Nothing of your account is left on this device.').closest('[role="status"]')).toBeTruthy()
+    // The rest of the banners stay away: the demo's own banner would only offer what the setup already does.
+    expect(screen.queryByText(/You are trying Wordado/)).toBeNull()
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Dismiss' })))
+    expect(accounts.calls).toContain('dismissNotice')
   })
 
   it('shows Sign in during the setup when the route asks for it', async () => {

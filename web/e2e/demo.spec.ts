@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { answer, expectAccessible, heading, SETTLE_MS, studyNew } from './helpers'
+import { answer, expectAccessible, finishSetup, heading, SETTLE_MS, studyNew, today } from './helpers'
 
 test.beforeEach(async ({ context }) => {
   // English, so the assertions read plainly; the Bulgarian default is covered by the unit suite.
@@ -10,6 +10,7 @@ test.beforeEach(async ({ context }) => {
 
 test('studies the demo by keyboard from the first visit to a completed day', async ({ page }) => {
   await page.goto('/')
+  await finishSetup(page)
   await expect(heading(page)).toHaveText('10 new words')
   await page.getByRole('link', { name: 'Start studying' }).click()
   for (let i = 0; i < 40 && !(await page.locator('.done').isVisible()); i += 1) await answer(page)
@@ -22,6 +23,8 @@ test('studies the demo by keyboard from the first visit to a completed day', asy
 
 for (const mode of ['flashcard', 'multiple_choice', 'listening_select']) {
   test(`answers a ${mode} item by keyboard`, async ({ page }) => {
+    await page.goto('/')
+    await finishSetup(page)
     await page.goto(`/study?mode=${mode}`)
     await expect(page.locator('.card')).toHaveAttribute('data-mode', mode)
     expect(await answer(page)).toBe(mode)
@@ -31,6 +34,7 @@ for (const mode of ['flashcard', 'multiple_choice', 'listening_select']) {
 test('keeps progress offline after the first visit, and after reconnecting', async ({ page, context, browserName }) => {
   test.skip(browserName === 'webkit', 'Playwright’s WebKit fails page.goto while offline ("WebKit encountered an internal error"); Safari offline is on the release checklist (docs/deploy.md)')
   await page.goto('/')
+  await finishSetup(page)
   await page.evaluate(async () => {
     await navigator.serviceWorker.ready
   })
@@ -53,6 +57,7 @@ test('keeps progress offline after the first visit, and after reconnecting', asy
 
 test('a second tab says Wordado is open elsewhere, and can take over', async ({ page, context }) => {
   await page.goto('/')
+  await finishSetup(page)
   await expect(heading(page)).toHaveText('10 new words')
   const second = await context.newPage()
   await second.goto('/')
@@ -63,6 +68,8 @@ test('a second tab says Wordado is open elsewhere, and can take over', async ({ 
 })
 
 test('plays a matching board once five words are known', async ({ page }) => {
+  await page.goto('/')
+  await finishSetup(page)
   await studyNew(page, 5)
   await page.goto('/practice/matching')
   const left = page.locator('[data-side="left"] button')
@@ -89,6 +96,8 @@ test('serves the privacy policy, not the app, once the service worker controls t
 })
 
 test('Settings › About says the demo’s word list is Wordado’s own, from the bundled sample’s credits', async ({ page }) => {
+  await page.goto('/')
+  await finishSetup(page)
   await page.goto('/settings/about')
   await expect(page.getByRole('heading', { name: 'About' })).toBeVisible()
   await expect(page.getByText('This word list was prepared by Wordado.')).toBeVisible()
@@ -96,6 +105,7 @@ test('Settings › About says the demo’s word list is Wordado’s own, from th
 
 test('meets WCAG 2.2 A and AA on every screen (spec §11.1)', async ({ page }) => {
   await page.goto('/')
+  await finishSetup(page)
   await expect(heading(page)).toHaveText('10 new words')
   await expectAccessible(page)
 
@@ -133,7 +143,7 @@ test('meets WCAG 2.2 A and AA on every screen (spec §11.1)', async ({ page }) =
   await expect(page.locator('.card[data-phase="prompt"]')).toBeVisible()
   await expectAccessible(page)
 
-  for (const path of ['/settings', '/settings/study', '/settings/languages', '/signin', '/settings/placement']) {
+  for (const path of ['/settings', '/settings/study', '/settings/languages', '/settings/native-language', '/signin', '/settings/placement']) {
     await page.goto(path)
     await expect(heading(page)).toBeVisible()
     await expectAccessible(page, { dark: true })
@@ -149,6 +159,9 @@ test('a German browser opens the demo in German, and a studied word’s translat
   try {
     const page = await context.newPage()
     await page.goto('/')
+    // The setup asks in German too, and preselects German; choosing it keeps the demo's words German.
+    await expect(page.getByRole('radio', { name: 'Deutsch' })).toBeChecked()
+    await finishSetup(page, 'Deutsch')
     await expect(heading(page)).toHaveText('10 neue Wörter')
 
     // Forcing the mode (as the mode-matrix tests above do) sidesteps the mode/direction randomness for a brand-new
@@ -164,44 +177,107 @@ test('a German browser opens the demo in German, and a studied word’s translat
   }
 })
 
-test('changing the native language in Settings keeps progress and switches translations', async ({ page }) => {
+test('changing the native language later, on its own page, keeps progress and switches translations', async ({ page }) => {
   // A word studied before the change (the demo's first word, "hello") stays counted afterwards.
+  await page.goto('/')
+  await finishSetup(page)
   await studyNew(page, 1)
   await page.goto('/path')
   await expect(page.getByText('1 of 20 started')).toBeVisible()
 
+  // Settings › Languages › Change opens the setup's language page, as a Settings sub-page.
   await page.goto('/settings/languages')
-  await page.getByRole('group', { name: 'Native language' }).getByRole('radio', { name: 'Deutsch' }).click()
-  const dialog = page.getByRole('dialog', { name: 'Native language' })
-  await expect(dialog).toContainText('Your progress stays. The words switch to German translations.')
-  await dialog.getByRole('button', { name: 'Change' }).click()
-  await expect(dialog).toBeHidden()
+  await page.getByRole('link', { name: 'Change native language' }).click()
+  await expect(page).toHaveURL('/settings/native-language')
+  // A navigation focuses the new screen, as every routed page does (App.tsx); the setup's steps focus their heading.
+  await expect(page.locator('#main')).toBeFocused()
+  await expect(page.getByRole('heading', { name: 'Native language', level: 2 })).toBeVisible()
+  await expect(page.getByRole('radio', { name: 'Български' })).toBeChecked()
+  await page.getByRole('radio', { name: 'Deutsch' }).check()
+  await expect(page.getByText('Your progress stays. The words switch to German translations.')).toBeVisible()
+  await page.getByRole('button', { name: 'Change', exact: true }).click()
 
-  // The interface was English, not the old native language, so it stays English (spec §8.6): only the pack
-  // switches, in the background (`web/src/app/l1Watch.ts`). Nothing in the UI flags that install as it runs, so
-  // the only reliable signal is the translation itself: retry a fresh flashcard of the next new word ("goodbye")
-  // until it reveals the German pack's translation.
-  await expect
-    .poll(
-      async () => {
-        // No throwing `expect` in here: a throw ends the poll at once instead of retrying it.
-        await page.goto('/study?mode=flashcard')
-        await page.locator('.card[data-phase="prompt"]').waitFor()
-        await page.waitForTimeout(SETTLE_MS)
-        await page.keyboard.press('Space')
-        const revealed = await page
-          .locator('.card[data-phase="revealed"]')
-          .waitFor({ timeout: 2_000 })
-          .then(() => true)
-          .catch(() => false)
-        return revealed ? page.locator('.card .translation').innerText() : null
-      },
-      { timeout: 15_000 },
-    )
-    .toBe('auf Wiedersehen')
+  // The page installs the German pack before it returns, so the very next flashcard is German. The interface was
+  // English, not the old native language, so it stays English (spec §8.6).
+  await expect(page).toHaveURL('/settings/languages')
+  await expect(page.getByRole('region', { name: 'Native language' }).getByText('Deutsch', { exact: true })).toBeVisible()
+  // Forcing the mode sidesteps the mode/direction randomness for a new word: a flashcard always reveals the
+  // translation. The next new word is "goodbye".
+  await page.goto('/study?mode=flashcard')
+  await expect(page.locator('.card[data-phase="prompt"]')).toBeVisible()
+  await page.waitForTimeout(SETTLE_MS)
+  await page.keyboard.press('Space')
+  await expect(page.locator('.card[data-phase="revealed"] .translation')).toHaveText('auf Wiedersehen')
 
   // Progress from before the change is still here: studying the new word above didn't rate it, so the count
   // of started words in the first unit is unchanged.
   await page.goto('/path')
   await expect(page.getByText('1 of 20 started')).toBeVisible()
 })
+
+// Plan 11: a new demo opens in the first-run setup.
+
+test('a first visit opens the setup; choosing German ends on Home with German translations', async ({ page }) => {
+  await page.goto('/')
+  await expect(heading(page)).toHaveText('Set up Wordado')
+  const language = page.getByRole('heading', { name: 'Which language do you speak?', level: 2 })
+  await expect(language).toBeFocused()
+  // Preselected from the interface's language; an English interface has no L1 of its own, so Bulgarian.
+  await expect(page.getByRole('radio', { name: 'Български' })).toBeChecked()
+  // The setup is no place to wander off from: no navigation until it is done.
+  await expect(page.locator('.nav')).toHaveCount(0)
+  await page.getByRole('radio', { name: 'Deutsch' }).check()
+  await page.getByRole('button', { name: 'Continue' }).click()
+
+  // The demo has one level, so the Level step is skipped and the Theme step follows.
+  await expect(page.getByRole('heading', { name: 'What do you want English for?', level: 2 })).toBeFocused()
+  await expect(page.getByText(/^Step 2 of \d$/)).toBeVisible()
+  await page.getByRole('button', { name: 'Start studying' }).click()
+
+  await expect(page).toHaveURL('/')
+  await expect(today(page)).toHaveText('10 new words')
+  await expect(page.locator('.nav')).toBeVisible()
+  await page.goto('/study?mode=flashcard')
+  await expect(page.locator('.card[data-phase="prompt"]')).toBeVisible()
+  await page.waitForTimeout(SETTLE_MS)
+  await page.keyboard.press('Space')
+  await expect(page.locator('.card[data-phase="revealed"] .translation')).toHaveText('hallo')
+})
+
+test('after the setup, a reload opens Home, not the setup', async ({ page }) => {
+  await page.goto('/')
+  await finishSetup(page)
+  await page.reload()
+  await expect(today(page)).toHaveText('10 new words')
+  await expect(page.getByRole('heading', { name: 'Set up Wordado' })).toHaveCount(0)
+})
+
+test('“I already have an account” leads from the setup to Sign in', async ({ page }) => {
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: 'Which language do you speak?' })).toBeVisible()
+  await page.getByRole('link', { name: 'I already have an account' }).click()
+  await expect(page).toHaveURL('/signin')
+  await expect(heading(page)).toHaveText('Create an account or sign in')
+})
+
+test('the setup’s Language and Theme steps meet WCAG 2.2 A and AA, light and dark (spec §11.1)', async ({ page }) => {
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: 'Which language do you speak?' })).toBeFocused()
+  await expectAccessible(page, { dark: true })
+  await page.getByRole('button', { name: 'Continue' }).click()
+  await expect(page.getByRole('heading', { name: 'What do you want English for?' })).toBeFocused()
+  await expectAccessible(page, { dark: true })
+})
+
+for (const width of [390, 1280]) {
+  test(`the language pages never scroll sideways at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 })
+    await page.goto('/')
+    await finishSetup(page)
+    for (const path of ['/settings/languages', '/settings/native-language']) {
+      await page.goto(path)
+      await expect(page.getByRole('heading', { name: 'Native language', exact: true })).toBeVisible()
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), path).toBe(true)
+    }
+  })
+}

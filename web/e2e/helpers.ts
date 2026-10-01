@@ -1,5 +1,8 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, type Page } from '@playwright/test'
+import { bg } from '../src/i18n/bg'
+import { de } from '../src/i18n/de'
+import { en, type Messages } from '../src/i18n/en'
 
 export const heading = (page: Page) => page.getByRole('heading', { level: 1 })
 
@@ -8,6 +11,27 @@ export const heading = (page: Page) => page.getByRole('heading', { level: 1 })
 // double press must not land on the next thing shown. A real learner's keystrokes are
 // never that fast; these e2e presses are, so every one of them waits past it first.
 export const SETTLE_MS = 300
+
+const TABLES: Readonly<Record<string, Messages>> = { en, bg, de }
+
+/** Today's heading: the screen the setup ends on, whatever its text says. */
+export const today = (page: Page) => page.locator('h1#today')
+
+/**
+ * Through the first-run setup (plan 11) that a new demo or a new account opens in: `l1` is the native language's
+ * endonym, as its radio is named. Its strings come from the interface's own table (the page's `lang`), so a German
+ * browser's setup is gone through the same way. After the language, Start studying ends it on the next step.
+ */
+export async function finishSetup(page: Page, l1 = 'Български'): Promise<void> {
+  const title = page.getByRole('heading', { level: 2 }).and(page.locator('#language-step-title'))
+  await expect(title).toBeVisible()
+  const t = TABLES[(await page.locator('html').getAttribute('lang')) ?? 'en'] ?? en
+  await expect(title).toHaveText(t['setup.language.title'])
+  await page.getByRole('radio', { name: l1 }).check()
+  await page.getByRole('button', { name: t['setup.continue'] }).click()
+  await page.getByRole('button', { name: t['setup.start'] }).click()
+  await expect(today(page)).toBeVisible()
+}
 
 /** Answers the item on screen by keyboard, as a learner would (spec §11.1); returns its mode. */
 export async function answer(page: Page): Promise<string> {

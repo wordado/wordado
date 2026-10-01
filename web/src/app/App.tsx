@@ -15,7 +15,7 @@ import { Themes } from '../screens/Themes'
 import { LanguageStep } from '../setup/LanguageStep'
 import { Setup } from '../setup/Setup'
 import { AccountMenu } from './AccountMenu'
-import { Banners } from './Banners'
+import { Banners, NoticeLine } from './Banners'
 import { LanguageMenu } from './LanguageMenu'
 
 /** The icons show only in the phone's tab bar; the label is always the link's name. */
@@ -156,9 +156,16 @@ export function App(props: { readonly resumed: boolean; readonly setup: boolean;
           )}
         </header>
       )}
-      {!focus && !props.setup && (
+      {!focus && (
         <aside aria-label={t('banner.label')}>
-          <Banners />
+          {/* During the setup, only what just happened to the account (signed out, deleted…): the rest waits. */}
+          {props.setup ? (
+            <div className="banners">
+              <NoticeLine />
+            </div>
+          ) : (
+            <Banners />
+          )}
         </aside>
       )}
       <main id="main" ref={main} tabIndex={-1}>
