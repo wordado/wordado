@@ -2227,12 +2227,26 @@ dialog.report textarea {
   content: '⚠ ';
 }
 
-.signin {
-  max-width: var(--measure);
+.signin h1:focus,
+.signin h2:focus {
+  outline: none;
 }
 
-.signin h1:focus {
-  outline: none;
+/* Inside the card a field never runs past its edge, and a checkbox sits level with its words. */
+.form-section .field > select,
+.form-section .field > input:not([type='checkbox']) {
+  width: 100%;
+  max-width: 100%;
+}
+
+.form-section label.check {
+  align-items: center;
+}
+
+/* The two ways in fill the card's width, with "or" between them. */
+.signin .signin-wide {
+  width: 100%;
+  margin-top: var(--space-3);
 }
 
 /* The first-run setup (plan 11): one step at a time, on one card in the Settings look (.form-section). Its title and
@@ -2288,8 +2302,19 @@ dialog.report textarea {
 }
 
 .signin .or {
-  margin: var(--space-4) 0 var(--space-2);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: var(--space-4) 0 0;
   color: var(--ink-soft);
+}
+
+.signin .or::before,
+.signin .or::after {
+  content: '';
+  flex-grow: 1;
+  height: 1px;
+  background: var(--rule);
 }
 
 .demo-note {

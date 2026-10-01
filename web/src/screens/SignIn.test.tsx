@@ -9,8 +9,6 @@ import { SignIn } from './SignIn'
 beforeEach(() => window.history.replaceState(null, '', '/signin'))
 afterEach(cleanup)
 
-const THIS_YEAR = new Date().getFullYear()
-
 async function render(options: Parameters<typeof fakeAccounts>[0] = {}, apiOver: Parameters<typeof fakeApi>[0] = {}) {
   const ctx = await setup()
   const api = fakeApi(apiOver)
@@ -23,9 +21,10 @@ async function render(options: Parameters<typeof fakeAccounts>[0] = {}, apiOver:
   return { ...ctx, api, accounts, redirects, pending }
 }
 
-async function passGate(country: string, year: number) {
+/** Step 1: the country, then the age it sets, confirmed. */
+async function passGate(country: string) {
   fireEvent.change(screen.getByLabelText('Country where you live'), { target: { value: country } })
-  fireEvent.change(screen.getByLabelText('Year of birth'), { target: { value: String(year) } })
+  fireEvent.click(screen.getByRole('checkbox', { name: /^I’m \d+ or older$/ }))
   await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue' })))
 }
 
@@ -35,20 +34,26 @@ describe('SignIn: the age gate (spec §11)', () => {
     expect((screen.getByLabelText('Country where you live') as HTMLSelectElement).value).toBe('BG')
   })
 
-  it('refuses a birth year that is not four digits, tied to the field', async () => {
+  it('asks to confirm the age the chosen country sets, and goes on only once it is confirmed', async () => {
     const { api } = await render()
-    await passGate('BG', 20)
-    const field = screen.getByLabelText('Year of birth')
-    const alert = screen.getByRole('alert')
-    expect(alert.textContent).toBe('Enter the year you were born, as four digits.')
-    expect(field.getAttribute('aria-describedby')).toContain(alert.id)
-    expect(field.getAttribute('aria-invalid')).toBe('true')
-    expect(api.calls.filter((c) => c.startsWith('sendCode'))).toEqual([])
+    expect(screen.getByText('Step 1 of 3')).toBeTruthy()
+    expect(screen.getByRole('checkbox', { name: 'I’m 14 or older' })).toBeTruthy()
+    fireEvent.change(screen.getByLabelText('Country where you live'), { target: { value: 'DE' } })
+    const confirm = screen.getByRole('checkbox', { name: 'I’m 16 or older' })
+    const go = screen.getByRole('button', { name: 'Continue' }) as HTMLButtonElement
+    expect(go.disabled).toBe(true)
+    fireEvent.click(confirm)
+    expect(go.disabled).toBe(false)
+    await act(async () => fireEvent.click(go))
+    expect(screen.getByText('Step 2 of 3')).toBeTruthy()
+    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 2, name: 'How do you want to sign in?' }))
+    expect(api.calls).toEqual(['requestCountry'])
   })
 
   it('turns away a learner below their country’s age before anything is sent or stored', async () => {
     const { api, pending } = await render()
-    await passGate('DE', THIS_YEAR - 15)
+    fireEvent.change(screen.getByLabelText('Country where you live'), { target: { value: 'DE' } })
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'I’m younger than 16' })))
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Sorry, you can’t create an account yet')
     expect(screen.getByText(/at least 16/)).toBeTruthy()
     expect(screen.queryByLabelText('Email')).toBeNull()
@@ -58,8 +63,8 @@ describe('SignIn: the age gate (spec §11)', () => {
 
   it('uses 16 when the learner would rather not say where they live', async () => {
     await render()
-    await passGate('', THIS_YEAR - 15)
-    expect(screen.getByText(/at least 16/)).toBeTruthy()
+    fireEvent.change(screen.getByLabelText('Country where you live'), { target: { value: '' } })
+    expect(screen.getByRole('checkbox', { name: 'I’m 16 or older' })).toBeTruthy()
   })
 
   it('keeps a country the learner already chose, even if the pre-fill arrives late', async () => {
@@ -94,7 +99,7 @@ describe('SignIn: the age gate (spec §11)', () => {
 describe('SignIn: a code by email (spec §8.6)', () => {
   it('sends a code, verifies it, and completes the sign-in with the gate’s country', async () => {
     const { api, accounts } = await render()
-    await passGate('BG', 1990)
+    await passGate('BG')
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'ana@example.com' } })
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Email me a code' })))
     expect(api.calls).toContain('sendCode ana@example.com')
@@ -114,7 +119,7 @@ describe('SignIn: a code by email (spec §8.6)', () => {
     await answerNew(ctx.client, ctx.env, 1)
     renderWith(<SignIn redirect={() => undefined} pending={{ save: () => undefined }} />, { ...ctx, api: fakeApi(), accounts: fakeAccounts() })
     await act(async () => undefined)
-    await passGate('BG', 1990)
+    await passGate('BG')
     expect(screen.getByText(/the words you studied in the demo are deleted. A new account keeps them/)).toBeTruthy()
   })
 
@@ -122,7 +127,7 @@ describe('SignIn: a code by email (spec §8.6)', () => {
     const ctx = await setup()
     renderWith(<SignIn redirect={() => undefined} pending={{ save: () => undefined }} />, { ...ctx, api: fakeApi(), accounts: fakeAccounts() })
     await act(async () => undefined)
-    await passGate('BG', 1990)
+    await passGate('BG')
     expect(screen.queryByText(/the words you studied in the demo are deleted/)).toBeNull()
     cleanup()
     const withSettings = await setup()
@@ -130,7 +135,7 @@ describe('SignIn: a code by email (spec §8.6)', () => {
     expect(withSettings.client.snapshot.states.size).toBe(0)
     renderWith(<SignIn redirect={() => undefined} pending={{ save: () => undefined }} />, { ...withSettings, api: fakeApi(), accounts: fakeAccounts() })
     await act(async () => undefined)
-    await passGate('BG', 1990)
+    await passGate('BG')
     expect(screen.getByText(/the words you studied in the demo are deleted/)).toBeTruthy()
   })
 
@@ -141,7 +146,7 @@ describe('SignIn: a code by email (spec §8.6)', () => {
     ['anything else', new ApiError(500, 'internal'), 'Something went wrong. Try again.'],
   ])('explains %s when asking for a code', async (_, error, message) => {
     await render({}, { sendCode: async () => Promise.reject(error) })
-    await passGate('BG', 1990)
+    await passGate('BG')
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'ana@example.com' } })
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Email me a code' })))
     expect(screen.getByRole('alert').textContent).toBe(message)
@@ -150,7 +155,7 @@ describe('SignIn: a code by email (spec §8.6)', () => {
 
   it('refuses an email that is not one', async () => {
     const { api } = await render()
-    await passGate('BG', 1990)
+    await passGate('BG')
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'ana' } })
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Email me a code' })))
     expect(screen.getByRole('alert').textContent).toBe('Enter an email address, like name@example.com.')
@@ -159,7 +164,7 @@ describe('SignIn: a code by email (spec §8.6)', () => {
 
   it('says a wrong code is wrong, tied to the field, and keeps the learner on the code', async () => {
     const { accounts } = await render({}, { verifyCode: async () => Promise.reject(new ApiError(400, 'INVALID_OTP')) })
-    await passGate('BG', 1990)
+    await passGate('BG')
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'ana@example.com' } })
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Email me a code' })))
     fireEvent.change(screen.getByLabelText('Code'), { target: { value: '000000' } })
@@ -174,7 +179,7 @@ describe('SignIn: a code by email (spec §8.6)', () => {
 
   it('shows a form error, not the field, when verify fails for a reason other than a wrong code', async () => {
     const { accounts } = await render({}, { verifyCode: async () => Promise.reject(new ApiError(500, 'internal')) })
-    await passGate('BG', 1990)
+    await passGate('BG')
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'ana@example.com' } })
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Email me a code' })))
     fireEvent.change(screen.getByLabelText('Code'), { target: { value: '123456' } })
@@ -195,7 +200,7 @@ describe('SignIn: a code by email (spec §8.6)', () => {
     const accounts = fakeAccounts()
     renderWith(<SignIn redirect={() => undefined} pending={{ save: () => undefined }} />, { ...ctx, api, accounts })
     await act(async () => undefined)
-    await passGate('BG', 1990)
+    await passGate('BG')
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'ana@example.com' } })
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Email me a code' })))
     expect(screen.queryByText('Signing you in…')).toBeNull()
@@ -222,7 +227,7 @@ describe('SignIn: a code by email (spec §8.6)', () => {
     const accounts = fakeAccounts()
     renderWith(<SignIn redirect={() => undefined} pending={{ save: () => undefined }} />, { ...ctx, api, accounts })
     await act(async () => undefined)
-    await passGate('BG', 1990)
+    await passGate('BG')
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'ana@example.com' } })
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Email me a code' })))
     fireEvent.click(screen.getByRole('button', { name: 'Send a new code' }))
@@ -241,7 +246,7 @@ describe('SignIn: a code by email (spec §8.6)', () => {
     })
     await act(async () => undefined)
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Sign in again')
-    await passGate('BG', 1990)
+    await passGate('BG')
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'bo@example.com' } })
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Email me a code' })))
     fireEvent.change(screen.getByLabelText('Code'), { target: { value: '123456' } })
@@ -253,7 +258,7 @@ describe('SignIn: a code by email (spec §8.6)', () => {
 describe('SignIn: Google (spec §8.6)', () => {
   it('keeps the gate’s country for the return, then goes to Google', async () => {
     const { redirects, pending } = await render()
-    await passGate('BG', 1990)
+    await passGate('BG')
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue with Google' })))
     expect(pending).toEqual([{ country: 'BG' }])
     expect(redirects).toEqual(['https://accounts.google.com/o/oauth2/auth'])
@@ -261,7 +266,7 @@ describe('SignIn: Google (spec §8.6)', () => {
 
   it('says so when Google is not available', async () => {
     const { redirects } = await render({}, { googleUrl: async () => Promise.reject(new ApiError(404, 'PROVIDER_NOT_FOUND')) })
-    await passGate('BG', 1990)
+    await passGate('BG')
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue with Google' })))
     expect(screen.getByRole('alert').textContent).toBe('Google sign-in isn’t available right now. Use a code by email.')
     expect(redirects).toEqual([])
@@ -271,7 +276,7 @@ describe('SignIn: Google (spec §8.6)', () => {
 describe('SignIn: the privacy policy (spec §11)', () => {
   it('links to the policy where the email address is asked for', async () => {
     await render()
-    await passGate('BG', 1990)
+    await passGate('BG')
     expect(screen.getByRole('link', { name: 'Privacy policy' }).getAttribute('href')).toBe('/privacy')
   })
 })

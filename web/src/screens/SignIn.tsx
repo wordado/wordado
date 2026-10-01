@@ -1,7 +1,7 @@
 import { useClient } from '@wordado/client-data'
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { ApiError, OfflineError } from '../account/api'
-import { checkBirthYear } from '../account/ageGate'
+import { consentAge } from '../account/ageGate'
 import { countryOptions } from '../account/countries'
 import { pendingSignIn, type PendingSignIn } from '../account/storage'
 import { useApp } from '../app/context'
@@ -53,21 +53,26 @@ function Field(props: {
   )
 }
 
+/** The wizard's steps, as its counter numbers them. */
+const STEP_NUMBER = { gate: 1, method: 2, code: 3 } as const
+
 /**
- * Sign-in and sign-up are one flow (spec §8.6): the age gate (spec §11),
- * then a code by email or Google. The server creates the account at the
- * first sign-in, so the gate comes first every time. Only the country is
- * kept; the birth year is checked here and forgotten. The native language
- * is asked by the first-run setup, right after sign-up (plan 11), not here.
+ * Sign-in and sign-up are one flow (spec §8.6), as a wizard in the first-run
+ * setup's look: the age gate (spec §11), then a code by email or Google, then
+ * the code. The server creates the account at the first sign-in, so the gate
+ * comes first every time. The gate asks where the learner lives and that they
+ * are at least the age it sets; only the country is kept, and no birth date is
+ * asked. The native language is asked by the first-run setup, right after
+ * sign-up (plan 11), not here.
  */
 export function SignIn(props: { readonly redirect?: (url: string) => void; readonly pending?: { save(p: PendingSignIn): void } }) {
   const { t, locale } = useT()
-  const { api, accounts, account, env } = useApp()
+  const { api, accounts, account } = useApp()
   const client = useClient()
   const online = useOnline()
   const [step, setStep] = useState<Step>({ kind: 'gate' })
   const [country, setCountry] = useState<string | null>(null)
-  const [year, setYear] = useState('')
+  const [ageConfirmed, setAgeConfirmed] = useState(false)
   const [email, setEmail] = useState('')
   const [code, setCode] = useState('')
   const [fieldError, setFieldError] = useState<MessageKey | null>(null)
@@ -129,13 +134,11 @@ export function SignIn(props: { readonly redirect?: (url: string) => void; reado
     setInfo(null)
   }
 
+  const age = consentAge(country)
   const submitGate = (event: FormEvent) => {
     event.preventDefault()
     reset()
-    const result = checkBirthYear(year, country, env.now())
-    if (result.status === 'invalid') setFieldError('signin.birthYearInvalid')
-    else if (result.status === 'too-young') setStep({ kind: 'too-young', age: result.age })
-    else setStep({ kind: 'method' })
+    if (ageConfirmed) setStep({ kind: 'method' })
   }
 
   const requestCode = async (address: string): Promise<boolean> => {
@@ -232,140 +235,153 @@ export function SignIn(props: { readonly redirect?: (url: string) => void; reado
 
   if (step.kind === 'too-young') {
     return (
-      <section className="signin" aria-labelledby="signin-title">
-        <h1 id="signin-title" ref={heading} tabIndex={-1}>
-          {t('signin.tooYoungTitle')}
-        </h1>
-        <p>{t('signin.tooYoung', { age: step.age })}</p>
-        <Link className="button" to={{ name: 'home' }}>
-          {t('signin.backToDemo')}
-        </Link>
+      <section className="setup signin" aria-labelledby="signin-title">
+        <div className="setup-head">
+          <h1 id="signin-title" ref={heading} tabIndex={-1}>
+            {t('signin.tooYoungTitle')}
+          </h1>
+        </div>
+        <div className="panel form-section">
+          <p>{t('signin.tooYoung', { age: step.age })}</p>
+          <div className="actions">
+            <Link className="button primary" to={{ name: 'home' }}>
+              {t('signin.backToDemo')}
+            </Link>
+          </div>
+        </div>
       </section>
     )
   }
-
   return (
-    <section className="signin" aria-labelledby="signin-title">
-      <h1 id="signin-title" ref={heading} tabIndex={-1}>
-        {title}
-      </h1>
+    <section className="setup signin" aria-labelledby="signin-title">
+      <div className="setup-head">
+        <h1 id="signin-title">{title}</h1>
+        <p className="eyebrow">{t('setup.step', { n: STEP_NUMBER[step.kind], count: 3 })}</p>
+      </div>
       {!online && <p className="note">{t('signin.offline')}</p>}
-
-      {step.kind === 'gate' && (
-        <form onSubmit={submitGate} noValidate>
-          <p className="lede">{t('signin.gateIntro')}</p>
-          <Field label={t('signin.country')} error={null}>
-            {({ id }) => (
-              <select
-                id={id}
-                value={country ?? ''}
-                onChange={(e) => {
-                  countryTouched.current = true
-                  setCountry(e.target.value === '' ? null : e.target.value)
-                }}
-              >
-                <option value="">{t('signin.countryUnknown')}</option>
-                {countries.map((c) => (
-                  <option key={c.code} value={c.code}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            )}
-          </Field>
-          <Field label={t('signin.birthYear')} hint={t('signin.birthYearHint')} error={fieldError === 'signin.birthYearInvalid' ? t(fieldError) : null}>
-            {({ id, describedBy, invalid }) => (
-              <input
-                id={id}
-                inputMode="numeric"
-                autoComplete="bday-year"
-                maxLength={4}
-                value={year}
-                aria-describedby={describedBy}
-                aria-invalid={invalid || undefined}
-                onChange={(e) => setYear(e.target.value)}
-              />
-            )}
-          </Field>
-          <button type="submit" className="button primary">
-            {t('signin.continue')}
-          </button>
-        </form>
-      )}
-
-      {step.kind === 'method' && (
-        <>
-          {account === null && demoHasProgress && <p className="note demo-note">{t('signin.demoNote')}</p>}
-          <form onSubmit={(e) => void submitEmail(e)} noValidate>
-            <Field label={t('signin.email')} error={fieldError === 'signin.emailInvalid' ? t(fieldError) : null}>
+      <div className="panel form-section">
+        {step.kind === 'gate' && (
+          <form onSubmit={submitGate} noValidate>
+            <h2 ref={heading} tabIndex={-1}>
+              {t('signin.stepGate')}
+            </h2>
+            <p className="note">{t('signin.gateIntro')}</p>
+            <Field label={t('signin.country')} error={null}>
+              {({ id }) => (
+                <select
+                  id={id}
+                  value={country ?? ''}
+                  onChange={(e) => {
+                    countryTouched.current = true
+                    setCountry(e.target.value === '' ? null : e.target.value)
+                    // Another country may set another age: confirm it again.
+                    setAgeConfirmed(false)
+                  }}
+                >
+                  <option value="">{t('signin.countryUnknown')}</option>
+                  {countries.map((c) => (
+                    <option key={c.code} value={c.code}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </Field>
+            <div className="field">
+              <label className="check">
+                <input type="checkbox" checked={ageConfirmed} onChange={(e) => setAgeConfirmed(e.target.checked)} />
+                {t('signin.ageConfirm', { age })}
+              </label>
+            </div>
+            <div className="actions">
+              <button type="submit" className="button primary" disabled={!ageConfirmed}>
+                {t('signin.continue')}
+              </button>
+              <button type="button" className="link-button" onClick={() => setStep({ kind: 'too-young', age })}>
+                {t('signin.younger', { age })}
+              </button>
+            </div>
+          </form>
+        )}
+        {step.kind === 'method' && (
+          <>
+            <h2 ref={heading} tabIndex={-1}>
+              {t('signin.stepMethod')}
+            </h2>
+            {account === null && demoHasProgress && <p className="note demo-note">{t('signin.demoNote')}</p>}
+            <form onSubmit={(e) => void submitEmail(e)} noValidate>
+              <Field label={t('signin.email')} error={fieldError === 'signin.emailInvalid' ? t(fieldError) : null}>
+                {({ id, describedBy, invalid }) => (
+                  <input
+                    id={id}
+                    type="email"
+                    autoComplete="email"
+                    value={email}
+                    aria-describedby={describedBy}
+                    aria-invalid={invalid || undefined}
+                    onChange={(e) => setEmail(e.target.value)}
+                  />
+                )}
+              </Field>
+              {formAlert}
+              <button type="submit" className="button primary signin-wide" disabled={busy || !online}>
+                {t('signin.sendCode')}
+              </button>
+            </form>
+            <p className="or">{t('signin.or')}</p>
+            <button type="button" className="button signin-wide" disabled={busy || !online} onClick={() => void google()}>
+              {t('signin.google')}
+            </button>
+            <p className="privacy-link">
+              <a href="/privacy">{t('privacy.link')}</a>
+            </p>
+          </>
+        )}
+        {step.kind === 'code' && (
+          <form onSubmit={(e) => void submitCode(e)} noValidate>
+            <h2 ref={heading} tabIndex={-1}>
+              {t('signin.stepCode')}
+            </h2>
+            <p>{t('signin.codeSent', { email: step.email })}</p>
+            <Field label={t('signin.code')} error={fieldError === 'signin.codeInvalid' || fieldError === 'signin.codeWrong' ? t(fieldError) : null}>
               {({ id, describedBy, invalid }) => (
                 <input
                   id={id}
-                  type="email"
-                  autoComplete="email"
-                  value={email}
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={6}
+                  value={code}
                   aria-describedby={describedBy}
                   aria-invalid={invalid || undefined}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => setCode(e.target.value)}
                 />
               )}
             </Field>
             {formAlert}
-            <button type="submit" className="button primary" disabled={busy || !online}>
-              {t('signin.sendCode')}
-            </button>
+            {info !== null && <p role="status">{t(info)}</p>}
+            {verifying && <p role="status">{t('signin.working')}</p>}
+            <div className="actions">
+              <button type="submit" className="button primary" disabled={busy}>
+                {t('signin.verify')}
+              </button>
+              <button type="button" className="link-button" disabled={busy} onClick={() => void resend()}>
+                {t('signin.resend')}
+              </button>
+              <button
+                type="button"
+                className="link-button"
+                onClick={() => {
+                  reset()
+                  setCode('')
+                  setStep({ kind: 'method' })
+                }}
+              >
+                {t('signin.otherEmail')}
+              </button>
+            </div>
           </form>
-          <p className="or">{t('signin.or')}</p>
-          <button type="button" className="button" disabled={busy || !online} onClick={() => void google()}>
-            {t('signin.google')}
-          </button>
-          <p className="privacy-link">
-            <a href="/privacy">{t('privacy.link')}</a>
-          </p>
-        </>
-      )}
-
-      {step.kind === 'code' && (
-        <form onSubmit={(e) => void submitCode(e)} noValidate>
-          <p>{t('signin.codeSent', { email: step.email })}</p>
-          <Field label={t('signin.code')} error={fieldError === 'signin.codeInvalid' || fieldError === 'signin.codeWrong' ? t(fieldError) : null}>
-            {({ id, describedBy, invalid }) => (
-              <input
-                id={id}
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                maxLength={6}
-                value={code}
-                aria-describedby={describedBy}
-                aria-invalid={invalid || undefined}
-                onChange={(e) => setCode(e.target.value)}
-              />
-            )}
-          </Field>
-          {formAlert}
-          {info !== null && <p role="status">{t(info)}</p>}
-          {verifying && <p role="status">{t('signin.working')}</p>}
-          <button type="submit" className="button primary" disabled={busy}>
-            {t('signin.verify')}
-          </button>
-          <p className="actions">
-            <button type="button" className="link-button" disabled={busy} onClick={() => void resend()}>
-              {t('signin.resend')}
-            </button>
-            <button
-              type="button"
-              className="link-button"
-              onClick={() => {
-                reset()
-                setCode('')
-                setStep({ kind: 'method' })
-              }}
-            >
-              {t('signin.otherEmail')}
-            </button>
-          </p>
-        </form>
-      )}
+        )}
+      </div>
     </section>
   )
 }

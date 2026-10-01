@@ -15,27 +15,8 @@ export const CONSENT_AGE: Readonly<Record<string, number>> = {
 export const UNKNOWN_COUNTRY_AGE = 16
 /** Outside the EEA (spec §11). */
 export const OUTSIDE_EEA_AGE = 13
-export const MIN_BIRTH_YEAR = 1900
 
 export function consentAge(country: string | null): number {
   if (country === null) return UNKNOWN_COUNTRY_AGE
   return CONSENT_AGE[country] ?? OUTSIDE_EEA_AGE
-}
-
-export type BirthYearCheck = { readonly status: 'ok' } | { readonly status: 'invalid' } | { readonly status: 'too-young'; readonly age: number }
-
-/**
- * Whether a learner who gives `text` as their birth year may sign up where
- * they live (spec §11). Only the year is asked, so the youngest age it
- * allows is used: born in 2010, a learner is 15 until their birthday in 2026.
- * The year is never stored.
- */
-export function checkBirthYear(text: string, country: string | null, now: number): BirthYearCheck {
-  const trimmed = text.trim()
-  if (!/^\d{4}$/.test(trimmed)) return { status: 'invalid' }
-  const year = Number(trimmed)
-  const current = new Date(now).getFullYear()
-  if (year < MIN_BIRTH_YEAR || year > current) return { status: 'invalid' }
-  const age = consentAge(country)
-  return current - year - 1 >= age ? { status: 'ok' } : { status: 'too-young', age }
 }
