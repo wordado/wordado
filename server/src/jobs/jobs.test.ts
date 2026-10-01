@@ -1,6 +1,8 @@
 import { replay, SCHEDULER_VERSION, type ReviewState, type WordId } from '@wordado/core'
 import { describe, expect, it } from 'vitest'
+import { TEST_DATABASE_URL } from '../../test/db'
 import { harness, type Harness, type Session } from '../../test/harness'
+import { createPool, pgDb } from '../db/db'
 import { pushPage, rawEvent } from '../../test/events'
 import { loadEvents, toStampedEvent } from '../sync/events'
 import { handleJob, REDERIVE_BATCH, REDERIVE_RETRY_MS, requestStaleRederivations } from './rederive'
@@ -52,6 +54,29 @@ describe('re-derivation (spec §4.3)', () => {
     await h.deps.db.query(`insert into learner (user_id, derived_scheduler_version) select id, 'fsrs5-old' from "user" where id like 'bulk-%'`)
     expect(await requestStaleRederivations(h.deps)).toBe(REDERIVE_BATCH)
     expect(await requestStaleRederivations(h.deps)).toBe(5)
+  })
+
+  it(`keeps to ${REDERIVE_BATCH} whatever join plan Postgres picks`, async () => {
+    const h = harness()
+    const s = await h.signIn()
+    await answer(h, s, ['c:w-1'])
+    const [row] = await h.deps.db.query<{ created_at: Date }>('select "createdAt" as created_at from "user" where id = $1', [s.userId])
+    await h.deps.db.query(
+      `insert into "user" (id, name, email, "emailVerified", "createdAt", "updatedAt")
+       select 'bulk-' || n, '', 'bulk-' || n || '@example.com', true, $1, $1 from generate_series(1, $2) as n`,
+      [row!.created_at, REDERIVE_BATCH + 5],
+    )
+    await h.deps.db.query(`insert into learner (user_id, derived_scheduler_version) select id, 'fsrs5-old' from "user" where id like 'bulk-%'`)
+    // The plan that made this flaky: a nested-loop semi join that rescans the limited, locking selection once per
+    // learner. Each rescan skips the rows this statement already updated, so the limit kept moving on.
+    const url = new URL(TEST_DATABASE_URL)
+    url.searchParams.set('options', '-c enable_hashjoin=off -c enable_hashagg=off -c enable_mergejoin=off -c enable_sort=off -c enable_material=off')
+    const db = pgDb(createPool(url.toString(), 1))
+    try {
+      expect(await requestStaleRederivations({ ...h.deps, db })).toBe(REDERIVE_BATCH)
+    } finally {
+      await db.end()
+    }
   })
 
   it("rebuilds a learner's state from the log and records the current version", async () => {
