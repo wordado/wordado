@@ -104,8 +104,10 @@ test('Settings › About says the demo’s word list is Wordado’s own, from th
 })
 
 // Every screen is scanned, in two tests: one walk through every screen outgrew the 30 s test budget in Firefox
-// on CI (each scan takes about a second there, light and dark).
+// on CI (each scan takes about a second there, light and dark). The study walk, the longer one, also keeps the
+// slow timeout from #51 as a margin.
 test('meets WCAG 2.2 A and AA on the study screens (spec §11.1)', async ({ page }) => {
+  test.slow()
   await page.goto('/')
   await finishSetup(page)
   await expect(heading(page)).toHaveText('10 new words')
