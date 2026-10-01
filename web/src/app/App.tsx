@@ -65,7 +65,7 @@ function Screen(props: { readonly route: Route }) {
 }
 
 /** Routes that run a study session: the shell steps aside so the card has the screen (focus mode). */
-const FOCUS: ReadonlySet<Route['name']> = new Set(['study', 'practice-words', 'matching'])
+const FOCUS: ReadonlySet<Route['name']> = new Set(['study', 'practice-words', 'matching', 'placement'])
 
 /**
  * The shell: the masthead's first row (the icon and wordmark, the language,

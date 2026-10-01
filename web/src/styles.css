@@ -1121,6 +1121,49 @@ main:focus,
   }
 }
 
+/* The placement test: the study look, with its title in the top bar and "I don't know" set apart */
+
+.study-bar-title {
+  flex-grow: 1;
+  margin: 0;
+  font: 600 var(--step-0) / 1.3 var(--font-ui);
+}
+
+.placement-intro {
+  margin: 0 0 var(--space-3);
+}
+
+.dont-know {
+  width: 100%;
+  min-height: 3.25rem;
+  color: var(--ink-soft);
+  background: transparent;
+  border: 1.5px dashed var(--rule);
+  border-radius: 1rem;
+}
+
+.dont-know .option-key {
+  display: inline-grid;
+  place-items: center;
+  width: 1.625rem;
+  height: 1.625rem;
+  font-weight: 600;
+  background: var(--paper-raised);
+  border-radius: 0.4375rem;
+}
+
+.level-badge {
+  display: grid;
+  place-items: center;
+  min-width: 5.5rem;
+  height: 4.5rem;
+  padding: 0 var(--space-4);
+  font: 600 2.25rem / 1 var(--font-entry);
+  color: var(--paper);
+  background: var(--ink);
+  border-radius: 1.25rem;
+}
+
 /* The end of a run */
 
 .app > main > .done {
@@ -2267,8 +2310,14 @@ dialog.report textarea {
   margin-top: var(--space-1);
 }
 
+.setup h1:focus,
 .setup h2:focus {
   outline: none;
+}
+
+/* In focus mode (the placement test's "not yet") there is no masthead above: give the title room. */
+.app.is-focus > main > .setup {
+  padding-top: var(--space-5);
 }
 
 /* A step's ways on: stacked on a phone, the primary first; in a row on the right from 48rem. */

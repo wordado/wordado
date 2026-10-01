@@ -34,7 +34,17 @@ describe('Placement (spec §7.2)', () => {
     const heading = screen.getByRole('heading', { level: 1 })
     expect(heading.textContent).toBe('The placement test isn’t available yet')
     expect(document.activeElement).toBe(heading)
-    expect(screen.getByRole('link', { name: 'Back to settings' }).getAttribute('href')).toBe('/settings')
+    // The test is offered under Settings › Studying, so that is the way back.
+    expect(screen.getByRole('link', { name: 'Back to settings' }).getAttribute('href')).toBe('/settings/study')
+  })
+
+  it('asks in focus mode: a way back, the count, the word on its card, the answers and “I don’t know”', async () => {
+    await withBands()
+    expect(screen.getByRole('link', { name: 'Back to settings' }).getAttribute('href')).toBe('/settings/study')
+    expect(document.querySelector('.study-bar')?.textContent).toContain('0 words answered')
+    expect(document.querySelector('.card .hw-word')).not.toBeNull()
+    expect(document.querySelectorAll('.study-actions .option')).toHaveLength(4)
+    expect(screen.getByRole('button', { name: 'I don’t know' }).classList.contains('dont-know')).toBe(true)
   })
 
   it('places a learner who knows every word at the highest band, and uses it once accepted', async () => {
@@ -45,6 +55,9 @@ describe('Placement (spec §7.2)', () => {
       await act(async () => fireEvent.click(screen.getByRole('button', { name: (name) => name.includes(answer) })))
     }
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Your level: B1')
+    // The result is a card with the level as a badge, the choice below it.
+    expect(document.querySelector('.done-card .level-badge')?.textContent).toBe('B1')
+    expect([...document.querySelectorAll('.done-actions > *')].map((e) => e.textContent)).toEqual(['Use B1', 'Keep A1'])
     expect(client.snapshot.settings.declaredLevel).toBe('A1')
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Use B1' })))
     expect(client.snapshot.settings.declaredLevel).toBe('B1')
