@@ -535,6 +535,57 @@ Expected: PASS.
 
 ---
 
+### Task 7a: web — the setup in the Settings look
+
+Added at plan review, after the product owner's direction: "all the pages that you made for the wizard should be styled in same way" as Settings (PR #48: a menu of sections, steppers, segments and switches).
+
+**Files:**
+- Modify:
+  - `web/src/styles.css`
+  - `web/src/setup/Setup.tsx`, `LanguageStep.tsx`, `LevelStep.tsx`, `ThemeStep.tsx`, `GoalStep.tsx`, `step.tsx`
+- Test: `web/src/setup/*.test.tsx`
+
+**Interfaces:**
+- Consumes: Settings' existing classes and components:
+  - `panel`, `.settings-section` (its `h2`, `h3`, `.field` and `.choices` rules);
+  - `choices segmented-field` + `segmented` (the level control in `StudySettings`);
+  - `switch-field`, and `NumberSetting` / `DailyGoalSetting`;
+  - `settings-row` (an icon, a title and a note).
+
+- [ ] **Step 1: Share the section styles, don't copy them.** The `.settings-section …` rules for headings, fields and choices also apply to a new class, `.form-section`. Do this either by adding `.form-section` to those selectors or by renaming them to a shared class used by both. Settings looks exactly as before.
+- [ ] **Step 2: The setup's layout.**
+  - The setup is one `panel form-section` card, with the same width as a Settings section page.
+  - Its title (`h1`) and step counter (the `eyebrow`) sit above the card, as Settings' title sits above its page.
+  - On a phone it fills the width with the 16 px gutter, as Settings does.
+- [ ] **Step 3: Each step uses the Settings controls.**
+  - **Language:** the native-language choice looks like Settings › Languages' choices (`.choices` inside the shared section style). The download bar and its note sit under it, and the buttons are in `.actions`.
+  - **Level:** a segmented control exactly like `StudySettings`' level (`choices segmented-field` + `segmented`, the code shown and the full name as the label), with its note under it.
+  - **Theme:** each theme is a row in the `settings-row` style: the theme's icon (as on the Themes page's cards), its name, and its description as the note. Activating a row chooses the theme. These are real buttons with the theme's name as their accessible name.
+  - **Goal:** `DailyGoalSetting` (switch and stepper) and `ReminderSettings`, inside the shared section style.
+  - **The step actions:**
+    - Start studying is `button primary`, Skip is `link-button`, and they are right-aligned on wide screens as Settings' actions are.
+    - On a phone they stack, with the primary button first.
+- [ ] **Step 4: The change-mode language page** (Task 7's `/settings/native-language`) renders inside the Settings page layout:
+  - `settings-page`, with the `settings-back` link to Languages in place of the step's own Back link;
+  - a `panel settings-section` around `LanguageStep`.
+
+  If Task 7 already did this, check it.
+- [ ] **Step 5: Tests.**
+  - The behaviour tests stay green.
+  - Add assertions that hold the look in place:
+    - the Level step renders radios inside a `.segmented` group;
+    - the Theme step's choices are buttons inside a `settings-row`-styled list;
+    - the setup card has the `panel` class.
+  - The e2e accessibility checks in Task 8 cover contrast and names.
+- [ ] **Step 6: Run and commit.**
+
+Run: `cd web && npx vitest run && cd .. && pnpm typecheck && pnpm lint`
+Expected: PASS.
+
+Commit subject: `style(web): the first-run setup in the Settings look`.
+
+---
+
 ### Task 8: e2e — the setup end to end, and every existing spec through it
 
 **Files:**
