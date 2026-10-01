@@ -187,7 +187,9 @@ Expected: both dry runs succeed, and the production one lists the route `app.wor
 ## Moving the app to app.wordado.com (2026-10)
 
 Done once, in one sitting, in this order. The website must already be built and checked on its preview
-address, and its launch check must pass (wordado-site `docs/deploy.md`, "Going live").
+address (wordado-site `docs/deploy.md`). Its legal pages need not be final yet: until its launch check passes,
+it deploys with `noindex` on every page, so it is reachable but kept out of search engines (decided
+2026-10-01: the app moves before the legal review).
 
 1. **Google Auth Platform › Clients › the web client:** add the authorised JavaScript origin
    `https://app.wordado.com` and the redirect URI `https://app.wordado.com/api/auth/callback/google`.
@@ -215,8 +217,8 @@ In `docs/superpowers/plans/2026-09-21-phase-1a-roadmap.md`, the privacy sentence
 ```markdown
   The privacy policy now lives on the website (`wordado/wordado-site`, `src/content/<lang>/privacy.md`, served at
   `https://wordado.com/<lang>/privacy/`) with the terms and the Impressum; all three name the controller as
-  `[Controller name]`, `[Address]` and `[Contact email]`, and the website refuses to go live until the review has
-  filled them in (`pnpm launch-check`).
+  `[Controller name]`, `[Address]` and `[Contact email]`, and the website stays out of search engines (`noindex`)
+  until the review has filled them in (`pnpm launch-check`).
 ```
 Leave the rest of that bullet (Google's app in Testing, the order before the beta) as it is.
 
@@ -248,8 +250,8 @@ gh pr create --draft --title "Move the app to app.wordado.com" --body "The app a
 Not code: the human partner follows `docs/deploy.md` › "Moving the app to app.wordado.com", steps 1–9, with the draft pull request from Task 2 merged at step 4. Preconditions, all true before starting:
 
 - [ ] The website builds and passes its checks on its preview address.
-- [ ] The website's `pnpm launch-check` passes (the legal review is done, in all three languages).
-- [ ] A native speaker has read the website's Bulgarian and German pages.
+- [ ] The website's Cloudflare secrets are set, so its production deploy can run (hidden with `noindex` until its
+      legal pages are final; the legal review and the native read gate indexing and the beta announcement, not the move).
 - [ ] Steps 1–9 done; the checks of steps 5 and 8 pass.
 - [ ] Update the memory and roadmap: the app is at `app.wordado.com`.
 
