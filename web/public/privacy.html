@@ -15,6 +15,7 @@
     <style>
       :root {
         --paper: #f6f7fb;
+        --paper-raised: #ffffff;
         --ink: #1d2b53;
         --ink-soft: #4b5675;
         --rule: #d9deea;
@@ -24,6 +25,7 @@
       @media (prefers-color-scheme: dark) {
         :root {
           --paper: #141c33;
+          --paper-raised: #1b2542;
           --ink: #e8ebf5;
           --ink-soft: #a9b1c9;
           --rule: #2e3a5c;
@@ -37,10 +39,59 @@
         font: 400 1rem / 1.6 system-ui, sans-serif;
         -webkit-text-size-adjust: 100%;
       }
-      main {
-        max-width: 42rem;
+      /* The app's look, without the app: a header with the wordmark, then the text on one card. */
+      header {
+        background: var(--paper-raised);
+        border-bottom: 1px solid var(--rule);
+      }
+      .bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        max-width: 45rem;
         margin: 0 auto;
-        padding: 2rem 1rem 4rem;
+        padding: 0.75rem 1rem;
+      }
+      .wordmark {
+        display: flex;
+        align-items: center;
+        gap: 0.625rem;
+        font: 600 1.375rem / 1 Georgia, serif;
+        color: var(--ink);
+        text-decoration: none;
+      }
+      .wordmark img {
+        display: block;
+        width: 2rem;
+        height: 2rem;
+        border-radius: 22%;
+      }
+      .open {
+        font-weight: 600;
+        text-decoration: none;
+      }
+      main {
+        max-width: 45rem;
+        margin: 0 auto;
+        padding: 1.5rem 1rem 4rem;
+      }
+      article {
+        padding: 0.25rem 1.25rem 1.25rem;
+        background: var(--paper-raised);
+        border: 1px solid var(--rule);
+        border-radius: 1.25rem;
+      }
+      @media (min-width: 40rem) {
+        article {
+          padding: 0.5rem 2rem 2rem;
+        }
+      }
+      /* Details only the legal review can fill in, marked so they cannot ship unnoticed. */
+      mark {
+        padding: 0 0.2em;
+        color: inherit;
+        background: color-mix(in srgb, #f2a863 35%, transparent);
+        border-radius: 0.2em;
       }
       h1,
       h2 {
@@ -50,7 +101,7 @@
       }
       h1 {
         font-size: 1.953rem;
-        margin: 1.5rem 0 0.25rem;
+        margin: 0.5rem 0 0.25rem;
       }
       h2 {
         font-size: 1.25rem;
@@ -65,9 +116,12 @@
         outline: 3px solid var(--rose);
         outline-offset: 2px;
       }
-      .updated,
-      .back {
+      .updated {
+        margin: 0 0 1.25rem;
         color: var(--ink-soft);
+      }
+      article > h2:first-child {
+        border-top: 0;
       }
       li + li {
         margin-top: 0.25rem;
@@ -75,10 +129,16 @@
     </style>
   </head>
   <body>
+    <header>
+      <div class="bar">
+        <a class="wordmark" href="/"><img src="/icon.svg" alt="" width="32" height="32" />Wordado</a>
+        <a class="open" href="/">Open the app</a>
+      </div>
+    </header>
     <main>
-      <p class="back"><a href="/">← Wordado</a></p>
       <h1>Privacy policy</h1>
-      <p class="updated">Last updated 27 September 2026</p>
+      <p class="updated">Last updated 1 October 2026</p>
+      <article>
 
       <p>
         Wordado is an app for learning English words. This page says what personal data Wordado collects, why, who
@@ -88,8 +148,8 @@
 
       <h2>Who is responsible</h2>
       <p>
-        The controller of your personal data is [Controller name], [Address]. For anything about your data, write to
-        [Contact email].
+        The controller of your personal data is <mark>[Controller name]</mark>, <mark>[Address]</mark>. For anything about your data, write to
+        <mark>[Contact email]</mark>.
       </p>
 
       <h2>What we collect</h2>
@@ -202,7 +262,7 @@
         </li>
         <li>
           Ask us for access to your data, to correct it, to restrict how we use it, or object to our use of it, by
-          writing to [Contact email].
+          writing to <mark>[Contact email]</mark>.
         </li>
         <li>
           Complain to a data protection authority, such as the one where you live. In Bulgaria, this is the
@@ -222,6 +282,7 @@
         When we change this policy, we update the date at the top of this page. If a change affects how we use data
         we already hold, we will tell you in the app before it takes effect.
       </p>
+      </article>
     </main>
   </body>
 </html>
