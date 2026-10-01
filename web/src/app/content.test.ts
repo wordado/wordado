@@ -44,17 +44,17 @@ describe('content (spec §9.3)', () => {
     const client = await Client.open({ driver: nodeSqliteDriver(), env: testEnv(), l1: 'bg' })
     expect(client.snapshot.corpus).toBeNull()
     const installPacks = vi.spyOn(client, 'installPacks')
-    let online = true
     const stop = startPackChecks({
       client: () => client,
       fetchManifest: async () => sampleManifest,
       fetchPack: sampleFetcher,
-      online: () => online,
+      online: () => true,
       onReport: () => undefined,
     })
     await vi.advanceTimersByTimeAsync(PACK_CHECK_INTERVAL_MS)
     expect(installPacks).not.toHaveBeenCalled()
     stop()
+    await client.close()
   })
 
   it('re-reads the audio index when a new pack becomes active, not before', async () => {
