@@ -277,6 +277,6 @@ describe('SignIn: the privacy policy (spec §11)', () => {
   it('links to the policy where the email address is asked for', async () => {
     await render()
     await passGate('BG')
-    expect(screen.getByRole('link', { name: 'Privacy policy' }).getAttribute('href')).toBe('/privacy')
+    expect(screen.getByRole('link', { name: 'Privacy policy' }).getAttribute('href')).toBe('https://wordado.com/en/privacy/')
   })
 })
