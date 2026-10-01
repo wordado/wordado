@@ -31,7 +31,7 @@ export function Home() {
           <p className="eyebrow" aria-hidden="true">
             {t('nav.home')}
           </p>
-          <h1 id="today" className="today" tabIndex={-1}>
+          <h1 id="today" className="today">
             {nothing ? t('home.allDone') : reviews > 0 ? t('home.reviews', { count: reviews }) : t('home.newWords', { count: fresh })}
           </h1>
           {nothing && <p className="today-more">{t('home.allDoneHint')}</p>}

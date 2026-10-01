@@ -106,6 +106,28 @@ describe('Setup, the demo (plan 11)', () => {
     expect(onFinish).toHaveBeenCalledTimes(1)
   })
 
+  it('Start studying on the goal step finishes the setup (review, fix 1)', async () => {
+    const ctx = await fresh()
+    const onFinish = vi.fn()
+    renderWith(<Setup onFinish={onFinish} />, ctx)
+    await pastLanguage()
+    fireEvent.click(screen.getByRole('button', { name: 'Skip' }))
+    expect(screen.getByRole('heading', { level: 2, name: 'A daily goal' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Start studying' }))
+    expect(onFinish).toHaveBeenCalledTimes(1)
+  })
+
+  it('says so when a theme cannot be saved, and stays on the theme (review, fix 1)', async () => {
+    const ctx = await fresh()
+    renderWith(<Setup onFinish={() => undefined} />, ctx)
+    await pastLanguage()
+    vi.spyOn(ctx.client, 'updateSettings').mockRejectedValue(new Error('disk full'))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Daily life' })))
+    expect(screen.getByRole('alert').textContent).toBe('Your change wasn’t saved: Something went wrong. Try again.')
+    expect(screen.getByRole('heading', { level: 2, name: 'What do you want English for?' })).toBeTruthy()
+    expect(ctx.client.snapshot.settings.activeTheme).toBeNull()
+  })
+
   it('sets a daily goal on the goal step, and offers no reminders to the demo', async () => {
     const ctx = await fresh()
     renderWith(<Setup onFinish={() => undefined} />, ctx)
@@ -136,6 +158,16 @@ describe('Setup, a corpus with two levels (plan 11)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
     expect(screen.getByRole('heading', { level: 2, name: 'What do you want English for?' })).toBeTruthy()
     expect(screen.getByText('Step 3 of 4')).toBeTruthy()
+  })
+
+  it('says so when the level cannot be saved (review, fix 1)', async () => {
+    const ctx = await fresh(twoLevels())
+    renderWith(<Setup onFinish={() => undefined} />, ctx)
+    await pastLanguage()
+    vi.spyOn(ctx.client, 'updateSettings').mockRejectedValue(new Error('disk full'))
+    await act(async () => fireEvent.click(screen.getByRole('radio', { name: /^B1/ })))
+    expect(screen.getByRole('alert').textContent).toBe('Your change wasn’t saved: Something went wrong. Try again.')
+    expect(ctx.client.snapshot.settings.declaredLevel).toBe('A1')
   })
 
   it('Skip leaves A1', async () => {

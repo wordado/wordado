@@ -163,7 +163,7 @@ export const de: Messages = {
   'setup.level.title': 'Dein Englischniveau',
   'setup.level.later': 'Nicht sicher? Du kannst später in den Einstellungen einen kurzen Einstufungstest machen.',
   'setup.goal.title': 'Ein Tagesziel',
-  'setup.goal.hint': 'Freiwillig. Du kannst es jederzeit in den Einstellungen festlegen oder ändern.',
+  'setup.goal.hint': 'Optional. Du kannst es jederzeit in den Einstellungen festlegen oder ändern.',
   'setup.language.title': 'Welche Sprache sprichst du?',
   'setup.language.hint': 'Die Wörter werden in dieser Sprache erklärt. Du kannst sie später in den Einstellungen ändern.',
   'setup.continue': 'Weiter',

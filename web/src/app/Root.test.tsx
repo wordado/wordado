@@ -107,7 +107,9 @@ describe('Root', () => {
     expect(screen.queryByRole('navigation', { name: 'Main' })).toBeNull()
     expect(screen.queryByText(/You are trying Wordado/)).toBeNull()
     // The masthead's first row stays: the wordmark, the interface language and the account.
-    expect(screen.getByRole('link', { name: 'Wordado' })).toBeTruthy()
+    // The wordmark is plain text while the setup shows: home would only show the setup again (review, fix 1).
+    expect(screen.getByText('Wordado', { selector: '.wordmark' })).toBeTruthy()
+    expect(screen.queryByRole('link', { name: 'Wordado' })).toBeNull()
     expect(screen.getByRole('button', { name: 'Interface language: English (EN)' })).toBeTruthy()
   })
 
@@ -117,6 +119,9 @@ describe('Root', () => {
     expect(screen.queryByRole('heading', { name: 'Set up Wordado' })).toBeNull()
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Create an account or sign in')
     expect(screen.queryByRole('navigation', { name: 'Main' })).toBeNull()
+    // From Sign in, the wordmark leads back to the setup.
+    await act(async () => fireEvent.click(screen.getByRole('link', { name: 'Wordado' })))
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Set up Wordado')
   })
 
   it('opens today once the setup is finished, focused, with the navigation back', async () => {
@@ -128,6 +133,20 @@ describe('Root', () => {
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('10 new words')
     expect(screen.getByRole('navigation', { name: 'Main' })).toBeTruthy()
     expect(document.activeElement?.tagName).toBe('MAIN')
+  })
+
+  it('keeps the masthead for a setup reached on a study deep link, and finishes on today (review, fix 1)', async () => {
+    window.history.replaceState(null, '', '/study')
+    await renderRoot({ fresh: true })
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Set up Wordado')
+    expect(screen.getByRole('banner')).toBeTruthy()
+    expect(screen.getByText('Wordado', { selector: '.wordmark' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Interface language: English (EN)' })).toBeTruthy()
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue' })))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Start studying' })))
+    expect(window.location.pathname).toBe('/')
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('10 new words')
+    expect(screen.getByRole('link', { name: 'Today' }).getAttribute('aria-current')).toBe('page')
   })
 
   it('renders today after finishSetup()', async () => {

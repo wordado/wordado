@@ -1,7 +1,7 @@
 import { ChartColumn, LayoutGrid, Route as RouteIcon, SlidersVertical, Sun, type LucideIcon } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { useT, type MessageKey } from '../i18n/i18n'
-import { Link, useRoute, type Route } from '../router'
+import { Link, navigate, useRoute, type Route } from '../router'
 import { Home } from '../screens/Home'
 import { Matching } from '../screens/Matching'
 import { Path } from '../screens/Path'
@@ -90,8 +90,14 @@ export function App(props: { readonly resumed: boolean; readonly setup: boolean;
     main.current?.focus()
   }, [route])
 
-  const focus = FOCUS.has(route.name)
   const inSetup = props.setup && route.name !== 'signin'
+  // The setup is never a study session, whatever the address says: it keeps the masthead.
+  const focus = !inSetup && FOCUS.has(route.name)
+  // Whatever address the setup was reached on, it ends on today.
+  const finishSetup = () => {
+    props.onFinishSetup()
+    navigate({ name: 'home' }, { replace: true })
+  }
   return (
     <div className={focus ? 'app is-focus' : 'app'}>
       <a className="skip" href="#main">
@@ -100,10 +106,18 @@ export function App(props: { readonly resumed: boolean; readonly setup: boolean;
       {!focus && (
         <header className="masthead">
           <div className="masthead-top">
-            <Link className="wordmark" to={{ name: 'home' }}>
-              <img src="/icon.svg" alt="" width="36" height="36" />
-              {t('app.name')}
-            </Link>
+            {/* Inert while the setup shows: home would only show it again. From Sign in it leads back to the setup. */}
+            {inSetup ? (
+              <span className="wordmark">
+                <img src="/icon.svg" alt="" width="36" height="36" />
+                {t('app.name')}
+              </span>
+            ) : (
+              <Link className="wordmark" to={{ name: 'home' }}>
+                <img src="/icon.svg" alt="" width="36" height="36" />
+                {t('app.name')}
+              </Link>
+            )}
             <div className="masthead-actions">
               <LanguageMenu />
               <AccountMenu />
@@ -134,7 +148,7 @@ export function App(props: { readonly resumed: boolean; readonly setup: boolean;
         </aside>
       )}
       <main id="main" ref={main} tabIndex={-1}>
-        {inSetup ? <Setup onFinish={props.onFinishSetup} /> : <Screen route={route} />}
+        {inSetup ? <Setup onFinish={finishSetup} /> : <Screen route={route} />}
       </main>
     </div>
   )

@@ -1,15 +1,11 @@
 import { placementAvailable, useClient, useClientSnapshot } from '@wordado/client-data'
 import { CEFR_LEVELS, MAX_NEW_WORD_LIMIT, MAX_REVIEW_CAP, RETENTION_TARGETS, type CefrLevel, type Corpus, type RetentionSetting, type Settings } from '@wordado/core'
-import { useEffect, useId, useState } from 'react'
+import { useId, useState } from 'react'
 import { errorMessageKey } from '../errors'
 import { useT, type MessageKey } from '../i18n/i18n'
 import { Link } from '../router'
-import { parseWholeNumber } from './fields'
-
-/** The highest daily goal the screen offers; `core` allows any positive whole number. */
-export const MAX_DAILY_GOAL = 1000
-/** What "Set a daily goal" starts from. */
-export const DEFAULT_DAILY_GOAL = 20
+import { DailyGoalSetting } from './DailyGoalSetting'
+import { NumberSetting } from './NumberSetting'
 
 /** Saves one settings field, and says so or says why not (spec §11.1: the result is announced). */
 export function useSave(): { save(patch: Partial<Settings>): Promise<void>; status: string | null } {
@@ -29,79 +25,6 @@ export function useSave(): { save(patch: Partial<Settings>): Promise<void>; stat
   }
 }
 
-/**
- * A number field saved when it is left or Enter is pressed, with − and +
- * beside it that save one step at once. What the learner types stays in the
- * field until it is valid; an invalid value is explained at the field and
- * never reaches `updateSettings`.
- */
-export function NumberSetting(props: {
-  readonly label: string
-  readonly hint: string
-  readonly invalid: string
-  readonly value: number
-  readonly min: number
-  readonly max: number
-  onSave(value: number): Promise<void>
-}) {
-  const { t } = useT()
-  const id = useId()
-  const hintId = useId()
-  const errorId = useId()
-  const [text, setText] = useState(String(props.value))
-  const [error, setError] = useState(false)
-  // A value changed elsewhere (a pull, another field) replaces the text unless the learner is mid-edit with an error.
-  useEffect(() => {
-    if (!error) setText(String(props.value))
-  }, [props.value])
-  const commit = async () => {
-    const value = parseWholeNumber(text, props.min, props.max)
-    setError(value === null)
-    if (value !== null && value !== props.value) await props.onSave(value)
-  }
-  /** One step from what the field shows (or the saved value, while it shows something invalid). */
-  const step = async (by: number) => {
-    const from = parseWholeNumber(text, props.min, props.max) ?? props.value
-    const value = Math.min(props.max, Math.max(props.min, from + by))
-    setText(String(value))
-    setError(false)
-    if (value !== props.value) await props.onSave(value)
-  }
-  return (
-    <div className="field number-field">
-      <label htmlFor={id}>{props.label}</label>
-      <div className="stepper">
-        <button type="button" aria-label={t('settings.less', { label: props.label })} disabled={props.value <= props.min} onClick={() => void step(-1)}>
-          −
-        </button>
-        <input
-          id={id}
-          inputMode="numeric"
-          value={text}
-          aria-describedby={error ? `${hintId} ${errorId}` : hintId}
-          aria-invalid={error || undefined}
-          onChange={(e) => setText(e.target.value)}
-          onBlur={() => void commit()}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') void commit()
-          }}
-        />
-        <button type="button" aria-label={t('settings.more', { label: props.label })} disabled={props.value >= props.max} onClick={() => void step(1)}>
-          +
-        </button>
-      </div>
-      <p className="note" id={hintId}>
-        {props.hint}
-      </p>
-      {error && (
-        <p className="field-error" role="alert" id={errorId}>
-          {props.invalid}
-        </p>
-      )}
-    </div>
-  )
-}
-
 const RETENTIONS = Object.keys(RETENTION_TARGETS) as RetentionSetting[]
 
 /** The levels the installed words come in, and the learner's own: a level with no words would teach nothing. */
@@ -116,7 +39,6 @@ export function StudySettings() {
   const { t } = useT()
   const { settings, corpus } = useClientSnapshot()
   const { save, status } = useSave()
-  const goalHintId = useId()
   const latencyHintId = useId()
   const retentionHintId = useId()
   const levels = offeredLevels(corpus, settings.declaredLevel)
@@ -178,31 +100,7 @@ export function StudySettings() {
           {t(`settings.retention.${settings.retention}Hint` as MessageKey)}
         </p>
       </fieldset>
-      <div className="field switch-field">
-        <label className="check">
-          <input
-            type="checkbox"
-            checked={settings.dailyGoal !== null}
-            aria-describedby={goalHintId}
-            onChange={(e) => void save({ dailyGoal: e.target.checked ? DEFAULT_DAILY_GOAL : null })}
-          />
-          {t('settings.goal')}
-        </label>
-        <p className="note" id={goalHintId}>
-          {t('settings.goalHint')}
-        </p>
-      </div>
-      {settings.dailyGoal !== null && (
-        <NumberSetting
-          label={t('settings.goalAnswers')}
-          hint=""
-          invalid={t('settings.goalInvalid', { max: MAX_DAILY_GOAL })}
-          value={settings.dailyGoal}
-          min={1}
-          max={MAX_DAILY_GOAL}
-          onSave={(dailyGoal) => save({ dailyGoal })}
-        />
-      )}
+      <DailyGoalSetting save={save} />
       <div className="field switch-field">
         <label className="check">
           <input type="checkbox" checked={settings.audio} onChange={(e) => void save({ audio: e.target.checked })} />
