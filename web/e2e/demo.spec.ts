@@ -103,7 +103,9 @@ test('Settings › About says the demo’s word list is Wordado’s own, from th
   await expect(page.getByText('This word list was prepared by Wordado.')).toBeVisible()
 })
 
-test('meets WCAG 2.2 A and AA on every screen (spec §11.1)', async ({ page }) => {
+// Every screen is scanned, in two tests: one walk through every screen outgrew the 30 s test budget in Firefox
+// on CI (each scan takes about a second there, light and dark).
+test('meets WCAG 2.2 A and AA on the study screens (spec §11.1)', async ({ page }) => {
   await page.goto('/')
   await finishSetup(page)
   await expect(heading(page)).toHaveText('10 new words')
@@ -142,7 +144,11 @@ test('meets WCAG 2.2 A and AA on every screen (spec §11.1)', async ({ page }) =
   await page.goto('/study?mode=multiple_choice')
   await expect(page.locator('.card[data-phase="prompt"]')).toBeVisible()
   await expectAccessible(page)
+})
 
+test('meets WCAG 2.2 A and AA on settings and sign-in, light and dark (spec §11.1)', async ({ page }) => {
+  await page.goto('/')
+  await finishSetup(page)
   for (const path of ['/settings', '/settings/study', '/settings/languages', '/settings/native-language', '/signin', '/settings/placement']) {
     await page.goto(path)
     await expect(heading(page)).toBeVisible()
