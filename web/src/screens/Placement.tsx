@@ -1,4 +1,5 @@
 import { PlacementRun, placementSource, useClient, useClientSnapshot, type PlacementSource } from '@wordado/client-data'
+import { X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useApp } from '../app/context'
 import { useT } from '../i18n/i18n'
@@ -7,9 +8,10 @@ import { Headword, Translation } from '../study/Headword'
 import { useStore } from '../useStore'
 
 /**
- * The optional placement test (spec §7.2). Questions carry no feedback, since
- * the test measures rather than teaches. Nothing changes until the learner
- * takes the result.
+ * The optional placement test (spec §7.2), in focus mode like a study run.
+ * Questions carry no feedback, since the test measures rather than teaches.
+ * Nothing changes until the learner takes the result. It is offered under
+ * Settings › Studying, so every way back leads there.
  */
 export function Placement(props: { readonly source?: PlacementSource }) {
   const { t } = useT()
@@ -45,62 +47,79 @@ export function Placement(props: { readonly source?: PlacementSource }) {
     else heading.current?.focus()
   }, [s.item, s.phase])
 
+  const back = { name: 'settings', section: 'study' } as const
   if (s.phase === 'unavailable') {
     return (
-      <section aria-labelledby="placement-title">
-        <h1 id="placement-title" ref={heading} tabIndex={-1}>
-          {t('placement.unavailableTitle')}
-        </h1>
-        <p>{t('placement.unavailableNote')}</p>
-        <Link className="button" to={{ name: 'settings' }}>
-          {t('placement.back')}
-        </Link>
+      <section className="setup" aria-labelledby="placement-title">
+        <div className="setup-head">
+          <h1 id="placement-title" ref={heading} tabIndex={-1}>
+            {t('placement.unavailableTitle')}
+          </h1>
+        </div>
+        <div className="panel form-section">
+          <p>{t('placement.unavailableNote')}</p>
+          <div className="actions">
+            <Link className="button" to={back}>
+              {t('placement.back')}
+            </Link>
+          </div>
+        </div>
       </section>
     )
   }
-
   if (s.phase === 'result' || s.phase === 'accepted') {
     const level = s.result!
     return (
       <section className="done" aria-labelledby="placement-title">
-        <h1 id="placement-title" ref={heading} tabIndex={-1}>
-          {s.phase === 'accepted' ? t('placement.acceptedTitle', { level }) : t('placement.resultTitle', { level })}
-        </h1>
-        {s.phase === 'result' ? (
-          <>
-            <p>{t('placement.resultBody', { level })}</p>
-            {/* `s.error` is the failure's own English message: the learner sees a translated one (spec §11.2). */}
-            {s.error !== null && <p role="alert">{t('settings.saveFailed', { message: t('error.unknown') })}</p>}
-            <div className="actions">
-              <button type="button" className="button primary" onClick={() => void run.accept()}>
+        <div className="panel done-card">
+          <span className="level-badge" aria-hidden="true">
+            {level}
+          </span>
+          <h1 id="placement-title" ref={heading} tabIndex={-1}>
+            {s.phase === 'accepted' ? t('placement.acceptedTitle', { level }) : t('placement.resultTitle', { level })}
+          </h1>
+          {s.phase === 'result' && <p>{t('placement.resultBody', { level })}</p>}
+          {/* `s.error` is the failure's own English message: the learner sees a translated one (spec §11.2). */}
+          {s.error !== null && <p role="alert">{t('settings.saveFailed', { message: t('error.unknown') })}</p>}
+        </div>
+        <div className="done-actions">
+          {s.phase === 'result' ? (
+            <>
+              <button type="button" className="button primary study-main" onClick={() => void run.accept()}>
                 {t('placement.accept', { level })}
               </button>
-              <Link className="button" to={{ name: 'settings' }}>
+              <Link className="button study-main" to={back}>
                 {t('placement.keep', { level: settings.declaredLevel })}
               </Link>
-            </div>
-          </>
-        ) : (
-          <Link className="button primary" to={{ name: 'home' }}>
-            {t('placement.home')}
-          </Link>
-        )}
+            </>
+          ) : (
+            <Link className="button primary study-main" to={{ name: 'home' }}>
+              {t('placement.home')}
+            </Link>
+          )}
+        </div>
       </section>
     )
   }
-
   const item = s.item!
   const l1 = (props.source?.corpus ?? corpus)?.l1 ?? 'bg'
   return (
     <section className="study" aria-labelledby="placement-title">
-      <h1 id="placement-title">{t('placement.title')}</h1>
-      <p className="note">{t('placement.intro')}</p>
       <div className="study-bar">
-        <p>{t('placement.progress', { count: s.asked })}</p>
+        <Link className="study-close" to={back} aria-label={t('placement.back')}>
+          <X aria-hidden="true" size={20} strokeWidth={2} />
+        </Link>
+        <h1 id="placement-title" className="study-bar-title">
+          {t('placement.title')}
+        </h1>
+        <p className="study-count">{t('placement.progress', { count: s.asked })}</p>
       </div>
+      <p className="note placement-intro">{t('placement.intro')}</p>
       <div className="card" ref={card} tabIndex={-1} data-mode="placement">
         <Headword entry={item.entry} />
         <p className="instruction">{t('study.chooseTranslation')}</p>
+      </div>
+      <div className="study-actions">
         <ol className="options">
           {item.options.map((option, index) => (
             <li key={option.entryId}>
@@ -108,12 +127,14 @@ export function Placement(props: { readonly source?: PlacementSource }) {
                 <span className="option-key" aria-hidden="true">
                   {index + 1}
                 </span>{' '}
-                <Translation entry={option} lang={l1} />
+                <span className="option-text">
+                  <Translation entry={option} lang={l1} />
+                </span>
               </button>
             </li>
           ))}
         </ol>
-        <button type="button" className="button" onClick={() => run.dontKnow()}>
+        <button type="button" className="button dont-know" onClick={() => run.dontKnow()}>
           <span className="option-key" aria-hidden="true">
             0
           </span>{' '}
