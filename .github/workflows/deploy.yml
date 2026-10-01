@@ -75,6 +75,11 @@ jobs:
             echo "::error::server/wrangler.jsonc still has the zero Hyperdrive id for $DEPLOY_ENV (docs/deploy.md, step 3)"
             exit 1
           fi
+      - name: Refuse a production route that is not APP_ORIGIN's host
+        # The Worker's BASE_URL comes from APP_ORIGIN, its address from wrangler.jsonc: they must agree.
+        if: inputs.environment == 'production'
+        working-directory: server
+        run: pnpm exec tsx scripts/check-route-host.ts wrangler.jsonc "$APP_ORIGIN"
       - name: Migrate the database (forward-only, before the Worker)
         run: pnpm --filter @wordado/server migrate
         env:

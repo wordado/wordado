@@ -148,6 +148,9 @@ private `wordado/wordado-research`, cloned into `docs/research/` and ignored her
   contract in a later release.
 - **Rollback:** `pnpm --filter @wordado/server exec wrangler rollback --env production` restores the previous
   Worker and its assets together. Migrations are forward-only: never roll the schema back; write a new migration.
+  Never roll production back to a version from before the move (2026-10): a rollback restores a version's
+  plain-text variables but not its route, so `app.wordado.com` would get `BASE_URL` `https://wordado.com` and
+  sign-in would break. Redeploy a fix instead.
 - **The preview's database** gets every pull request's migrations. After closing a pull request whose
   migration never merged, reset the Neon `preview` branch from its parent.
 - **CPU** (spec §4.4, §17.2): `smoke:remote` prints how long a 500-event page and a 101-word pull took.
@@ -169,6 +172,14 @@ address (wordado-site `docs/deploy.md`). Its legal pages need not be final yet: 
 it deploys with `noindex` on every page, so it is reachable but kept out of search engines (decided
 2026-10-01: the app moves before the legal review).
 
+What is lost: the app's local data and installed copies are per origin, so they stay on the old address.
+Synced progress comes back on signing in at the new one. Reminders are per origin too: test users who had them on
+turn them on again at `app.wordado.com`. Events never synced on the old origin are out of reach, so ask the test
+users to open the app online and let it sync before the day.
+
+Before step 1, be merge-ready: bring the pull request up to date and let its CI pass, so that the window between
+steps 3 and 4 stays short.
+
 1. **Google Auth Platform › Clients › the web client:** add the authorised JavaScript origin
    `https://app.wordado.com` and the redirect URI `https://app.wordado.com/api/auth/callback/google`.
    Keep the old ones for now.
@@ -178,12 +189,24 @@ it deploys with `noindex` on every page, so it is reachable but kept out of sear
    Between steps 3 and 4, deploy nothing else to production: a deploy in that window would give the old
    route the new BASE_URL.
 4. **Merge the move's pull request** and approve its production deploy. Wrangler attaches the custom domain
-   `app.wordado.com` (it creates the DNS record itself).
-5. **Check the app:** open `https://app.wordado.com`, sign in by emailed code and by Google, study one card,
-   and see it sync (`pnpm --filter @wordado/server smoke:remote https://app.wordado.com production`).
+   `app.wordado.com` (it creates the DNS record itself). Until step 7, `wordado.com` serves nothing (or the
+   app), so do steps 5 to 7 promptly.
+5. **Check the app:** `curl -fsS https://app.wordado.com/health`, then open `https://app.wordado.com`, sign in
+   by emailed code and by Google, study one card, and see it sync. Do not run `smoke:remote` against
+   production: it reads the code from `wrangler tail`, which works only with the console mailer, so it would
+   time out, mail a real address and leave a stray account. Also confirm that the `/v1/sync/` rate-limit rule's
+   expression (Security › WAF › Rate limiting) has no hostname condition, so it still applies on
+   `app.wordado.com`.
+
+   **If step 5 fails:** before step 7, the way back is to revert the move's pull request on `main`, set
+   `APP_ORIGIN` back to `https://wordado.com`, and redeploy (Wrangler moves the custom domain back; Google's and
+   R2's old values are still in place because step 9 has not run). After step 7 the only way is forward: fix and
+   redeploy.
 6. **Free the main domain:** Cloudflare › Workers & Pages › `wordado` › Settings › Domains & Routes: remove
    `wordado.com` if it is still listed.
 7. **Deploy the website** to `wordado.com` (wordado-site: set `PRODUCTION_ENABLED`, run Deploy).
 8. **Check the redirects:** `curl -sI https://wordado.com/` (302 to a language), `curl -sI https://wordado.com/study`
    (301 to `https://app.wordado.com/study`), `curl -sI https://wordado.com/privacy` (302 to `/<lang>/privacy/`).
 9. **Remove the old values:** `https://wordado.com` from Google's origins and redirects, and from R2's CORS.
+   Also update Google Auth Platform › Branding: the privacy-policy link to `https://wordado.com/en/privacy/` and
+   the home page to `https://wordado.com` (Google's verification dislikes redirecting policy URLs).
