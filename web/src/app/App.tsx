@@ -1,4 +1,4 @@
-import { ChartColumn, LayoutGrid, Route as RouteIcon, SlidersVertical, Sun, type LucideIcon } from 'lucide-react'
+import { ChartColumn, ChevronLeft, LayoutGrid, Route as RouteIcon, SlidersVertical, Sun, type LucideIcon } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { useT, type MessageKey } from '../i18n/i18n'
 import { Link, navigate, useRoute, type Route } from '../router'
@@ -12,6 +12,7 @@ import { Settings } from '../screens/Settings'
 import { SignIn } from '../screens/SignIn'
 import { Study } from '../screens/Study'
 import { Themes } from '../screens/Themes'
+import { LanguageStep } from '../setup/LanguageStep'
 import { Setup } from '../setup/Setup'
 import { AccountMenu } from './AccountMenu'
 import { Banners } from './Banners'
@@ -25,6 +26,25 @@ const NAV: readonly { readonly route: Route; readonly label: MessageKey; readonl
   { route: { name: 'progress' }, label: 'nav.progress', icon: ChartColumn },
   { route: { name: 'settings' }, label: 'nav.settings', icon: SlidersVertical },
 ]
+
+/** Changing the native language later (plan 11, Task 7): the setup's language page, in `change` mode, inside the
+ * same Settings layout (PR #48) as every other section's own page. */
+function NativeLanguagePage() {
+  const { t } = useT()
+  return (
+    <div className="settings">
+      <div className="settings-page">
+        <Link className="settings-back" to={{ name: 'settings', section: 'languages' }}>
+          <ChevronLeft aria-hidden="true" size={18} />
+          {t('settings.languages')}
+        </Link>
+        <div className="panel settings-section">
+          <LanguageStep mode="change" ownBack={false} onDone={() => navigate({ name: 'settings', section: 'languages' })} />
+        </div>
+      </div>
+    </div>
+  )
+}
 
 function Screen(props: { readonly route: Route }) {
   const { route } = props
@@ -49,6 +69,8 @@ function Screen(props: { readonly route: Route }) {
       return <Settings section={route.section ?? null} />
     case 'placement':
       return <Placement />
+    case 'native-language':
+      return <NativeLanguagePage />
     default:
       return <Home />
   }
@@ -130,7 +152,11 @@ export function App(props: { readonly resumed: boolean; readonly setup: boolean;
                   <li key={item.label}>
                     <Link
                       to={item.route}
-                      aria-current={item.route.name === route.name || (item.route.name === 'settings' && route.name === 'placement') ? 'page' : undefined}
+                      aria-current={
+                        item.route.name === route.name || (item.route.name === 'settings' && (route.name === 'placement' || route.name === 'native-language'))
+                          ? 'page'
+                          : undefined
+                      }
                     >
                       <item.icon aria-hidden="true" className="nav-icon" size={24} strokeWidth={1.75} />
                       <span>{t(item.label)}</span>

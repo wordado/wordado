@@ -12,11 +12,12 @@ type Attempt = { readonly phase: 'idle' } | { readonly phase: 'installing'; read
 
 /**
  * The native language (plan 11, Task 5). In `setup` mode it is the first-run setup's first step; in `change` mode it
- * is Settings' language page. Either way it writes `settings.l1`, then installs that pack through the one
- * `PackSwitcher` and shows its download; `onDone` follows once the pack is installed. A failed install says so and
- * offers Try again, and the setup's link to Sign in stays, so it is never a dead end (Review Focus 4).
+ * is Settings' language page, at `/settings/native-language` (Task 7). Either way it writes `settings.l1`, then
+ * installs that pack through the one `PackSwitcher` and shows its download; `onDone` follows once the pack is
+ * installed. A failed install says so and offers Try again, and the setup's link to Sign in stays, so it is never a
+ * dead end (Review Focus 4). `ownBack` is false when the page around it already has its own Back link.
  */
-export function LanguageStep(props: { readonly mode: 'setup' | 'change'; onDone(): void }) {
+export function LanguageStep(props: { readonly mode: 'setup' | 'change'; readonly ownBack?: boolean; onDone(): void }) {
   const { t, locale, setLocale } = useT()
   const client = useClient()
   const { account, packs } = useApp()
@@ -172,7 +173,7 @@ export function LanguageStep(props: { readonly mode: 'setup' | 'change'; onDone(
         {props.mode === 'setup' ? (
           <Link to={{ name: 'signin' }}>{t('setup.haveAccount')}</Link>
         ) : (
-          <Link to={{ name: 'settings', section: 'languages' }}>{t('common.back')}</Link>
+          (props.ownBack ?? true) && <Link to={{ name: 'settings', section: 'languages' }}>{t('common.back')}</Link>
         )}
       </div>
     </section>

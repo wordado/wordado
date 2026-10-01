@@ -235,10 +235,9 @@ export const de: Messages = {
 
   'signin.title': 'Konto erstellen oder anmelden',
   'signin.againTitle': 'Erneut anmelden',
-  'signin.gateIntro': 'Zuerst zwei Fragen, die wir dir gesetzlich stellen müssen. Davon wird nur dein Land gespeichert; deine Muttersprache speichern wir mit deinen Einstellungen.',
+  'signin.gateIntro': 'Zuerst zwei Fragen, die wir dir gesetzlich stellen müssen. Nur dein Land wird gespeichert.',
   'signin.country': 'Land, in dem du lebst',
   'signin.countryUnknown': 'Das möchte ich nicht angeben',
-  'signin.nativeLanguage': 'Deine Muttersprache',
   'signin.birthYear': 'Geburtsjahr',
   'signin.birthYearHint': 'Vier Ziffern, zum Beispiel 1994. Es wird nicht gespeichert.',
   'signin.birthYearInvalid': 'Gib dein Geburtsjahr als vier Ziffern ein.',

@@ -40,20 +40,18 @@ describe('the account record', () => {
 })
 
 describe('the pending sign-in', () => {
-  it('carries the age gate’s country and native language across a redirect', () => {
+  it('carries the age gate’s country across a redirect', () => {
     const pending = pendingSignIn(memoryStorage())
-    pending.save({ country: 'BG', l1: 'de' })
-    expect(pending.read()).toEqual({ country: 'BG', l1: 'de' })
+    pending.save({ country: 'BG' })
+    expect(pending.read()).toEqual({ country: 'BG' })
     pending.clear()
     expect(pending.read()).toBeNull()
   })
 
-  it('reads one saved before the native language was asked as no choice, and refuses an unknown language', () => {
+  it('still parses one stored with a native language (plan 10), ignoring it', () => {
     const storage = memoryStorage()
-    storage.setItem('wordado.signin', JSON.stringify({ country: 'BG' }))
-    expect(pendingSignIn(storage).read()).toEqual({ country: 'BG', l1: null })
-    storage.setItem('wordado.signin', JSON.stringify({ country: 'BG', l1: 'xx' }))
-    expect(pendingSignIn(storage).read()).toBeNull()
+    storage.setItem('wordado.signin', JSON.stringify({ country: 'BG', l1: 'de' }))
+    expect(pendingSignIn(storage).read()).toEqual({ country: 'BG' })
   })
 })
 

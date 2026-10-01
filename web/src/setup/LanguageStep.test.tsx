@@ -195,6 +195,12 @@ describe('LanguageStep, change mode (plan 11)', () => {
     expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1, name: 'Muttersprache' }))
   })
 
+  it('omits its own Back link when the page around it already has one (Task 7)', async () => {
+    const ctx = await setup()
+    renderWith(<LanguageStep mode="change" ownBack={false} onDone={() => undefined} />, ctx)
+    expect(screen.queryByRole('link', { name: 'Back' })).toBeNull()
+  })
+
   it('hides Change again when the installed language is chosen again (review, fix 1)', async () => {
     const ctx = await setup()
     renderWith(<LanguageStep mode="change" onDone={() => undefined} />, ctx)

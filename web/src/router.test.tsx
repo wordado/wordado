@@ -54,6 +54,11 @@ describe('routes', () => {
     expect(parseRoute('/settings/placement', '')).toEqual({ name: 'placement' })
     expect(routeHref({ name: 'placement' })).toBe('/settings/placement')
   })
+
+  it('routes changing the native language under settings (plan 11)', () => {
+    expect(parseRoute('/settings/native-language', '')).toEqual({ name: 'native-language' })
+    expect(routeHref({ name: 'native-language' })).toBe('/settings/native-language')
+  })
 })
 
 function Where() {

@@ -221,10 +221,9 @@ export const bg: Messages = {
 
   'signin.title': 'Създайте профил или влезте',
   'signin.againTitle': 'Влезте отново',
-  'signin.gateIntro': 'Първо два въпроса, които законът изисква. От тях пазим само държавата ви, а родният ви език се запазва в настройките ви.',
+  'signin.gateIntro': 'Първо два въпроса, които законът изисква. Пазим само държавата ви.',
   'signin.country': 'Държава, в която живеете',
   'signin.countryUnknown': 'Предпочитам да не казвам',
-  'signin.nativeLanguage': 'Родният ви език',
   'signin.birthYear': 'Година на раждане',
   'signin.birthYearHint': 'Четири цифри, например 1994. Не се пази.',
   'signin.birthYearInvalid': 'Въведете годината, в която сте родени, с четири цифри.',

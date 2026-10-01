@@ -17,6 +17,7 @@ export type Route =
   | { readonly name: 'signin' }
   | { readonly name: 'settings'; readonly section?: SettingsSection }
   | { readonly name: 'placement' }
+  | { readonly name: 'native-language' }
 
 /** Modes a learner can choose for a run; matching has its own route. */
 const RUN_MODES: readonly Mode[] = ['flashcard', 'multiple_choice', 'listening_select']
@@ -49,6 +50,8 @@ export function parseRoute(pathname: string, search: string): Route {
       return { name: 'settings' }
     case '/settings/placement':
       return { name: 'placement' }
+    case '/settings/native-language':
+      return { name: 'native-language' }
     default: {
       const section = SETTINGS_SECTIONS.find((s) => path === `/settings/${s}`)
       return section ? { name: 'settings', section } : { name: 'home' }
@@ -72,6 +75,8 @@ export function routeHref(route: Route): string {
       return '/practice/matching'
     case 'placement':
       return '/settings/placement'
+    case 'native-language':
+      return '/settings/native-language'
     case 'settings':
       return route.section ? `/settings/${route.section}` : '/settings'
     default:
