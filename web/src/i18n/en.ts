@@ -148,6 +148,7 @@ export const en = {
   'settings.nativeLanguageHint': 'The language the words are translated into.',
   'settings.nativeLanguageConfirm': 'Your progress stays. The words switch to {language} translations.',
   'settings.nativeLanguageChange': 'Change',
+  'settings.nativeLanguageChangeLink': 'Change native language',
   'settings.nativeLanguagePending': 'Your words switch to {language} as soon as the translations have downloaded.',
   'settings.language': 'Interface language',
   'settings.languageHint': 'The words are always English; this changes the menus and messages.',

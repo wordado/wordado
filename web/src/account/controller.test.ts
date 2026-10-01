@@ -10,7 +10,7 @@ import { answerTo, disk, flaky } from '../test/disk'
 import { fakeApi } from '../test/fakeApi'
 import { OfflineError, type Me } from './api'
 import { AccountController, NotReady, SignOutOffline } from './controller'
-import { accountStorage, DEMO_FILE, learnerFile, memoryStorage, pendingSignIn } from './storage'
+import { accountStorage, DEMO_FILE, learnerFile, memoryStorage, pendingSignIn, SIGNIN_KEY } from './storage'
 
 const ANA: Me = { userId: 'u1', email: 'ana@example.com', country: null, createdAt: 0 }
 
@@ -448,6 +448,23 @@ describe('Boot must be ready before an account changes (spec §9.1)', () => {
     await expect(controller.signOut()).rejects.toBeInstanceOf(NotReady)
     expect(accounts.read()?.userId).toBe('u1')
     expect(deletes).toEqual([])
+  })
+})
+
+describe('the native language is no longer completeSignIn’s to save (plan 11, fix round 1)', () => {
+  it('writes no settings.l1 on an ordinary sign-in', async () => {
+    const a = await app()
+    expect(await a.controller.completeSignIn('BG')).toBe('signed-in')
+    expect(a.client().snapshot.settings.l1).toBeNull()
+  })
+
+  it('writes no settings.l1 resuming Google from a record stored before plan 11, which could carry an l1', async () => {
+    const a = await app()
+    const raw = memoryStorage()
+    raw.setItem(SIGNIN_KEY, JSON.stringify({ country: 'DE', l1: 'de' }))
+    const controller = new AccountController({ api: a.api, boot: a.boot, accounts: a.accounts, pending: pendingSignIn(raw), transport: () => a.server })
+    expect(await controller.resumeGoogle('ok')).toBe('signed-in')
+    expect(a.client().snapshot.settings.l1).toBeNull()
   })
 })
 

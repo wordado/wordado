@@ -1,4 +1,4 @@
-import { ChartColumn, ChevronLeft, LayoutGrid, Route as RouteIcon, SlidersVertical, Sun, type LucideIcon } from 'lucide-react'
+import { ChartColumn, LayoutGrid, Route as RouteIcon, SlidersVertical, Sun, type LucideIcon } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { useT, type MessageKey } from '../i18n/i18n'
 import { Link, navigate, useRoute, type Route } from '../router'
@@ -27,25 +27,6 @@ const NAV: readonly { readonly route: Route; readonly label: MessageKey; readonl
   { route: { name: 'settings' }, label: 'nav.settings', icon: SlidersVertical },
 ]
 
-/** Changing the native language later (plan 11, Task 7): the setup's language page, in `change` mode, inside the
- * same Settings layout (PR #48) as every other section's own page. */
-function NativeLanguagePage() {
-  const { t } = useT()
-  return (
-    <div className="settings">
-      <div className="settings-page">
-        <Link className="settings-back" to={{ name: 'settings', section: 'languages' }}>
-          <ChevronLeft aria-hidden="true" size={18} />
-          {t('settings.languages')}
-        </Link>
-        <div className="panel settings-section">
-          <LanguageStep mode="change" ownBack={false} onDone={() => navigate({ name: 'settings', section: 'languages' })} />
-        </div>
-      </div>
-    </div>
-  )
-}
-
 function Screen(props: { readonly route: Route }) {
   const { route } = props
   switch (route.name) {
@@ -70,7 +51,14 @@ function Screen(props: { readonly route: Route }) {
     case 'placement':
       return <Placement />
     case 'native-language':
-      return <NativeLanguagePage />
+      // Changing the native language later (plan 11, Task 7): the setup's language page, as a sub-page of
+      // Settings' Languages section, so it gets that section's own has-section layout and Back link for free.
+      return (
+        <Settings
+          section={null}
+          page={{ section: 'languages', content: <LanguageStep mode="change" ownBack={false} onDone={() => navigate({ name: 'settings', section: 'languages' })} /> }}
+        />
+      )
     default:
       return <Home />
   }

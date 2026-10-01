@@ -26,10 +26,12 @@ describe('Settings: the native language (plan 11)', () => {
     expect(screen.getByText('Deutsch')).toBeTruthy()
   })
 
-  it('"Change" links to the language page', async () => {
+  it('"Change" links to the language page, with a descriptive accessible name (fix round 1)', async () => {
     const ctx = await setup()
     renderWith(<NativeLanguageSettings />, ctx)
-    expect(screen.getByRole('link', { name: 'Change' }).getAttribute('href')).toBe('/settings/native-language')
+    const link = screen.getByRole('link', { name: 'Change native language' })
+    expect(link.getAttribute('href')).toBe('/settings/native-language')
+    expect(link.textContent).toBe('Change')
   })
 
   it('says a change is pending until the new language is installed', async () => {

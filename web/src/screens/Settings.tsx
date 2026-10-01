@@ -4,7 +4,7 @@ import { BookOpen, ChevronLeft, ChevronRight, Globe, Info, Package, Smartphone, 
 import type { ReactNode } from 'react'
 import { useApp } from '../app/context'
 import { ENDONYM, languageName, useT, type MessageKey } from '../i18n/i18n'
-import { Link, type SettingsSection } from '../router'
+import { Link, type Route, type SettingsSection } from '../router'
 import { AboutSettings } from '../settings/AboutSettings'
 import { AccountSettings } from '../settings/AccountSettings'
 import { AppSettings } from '../settings/AppSettings'
@@ -47,19 +47,30 @@ const ICON: Readonly<Record<SettingsSection, LucideIcon>> = {
   about: Info,
 }
 
+/** A sub-page of one of the sections, replacing its own content (plan 11, Task 7: changing the native language).
+ * The section still shows current in the menu and keeps the phone/desktop layout of any other section page; only
+ * the content and the Back link's target (the section itself, not the menu) differ. */
+export interface SettingsPage {
+  readonly section: SettingsSection
+  readonly content: ReactNode
+}
+
 /**
  * Settings (spec §7, §9.3, §11) as a menu of sections, each on its own page.
  * The menu says what each section is set to. On a phone the menu and a
  * section take turns; from 48rem they sit side by side, the menu opening on
  * the first section.
  */
-export function Settings(props: { readonly section: SettingsSection | null }) {
+export function Settings(props: { readonly section: SettingsSection | null; readonly page?: SettingsPage }) {
   const { t } = useT()
   const summaries = useSummaries()
   // A section with nothing to show here (no audio to download, nothing to install) is left out.
   const available = (section: SettingsSection) => summaries[section] !== null
-  const section = props.section !== null && available(props.section) ? props.section : null
+  const section = props.page ? props.page.section : props.section !== null && available(props.section) ? props.section : null
   const shown = section ?? 'study'
+  // A sub-page's Back goes to its own section, not all the way to the menu; every other page's goes to the menu.
+  const backTo: Route = props.page ? { name: 'settings', section: props.page.section } : { name: 'settings' }
+  const backLabel = props.page ? TITLE[props.page.section] : 'settings.title'
   return (
     <div className={section ? 'settings has-section' : 'settings'}>
       <h1 className="settings-title">{t('settings.title')}</h1>
@@ -94,11 +105,11 @@ export function Settings(props: { readonly section: SettingsSection | null }) {
         })}
       </nav>
       <div className="settings-page">
-        <Link className="settings-back" to={{ name: 'settings' }}>
+        <Link className="settings-back" to={backTo}>
           <ChevronLeft aria-hidden="true" size={18} />
-          {t('settings.title')}
+          {t(backLabel)}
         </Link>
-        <SectionPage section={shown} />
+        {props.page ? <div className="panel settings-section">{props.page.content}</div> : <SectionPage section={shown} />}
       </div>
     </div>
   )

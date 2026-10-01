@@ -10,6 +10,9 @@ import { Link } from '../router'
 export function NativeLanguageSettings() {
   const { t, locale } = useT()
   const { settings, l1: installedText } = useClientSnapshot()
+  // `Client.l1` (the active pack's L1, or the default before any pack exists) is always one of SUPPORTED_L1S in
+  // practice — Boot's own default and every installed corpus are. The fallback only satisfies the type checker,
+  // since the snapshot carries it as a plain `string`; it never masks a real pending change.
   const installed: L1 = isSupportedL1(installedText) ? installedText : 'bg'
   const current = settings.l1 ?? installed
   // Intl's own form of the name, as it sits mid-sentence: "German", "Deutsch", "немски".
@@ -23,7 +26,9 @@ export function NativeLanguageSettings() {
       <p className="note">{t('settings.nativeLanguageHint')}</p>
       <p lang={current}>{languageName(current, current)}</p>
       {pending !== null && <p className="note">{t('settings.nativeLanguagePending', { language: inSentence(pending) })}</p>}
-      <Link to={{ name: 'native-language' }}>{t('settings.nativeLanguageChange')}</Link>
+      <Link to={{ name: 'native-language' }} aria-label={t('settings.nativeLanguageChangeLink')}>
+        {t('settings.nativeLanguageChange')}
+      </Link>
     </section>
   )
 }

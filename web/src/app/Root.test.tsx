@@ -15,7 +15,7 @@ import { Root } from './Root'
 beforeEach(() => window.history.replaceState(null, '', '/'))
 afterEach(cleanup)
 
-async function renderRoot(options: { free?: boolean; backend?: Backend; fresh?: boolean } = {}) {
+async function renderRoot(options: { free?: boolean; backend?: Backend; fresh?: boolean; packs?: PackSwitcher } = {}) {
   let owner = options.free ?? true
   const lock: LockPort = {
     acquire: async () => owner,
@@ -37,7 +37,7 @@ async function renderRoot(options: { free?: boolean; backend?: Backend; fresh?: 
   )
   render(
     <I18nProvider storage={{ getItem: () => 'en', setItem: () => undefined }}>
-      <Root boot={boot} services={{ env, audio: fakeAudio(), afterRun: () => undefined, api: fakeApi(), accounts: fakeAccounts(), reminders: fakeReminders(), lifecycle: fakeLifecycle(), credits: fakeCredits(), fixNotices: fakeFixNotices(), packs: options.fresh ? samplePacks() : fakePacks() }} />
+      <Root boot={boot} services={{ env, audio: fakeAudio(), afterRun: () => undefined, api: fakeApi(), accounts: fakeAccounts(), reminders: fakeReminders(), lifecycle: fakeLifecycle(), credits: fakeCredits(), fixNotices: fakeFixNotices(), packs: options.packs ?? (options.fresh ? samplePacks() : fakePacks()) }} />
     </I18nProvider>,
   )
   await act(() => boot.start())
@@ -76,6 +76,21 @@ describe('Root', () => {
     await act(async () => fireEvent.click(screen.getByRole('link', { name: 'Wordado' })))
     await act(async () => fireEvent.click(screen.getByRole('link', { name: 'Start studying' })))
     expect(await screen.findByRole('progressbar', { name: 'Session progress' })).toBeTruthy()
+  })
+
+  it('changes the native language on its own page, laid out like any other Settings section (plan 11, Task 7 fix 1)', async () => {
+    window.history.replaceState(null, '', '/settings/native-language')
+    await renderRoot({ packs: samplePacks() })
+    // The same has-section layout as any other section page (not a bare page that CSS would hide on a phone,
+    // or push into the menu column on desktop): the menu and the page both render, with Languages current.
+    expect(document.querySelector('.settings.has-section')).toBeTruthy()
+    // Its own Back goes one level up, to Languages, not all the way to the Settings menu.
+    expect(screen.getByRole('link', { name: 'Languages' }).getAttribute('href')).toBe('/settings/languages')
+    // The top nav's Settings item is current, as for every other Settings page.
+    expect(screen.getByRole('link', { name: 'Settings' }).getAttribute('aria-current')).toBe('page')
+    fireEvent.click(screen.getByRole('radio', { name: 'Deutsch' }))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Change' })))
+    expect(window.location.pathname).toBe('/settings/languages')
   })
 
   it('hides the masthead, navigation and banners while studying, and brings them back after', async () => {
