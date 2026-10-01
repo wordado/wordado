@@ -9,6 +9,7 @@ import type { Backend } from '../storage/protocol'
 import type { CreditsPort } from './credits'
 import type { FixNoticesPort } from './fixNotices'
 import type { LifecyclePort } from './lifecycle'
+import type { PackSwitcher } from './packSwitch'
 
 /** What the screens need beside the Client. */
 export interface AppServices {
@@ -30,6 +31,8 @@ export interface AppServices {
   readonly credits: CreditsPort
   /** What the learner reported that is fixed now (spec §8.10). */
   readonly fixNotices: FixNoticesPort
+  /** The one place that installs a language's pack (plan 11): the L1 watcher, the setup and Settings' language page. */
+  readonly packs: PackSwitcher
   /**
    * Called when a run ends: fetches the clips of the words about to be met
    * (spec §9.3), flushes the outbox (spec §9.1), and asks once for persistent

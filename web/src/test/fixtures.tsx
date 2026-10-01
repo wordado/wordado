@@ -11,6 +11,7 @@ import { AppProvider } from '../app/context'
 import type { CreditsPort, CreditsView } from '../app/credits'
 import type { FixNotice, FixNoticesPort } from '../app/fixNotices'
 import { type LifecycleState, type LifecyclePort } from '../app/lifecycle'
+import { PackSwitcher } from '../app/packSwitch'
 import type { AudioPort } from '../content/audio'
 import { I18nProvider, type Locale } from '../i18n/i18n'
 import type { ReminderActions, ReminderPrefs } from '../reminders/reminders'
@@ -58,6 +59,15 @@ export interface RenderContext {
   readonly lifecycle?: LifecyclePort
   readonly credits?: CreditsPort
   readonly fixNotices?: FixNoticesPort
+  readonly packs?: PackSwitcher
+}
+
+/** A real `PackSwitcher` with stub deps: no screen under test installs a pack unless it says so. */
+export function fakePacks(): PackSwitcher {
+  return new PackSwitcher({
+    fetchManifest: () => Promise.reject(new Error('fakePacks: no manifest configured')),
+    fetcher: () => async () => new Uint8Array(),
+  })
 }
 
 /** Installation and updates as the banners and settings see them; every call is logged. */
@@ -159,6 +169,7 @@ export function renderWith(ui: ReactElement, ctx: RenderContext): RenderResult {
             lifecycle: ctx.lifecycle ?? fakeLifecycle(),
             credits: ctx.credits ?? fakeCredits(),
             fixNotices: ctx.fixNotices ?? fakeFixNotices(),
+            packs: ctx.packs ?? fakePacks(),
           }}
         >
           {ui}
