@@ -14,7 +14,7 @@ export function Root(props: { readonly boot: Boot; readonly services: Omit<AppSe
       return (
         <ClientProvider client={state.client}>
           <AppProvider value={{ ...props.services, backend: state.backend, account: state.account }}>
-            <App resumed={state.resumed} />
+            <App resumed={state.resumed} setup={state.setup} onFinishSetup={() => props.boot.finishSetup()} />
           </AppProvider>
         </ClientProvider>
       )

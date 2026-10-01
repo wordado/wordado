@@ -9,12 +9,13 @@ import { chosenL1 } from '../test/disk'
 import { fakeApi } from '../test/fakeApi'
 import type { Backend } from '../storage/protocol'
 import { Boot, type LockPort } from './boot'
+import { PackSwitcher } from './packSwitch'
 import { Root } from './Root'
 
 beforeEach(() => window.history.replaceState(null, '', '/'))
 afterEach(cleanup)
 
-async function renderRoot(options: { free?: boolean; backend?: Backend } = {}) {
+async function renderRoot(options: { free?: boolean; backend?: Backend; fresh?: boolean } = {}) {
   let owner = options.free ?? true
   const lock: LockPort = {
     acquire: async () => owner,
@@ -27,8 +28,8 @@ async function renderRoot(options: { free?: boolean; backend?: Backend } = {}) {
     {
       env,
       l1: () => 'bg',
-      // The learner has chosen Bulgarian already, so the app opens without the first-run setup (plan 11).
-      openDriver: async () => ({ driver: await chosenL1(nodeSqliteDriver()), backend: options.backend ?? 'opfs' }),
+      // The learner has chosen Bulgarian already, so the app opens without the first-run setup (plan 11); a `fresh` file opens in it.
+      openDriver: async () => ({ driver: options.fresh ? nodeSqliteDriver() : await chosenL1(nodeSqliteDriver()), backend: options.backend ?? 'opfs' }),
       fetchManifest: async () => sampleManifest,
       fetchPack: sampleFetcher,
     },
@@ -36,12 +37,15 @@ async function renderRoot(options: { free?: boolean; backend?: Backend } = {}) {
   )
   render(
     <I18nProvider storage={{ getItem: () => 'en', setItem: () => undefined }}>
-      <Root boot={boot} services={{ env, audio: fakeAudio(), afterRun: () => undefined, api: fakeApi(), accounts: fakeAccounts(), reminders: fakeReminders(), lifecycle: fakeLifecycle(), credits: fakeCredits(), fixNotices: fakeFixNotices(), packs: fakePacks() }} />
+      <Root boot={boot} services={{ env, audio: fakeAudio(), afterRun: () => undefined, api: fakeApi(), accounts: fakeAccounts(), reminders: fakeReminders(), lifecycle: fakeLifecycle(), credits: fakeCredits(), fixNotices: fakeFixNotices(), packs: options.fresh ? samplePacks() : fakePacks() }} />
     </I18nProvider>,
   )
   await act(() => boot.start())
   return boot
 }
+
+/** A switcher that installs the sample, as the setup's Language step needs. */
+const samplePacks = () => new PackSwitcher({ fetchManifest: async () => sampleManifest, fetcher: () => sampleFetcher })
 
 describe('Root', () => {
   it('opens on today, in the demo', async () => {
@@ -93,6 +97,46 @@ describe('Root', () => {
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Български' })))
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('10 нови думи')
     expect(screen.getByRole('button', { name: 'Език на интерфейса: Български (BG)' }).textContent).toBe('BG')
+  })
+
+  it('opens a new learner in the first-run setup, without the navigation or banners (plan 11)', async () => {
+    await renderRoot({ fresh: true })
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Set up Wordado')
+    expect(screen.getByRole('heading', { level: 2, name: 'Which language do you speak?' })).toBeTruthy()
+    expect(screen.queryByRole('heading', { name: '10 new words' })).toBeNull()
+    expect(screen.queryByRole('navigation', { name: 'Main' })).toBeNull()
+    expect(screen.queryByText(/You are trying Wordado/)).toBeNull()
+    // The masthead's first row stays: the wordmark, the interface language and the account.
+    expect(screen.getByRole('link', { name: 'Wordado' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Interface language: English (EN)' })).toBeTruthy()
+  })
+
+  it('shows Sign in during the setup when the route asks for it', async () => {
+    window.history.replaceState(null, '', '/signin')
+    await renderRoot({ fresh: true })
+    expect(screen.queryByRole('heading', { name: 'Set up Wordado' })).toBeNull()
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Create an account or sign in')
+    expect(screen.queryByRole('navigation', { name: 'Main' })).toBeNull()
+  })
+
+  it('opens today once the setup is finished, focused, with the navigation back', async () => {
+    const boot = await renderRoot({ fresh: true })
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue' })))
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Set up Wordado')
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Start studying' })))
+    expect(boot.store.get()).toMatchObject({ status: 'ready', setup: false })
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('10 new words')
+    expect(screen.getByRole('navigation', { name: 'Main' })).toBeTruthy()
+    expect(document.activeElement?.tagName).toBe('MAIN')
+  })
+
+  it('renders today after finishSetup()', async () => {
+    const boot = await renderRoot({ fresh: true })
+    const state = boot.store.get()
+    if (state.status !== 'ready') throw new Error('not ready')
+    await act(async () => void (await state.client.changeL1('bg', sampleManifest, sampleFetcher)))
+    act(() => boot.finishSetup())
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('10 new words')
   })
 
   it('shows a storage message when opening the database fails', async () => {

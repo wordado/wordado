@@ -152,6 +152,14 @@ export const en = {
   'settings.language': 'Interface language',
   'settings.languageHint': 'The words are always English; this changes the menus and messages.',
 
+  'setup.title': 'Set up Wordado',
+  'setup.step': 'Step {n} of {count}',
+  'setup.skip': 'Skip',
+  'setup.start': 'Start studying',
+  'setup.level.title': 'Your English level',
+  'setup.level.later': 'Not sure? You can take a short placement test later in Settings.',
+  'setup.goal.title': 'A daily goal',
+  'setup.goal.hint': 'Optional. You can set it or change it any time in Settings.',
   'setup.language.title': 'Which language do you speak?',
   'setup.language.hint': 'Words are explained in this language. You can change it later in Settings.',
   'setup.continue': 'Continue',
@@ -269,7 +277,6 @@ export const en = {
 
   'onboard.title': 'What do you want English for?',
   'onboard.hint': 'Pick one and its words come first. You can change it any time under Themes.',
-  'onboard.skip': 'Skip',
 
   'mode.flashcard': 'Flashcards',
   'mode.multiple_choice': 'Multiple choice',

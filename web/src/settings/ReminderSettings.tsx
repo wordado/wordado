@@ -11,8 +11,12 @@ const fromTime = (value: string): number | null => {
   return minute >= 0 && minute <= 1439 ? minute : null
 }
 
-/** Opt-in reminders (spec §8.11); says plainly what stands in the way when they cannot work. */
-export function ReminderSettings() {
+/**
+ * Opt-in reminders (spec §8.11); says plainly what stands in the way when they cannot work. `headingLevel` 3 nests
+ * it under a page whose sections are h2s already, as the setup's goal step (plan 11).
+ */
+export function ReminderSettings(props: { readonly headingLevel?: 2 | 3 } = {}) {
+  const Heading = props.headingLevel === 3 ? 'h3' : 'h2'
   const { t } = useT()
   const { account, reminders } = useApp()
   const timeId = useId()
@@ -61,7 +65,7 @@ export function ReminderSettings() {
 
   return (
     <section aria-labelledby="settings-reminders">
-      <h2 id="settings-reminders">{t('reminders.title')}</h2>
+      <Heading id="settings-reminders">{t('reminders.title')}</Heading>
       {blocked !== null ? (
         <p role="status">{t(blocked)}</p>
       ) : (

@@ -12,6 +12,7 @@ import { Settings } from '../screens/Settings'
 import { SignIn } from '../screens/SignIn'
 import { Study } from '../screens/Study'
 import { Themes } from '../screens/Themes'
+import { Setup } from '../setup/Setup'
 import { AccountMenu } from './AccountMenu'
 import { Banners } from './Banners'
 import { LanguageMenu } from './LanguageMenu'
@@ -59,13 +60,23 @@ const FOCUS: ReadonlySet<Route['name']> = new Set(['study', 'practice-words', 'm
 /**
  * The shell: the masthead's first row (the icon and wordmark, the language,
  * the account), the navigation (a second row, or the tab bar on a phone),
- * banners, and the routed screen. While studying, only the screen.
+ * banners, and the routed screen. While studying, only the screen. While the
+ * first-run setup is owed (`setup`, plan 11), the setup instead of the routed
+ * screen (except Sign in, which a returning learner needs), under the
+ * masthead's first row alone; `onFinishSetup` ends it.
  */
-export function App(props: { readonly resumed: boolean }) {
+export function App(props: { readonly resumed: boolean; readonly setup: boolean; onFinishSetup(): void }) {
   const { t } = useT()
   const route = useRoute()
   const main = useRef<HTMLElement>(null)
   const first = useRef(true)
+  const setupBefore = useRef(props.setup)
+
+  // The setup gave way to today without a navigation: focus the new screen, as a navigation would (spec §11.1).
+  useEffect(() => {
+    if (setupBefore.current && !props.setup) main.current?.focus()
+    setupBefore.current = props.setup
+  }, [props.setup])
 
   // After an in-app navigation, focus the new screen, as a page load would
   // (spec §11.1). The shell itself also mounts fresh after a take-over or a
@@ -80,6 +91,7 @@ export function App(props: { readonly resumed: boolean }) {
   }, [route])
 
   const focus = FOCUS.has(route.name)
+  const inSetup = props.setup && route.name !== 'signin'
   return (
     <div className={focus ? 'app is-focus' : 'app'}>
       <a className="skip" href="#main">
@@ -97,30 +109,32 @@ export function App(props: { readonly resumed: boolean }) {
               <AccountMenu />
             </div>
           </div>
-          <nav className="nav" aria-label={t('nav.label')}>
-            <ul>
-              {NAV.map((item) => (
-                <li key={item.label}>
-                  <Link
-                    to={item.route}
-                    aria-current={item.route.name === route.name || (item.route.name === 'settings' && route.name === 'placement') ? 'page' : undefined}
-                  >
-                    <item.icon aria-hidden="true" className="nav-icon" size={24} strokeWidth={1.75} />
-                    <span>{t(item.label)}</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </nav>
+          {!props.setup && (
+            <nav className="nav" aria-label={t('nav.label')}>
+              <ul>
+                {NAV.map((item) => (
+                  <li key={item.label}>
+                    <Link
+                      to={item.route}
+                      aria-current={item.route.name === route.name || (item.route.name === 'settings' && route.name === 'placement') ? 'page' : undefined}
+                    >
+                      <item.icon aria-hidden="true" className="nav-icon" size={24} strokeWidth={1.75} />
+                      <span>{t(item.label)}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </nav>
+          )}
         </header>
       )}
-      {!focus && (
+      {!focus && !props.setup && (
         <aside aria-label={t('banner.label')}>
           <Banners />
         </aside>
       )}
       <main id="main" ref={main} tabIndex={-1}>
-        <Screen route={route} />
+        {inSetup ? <Setup onFinish={props.onFinishSetup} /> : <Screen route={route} />}
       </main>
     </div>
   )

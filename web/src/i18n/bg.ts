@@ -147,6 +147,14 @@ export const bg: Messages = {
   'settings.language': 'Език на интерфейса',
   'settings.languageHint': 'Думите винаги са на английски; това сменя менютата и съобщенията.',
 
+  'setup.title': 'Настройте Wordado',
+  'setup.step': 'Стъпка {n} от {count}',
+  'setup.skip': 'Пропуснете',
+  'setup.start': 'Започнете да учите',
+  'setup.level.title': 'Вашето ниво на английски',
+  'setup.level.later': 'Не сте сигурни? По-късно можете да направите кратък тест за ниво в Настройки.',
+  'setup.goal.title': 'Дневна цел',
+  'setup.goal.hint': 'По желание. Можете да я зададете или промените по всяко време в Настройки.',
   'setup.language.title': 'Кой език говорите?',
   'setup.language.hint': 'Думите се обясняват на този език. Можете да го смените по-късно в Настройки.',
   'setup.continue': 'Продължете',
@@ -264,7 +272,6 @@ export const bg: Messages = {
 
   'onboard.title': 'За какво ви е английският?',
   'onboard.hint': 'Изберете и думите от темата ще са първи. Можете да го промените по всяко време в „Теми“.',
-  'onboard.skip': 'Пропусни',
 
   'mode.flashcard': 'Карти',
   'mode.multiple_choice': 'Избор на отговор',

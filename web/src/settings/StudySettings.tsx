@@ -1,5 +1,5 @@
 import { placementAvailable, useClient, useClientSnapshot } from '@wordado/client-data'
-import { CEFR_LEVELS, MAX_NEW_WORD_LIMIT, MAX_REVIEW_CAP, RETENTION_TARGETS, type CefrLevel, type RetentionSetting, type Settings } from '@wordado/core'
+import { CEFR_LEVELS, MAX_NEW_WORD_LIMIT, MAX_REVIEW_CAP, RETENTION_TARGETS, type CefrLevel, type Corpus, type RetentionSetting, type Settings } from '@wordado/core'
 import { useEffect, useId, useState } from 'react'
 import { errorMessageKey } from '../errors'
 import { useT, type MessageKey } from '../i18n/i18n'
@@ -7,12 +7,12 @@ import { Link } from '../router'
 import { parseWholeNumber } from './fields'
 
 /** The highest daily goal the screen offers; `core` allows any positive whole number. */
-const MAX_DAILY_GOAL = 1000
+export const MAX_DAILY_GOAL = 1000
 /** What "Set a daily goal" starts from. */
-const DEFAULT_DAILY_GOAL = 20
+export const DEFAULT_DAILY_GOAL = 20
 
 /** Saves one settings field, and says so or says why not (spec §11.1: the result is announced). */
-function useSave(): { save(patch: Partial<Settings>): Promise<void>; status: string | null } {
+export function useSave(): { save(patch: Partial<Settings>): Promise<void>; status: string | null } {
   const { t } = useT()
   const client = useClient()
   const [status, setStatus] = useState<string | null>(null)
@@ -35,7 +35,7 @@ function useSave(): { save(patch: Partial<Settings>): Promise<void>; status: str
  * field until it is valid; an invalid value is explained at the field and
  * never reaches `updateSettings`.
  */
-function NumberSetting(props: {
+export function NumberSetting(props: {
   readonly label: string
   readonly hint: string
   readonly invalid: string
@@ -104,6 +104,13 @@ function NumberSetting(props: {
 
 const RETENTIONS = Object.keys(RETENTION_TARGETS) as RetentionSetting[]
 
+/** The levels the installed words come in, and the learner's own: a level with no words would teach nothing. */
+export function offeredLevels(corpus: Corpus | null, declared: CefrLevel): CefrLevel[] {
+  const shipped = new Set<CefrLevel>(corpus?.units.map((u) => u.level) ?? [])
+  shipped.add(declared)
+  return CEFR_LEVELS.filter((l) => shipped.has(l))
+}
+
 /** Level, limits, retention, goal, audio and latency grading (spec §7.1, §7.2, §7.4, §8.4, §11.1). */
 export function StudySettings() {
   const { t } = useT()
@@ -112,10 +119,7 @@ export function StudySettings() {
   const goalHintId = useId()
   const latencyHintId = useId()
   const retentionHintId = useId()
-  // The levels the installed words come in, and the learner's own: a level with no words would teach nothing.
-  const shipped = new Set<CefrLevel>(corpus?.units.map((u) => u.level) ?? [])
-  shipped.add(settings.declaredLevel)
-  const levels = CEFR_LEVELS.filter((l) => shipped.has(l))
+  const levels = offeredLevels(corpus, settings.declaredLevel)
   return (
     <section aria-labelledby="settings-study">
       <h2 id="settings-study">{t('settings.study')}</h2>

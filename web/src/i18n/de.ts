@@ -156,6 +156,14 @@ export const de: Messages = {
   'settings.language': 'Sprache der Oberfläche',
   'settings.languageHint': 'Die Wörter sind immer auf Englisch; das ändert nur die Menüs und Meldungen.',
 
+  'setup.title': 'Wordado einrichten',
+  'setup.step': 'Schritt {n} von {count}',
+  'setup.skip': 'Überspringen',
+  'setup.start': 'Lernen beginnen',
+  'setup.level.title': 'Dein Englischniveau',
+  'setup.level.later': 'Nicht sicher? Du kannst später in den Einstellungen einen kurzen Einstufungstest machen.',
+  'setup.goal.title': 'Ein Tagesziel',
+  'setup.goal.hint': 'Freiwillig. Du kannst es jederzeit in den Einstellungen festlegen oder ändern.',
   'setup.language.title': 'Welche Sprache sprichst du?',
   'setup.language.hint': 'Die Wörter werden in dieser Sprache erklärt. Du kannst sie später in den Einstellungen ändern.',
   'setup.continue': 'Weiter',
@@ -281,7 +289,6 @@ export const de: Messages = {
 
   'onboard.title': 'Wofür möchtest du Englisch lernen?',
   'onboard.hint': 'Wähl eins aus, und seine Wörter kommen zuerst. Du kannst das jederzeit unter „Themen“ ändern.',
-  'onboard.skip': 'Überspringen',
 
   'mode.flashcard': 'Karteikarten',
   'mode.multiple_choice': 'Multiple-Choice',
