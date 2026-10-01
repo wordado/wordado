@@ -384,7 +384,16 @@ test('a returning account signing in on a fresh browser lands on Home, without t
   await a.goto('/')
   await synced(a)
   await expect
-    .poll(async () => (await exported(a)).documents.some((d) => d.fields['l1'] === 'de'), { timeout: 20_000 })
+    .poll(
+      async () => {
+        // No throwing `expect` in here (as `exported` has): a throw ends the poll at once instead of retrying it.
+        const response = await a.request.get('/v1/export')
+        if (response.status() !== 200) return false
+        const { documents } = (await response.json()) as { documents: { fields: Record<string, unknown> }[] }
+        return documents.some((d) => d.fields['l1'] === 'de')
+      },
+      { timeout: 20_000 },
+    )
     .toBe(true)
   await first.close()
 
