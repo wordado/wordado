@@ -8,7 +8,8 @@ repository deploys the preview and runs one learner's life against it (`smoke:re
 and audio) lives in the R2 bucket `wordado-content`, served at `https://content.wordado.com`, and is
 published by the **Corpus** workflow of the private `wordado/wordado-content` repository (`pipeline/README.md`).
 
-The public website at `https://wordado.com` is a separate Worker from the private repo `wordado/wordado-site`; it serves the privacy policy and redirects the app's old paths here.
+The public website at `https://wordado.com` is a separate Worker from the private repo
+`wordado/wordado-site`; it serves the privacy policy and redirects the app's old paths here.
 
 Nothing deploys until the repository variable `DEPLOY_ENABLED` is `true` (step 10).
 
@@ -37,12 +38,14 @@ until the support address below decides how wordado.com receives: no MX would le
 and a null MX (`0 .`) can make some providers distrust mail *from* wordado.com, the sign-in codes included.
 Not yet: a redirect from `www.wordado.com` to `https://wordado.com`, which is the website
 (before the beta is announced): a proxied `AAAA www 100::` record and the Redirect Rules template *Redirect from
-WWW to root* (301, query string kept). Never serve the app on `www` too, nor on the main domain: its local data, sign-in cookie and
-installed app would be separate from `app.wordado.com`'s. The app is only ever on `app.wordado.com`. A public support address, such as `support@wordado.com`
+WWW to root* (301, query string kept). Never serve the app on `www` too, nor on the main domain: its local
+data, sign-in cookie and installed app would be separate from `app.wordado.com`'s. The app is only ever on
+`app.wordado.com`. A public support address, such as `support@wordado.com`
 (before Google's app is published): either Resend receiving (enable wordado.com under Receiving; it uses the
 present MX) or Cloudflare Email Routing, which replaces the MX with its own and forwards to a personal inbox. Google's **User support email** (Branding) is a dropdown of the signed-in account and the Google Groups it
 manages, so it needs a Google Group or a Google account for that address; until then it shows the personal
-address to test users only. The same address can fill the privacy policy's `[Contact email]` (the website's, `https://wordado.com/<lang>/privacy/`).
+address to test users only. The same address can fill the privacy policy's `[Contact email]`
+(the website's, `https://wordado.com/<lang>/privacy/`).
 
 ## Provisioning, once
 
@@ -83,7 +86,7 @@ private `wordado/wordado-research`, cloned into `docs/research/` and ignored her
 5. **R2.** `pnpm exec wrangler r2 bucket create wordado-content --location weur`. Connect the
    custom domain `content.wordado.com` to it on the dashboard (R2 › wordado-content › Settings ›
    Custom Domains). Allow the app's origins to read it. Write `cors.json`:
-   `{"rules":[{"allowed":{"origins":["https://wordado.com","https://wordado-preview.<subdomain>.workers.dev"],"methods":["GET","HEAD"]},"maxAgeSeconds":86400}]}`
+   `{"rules":[{"allowed":{"origins":["https://app.wordado.com","https://wordado-preview.<subdomain>.workers.dev"],"methods":["GET","HEAD"]},"maxAgeSeconds":86400}]}`
    and run `pnpm exec wrangler r2 bucket cors set wordado-content --file cors.json`. Create an R2 API
    token with *Object Read & Write* on `wordado-content` only, and keep its access key id and secret.
 6. **Secrets and variables** (`gh` from the repository root). Create the environments, with production limited to `main`:
@@ -95,7 +98,7 @@ private `wordado/wordado-research`, cloned into `docs/research/` and ignored her
      `gh secret set DATABASE_URL` (that branch's direct URL), and `gh secret set BETTER_AUTH_SECRET`
      (`openssl rand -base64 48`, a different one per environment). Also
      `gh variable set CONTENT_MANIFEST_URL --body https://content.wordado.com/manifest.json`.
-   - `APP_ORIGIN`: `https://wordado-preview.<subdomain>.workers.dev` for preview, `https://wordado.com` for production.
+   - `APP_ORIGIN`: `https://wordado-preview.<subdomain>.workers.dev` for preview, `https://app.wordado.com` for production.
    - Production only: `gh variable set CONTENT_BUCKET --body wordado-content --env production`,
      `gh secret set R2_ACCESS_KEY_ID --env production`, `gh secret set R2_SECRET_ACCESS_KEY --env production`.
      The Worker does not use them, but they stay here and are removed only after the first corpus release
@@ -104,7 +107,7 @@ private `wordado/wordado-research`, cloned into `docs/research/` and ignored her
      `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, and `VAPID_SUBJECT` (`mailto:…`).
    - Production only (*done 2026-09-27*): `RESEND_API_KEY` with `EMAIL_FROM`
      (`Wordado <codes@wordado.com>`, once Resend has verified the domain), and `GOOGLE_CLIENT_ID` with
-     `GOOGLE_CLIENT_SECRET` (redirect `https://wordado.com/api/auth/callback/google`). Without Resend,
+     `GOOGLE_CLIENT_SECRET` (redirect `https://app.wordado.com/api/auth/callback/google`). Without Resend,
      production prints sign-in codes to its log, as development does. The preview has no mailer on
      purpose: its codes are only in its log, which `smoke:remote` reads.
    A deploy refuses half of a pair, and a `BETTER_AUTH_SECRET` under 32 characters (`server/scripts/secretsFile.ts`).
@@ -172,6 +175,8 @@ it deploys with `noindex` on every page, so it is reachable but kept out of sear
 2. **R2 › `wordado-content` › Settings › CORS policy:** add `https://app.wordado.com` to `AllowedOrigins`.
    Keep `https://wordado.com` for now.
 3. **GitHub › Settings › Environments › `production`:** set `APP_ORIGIN` to `https://app.wordado.com`.
+   Between steps 3 and 4, deploy nothing else to production: a deploy in that window would give the old
+   route the new BASE_URL.
 4. **Merge the move's pull request** and approve its production deploy. Wrangler attaches the custom domain
    `app.wordado.com` (it creates the DNS record itself).
 5. **Check the app:** open `https://app.wordado.com`, sign in by emailed code and by Google, study one card,
