@@ -87,6 +87,24 @@ describe('TabLock', () => {
     await b.dispose()
   })
 
+  it('drops the lock at once, without releasing the database, and can take it again (the page is being left)', async () => {
+    const name = unique()
+    const log: string[] = []
+    const a = tab(name, log, 'a')
+    await a.acquire()
+    log.length = 0
+    a.drop()
+    // Synchronous: a page about to be frozen gets no later turn.
+    expect(log).toEqual(['a idle'])
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    const b = tab(name, log, 'b')
+    expect(await b.acquire()).toBe(true)
+    await b.dispose()
+    expect(await a.acquire()).toBe(true)
+    expect(log).not.toContain('a releasing')
+    await a.dispose()
+  })
+
   it('does not steal from a slow owner with an open channel', async () => {
     const name = unique()
     const log: string[] = []

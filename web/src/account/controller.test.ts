@@ -24,7 +24,8 @@ async function app(options: { env?: TestEnv; server?: FakeServer; transport?: Sy
   const pending = pendingSignIn(memoryStorage())
   const api = fakeApi({}, options.session === undefined ? ANA : options.session)
   const stops: boolean[] = []
-  const lock: LockPort = { acquire: async () => true, takeOver: async () => undefined }
+  const locks: string[] = []
+  const lock: LockPort = { acquire: async () => true, takeOver: async () => undefined, drop: () => void locks.push('drop') }
   const boot = new Boot(
     {
       env,
@@ -57,7 +58,7 @@ async function app(options: { env?: TestEnv; server?: FakeServer; transport?: Sy
     if (state.status !== 'ready') throw new Error(`not ready: ${state.status}`)
     return state.client
   }
-  return { env, server, d, accounts, pending, api, boot, controller, client, stops }
+  return { env, server, d, accounts, pending, api, boot, controller, client, stops, locks }
 }
 
 /** Another device of the same account, with progress on the server. */
@@ -69,6 +70,17 @@ async function progressElsewhere(env: TestEnv, server: FakeServer): Promise<void
   await other.sync()
   await other.close()
 }
+
+describe('leaving the page for Google (iOS keeps it frozen, holding the file)', () => {
+  it('closes the database and lets go of the lock', async () => {
+    const a = await app()
+    const client = a.client()
+    await a.controller.leavePage()
+    expect(a.boot.store.get().status).toBe('starting')
+    expect(a.locks).toEqual(['drop'])
+    await expect(client.updateSettings({ newWordLimit: 5 })).rejects.toThrow()
+  })
+})
 
 describe('signing in from the demo (spec §8.6)', () => {
   it('carries the demo over into a new account, from the demo’s own device, and deletes the demo', async () => {
@@ -280,7 +292,7 @@ describe('signing out, deleting, leaving the demo (spec §8.6, §11)', () => {
     a.controller.dismissNotice()
     const controller = new AccountController({
       api: a.api,
-      boot: { store: a.boot.store, switchTo: async () => false },
+      boot: { store: a.boot.store, switchTo: async () => false, leave: async () => undefined },
       accounts: a.accounts,
       pending: a.pending,
       transport: () => a.server,
@@ -414,7 +426,7 @@ describe('Boot must be ready before an account changes (spec §9.1)', () => {
     const pending = pendingSignIn(memoryStorage())
     const api = fakeApi({}, ANA)
     const deletes: string[] = []
-    const lock: LockPort = { acquire: async () => true, takeOver: async () => undefined }
+    const lock: LockPort = { acquire: async () => true, takeOver: async () => undefined, drop: () => undefined }
     const boot = new Boot(
       {
         env,

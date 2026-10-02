@@ -24,6 +24,7 @@ async function renderRoot(options: { free?: boolean; backend?: Backend; fresh?: 
     takeOver: async () => {
       owner = true
     },
+    drop: () => undefined,
   }
   const env = testEnv()
   const boot = new Boot(
@@ -198,7 +199,7 @@ describe('Root', () => {
 
   it('shows a storage message when opening the database fails', async () => {
     const env = testEnv()
-    const lock: LockPort = { acquire: async () => true, takeOver: async () => undefined }
+    const lock: LockPort = { acquire: async () => true, takeOver: async () => undefined, drop: () => undefined }
     const boot = new Boot(
       {
         env,
@@ -229,6 +230,7 @@ describe('Root', () => {
         throw new Error('Locks are not available in this context')
       },
       takeOver: async () => undefined,
+      drop: () => undefined,
     }
     const boot = new Boot(
       { env, l1: () => 'bg', openDriver: async () => ({ driver: nodeSqliteDriver(), backend: 'opfs' }), fetchManifest: async () => sampleManifest, fetchPack: sampleFetcher },

@@ -54,6 +54,9 @@ function Field(props: {
   )
 }
 
+/** How long going to Google waits for the database to be let go before going anyway. Tuning (§15). */
+export const LEAVE_TIMEOUT_MS = 2_000
+
 /** The wizard's steps, as its counter numbers them. */
 const STEP_NUMBER = { gate: 1, method: 2, code: 3 } as const
 
@@ -66,7 +69,12 @@ const STEP_NUMBER = { gate: 1, method: 2, code: 3 } as const
  * asked. The native language is asked by the first-run setup, right after
  * sign-up (plan 11), not here.
  */
-export function SignIn(props: { readonly redirect?: (url: string) => void; readonly pending?: { save(p: PendingSignIn): void } }) {
+export function SignIn(props: {
+  readonly redirect?: (url: string) => void
+  readonly pending?: { save(p: PendingSignIn): void }
+  /** Tests shorten LEAVE_TIMEOUT_MS. */
+  readonly leaveWithinMs?: number
+}) {
   const { t, locale } = useT()
   const { api, accounts, account } = useApp()
   const client = useClient()
@@ -172,7 +180,16 @@ export function SignIn(props: { readonly redirect?: (url: string) => void; reado
     try {
       pending.save({ country })
       const origin = window.location.origin
-      redirect(await api.googleUrl(`${origin}/?signin=google`, `${origin}/?signin=google-error`))
+      const url = await api.googleUrl(`${origin}/?signin=google`, `${origin}/?signin=google-error`)
+      // Let go of the database first: iOS keeps this page frozen while away, still holding the file the page Google
+      // returns to must open. A slow close never holds the sign-in up; `pagehide` lets go regardless (main.tsx).
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const timeout = new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, props.leaveWithinMs ?? LEAVE_TIMEOUT_MS)
+      })
+      await Promise.race([accounts.leavePage().catch(() => undefined), timeout])
+      clearTimeout(timer)
+      redirect(url)
     } catch (err) {
       setFormError(t(err instanceof OfflineError ? 'signin.offline' : 'signin.googleFailed'))
       setBusy(false)

@@ -10,6 +10,9 @@ export const FLUSH_TIMEOUT_MS = 3_000
 /** How long a new device waits for an account's first pull before deciding on the first-run setup (plan 11). Tuning (§15). */
 export const SETUP_PULL_TIMEOUT_MS = 5_000
 
+/** How long opening a database file may take before the boot fails with "Try again" (a frozen iOS page can hold the file for good). Tuning (§15). */
+export const OPEN_TIMEOUT_MS = 10_000
+
 export type BootState =
   | { readonly status: 'starting' }
   /** Another tab owns the database (spec §9.1). */
@@ -47,6 +50,8 @@ export function defaultL1(account: AccountRecord | null, locale: Locale): L1 {
 export interface LockPort {
   acquire(): Promise<boolean>
   takeOver(): Promise<void>
+  /** Lets go of the lock at once, without asking (the page is being left); `acquire()` takes it again. */
+  drop(): void
 }
 
 export interface BootDeps {
@@ -57,6 +62,8 @@ export interface BootDeps {
   readonly accounts?: AccountStorage
   /** Opens one database file: `demo`, or a learner's `user-<id>`. */
   openDriver(file: string): Promise<{ readonly driver: SqlDriver; readonly backend: Backend }>
+  /** Ends every driver `openDriver` has opened or is opening, synchronously (the page is being hidden); their calls fail from then on. */
+  terminateDrivers?(): void
   /** Deletes a closed file: the demo after a carry-over or when left, a learner's after sign-out. */
   deleteDatabase?(file: string): Promise<void>
   /** Every database file kept (`listDatabases`), so each open can sweep the files no account owns. Absent: no sweep. */
@@ -69,6 +76,8 @@ export interface BootDeps {
   readonly flushTimeoutMs?: number
   /** Tests shorten SETUP_PULL_TIMEOUT_MS. */
   readonly setupPullTimeoutMs?: number
+  /** Tests shorten OPEN_TIMEOUT_MS. */
+  readonly openTimeoutMs?: number
   /** The manifest to install from: the demo's (the bundled sample) or a learner's (the CDN, plan 7). */
   fetchManifest(account: AccountRecord | null): Promise<PackManifest>
   readonly fetchPack: PackFetcher
@@ -113,6 +122,8 @@ export class Boot {
    * handed over only once this tab has let go of whatever it opened.
    */
   private opening: Promise<void> | null = null
+  /** Set by `suspend()` and `leave()`, so only a page that let go opens again on `resume()`. */
+  private suspended = false
 
   constructor(
     private readonly deps: BootDeps,
@@ -187,11 +198,57 @@ export class Boot {
    * lock pass on.
    */
   async release(): Promise<void> {
+    await this.letGo({ status: 'elsewhere' })
+  }
+
+  /**
+   * This page is navigating away on purpose (Google's sign-in): flush and
+   * close as a hand-over does, then let go of the tab lock, so whichever
+   * page comes next finds the file and the lock free. `resume()` opens again
+   * if this page is shown once more.
+   */
+  async leave(): Promise<void> {
+    this.suspended = true
+    const generation = await this.letGo({ status: 'starting' })
+    if (generation === this.generation) this.lock.drop()
+  }
+
+  /**
+   * The page is being hidden (`pagehide`) and may be frozen in the back-forward
+   * cache, where it answers nobody (iOS): the database Worker and the locks it
+   * and this tab hold must go now, synchronously. No flush: each answer is
+   * already committed, and the next open picks up any outbox. The Client goes
+   * with its driver; its close only tidies up.
+   */
+  suspend(): void {
     this.generation += 1
     this.lockHeld = false
+    this.suspended = true
+    this.deps.terminateDrivers?.()
+    this.lock.drop()
+    this.stopSync?.()
+    this.stopSync = null
+    const client = this.client
+    this.client = null
+    this.store.set({ status: 'starting' })
+    void client?.close().catch(() => undefined)
+  }
+
+  /** The page is shown again after `suspend()` or `leave()` (`pageshow` from the back-forward cache): open the ordinary way. */
+  async resume(): Promise<void> {
+    if (!this.suspended) return
+    this.suspended = false
+    await this.start()
+  }
+
+  /** Gives the database up: what `release()` and `leave()` share. Resolves with the generation it started, once the file is closed. */
+  private async letGo(state: BootState): Promise<number> {
+    const generation = ++this.generation
+    this.lockHeld = false
     if (this.opening) await this.opening.catch(() => undefined)
-    this.store.set({ status: 'elsewhere' })
+    this.store.set(state)
     await this.closeClient(true)
+    return generation
   }
 
   /**
@@ -362,7 +419,7 @@ export class Boot {
     const account = await this.sweep(this.deps.accounts?.read() ?? null)
     if (account?.carryOver) await this.carryOverDemo(account)
     if (generation !== this.generation) return
-    const { driver, backend } = await this.deps.openDriver(account ? learnerFile(account.userId) : DEMO_FILE)
+    const { driver, backend } = await this.openDriver(account ? learnerFile(account.userId) : DEMO_FILE)
     if (generation !== this.generation) {
       await driver.close().catch(() => undefined)
       return
@@ -418,11 +475,27 @@ export class Boot {
     return account
   }
 
+  /**
+   * `deps.openDriver`, failing after OPEN_TIMEOUT_MS rather than waiting for
+   * good on a file another page holds; a driver that arrives later is closed.
+   */
+  private openDriver(file: string): Promise<{ readonly driver: SqlDriver; readonly backend: Backend }> {
+    const opening = this.deps.openDriver(file)
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        reject(new Error('The database took too long to open'))
+        opening.then(({ driver }) => driver.close()).catch(() => undefined)
+      }, this.deps.openTimeoutMs ?? OPEN_TIMEOUT_MS)
+    })
+    return Promise.race([opening, timeout]).finally(() => clearTimeout(timer))
+  }
+
   /** Whom the demo on disk is attached to (null: nobody); undefined when it cannot be read. */
   private async demoOwner(): Promise<string | null | undefined> {
     let opened: { readonly driver: SqlDriver; readonly backend: Backend }
     try {
-      opened = await this.deps.openDriver(DEMO_FILE)
+      opened = await this.openDriver(DEMO_FILE)
     } catch {
       return undefined
     }
@@ -452,7 +525,7 @@ export class Boot {
     if (!transport) return
     let opened: { readonly driver: SqlDriver; readonly backend: Backend }
     try {
-      opened = await this.deps.openDriver(DEMO_FILE)
+      opened = await this.openDriver(DEMO_FILE)
     } catch {
       return
     }

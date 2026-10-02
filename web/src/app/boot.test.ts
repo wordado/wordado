@@ -10,7 +10,7 @@ import type { WordId } from '@wordado/core'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { accountStorage, DEMO_FILE, learnerFile, memoryStorage } from '../account/storage'
 import { answerTo, chosenL1, disk, fileDriver, flaky } from '../test/disk'
-import { Boot, type BootDeps, defaultL1, FLUSH_TIMEOUT_MS, type LockPort, SETUP_PULL_TIMEOUT_MS } from './boot'
+import { Boot, type BootDeps, defaultL1, FLUSH_TIMEOUT_MS, type LockPort, OPEN_TIMEOUT_MS, SETUP_PULL_TIMEOUT_MS } from './boot'
 
 const hello = answerTo('c:hello-1')
 
@@ -66,15 +66,20 @@ function boot(over: Partial<BootDeps> = {}, free = true) {
     ...over,
   }
   let release: () => Promise<void> = async () => undefined
+  const locks: string[] = []
   const lock: LockPort = {
-    acquire: async () => free,
+    acquire: async () => {
+      locks.push('acquire')
+      return free
+    },
     takeOver: async () => undefined,
+    drop: () => void locks.push('drop'),
   }
   const b = new Boot(deps, (r) => {
     release = r
     return lock
   })
-  return { boot: b, release: () => release() }
+  return { boot: b, release: () => release(), locks }
 }
 
 /**
@@ -268,6 +273,7 @@ describe('Boot', () => {
         return true
       },
       takeOver: async () => undefined,
+      drop: () => undefined,
     }
     const b = new Boot(deps, () => lock)
     await b.start()
@@ -291,6 +297,7 @@ describe('Boot', () => {
         throw new Error('Locks are not available in this context')
       },
       takeOver: async () => undefined,
+      drop: () => undefined,
     }
     const b = new Boot(deps, () => lock)
     await b.start()
@@ -310,6 +317,7 @@ describe('Boot', () => {
       takeOver: async () => {
         throw new Error('The owner never answered')
       },
+      drop: () => undefined,
     }
     const b = new Boot(deps, () => lock)
     await b.start()
@@ -335,6 +343,7 @@ describe('Boot', () => {
         return true
       },
       takeOver: async () => undefined,
+      drop: () => undefined,
     }
     const b = new Boot(deps, () => lock)
     await b.start()
@@ -361,6 +370,7 @@ describe('Boot', () => {
         takeOverCalls += 1
         if (!succeed) throw new Error('The owner never answered')
       },
+      drop: () => undefined,
     }
     const b = new Boot(deps, () => lock)
     await b.start()
@@ -1124,5 +1134,164 @@ describe('the first-run setup (plan 11)', () => {
     expect(d.exists(DEMO_FILE)).toBe(false)
     expect(log).toEqual(['start'])
     await expect(demo.updateSettings({ newWordLimit: 5 })).rejects.toThrow()
+  })
+})
+
+describe('Boot never waits forever on the database (iOS: a frozen page holds the file)', () => {
+  it('fails with the storage reason when opening the database never settles, and closes the driver if it arrives late', async () => {
+    const late = deferred<{ driver: SqlDriver; backend: 'opfs' }>()
+    const { driver, closes } = countingDriver(nodeSqliteDriver())
+    let attempt = 0
+    const delays = timerDelays()
+    const { boot: b } = boot({
+      openDriver: async () => {
+        attempt += 1
+        return attempt === 1 ? late.promise : chosen()
+      },
+      openTimeoutMs: 20,
+    })
+    await b.start()
+    expect(b.store.get()).toMatchObject({ status: 'failed', reason: 'storage' })
+    expect(delays()).toContain(20)
+    expect(delays()).not.toContain(OPEN_TIMEOUT_MS)
+    late.resolve({ driver, backend: 'opfs' })
+    await new Promise((r) => setTimeout(r, 0))
+    expect(closes()).toBe(1)
+    // "Try again" opens a fresh one.
+    await b.retry()
+    expect(ready(b).snapshot.corpus).not.toBeNull()
+  })
+
+  it('skips a demo it cannot open in time, for the sweep and an owed carry-over, and opens the learner’s file', async () => {
+    const d = disk()
+    const env = testEnv()
+    await (async () => {
+      const { boot: first } = boot({ openDriver: async () => d.openDriver(DEMO_FILE) })
+      await first.start()
+      await ready(first).answer(hello)
+      await ready(first).close()
+    })()
+    const accounts = accountStorage(memoryStorage())
+    accounts.save({ userId: 'u1', email: 'ana@example.com', carryOver: true })
+    const { boot: b } = boot({
+      env,
+      accounts,
+      openDriver: async (file) => (file === DEMO_FILE ? new Promise(() => undefined) : choosing(d.openDriver)(file)),
+      deleteDatabase: d.deleteDatabase,
+      listDatabases: d.listDatabases,
+      transport: () => new FakeServer({ now: env.now }),
+      openTimeoutMs: 20,
+      setupPullTimeoutMs: 20,
+    })
+    await b.start()
+    expect(b.store.get()).toMatchObject({ status: 'ready', account: { userId: 'u1' } })
+    // The carry-over is still owed: the demo stays, and so does the flag.
+    expect(d.exists(DEMO_FILE)).toBe(true)
+    expect(accounts.read()?.carryOver).toBe(true)
+  })
+})
+
+describe('Boot lets go when the page is hidden, and opens again when it is shown (iOS back-forward cache)', () => {
+  it('suspend() ends the database at once, lets go of the lock, and drops the Client; resume() opens a fresh one', async () => {
+    const opened: ReturnType<typeof countingDriver>[] = []
+    const log: string[] = []
+    const { boot: b, locks } = boot({
+      openDriver: async () => {
+        const { driver } = await chosen()
+        const counted = countingDriver(driver)
+        opened.push(counted)
+        return { driver: counted.driver, backend: 'opfs' }
+      },
+      terminateDrivers: () => void log.push(`terminate while ${b.store.get().status}`),
+    })
+    await b.start()
+    const client = ready(b)
+    locks.length = 0
+
+    b.suspend()
+    // Synchronous: a page about to be frozen gets no later turn.
+    expect(log).toEqual(['terminate while ready'])
+    expect(locks).toEqual(['drop'])
+    expect(b.store.get().status).toBe('starting')
+    await new Promise((r) => setTimeout(r, 0))
+    expect(opened[0]!.closes()).toBe(1)
+    await expect(client.updateSettings({ newWordLimit: 5 })).rejects.toThrow()
+
+    await b.resume()
+    expect(locks).toEqual(['drop', 'acquire'])
+    expect(opened).toHaveLength(2)
+    expect(ready(b)).not.toBe(client)
+    expect(ready(b).snapshot.corpus).not.toBeNull()
+  })
+
+  it('an open in flight when the page is hidden never becomes ready, and its driver is closed', async () => {
+    const first = deferred<{ driver: SqlDriver; backend: 'opfs' }>()
+    const { driver, closes } = countingDriver(nodeSqliteDriver())
+    let attempt = 0
+    const { boot: b } = boot({
+      openDriver: async () => {
+        attempt += 1
+        return attempt === 1 ? first.promise : chosen()
+      },
+    })
+    const starting = b.start()
+    await Promise.resolve()
+    await Promise.resolve()
+    b.suspend()
+    first.resolve({ driver, backend: 'opfs' })
+    await starting
+    expect(b.store.get().status).toBe('starting')
+    expect(closes()).toBe(1)
+    await b.resume()
+    expect(ready(b).snapshot.corpus).not.toBeNull()
+  })
+
+  it('resume() does nothing unless the Boot was suspended', async () => {
+    let opens = 0
+    const { boot: b } = boot({
+      openDriver: async () => {
+        opens += 1
+        return chosen()
+      },
+    })
+    await b.start()
+    const client = ready(b)
+    await b.resume()
+    expect(opens).toBe(1)
+    expect(ready(b)).toBe(client)
+  })
+
+  it('leave() flushes and closes as a hand-over does, then lets go of the lock; resume() opens again', async () => {
+    const d = disk()
+    const env = testEnv()
+    const server = new FakeServer({ now: env.now })
+    const accounts = accountStorage(memoryStorage())
+    accounts.save({ userId: 'u1', email: 'ana@example.com' })
+    const log: string[] = []
+    const { boot: b, locks } = boot({
+      env,
+      accounts,
+      openDriver: async (file) => {
+        const opened = await choosing(d.openDriver)(file)
+        return { ...opened, driver: { ...opened.driver, close: async () => (log.push('closed'), opened.driver.close()) } }
+      },
+      deleteDatabase: d.deleteDatabase,
+      transport: () => server,
+    })
+    await b.start()
+    const client = ready(b)
+    await client.answer(hello)
+    locks.length = 0
+    const leaving = b.leave()
+    expect(b.store.get().status).toBe('starting')
+    await leaving
+    expect(server.events.size).toBe(1)
+    expect(log).toEqual(['closed'])
+    expect(locks).toEqual(['drop'])
+    expect(b.store.get().status).toBe('starting')
+
+    await b.resume()
+    expect(ready(b)).not.toBe(client)
+    expect(ready(b).snapshot.states.size).toBe(1)
   })
 })

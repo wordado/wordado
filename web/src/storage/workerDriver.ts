@@ -12,6 +12,20 @@ export type WorkerFactory = () => Worker
 const sqliteWorker: WorkerFactory = () =>
   new Worker(new URL('./sqlite.worker.ts', import.meta.url), { type: 'module', name: 'wordado-sqlite' })
 
+/** How to end each Worker opened (or still opening) and not yet closed. */
+const live = new Set<() => void>()
+
+/**
+ * Ends every database Worker at once, without a word to it: the page is being
+ * hidden and may be frozen (iOS's back-forward cache), and a frozen Worker
+ * would keep the OPFS file and its lock from the next page. Every pending and
+ * later call fails; what was committed is on disk, and SQLite rolls back an
+ * unfinished transaction when the file next opens.
+ */
+export function terminateWorkerDrivers(): void {
+  for (const end of live) end()
+}
+
 /**
  * The web SqlDriver (plan 4 contract): every call is a message to the Worker,
  * answered in order. `close` terminates the Worker, which releases the OPFS
@@ -46,6 +60,13 @@ export async function openWorkerDriver(
     failAll(new Error(`The database worker failed: ${event.message || 'unknown error'}`))
   }
 
+  const end = () => {
+    live.delete(end)
+    worker.terminate()
+    failAll(new Error('The database is closed'))
+  }
+  live.add(end)
+
   const call = (message: WorkerCall): Promise<unknown> => {
     if (broken) return Promise.reject(broken)
     return new Promise((resolve, reject) => {
@@ -60,7 +81,7 @@ export async function openWorkerDriver(
   try {
     opened = (await call({ op: 'open', file, backends })) as OpenResult
   } catch (err) {
-    worker.terminate()
+    end()
     throw err
   }
 
@@ -76,8 +97,7 @@ export async function openWorkerDriver(
       try {
         await call({ op: 'close' })
       } finally {
-        worker.terminate()
-        failAll(new Error('The database is closed'))
+        end()
       }
     },
   }
