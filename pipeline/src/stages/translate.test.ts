@@ -36,6 +36,18 @@ describe('translateSenses', () => {
     expect(L1_GUIDES['de']).toMatch(/infinitive/)
   })
 
+  it('has a Spanish guide: nouns without the article, verbs in the infinitive, Spain’s Spanish', () => {
+    expect(L1_GUIDES['es']).toMatch(/Spanish/)
+    expect(L1_GUIDES['es']).toMatch(/without the article/)
+    expect(L1_GUIDES['es']).toMatch(/infinitive/)
+  })
+
+  it('sends a translate request for es', async () => {
+    const r = run(() => ({ items: [{ key: '0', translation: 'agua', alternates: [], sense: '' }] }))
+    await translateSenses('es', items, r)
+    expect((r.llm as ReturnType<typeof fakeLlm>).calls[0]!.input).toMatchObject({ l1: 'es' })
+  })
+
   it('rejects a response that answers other items than it was asked', async () => {
     await expect(translateSenses('bg', items, run(() => ({ items: [{ key: '1', translation: 'вода', alternates: [], sense: '' }] })))).rejects.toThrow(/answers other items/)
   })
