@@ -1327,6 +1327,89 @@ describe('Boot lets go when the page is hidden, and opens again when it is shown
     expect(log).toEqual(['drop'])
   })
 
+  it('a stale take-over sharing its request with a newer one leaves the lock to it: held, and opened once', async () => {
+    // TabLock.takeOver() hands every caller the one request in flight.
+    const taken = deferred<void>()
+    const log: string[] = []
+    const lock: LockPort = {
+      acquire: async () => false,
+      takeOver: () => taken.promise,
+      drop: () => void log.push('drop'),
+    }
+    const b = new Boot(
+      {
+        env: testEnv(),
+        l1: () => 'bg',
+        openDriver: async (file) => {
+          log.push(`open ${file}`)
+          return chosen()
+        },
+        fetchManifest: async () => sampleManifest,
+        fetchPack: sampleFetcher,
+      },
+      () => lock,
+    )
+    await b.start()
+    const stale = b.takeOver()
+    b.suspend()
+    await b.resume()
+    expect(b.store.get().status).toBe('elsewhere')
+    log.length = 0
+    const current = b.takeOver()
+    taken.resolve()
+    await Promise.all([stale, current])
+    expect(log).toEqual([`open ${DEMO_FILE}`])
+    expect(ready(b).snapshot.corpus).not.toBeNull()
+  })
+
+  it('resume() does nothing while leave() is still letting go; after it, the page reopens as usual', async () => {
+    const closing = deferred<void>()
+    let opens = 0
+    const { boot: b, locks } = boot({
+      openDriver: async () => {
+        opens += 1
+        const { driver } = await chosen()
+        if (opens > 1) return { driver, backend: 'opfs' }
+        return { driver: { ...driver, close: async () => (await closing.promise, driver.close()) }, backend: 'opfs' }
+      },
+    })
+    await b.start()
+    const leaving = b.leave()
+    await b.resume()
+    expect(locks).toEqual(['acquire'])
+    expect(b.store.get().status).toBe('starting')
+    closing.resolve()
+    await leaving
+    b.suspend()
+    await b.resume()
+    expect(opens).toBe(2)
+    expect(ready(b).snapshot.corpus).not.toBeNull()
+  })
+
+  it('a hand-over that waited for an open does not close the Client a later resume() opened', async () => {
+    const first = deferred<{ driver: SqlDriver; backend: 'opfs' }>()
+    const entered = deferred<void>()
+    let attempt = 0
+    const { boot: b, release } = boot({
+      openDriver: async () => {
+        attempt += 1
+        if (attempt > 1) return chosen()
+        entered.resolve()
+        return first.promise
+      },
+    })
+    const starting = b.start()
+    await entered.promise
+    const releasing = release()
+    b.suspend()
+    await b.resume()
+    const client = ready(b)
+    first.resolve({ driver: nodeSqliteDriver(), backend: 'opfs' })
+    await Promise.all([starting, releasing])
+    expect(ready(b)).toBe(client)
+    await client.updateSettings({ newWordLimit: 5 })
+  })
+
   it('resume() does nothing unless the Boot was suspended', async () => {
     let opens = 0
     const { boot: b } = boot({

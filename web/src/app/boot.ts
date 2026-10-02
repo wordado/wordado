@@ -124,6 +124,10 @@ export class Boot {
   private opening: Promise<void> | null = null
   /** Set by `suspend()` and `leave()`, so only a page that let go opens again on `resume()`. */
   private suspended = false
+  /** Set while `leave()` lets go: the redirect follows, so `resume()` waits for nothing and does nothing. */
+  private leaving = false
+  /** Counts lock requests, so only the latest one decides what a request answered after the page let go does with the lock. */
+  private lockRequests = 0
 
   constructor(
     private readonly deps: BootDeps,
@@ -136,6 +140,7 @@ export class Boot {
     this.store.set({ status: 'starting' })
     this.lastLockAttempt = 'acquire'
     const generation = this.generation
+    const request = ++this.lockRequests
     let held: boolean
     try {
       held = await this.lock.acquire()
@@ -143,7 +148,7 @@ export class Boot {
       if (generation === this.generation) this.store.set({ status: 'failed', message: messageOf(err), reason: 'lock' })
       return
     }
-    if (this.hiddenSince(generation)) return
+    if (this.hiddenSince(generation, request, held)) return
     if (!held) {
       this.store.set({ status: 'elsewhere' })
       return
@@ -157,24 +162,27 @@ export class Boot {
     this.store.set({ status: 'starting' })
     this.lastLockAttempt = 'takeOver'
     const generation = this.generation
+    const request = ++this.lockRequests
     try {
       await this.lock.takeOver()
     } catch (err) {
       if (generation === this.generation) this.store.set({ status: 'failed', message: messageOf(err), reason: 'lock' })
       return
     }
-    if (this.hiddenSince(generation)) return
+    if (this.hiddenSince(generation, request, true)) return
     this.lockHeld = true
     await this.open(true)
   }
 
   /**
-   * Whether the page let go (`suspend()`, `leave()`) while a lock request was
-   * pending: the lock it now holds goes again, and nothing opens until `resume()`.
+   * Whether the page let go (`suspend()`, `leave()`) while this lock request
+   * was pending: nothing opens. The lock it got goes again, unless a newer
+   * request is under way — `TabLock.takeOver()` hands the same grant to every
+   * caller, and the newer one keeps it.
    */
-  private hiddenSince(generation: number): boolean {
+  private hiddenSince(generation: number, request: number, acquired: boolean): boolean {
     if (generation === this.generation) return false
-    this.lock.drop()
+    if (acquired && request === this.lockRequests) this.lock.drop()
     return true
   }
 
@@ -187,12 +195,13 @@ export class Boot {
     this.store.set({ status: 'starting' })
     if (!this.lockHeld) {
       const generation = this.generation
+      const request = ++this.lockRequests
       try {
         if (this.lastLockAttempt === 'takeOver') {
           await this.lock.takeOver()
         } else {
           const held = await this.lock.acquire()
-          if (this.hiddenSince(generation)) return
+          if (this.hiddenSince(generation, request, held)) return
           if (!held) {
             this.store.set({ status: 'elsewhere' })
             return
@@ -202,7 +211,7 @@ export class Boot {
         if (generation === this.generation) this.store.set({ status: 'failed', message: messageOf(err), reason: 'lock' })
         return
       }
-      if (this.hiddenSince(generation)) return
+      if (this.hiddenSince(generation, request, true)) return
       this.lockHeld = true
     }
     await this.open(true)
@@ -226,8 +235,13 @@ export class Boot {
    */
   async leave(): Promise<void> {
     this.suspended = true
-    const generation = await this.letGo({ status: 'starting' })
-    if (generation === this.generation) this.lock.drop()
+    this.leaving = true
+    try {
+      const generation = await this.letGo({ status: 'starting' })
+      if (generation === this.generation) this.lock.drop()
+    } finally {
+      this.leaving = false
+    }
   }
 
   /**
@@ -253,16 +267,21 @@ export class Boot {
 
   /** The page is shown again after `suspend()` or `leave()` (`pageshow` from the back-forward cache): open the ordinary way. */
   async resume(): Promise<void> {
-    if (!this.suspended) return
+    if (!this.suspended || this.leaving) return
     this.suspended = false
     await this.start()
   }
 
-  /** Gives the database up: what `release()` and `leave()` share. Resolves with the generation it started, once the file is closed. */
+  /**
+   * Gives the database up: what `release()` and `leave()` share. Resolves with the generation it started, once the file
+   * is closed — or at once after waiting for an open, if the page let go and came back meanwhile: the Client open now
+   * is a later one, not this call's to close.
+   */
   private async letGo(state: BootState): Promise<number> {
     const generation = ++this.generation
     this.lockHeld = false
     if (this.opening) await this.opening.catch(() => undefined)
+    if (generation !== this.generation) return generation
     this.store.set(state)
     await this.closeClient(true)
     return generation
