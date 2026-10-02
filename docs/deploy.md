@@ -36,11 +36,11 @@ real sender passing, tighten it to `p=quarantine`. The apex MX, `10 inbound-smtp
 Resend's receiving record, but receiving is not enabled, so mail to `@wordado.com` is refused at once. Keep it
 until the support address below decides how wordado.com receives: no MX would leave senders retrying for days,
 and a null MX (`0 .`) can make some providers distrust mail *from* wordado.com, the sign-in codes included.
-Not yet: a redirect from `www.wordado.com` to `https://wordado.com`, which is the website
-(before the beta is announced): a proxied `AAAA www 100::` record and the Redirect Rules template *Redirect from
-WWW to root* (301, query string kept). Never serve the app on `www` too, nor on the main domain: its local
-data, sign-in cookie and installed app would be separate from `app.wordado.com`'s. The app is only ever on
-`app.wordado.com`. A public support address, such as `support@wordado.com`
+Since 2026-10-02, `www.wordado.com` redirects to `https://wordado.com`, which is the website: a proxied
+`AAAA www 100::` record and a Redirect Rule (*Redirect from WWW to root*: 301, path and query string kept).
+Never serve the app on `www` too, nor on the main domain: its local data, sign-in cookie and installed app would
+be separate from `app.wordado.com`'s. The app is only ever on `app.wordado.com`.
+Not yet: a public support address, such as `support@wordado.com`
 (before Google's app is published): either Resend receiving (enable wordado.com under Receiving; it uses the
 present MX) or Cloudflare Email Routing, which replaces the MX with its own and forwards to a personal inbox. Google's **User support email** (Branding) is a dropdown of the signed-in account and the Google Groups it
 manages, so it needs a Google Group or a Google account for that address; until then it shows the personal
