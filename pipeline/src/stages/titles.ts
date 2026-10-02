@@ -11,8 +11,15 @@ export interface TitleUnit {
   readonly words: readonly string[]
 }
 
-const SYSTEM = (l1s: readonly string[]) => `You name the units of an English vocabulary course for adult learners.
-For each unit, in the order given, write a title of two to four words that says what its words have in common ("Food and drink", "At home"), in English ("en", title words in sentence case) and in each of these languages, as a native speaker would title a textbook unit: ${l1s.join(', ')}.
+/** Each L1's language, named precisely enough that the model picks the right regional variety (plan 12). An L1 missing here falls back to its bare code in the prompt. */
+export const L1_NAMES: Readonly<Record<string, string>> = {
+  bg: 'Bulgarian',
+  de: 'German, as written in Germany',
+  es: 'Spanish, as written in Spain',
+}
+
+export const SYSTEM = (l1s: readonly string[]) => `You name the units of an English vocabulary course for adult learners.
+For each unit, in the order given, write a title of two to four words that says what its words have in common ("Food and drink", "At home"), in English ("en", title words in sentence case) and in each of these languages, as a native speaker would title a textbook unit: ${l1s.map((l1) => (L1_NAMES[l1] ? `${l1} (${L1_NAMES[l1]})` : l1)).join(', ')}.
 Return one item per unit with "unit" exactly as given.`
 
 function schema(l1s: readonly string[]) {

@@ -40,6 +40,7 @@ describe('translateSenses', () => {
     expect(L1_GUIDES['es']).toMatch(/Spanish/)
     expect(L1_GUIDES['es']).toMatch(/without the article/)
     expect(L1_GUIDES['es']).toMatch(/infinitive/)
+    expect(L1_GUIDES['es']).toMatch(/Spain/)
   })
 
   it('sends a translate request for es', async () => {
