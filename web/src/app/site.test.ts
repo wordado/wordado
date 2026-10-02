@@ -9,6 +9,7 @@ describe('privacyUrl', () => {
       'https://wordado.com/bg/privacy/',
       'https://wordado.com/de/privacy/',
       'https://wordado.com/en/privacy/',
+      'https://wordado.com/es/privacy/',
     ])
   })
 })

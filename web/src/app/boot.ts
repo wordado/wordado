@@ -1,5 +1,5 @@
 import { Client, createStore, type ClientEnv, type InstallReport, type PackFetcher, type SqlDriver, type Store, type SyncTransport } from '@wordado/client-data'
-import type { L1, PackManifest } from '@wordado/core'
+import { isSupportedL1, type L1, type PackManifest } from '@wordado/core'
 import { DEMO_FILE, learnerFile, type AccountRecord, type AccountStorage } from '../account/storage'
 import type { Locale } from '../i18n/i18n'
 import type { Backend } from '../storage/protocol'
@@ -40,7 +40,7 @@ export type BootState =
  */
 export function defaultL1(account: AccountRecord | null, locale: Locale): L1 {
   if (account !== null) return 'bg'
-  return locale === 'de' ? 'de' : 'bg'
+  return isSupportedL1(locale) ? locale : 'bg'
 }
 
 /** What Boot needs of the tab lock (Task 5's TabLock). */

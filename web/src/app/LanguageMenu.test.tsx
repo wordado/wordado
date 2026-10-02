@@ -53,6 +53,14 @@ describe('LanguageMenu', () => {
     expect(await screen.findByRole('button', { name: 'Език на интерфейса: Български (BG)' })).toBeTruthy()
   })
 
+  it('moves a saved Spanish interface to Bulgarian under a Bulgarian pack (plan 12, Review Focus 2)', async () => {
+    const ctx = await setup()
+    renderWith(<Shell />, { ...ctx, locale: 'es' })
+    expect(await screen.findByRole('button', { name: 'Език на интерфейса: Български (BG)' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Език на интерфейса: Български (BG)' }))
+    expect(screen.queryByRole('button', { name: 'Español' })).toBeNull()
+  })
+
   it('closes on Escape, returning focus, and on a press outside', async () => {
     const ctx = await setup()
     renderWith(<LanguageMenu />, { ...ctx })

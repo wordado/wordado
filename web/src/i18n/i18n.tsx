@@ -3,19 +3,20 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { bg } from './bg'
 import { de } from './de'
 import { en, type Message, type MessageKey, type Messages } from './en'
+import { es } from './es'
 
 export type { MessageKey }
 
-export const LOCALES = ['bg', 'de', 'en'] as const
+export const LOCALES = ['bg', 'de', 'en', 'es'] as const
 export type Locale = (typeof LOCALES)[number]
 
 /** Each language named in itself, as language pickers do. The visible name is the accessible name (WCAG 2.5.3). */
-export const ENDONYM: Readonly<Record<Locale, string>> = { bg: 'Български', de: 'Deutsch', en: 'English' }
+export const ENDONYM: Readonly<Record<Locale, string>> = { bg: 'Български', de: 'Deutsch', en: 'English', es: 'Español' }
 
 /** The one localStorage key the app uses (spec §11.2: the interface language is the learner's choice). */
 export const LOCALE_KEY = 'wordado.locale'
 
-const MESSAGES: Readonly<Record<Locale, Messages>> = { bg, de, en }
+const MESSAGES: Readonly<Record<Locale, Messages>> = { bg, de, en, es }
 
 export type Vars = Readonly<Record<string, string | number>>
 

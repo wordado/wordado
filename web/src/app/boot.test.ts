@@ -867,6 +867,13 @@ describe('the default L1 (plan 10)', () => {
     expect(defaultL1(ana, 'de')).toBe('bg')
   })
 
+  it('follows any interface that is an L1 the app teaches from, Spanish too (plan 12)', () => {
+    const ana = { userId: 'u1', email: 'ana@example.com' }
+    expect(defaultL1(null, 'es')).toBe('es')
+    expect(defaultL1(null, 'de')).toBe('de')
+    expect(defaultL1(ana, 'es')).toBe('bg')
+  })
+
   it('opens the demo with a German interface in German, and a signed-in learner in Bulgarian', async () => {
     const accounts = accountStorage(memoryStorage())
     const asked: (string | null)[] = []
