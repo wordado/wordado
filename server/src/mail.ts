@@ -31,7 +31,7 @@ export function resendMailer(options: ResendOptions): Mailer {
           from: options.from,
           to: [email],
           subject: `Wordado: ${code}`,
-          text: `Your Wordado sign-in code is ${code}. It expires in 5 minutes.\n\nВашият код за вход в Wordado е ${code}. Валиден е 5 минути.\n\nDein Wordado-Anmeldecode ist ${code}. Er ist 5 Minuten gültig.`,
+          text: `Your Wordado sign-in code is ${code}. It expires in 5 minutes.\n\nВашият код за вход в Wordado е ${code}. Валиден е 5 минути.\n\nDein Wordado-Anmeldecode ist ${code}. Er ist 5 Minuten gültig.\n\nTu código de inicio de sesión en Wordado es ${code}. Caduca en 5 minutos.`,
         }),
       })
       if (!response.ok) throw new Error(`Resend refused the email: ${response.status}`)

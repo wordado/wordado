@@ -26,11 +26,12 @@ const UNIT_STATUS: Readonly<Record<UnitStatus, MessageKey>> = {
   open: 'path.open',
 }
 
-const LEVEL_STATUS: Readonly<Record<LevelStatus, MessageKey>> = {
+/** A level's own labels: they agree with "level", which differs in gender from "unit" in some languages (plan 12). */
+export const LEVEL_STATUS: Readonly<Record<LevelStatus, MessageKey>> = {
   skipped: 'path.levelSkipped',
-  complete: 'path.complete',
-  locked: 'path.locked',
-  open: 'path.open',
+  complete: 'path.levelComplete',
+  locked: 'path.levelLocked',
+  open: 'path.levelOpen',
 }
 
 /** Toggles one key in a set held in state. */

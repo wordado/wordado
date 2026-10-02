@@ -247,8 +247,10 @@ writes `work/compare.md`, its answers beside the draft's. Nothing goes into the 
 One draft serves every L1: senses, themes, levels, audio, IDs and units are shared, and only translations and unit
 titles are asked per L1. To add one (German, `de`, is the model):
 
-1. **Code** (this repository): a translation guide in `L1_GUIDES` (`pipeline/src/stages/translate.ts`) and unit-group
-   names in `GROUP_NAMES` (`pipeline/src/units.ts`).
+1. **Code** (this repository): a translation guide in `L1_GUIDES` (`pipeline/src/stages/translate.ts`), unit-group
+   names in `GROUP_NAMES` (`pipeline/src/units.ts`), and the L1's language in `L1_NAMES` (`pipeline/src/stages/titles.ts`).
+   An L1 missing from `L1_NAMES` falls back to its bare code in the unit-titles prompt without a word of warning, so
+   it must be set.
 2. **Theme names**: every theme in `themes.json` gets a `name` and a `description` in the new L1. The draft refuses
    until each has both.
 3. **`pipeline.json`**: append the code to `l1s`. Never put it first: the first L1 is the lead that senses merge on,

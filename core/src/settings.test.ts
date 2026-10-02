@@ -79,10 +79,12 @@ describe('l1', () => {
   it('holds the learner’s L1: a supported language, or null until chosen', () => {
     expect(DEFAULT_SETTINGS.l1).toBeNull()
     expect(validateSettingsPatch({ l1: 'de' })).toEqual({ ok: true, fields: { l1: 'de' } })
+    expect(validateSettingsPatch({ l1: 'es' })).toEqual({ ok: true, fields: { l1: 'es' } })
     expect(validateSettingsPatch({ l1: null })).toEqual({ ok: true, fields: { l1: null } })
     expect(validateSettingsPatch({ l1: 'fr' })).toEqual({ ok: false, errors: ['l1'] })
     expect(settingsFromFields({ l1: 'xx' }).l1).toBeNull()
     expect(isSupportedL1('bg')).toBe(true)
+    expect(isSupportedL1('es')).toBe(true)
     expect(isSupportedL1('en')).toBe(false)
   })
 })

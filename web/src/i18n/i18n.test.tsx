@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { bg } from './bg'
 import { de } from './de'
 import { en } from './en'
+import { es } from './es'
 import { I18nProvider, initialLocale, interfaceLocales, languageName, LOCALE_KEY, localized, translate, useT, type MessageKey } from './i18n'
 
 afterEach(() => {
@@ -17,7 +18,7 @@ const placeholders = (message: string | { one: string; other: string }): string[
 
 describe('the message tables', () => {
   it('have the same keys, the same shape and the same placeholders in every language', () => {
-    for (const table of [bg, de]) {
+    for (const table of [bg, de, es]) {
       expect(Object.keys(table).sort()).toEqual(Object.keys(en).sort())
       for (const key of Object.keys(en) as MessageKey[]) {
         expect(typeof table[key], key).toBe(typeof en[key])
@@ -35,6 +36,11 @@ describe('initialLocale', () => {
   it('falls back to the first supported browser language', () => {
     expect(initialLocale(null, ['de-AT', 'en'])).toBe('de')
     expect(initialLocale(null, ['fr-FR', 'bg'])).toBe('bg')
+  })
+
+  it('gives Spain’s Spanish to any Spanish speaker (plan 12)', () => {
+    expect(initialLocale(null, ['es-ES'])).toBe('es')
+    expect(initialLocale(null, ['es-MX', 'en'])).toBe('es')
   })
 
   it('falls back to English when nothing is saved or supported', () => {
@@ -60,12 +66,13 @@ describe('initialLocale', () => {
 
 describe('interfaceLocales', () => {
   it('offers every interface language before a pack is installed', () => {
-    expect(interfaceLocales(null)).toEqual(['bg', 'de', 'en'])
+    expect(interfaceLocales(null)).toEqual(['bg', 'de', 'en', 'es'])
   })
 
   it('offers the installed pack’s L1 and English once one is (spec §11.2)', () => {
     expect(interfaceLocales('bg')).toEqual(['bg', 'en'])
     expect(interfaceLocales('de')).toEqual(['de', 'en'])
+    expect(interfaceLocales('es')).toEqual(['es', 'en'])
   })
 
   it('offers English alone for an L1 the interface has no table for', () => {
@@ -85,6 +92,11 @@ describe('translate', () => {
   it('picks the German plural form (one for 1, other for 2)', () => {
     expect(translate('de', 'home.newWords', { count: 1 })).toBe('1 neues Wort')
     expect(translate('de', 'home.newWords', { count: 2 })).toBe('2 neue Wörter')
+  })
+
+  it('picks the Spanish plural form (one for 1, other for 2)', () => {
+    expect(translate('es', 'home.newWords', { count: 1 })).toBe('1 palabra nueva')
+    expect(translate('es', 'home.newWords', { count: 2 })).toBe('2 palabras nuevas')
   })
 
   it('leaves a placeholder it was not given visible, rather than printing undefined', () => {

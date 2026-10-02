@@ -113,6 +113,16 @@ describe('groupTitles', () => {
     expect(titles.get('a1-05')).toEqual({ bg: { en: 'Verbs 1', l1: 'Глаголи 1' }, de: { en: 'Verbs 1', l1: 'Verben 1' } })
     expect(titles.get('a1-06')!['de']).toEqual({ en: 'More words 1', l1: 'Weitere Wörter 1' })
   })
+
+  it('names part-of-speech and mixed units in Spanish', () => {
+    const units = [
+      { unit_id: 'a1-05', level: 'A1' as const, entry_ids: ['x-1'], group: 'pos:verb' },
+      { unit_id: 'a1-06', level: 'A1' as const, entry_ids: ['y-1'], group: 'mixed' },
+    ]
+    const titles = groupTitles(units, ['bg', 'es'])
+    expect(titles.get('a1-05')).toEqual({ bg: { en: 'Verbs 1', l1: 'Глаголи 1' }, es: { en: 'Verbs 1', l1: 'Verbos 1' } })
+    expect(titles.get('a1-06')!['es']).toEqual({ en: 'More words 1', l1: 'Más palabras 1' })
+  })
 })
 
 describe('inPathOrder', () => {

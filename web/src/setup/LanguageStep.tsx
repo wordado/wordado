@@ -28,7 +28,7 @@ export function LanguageStep(props: { readonly mode: 'setup' | 'change'; readonl
   // In `change` mode the current choice is the setting, even while it is pending (offline): choosing the installed
   // language again then cancels that change.
   const current: L1 = settings.l1 ?? installed ?? 'bg'
-  const [chosen, setChosen] = useState<L1>(() => (props.mode === 'change' ? current : (settings.l1 ?? (locale === 'de' ? 'de' : 'bg'))))
+  const [chosen, setChosen] = useState<L1>(() => (props.mode === 'change' ? current : (settings.l1 ?? (isSupportedL1(locale) ? locale : 'bg'))))
   const [attempt, setAttempt] = useState<Attempt>({ phase: 'idle' })
   const [saveError, setSaveError] = useState<string | null>(null)
   // Intl's own form of the name, as it sits mid-sentence: "German", "Deutsch", "немски".
