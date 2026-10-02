@@ -3,6 +3,7 @@ import { expect, type Page } from '@playwright/test'
 import { bg } from '../src/i18n/bg'
 import { de } from '../src/i18n/de'
 import { en, type Messages } from '../src/i18n/en'
+import { es } from '../src/i18n/es'
 
 export const heading = (page: Page) => page.getByRole('heading', { level: 1 })
 
@@ -12,7 +13,7 @@ export const heading = (page: Page) => page.getByRole('heading', { level: 1 })
 // never that fast; these e2e presses are, so every one of them waits past it first.
 export const SETTLE_MS = 300
 
-const TABLES: Readonly<Record<string, Messages>> = { en, bg, de }
+const TABLES: Readonly<Record<string, Messages>> = { en, bg, de, es }
 
 /** Today's heading: the screen the setup ends on, whatever its text says. */
 export const today = (page: Page) => page.locator('h1#today')
