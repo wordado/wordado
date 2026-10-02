@@ -296,7 +296,7 @@ export const es: Messages = {
   'mode.matching': 'Emparejar',
 
   'study.loading': 'Preparando tus palabras…',
-  'study.progress': '{answered} hechas, {remaining} por hacer',
+  'study.progress': 'Hechas: {answered} · Por hacer: {remaining}',
   'study.progressLabel': 'Progreso de la ronda',
   'study.more': 'Más',
   'study.finish': 'Parar por ahora',
@@ -350,7 +350,7 @@ export const es: Messages = {
   'matching.title': 'Emparejar',
   'matching.instructions': 'Elige una palabra en inglés y luego su traducción.',
   'matching.english': 'Inglés',
-  'matching.miss': '{left} y {right} no son pareja.',
+  'matching.miss': 'No son pareja: {left} – {right}.',
   'matching.matched': 'Emparejadas',
   'matching.done': '¡Has encontrado todas las parejas!',
   'matching.again': 'Jugar otra vez',
