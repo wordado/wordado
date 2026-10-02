@@ -172,7 +172,7 @@ test('a German browser opens the demo in German, and a studied word’s translat
     await page.waitForTimeout(SETTLE_MS)
     await page.keyboard.press('Space')
     await expect(page.locator('.card[data-phase="revealed"]')).toBeVisible()
-    await expect(page.getByText('hallo')).toBeVisible()
+    await expect(page.locator('.card[data-phase="revealed"] .translation')).toHaveText('hallo')
   } finally {
     await context.close()
   }
@@ -239,7 +239,7 @@ test('a Spanish browser opens the demo in Spanish, and a studied word’s transl
     await page.waitForTimeout(SETTLE_MS)
     await page.keyboard.press('Space')
     await expect(page.locator('.card[data-phase="revealed"]')).toBeVisible()
-    await expect(page.getByText('hola')).toBeVisible()
+    await expect(page.locator('.card[data-phase="revealed"] .translation')).toHaveText('hola')
   } finally {
     await context.close()
   }
