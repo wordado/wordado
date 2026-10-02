@@ -21,6 +21,7 @@ const { sources, clips } = readSourceDir(DIR)
 const built = sources.map((source) => buildPack(source, clips))
 const bgOut = built.find((o) => o.pack.l1 === 'bg')!
 const deOut = built.find((o) => o.pack.l1 === 'de')!
+const esOut = built.find((o) => o.pack.l1 === 'es')!
 const corpus = loadCorpus([bgOut.pack])
 const pool = [...corpus.entries.values()]
 
@@ -102,17 +103,54 @@ describe('the A1 German sample pack (plan 10)', () => {
   })
 })
 
+describe('the A1 Spanish sample pack (plan 12)', () => {
+  it('is committed byte for byte as the build produces it, and validates as version 0 of the Spanish corpus pack', () => {
+    expect(esOut).toBeDefined()
+    const committed = readFileSync(join(DIR, esOut.packFile))
+    expect(committed.equals(Buffer.from(esOut.packBytes))).toBe(true)
+    const result = validatePack(JSON.parse(readFileSync(join(DIR, esOut.packFile), 'utf8')))
+    expect(result.status).toBe('ok')
+    expect(esOut.pack.pack_id).toBe('corpus-es')
+    expect(esOut.pack.corpus_version).toBe(0)
+    expect(esOut.packFile).toBe('corpus-v0-es.pack')
+  })
+
+  it('shares the same entry IDs, units, themes and audio as the Bulgarian pack', () => {
+    expect(esOut.pack.entries.map((e) => e.entry_id).sort()).toEqual(bgOut.pack.entries.map((e) => e.entry_id).sort())
+    expect(esOut.pack.units.map((u) => [u.unit_id, u.entry_ids])).toEqual(bgOut.pack.units.map((u) => [u.unit_id, u.entry_ids]))
+    expect(esOut.pack.themes.map((t) => t.theme_id)).toEqual(bgOut.pack.themes.map((t) => t.theme_id))
+    expect(esOut.pack.audio.map((a) => a.clip_id).sort()).toEqual(bgOut.pack.audio.map((a) => a.clip_id).sort())
+  })
+
+  it('translates hello-1 as hola and titles the first unit in Spanish', () => {
+    expect(esOut.pack.entries.find((e) => e.entry_id === 'hello-1')?.translation).toBe('hola')
+    expect(esOut.pack.units.map((u) => u.title.l1)).toEqual(['Personas y saludos', 'Comida y bebida', 'En casa y en el día a día'])
+  })
+
+  it('has no two entries sharing a translation, so no demo distractor is ambiguous', () => {
+    const norm = (s: string) => s.trim().normalize('NFC').toLowerCase()
+    const seen = new Map<string, string>()
+    for (const e of esOut.pack.entries) {
+      for (const t of [e.translation, ...e.alternates].map(norm)) {
+        expect(seen.get(t), `${t} in ${e.entry_id} and ${seen.get(t)}`).toBeUndefined()
+        seen.set(t, e.entry_id)
+      }
+    }
+  })
+})
+
 describe('the sample manifest (plan 10)', () => {
-  it('lists both packs at version 0', () => {
+  it('lists the three packs at version 0', () => {
     const manifest = JSON.parse(readFileSync(join(DIR, 'manifest.json'), 'utf8')) as { packs: { pack_id: string; l1: string; corpus_version: number }[] }
     expect(manifest.packs.map((p) => [p.pack_id, p.l1, p.corpus_version]).sort()).toEqual([
       ['corpus-bg', 'bg', 0],
       ['corpus-de', 'de', 0],
+      ['corpus-es', 'es', 0],
     ])
     expect(manifest).toEqual({
       schema_version: bgOut.manifest.schema_version,
       corpus_version: 0,
-      packs: [...bgOut.manifest.packs, ...deOut.manifest.packs].sort((a, b) => (a.l1 < b.l1 ? -1 : 1)),
+      packs: [...bgOut.manifest.packs, ...deOut.manifest.packs, ...esOut.manifest.packs].sort((a, b) => (a.l1 < b.l1 ? -1 : 1)),
     })
   })
 

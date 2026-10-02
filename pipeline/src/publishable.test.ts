@@ -34,13 +34,10 @@ describe('publishProblems (spec §4.4: never a manifest whose files are not all 
     expect(publishProblems(sample({ 'corpus-v0-bg.pack': tampered }))).toEqual(['corpus-v0-bg.pack: sha256 does not match the manifest'])
   })
 
-  it('names a missing or truncated clip, once per pack that lists it (the sample’s two packs share audio/)', () => {
+  it('names a missing or truncated clip, once per pack that lists it (the sample’s three packs share audio/)', () => {
     const clip = new Uint8Array(readFileSync(join(DIR, 'audio/hello-1-uk.m4a')))
-    expect(publishProblems(sample({ 'audio/hello-1-uk.m4a': null }))).toEqual(['audio/hello-1-uk.m4a: missing', 'audio/hello-1-uk.m4a: missing'])
-    expect(publishProblems(sample({ 'audio/hello-1-uk.m4a': clip.slice(0, 100) }))).toEqual([
-      `audio/hello-1-uk.m4a: ${100} bytes, the pack says ${clip.length}`,
-      `audio/hello-1-uk.m4a: ${100} bytes, the pack says ${clip.length}`,
-    ])
+    expect(publishProblems(sample({ 'audio/hello-1-uk.m4a': null }))).toEqual(Array(3).fill('audio/hello-1-uk.m4a: missing'))
+    expect(publishProblems(sample({ 'audio/hello-1-uk.m4a': clip.slice(0, 100) }))).toEqual(Array(3).fill(`audio/hello-1-uk.m4a: ${100} bytes, the pack says ${clip.length}`))
   })
 
   it('refuses a URL that is not relative to the manifest', () => {

@@ -19,6 +19,15 @@
       "url": "corpus-v0-de.pack",
       "sha256": "f4a09c916ffc8923e3e6c489267b1a868d3aababe7c4c5e7de69c5c70de31a94",
       "bytes": 31686
+    },
+    {
+      "pack_id": "corpus-es",
+      "l1": "es",
+      "corpus_version": 0,
+      "schema_version": 1,
+      "url": "corpus-v0-es.pack",
+      "sha256": "48ee632bb8cfb8d00bb7681218f99410ecbb21d759d1676485b7929c6f376eba",
+      "bytes": 31641
     }
   ]
 }

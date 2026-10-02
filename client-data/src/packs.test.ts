@@ -106,7 +106,7 @@ describe('installPacks', () => {
 
   it('ignores packs for another L1', async () => {
     const { db, env } = await open()
-    const report = await installPacks(db, env, manifest, 'es', fromDisk)
+    const report = await installPacks(db, env, manifest, 'fr', fromDisk)
     expect(report).toEqual({ staged: [], appUpdateNeeded: [], rejected: [] })
   })
 
