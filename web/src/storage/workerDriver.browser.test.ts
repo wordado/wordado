@@ -140,6 +140,18 @@ describe('openWorkerDriver', () => {
     await second.driver.close()
   })
 
+  it('ends only its own Worker when an open is aborted: another driver keeps working', async () => {
+    const live = await openWorkerDriver(unique('live'), ['opfs'])
+    await live.driver.exec('CREATE TABLE t (v TEXT)')
+    const cancel = new AbortController()
+    const inFlight = openWorkerDriver(unique('aborted'), ['opfs'], undefined, cancel.signal)
+    cancel.abort()
+    await expect(inFlight).rejects.toThrow('closed')
+    await live.driver.run('INSERT INTO t VALUES (?)', ['still here'])
+    expect(await live.driver.all('SELECT v FROM t')).toEqual([{ v: 'still here' }])
+    await live.driver.close()
+  })
+
   it('opens two files at once, as a carry-over does (the demo and the learner’s)', async () => {
     const demo = await openWorkerDriver(unique('demo'), ['opfs'])
     const learner = await openWorkerDriver(unique('user'), ['opfs'])

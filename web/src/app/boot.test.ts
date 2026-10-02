@@ -1143,8 +1143,10 @@ describe('Boot never waits forever on the database (iOS: a frozen page holds the
     const { driver, closes } = countingDriver(nodeSqliteDriver())
     let attempt = 0
     const delays = timerDelays()
+    const signals: AbortSignal[] = []
     const { boot: b } = boot({
-      openDriver: async () => {
+      openDriver: async (_file, signal) => {
+        signals.push(signal!)
         attempt += 1
         return attempt === 1 ? late.promise : chosen()
       },
@@ -1154,12 +1156,15 @@ describe('Boot never waits forever on the database (iOS: a frozen page holds the
     expect(b.store.get()).toMatchObject({ status: 'failed', reason: 'storage' })
     expect(delays()).toContain(20)
     expect(delays()).not.toContain(OPEN_TIMEOUT_MS)
+    expect(signals[0]!.aborted).toBe(true)
     late.resolve({ driver, backend: 'opfs' })
     await new Promise((r) => setTimeout(r, 0))
     expect(closes()).toBe(1)
     // "Try again" opens a fresh one.
     await b.retry()
     expect(ready(b).snapshot.corpus).not.toBeNull()
+    // An open that finished in time is not cancelled.
+    expect(signals[1]!.aborted).toBe(false)
   })
 
   it('skips a demo it cannot open in time, for the sweep and an owed carry-over, and opens the learner’s file', async () => {
@@ -1226,17 +1231,19 @@ describe('Boot lets go when the page is hidden, and opens again when it is shown
 
   it('an open in flight when the page is hidden never becomes ready, and its driver is closed', async () => {
     const first = deferred<{ driver: SqlDriver; backend: 'opfs' }>()
+    const entered = deferred<void>()
     const { driver, closes } = countingDriver(nodeSqliteDriver())
     let attempt = 0
     const { boot: b } = boot({
       openDriver: async () => {
         attempt += 1
-        return attempt === 1 ? first.promise : chosen()
+        if (attempt > 1) return chosen()
+        entered.resolve()
+        return first.promise
       },
     })
     const starting = b.start()
-    await Promise.resolve()
-    await Promise.resolve()
+    await entered.promise
     b.suspend()
     first.resolve({ driver, backend: 'opfs' })
     await starting
@@ -1244,6 +1251,80 @@ describe('Boot lets go when the page is hidden, and opens again when it is shown
     expect(closes()).toBe(1)
     await b.resume()
     expect(ready(b).snapshot.corpus).not.toBeNull()
+  })
+
+  it('a lock request answered after the page was hidden lets the lock go again and opens nothing; resume() opens once', async () => {
+    const held = deferred<boolean>()
+    const log: string[] = []
+    let acquires = 0
+    const env = testEnv()
+    const accounts = accountStorage(memoryStorage())
+    accounts.save({ userId: 'u1', email: 'ana@example.com' })
+    const lock: LockPort = {
+      acquire: () => (++acquires === 1 ? held.promise : Promise.resolve(true)),
+      takeOver: async () => undefined,
+      drop: () => void log.push('drop'),
+    }
+    const b = new Boot(
+      {
+        env,
+        l1: () => 'bg',
+        accounts,
+        openDriver: async (file) => {
+          log.push(`open ${file}`)
+          return chosen()
+        },
+        transport: () => new FakeServer({ now: env.now }),
+        startSync: () => {
+          log.push('startSync')
+          return () => log.push('stopSync')
+        },
+        fetchManifest: async () => sampleManifest,
+        fetchPack: sampleFetcher,
+      },
+      () => lock,
+    )
+    const starting = b.start()
+    b.suspend()
+    log.length = 0
+    held.resolve(true)
+    await starting
+    expect(b.store.get().status).toBe('starting')
+    expect(log).toEqual(['drop'])
+    await b.resume()
+    expect(b.store.get()).toMatchObject({ status: 'ready', account: { userId: 'u1' } })
+    expect(log).toEqual(['drop', `open ${learnerFile('u1')}`, 'startSync'])
+  })
+
+  it('a take-over answered after the page was hidden lets the lock go again and opens nothing', async () => {
+    const taken = deferred<void>()
+    const log: string[] = []
+    const lock: LockPort = {
+      acquire: async () => false,
+      takeOver: () => taken.promise,
+      drop: () => void log.push('drop'),
+    }
+    const b = new Boot(
+      {
+        env: testEnv(),
+        l1: () => 'bg',
+        openDriver: async (file) => {
+          log.push(`open ${file}`)
+          return chosen()
+        },
+        fetchManifest: async () => sampleManifest,
+        fetchPack: sampleFetcher,
+      },
+      () => lock,
+    )
+    await b.start()
+    const takingOver = b.takeOver()
+    b.suspend()
+    log.length = 0
+    taken.resolve()
+    await takingOver
+    expect(b.store.get().status).toBe('starting')
+    expect(log).toEqual(['drop'])
   })
 
   it('resume() does nothing unless the Boot was suspended', async () => {

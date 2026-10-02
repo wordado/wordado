@@ -35,6 +35,8 @@ export async function openWorkerDriver(
   file: string,
   backends: readonly Backend[] = BACKENDS,
   makeWorker: WorkerFactory = sqliteWorker,
+  /** Aborting it while the open is under way ends this Worker, and the open fails. */
+  signal?: AbortSignal,
 ): Promise<OpenedDriver> {
   const worker = makeWorker()
   const pending = new Map<number, { resolve(value: unknown): void; reject(error: Error): void }>()
@@ -78,11 +80,15 @@ export async function openWorkerDriver(
   }
 
   let opened: OpenResult
+  signal?.addEventListener('abort', end)
   try {
+    if (signal?.aborted) end()
     opened = (await call({ op: 'open', file, backends })) as OpenResult
   } catch (err) {
     end()
     throw err
+  } finally {
+    signal?.removeEventListener('abort', end)
   }
 
   const driver: SqlDriver = {

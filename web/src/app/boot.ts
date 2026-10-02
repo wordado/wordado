@@ -60,8 +60,8 @@ export interface BootDeps {
   l1(account: AccountRecord | null): string
   /** Which account this device is signed in to, read at every open. Absent: always the demo. */
   readonly accounts?: AccountStorage
-  /** Opens one database file: `demo`, or a learner's `user-<id>`. */
-  openDriver(file: string): Promise<{ readonly driver: SqlDriver; readonly backend: Backend }>
+  /** Opens one database file: `demo`, or a learner's `user-<id>`. An aborted `signal` gives the open up (it took too long). */
+  openDriver(file: string, signal?: AbortSignal): Promise<{ readonly driver: SqlDriver; readonly backend: Backend }>
   /** Ends every driver `openDriver` has opened or is opening, synchronously (the page is being hidden); their calls fail from then on. */
   terminateDrivers?(): void
   /** Deletes a closed file: the demo after a carry-over or when left, a learner's after sign-out. */
@@ -135,13 +135,15 @@ export class Boot {
   async start(): Promise<void> {
     this.store.set({ status: 'starting' })
     this.lastLockAttempt = 'acquire'
+    const generation = this.generation
     let held: boolean
     try {
       held = await this.lock.acquire()
     } catch (err) {
-      this.store.set({ status: 'failed', message: messageOf(err), reason: 'lock' })
+      if (generation === this.generation) this.store.set({ status: 'failed', message: messageOf(err), reason: 'lock' })
       return
     }
+    if (this.hiddenSince(generation)) return
     if (!held) {
       this.store.set({ status: 'elsewhere' })
       return
@@ -154,14 +156,26 @@ export class Boot {
   async takeOver(): Promise<void> {
     this.store.set({ status: 'starting' })
     this.lastLockAttempt = 'takeOver'
+    const generation = this.generation
     try {
       await this.lock.takeOver()
     } catch (err) {
-      this.store.set({ status: 'failed', message: messageOf(err), reason: 'lock' })
+      if (generation === this.generation) this.store.set({ status: 'failed', message: messageOf(err), reason: 'lock' })
       return
     }
+    if (this.hiddenSince(generation)) return
     this.lockHeld = true
     await this.open(true)
+  }
+
+  /**
+   * Whether the page let go (`suspend()`, `leave()`) while a lock request was
+   * pending: the lock it now holds goes again, and nothing opens until `resume()`.
+   */
+  private hiddenSince(generation: number): boolean {
+    if (generation === this.generation) return false
+    this.lock.drop()
+    return true
   }
 
   /**
@@ -172,20 +186,23 @@ export class Boot {
   async retry(): Promise<void> {
     this.store.set({ status: 'starting' })
     if (!this.lockHeld) {
+      const generation = this.generation
       try {
         if (this.lastLockAttempt === 'takeOver') {
           await this.lock.takeOver()
         } else {
           const held = await this.lock.acquire()
+          if (this.hiddenSince(generation)) return
           if (!held) {
             this.store.set({ status: 'elsewhere' })
             return
           }
         }
       } catch (err) {
-        this.store.set({ status: 'failed', message: messageOf(err), reason: 'lock' })
+        if (generation === this.generation) this.store.set({ status: 'failed', message: messageOf(err), reason: 'lock' })
         return
       }
+      if (this.hiddenSince(generation)) return
       this.lockHeld = true
     }
     await this.open(true)
@@ -477,14 +494,18 @@ export class Boot {
 
   /**
    * `deps.openDriver`, failing after OPEN_TIMEOUT_MS rather than waiting for
-   * good on a file another page holds; a driver that arrives later is closed.
+   * good on a file another page holds: the open is aborted, and a driver that
+   * arrives later all the same is closed.
    */
   private openDriver(file: string): Promise<{ readonly driver: SqlDriver; readonly backend: Backend }> {
-    const opening = this.deps.openDriver(file)
+    const cancel = new AbortController()
+    const opening = this.deps.openDriver(file, cancel.signal)
     let timer: ReturnType<typeof setTimeout> | undefined
     const timeout = new Promise<never>((_, reject) => {
       timer = setTimeout(() => {
         reject(new Error('The database took too long to open'))
+        cancel.abort()
+        // Should the open finish anyway, its driver is not used.
         opening.then(({ driver }) => driver.close()).catch(() => undefined)
       }, this.deps.openTimeoutMs ?? OPEN_TIMEOUT_MS)
     })

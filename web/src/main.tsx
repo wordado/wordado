@@ -71,7 +71,7 @@ const boot = new Boot(
     // Read at every open: the demo follows the interface's language, an account starts in Bulgarian (plan 10).
     l1: (account) => defaultL1(account, initialLocale(browserStorage('localStorage'))),
     accounts,
-    openDriver: (file) => openWorkerDriver(file),
+    openDriver: (file, signal) => openWorkerDriver(file, undefined, undefined, signal),
     terminateDrivers: terminateWorkerDrivers,
     deleteDatabase,
     listDatabases,
@@ -229,10 +229,12 @@ createRoot(document.getElementById('root')!).render(
 void boot.start()
 
 // iOS keeps a page left for another (Google's sign-in) frozen in its back-forward cache, where its database Worker
-// would hold the file and its lock from the next page for good: let go as the page is hidden, open again if it returns.
+// would hold the file and its lock from the next page for good: let go as the page is hidden, open again if it returns
+// — from the cache, or because it never went (`resume()` does nothing unless the page let go).
 window.addEventListener('pagehide', () => boot.suspend())
-window.addEventListener('pageshow', (event) => {
-  if (event.persisted) void boot.resume()
+window.addEventListener('pageshow', () => void boot.resume())
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') void boot.resume()
 })
 
 // Offline after the first visit (spec §9.1), and "a new version is ready". Not in development, where it would cache the dev server.
