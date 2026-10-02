@@ -170,6 +170,19 @@ export class TabLock {
   }
 
   /**
+   * Lets go of the lock now, without calling `release` (the caller has given
+   * the database up or is about to, synchronously): the page is being left and
+   * may be frozen. Keeps listening; `acquire()` takes the lock again.
+   */
+  drop(): void {
+    const letGo = this.letGo
+    if (!letGo) return
+    this.letGo = null
+    this.store.set('idle')
+    letGo()
+  }
+
+  /**
    * Stops listening and lets go of the lock, resolving once the browser has
    * released it. `keepLock` keeps holding it (tests use it to play a frozen tab).
    */

@@ -2,7 +2,7 @@ import { Client, Database } from '@wordado/client-data'
 import { describe, expect, it } from 'vitest'
 import { webEnv } from '../env'
 import { deleteDatabase, IDB_PREFIX } from './erase'
-import { openWorkerDriver } from './workerDriver'
+import { openWorkerDriver, terminateWorkerDrivers } from './workerDriver'
 
 const unique = (prefix: string) => `${prefix}-${crypto.randomUUID()}`
 
@@ -121,6 +121,36 @@ describe('openWorkerDriver', () => {
       Worker.prototype.terminate.call(worker!)
     }
   }, 15_000)
+
+  it('ends every driver at once on terminateWorkerDrivers, letting go of the OPFS file, and fails an open still in flight', async () => {
+    const file = unique('terminate')
+    const first = await openWorkerDriver(file, ['opfs'])
+    await first.driver.exec('CREATE TABLE t (v TEXT)')
+    await first.driver.run('INSERT INTO t VALUES (?)', ['kept'])
+    const inFlight = openWorkerDriver(unique('in-flight'), ['opfs'])
+    terminateWorkerDrivers()
+    await expect(inFlight).rejects.toThrow('closed')
+    await expect(first.driver.all('SELECT v FROM t')).rejects.toThrow('closed')
+    // Closing it afterwards is harmless.
+    await first.driver.close().catch(() => undefined)
+    // No close was awaited, yet the file is free, and what was committed is there.
+    const second = await openWorkerDriver(file, ['opfs'])
+    expect(second.backend).toBe('opfs')
+    expect(await second.driver.all('SELECT v FROM t')).toEqual([{ v: 'kept' }])
+    await second.driver.close()
+  })
+
+  it('ends only its own Worker when an open is aborted: another driver keeps working', async () => {
+    const live = await openWorkerDriver(unique('live'), ['opfs'])
+    await live.driver.exec('CREATE TABLE t (v TEXT)')
+    const cancel = new AbortController()
+    const inFlight = openWorkerDriver(unique('aborted'), ['opfs'], undefined, cancel.signal)
+    cancel.abort()
+    await expect(inFlight).rejects.toThrow('closed')
+    await live.driver.run('INSERT INTO t VALUES (?)', ['still here'])
+    expect(await live.driver.all('SELECT v FROM t')).toEqual([{ v: 'still here' }])
+    await live.driver.close()
+  })
 
   it('opens two files at once, as a carry-over does (the demo and the learner’s)', async () => {
     const demo = await openWorkerDriver(unique('demo'), ['opfs'])

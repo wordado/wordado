@@ -106,6 +106,9 @@ export function fakeAccounts(over: Partial<AccountActions> = {}): AccountActions
     dismissNotice: () => {
       calls.push('dismissNotice')
     },
+    leavePage: async () => {
+      calls.push('leavePage')
+    },
     ...over,
   }
 }

@@ -264,6 +264,53 @@ describe('SignIn: Google (spec §8.6)', () => {
     expect(redirects).toEqual(['https://accounts.google.com/o/oauth2/auth'])
   })
 
+  it('lets go of the database before going to Google, so the page Google returns to can open it (iOS)', async () => {
+    const ctx = await setup()
+    const log: string[] = []
+    let leave: () => void = () => undefined
+    const left = new Promise<void>((resolve) => {
+      leave = resolve
+    })
+    const accounts = fakeAccounts({
+      leavePage: async () => {
+        log.push('leaving')
+        await left
+        log.push('left')
+      },
+    })
+    renderWith(<SignIn redirect={(url) => log.push(`redirect ${url}`)} pending={{ save: () => undefined }} />, { ...ctx, api: fakeApi(), accounts })
+    await act(async () => undefined)
+    await passGate('BG')
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue with Google' })))
+    expect(log).toEqual(['leaving'])
+    await act(async () => leave())
+    expect(log).toEqual(['leaving', 'left', 'redirect https://accounts.google.com/o/oauth2/auth'])
+  })
+
+  it('goes to Google anyway when letting go of the database takes too long', async () => {
+    const ctx = await setup()
+    const redirects: string[] = []
+    const accounts = fakeAccounts({ leavePage: () => new Promise<void>(() => undefined) })
+    renderWith(<SignIn redirect={(url) => redirects.push(url)} pending={{ save: () => undefined }} leaveWithinMs={20} />, {
+      ...ctx,
+      api: fakeApi(),
+      accounts,
+    })
+    await act(async () => undefined)
+    await passGate('BG')
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue with Google' })))
+    expect(redirects).toEqual([])
+    await act(() => new Promise((resolve) => setTimeout(resolve, 40)))
+    expect(redirects).toEqual(['https://accounts.google.com/o/oauth2/auth'])
+  })
+
+  it('keeps the database open when the Google address cannot be had', async () => {
+    const { accounts } = await render({}, { googleUrl: async () => Promise.reject(new ApiError(404, 'PROVIDER_NOT_FOUND')) })
+    await passGate('BG')
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue with Google' })))
+    expect(accounts.calls).not.toContain('leavePage')
+  })
+
   it('says so when Google is not available', async () => {
     const { redirects } = await render({}, { googleUrl: async () => Promise.reject(new ApiError(404, 'PROVIDER_NOT_FOUND')) })
     await passGate('BG')
