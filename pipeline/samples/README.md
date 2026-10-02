@@ -1,9 +1,9 @@
 # Sample content
 
 `a1/` is a small hand-made A1 sample corpus: 60 entries with their example sentences, units,
-themes and audio, translated into Bulgarian (`corpus-v0-bg.pack`) and German
-(`corpus-v0-de.pack`). Wordado's demo mode studies the Bulgarian pack, and every test suite
-uses both.
+themes and audio, translated into Bulgarian (`corpus-v0-bg.pack`), German
+(`corpus-v0-de.pack`) and Spanish (`corpus-v0-es.pack`). Wordado's demo mode studies the
+learner's L1 pack, and the test suites use all three.
 
 ## Terms
 
@@ -17,7 +17,7 @@ redistribute it, or use it in another product, without permission.
 ## Audio
 
 The 60 clips in `a1/audio/` (one British English pronunciation per headword, AAC in m4a,
-mono, 48 kbit/s), shared by both packs, are made by
+mono, 48 kbit/s), shared by the three packs, are made by
 [`pipeline/scripts/tts-audio.sh`](../scripts/tts-audio.sh) with:
 
 - **Engine:** [Piper](https://github.com/OHF-Voice/piper1-gpl), the `piper-tts` 1.8.0 Python

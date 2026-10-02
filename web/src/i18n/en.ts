@@ -355,6 +355,9 @@ export const en = {
   'path.wordNew': 'Not started',
   'path.wordActions': 'Word actions: {word}',
   'path.levelSkipped': 'Skipped',
+  'path.levelComplete': 'Complete',
+  'path.levelLocked': 'Locked',
+  'path.levelOpen': 'Open',
   'path.unitsComplete': { one: '{count} unit complete', other: '{count} units complete' },
   'path.showAll': 'Show all {count} units',
 

@@ -57,6 +57,15 @@ describe('LanguageStep, setup mode (plan 11)', () => {
     expect(choice('Deutsch').checked).toBe(false)
   })
 
+  it('preselects Spanish for a Spanish interface (plan 12)', async () => {
+    const ctx = await setup()
+    renderWith(<LanguageStep mode="setup" onDone={() => undefined} />, { ...ctx, locale: 'es' })
+    expect(screen.getByRole('heading', { name: '¿Qué idioma hablas?' })).toBeTruthy()
+    expect(choice('Español').checked).toBe(true)
+    expect(choice('Български').checked).toBe(false)
+    expect(choice('Deutsch').checked).toBe(false)
+  })
+
   it('gives its heading focus when it appears', async () => {
     const ctx = await setup()
     renderWith(<LanguageStep mode="setup" onDone={() => undefined} />, ctx)

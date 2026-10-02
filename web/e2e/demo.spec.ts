@@ -172,7 +172,7 @@ test('a German browser opens the demo in German, and a studied word’s translat
     await page.waitForTimeout(SETTLE_MS)
     await page.keyboard.press('Space')
     await expect(page.locator('.card[data-phase="revealed"]')).toBeVisible()
-    await expect(page.getByText('hallo')).toBeVisible()
+    await expect(page.locator('.card[data-phase="revealed"] .translation')).toHaveText('hallo')
   } finally {
     await context.close()
   }
@@ -214,6 +214,80 @@ test('changing the native language later, on its own page, keeps progress and sw
   // of started words in the first unit is unchanged.
   await page.goto('/path')
   await expect(page.getByText('1 of 20 started')).toBeVisible()
+})
+
+// Plan 12: a third L1 (Spanish) beside Bulgarian and German, and changing to it in Settings.
+
+test('a Spanish browser opens the demo in Spanish, and a studied word’s translation is Spanish', async ({ browser }) => {
+  // A fresh context, not the English one `beforeEach` forces: no saved locale, so the interface follows
+  // the browser's Spanish (spec §11.2, plan 10 Decision 4), and the demo's L1 follows the interface.
+  const context = await browser.newContext({ locale: 'es-ES' })
+  try {
+    const page = await context.newPage()
+    await page.goto('/')
+    // The setup asks in Spanish too, and preselects Spanish.
+    await expect(page.getByRole('heading', { name: '¿Qué idioma hablas?', level: 2 })).toBeFocused()
+    await expect(page.getByRole('radio', { name: 'Español' })).toBeChecked()
+    await expectAccessible(page)
+    await finishSetup(page, 'Español')
+    await expect(heading(page)).toHaveText('10 palabras nuevas')
+
+    // Forcing the mode (as the mode-matrix tests above do) sidesteps the mode/direction randomness for a brand-new
+    // word (core/src/modeSelection.ts): a flashcard always reveals the translation.
+    await page.goto('/study?mode=flashcard')
+    await expect(page.locator('.card')).toHaveAttribute('data-mode', 'flashcard')
+    await page.waitForTimeout(SETTLE_MS)
+    await page.keyboard.press('Space')
+    await expect(page.locator('.card[data-phase="revealed"]')).toBeVisible()
+    await expect(page.locator('.card[data-phase="revealed"] .translation')).toHaveText('hola')
+  } finally {
+    await context.close()
+  }
+})
+
+test('changing the native language to Spanish keeps progress, switches translations, and narrows the language menu', async ({ page }) => {
+  // A word studied before the change (the demo's first word, "hello") stays counted afterwards.
+  await page.goto('/')
+  await finishSetup(page)
+  await studyNew(page, 1)
+  await page.goto('/path')
+  await expect(page.getByText('1 of 20 started')).toBeVisible()
+
+  // Settings › Languages › Change opens the setup's language page, as a Settings sub-page.
+  await page.goto('/settings/languages')
+  await page.getByRole('link', { name: 'Change native language' }).click()
+  await expect(page).toHaveURL('/settings/native-language')
+  await expect(page.locator('#main')).toBeFocused()
+  await expect(page.getByRole('heading', { name: 'Native language', level: 2 })).toBeVisible()
+  await expect(page.getByRole('radio', { name: 'Български' })).toBeChecked()
+  await page.getByRole('radio', { name: 'Español' }).check()
+  await expect(page.getByText('Your progress stays. The words switch to Spanish translations.')).toBeVisible()
+  await page.getByRole('button', { name: 'Change', exact: true }).click()
+
+  // The page installs the Spanish pack before it returns, so the very next flashcard is Spanish. The interface
+  // was English, not the old native language, so it stays English (spec §8.6).
+  await expect(page).toHaveURL('/settings/languages')
+  await expect(page.getByRole('region', { name: 'Native language' }).getByText('Español', { exact: true })).toBeVisible()
+  // Forcing the mode sidesteps the mode/direction randomness for a new word: a flashcard always reveals the
+  // translation. The next new word is "goodbye".
+  await page.goto('/study?mode=flashcard')
+  await expect(page.locator('.card[data-phase="prompt"]')).toBeVisible()
+  await page.waitForTimeout(SETTLE_MS)
+  await page.keyboard.press('Space')
+  await expect(page.locator('.card[data-phase="revealed"] .translation')).toHaveText('adiós')
+
+  // Progress from before the change is still here: studying the new word above didn't rate it, so the count
+  // of started words in the first unit is unchanged.
+  await page.goto('/path')
+  await expect(page.getByText('1 of 20 started')).toBeVisible()
+
+  // The header's language menu now offers only the learner's L1 (Español) and English.
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Interface language: English (EN)' }).click()
+  await expect(page.getByRole('button', { name: 'Español', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'English', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Deutsch', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Български', exact: true })).toHaveCount(0)
 })
 
 // Plan 11: a new demo opens in the first-run setup.

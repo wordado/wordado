@@ -41,6 +41,14 @@ Use standard literary Bulgarian. No transliteration, no English words, no explan
 - Alternates: other translations a learner might give that are also correct for this sense, most common first, at most four. No near-synonyms that would be wrong in the example sentence.
 - Sense: two to four German words that tell this sense apart from the headword's other senses (for bank: "Geldinstitut", "Flussufer"). Empty when the gloss is empty.
 Use standard German as written in Germany, in the current spelling, with ß and umlauts. No English words, no explanations in brackets.`,
+  es: `Translate into Spanish, as a bilingual dictionary would.
+- Nouns: the singular, without the article (agua, not el agua): the learners are Spanish speakers and know the gender.
+- Verbs: the infinitive (escribir). Pronominal verbs as a dictionary gives them (llamarse; acordarse).
+- Adjectives: the masculine singular (grande, rojo).
+- Interjections and phrases: what a Spanish speaker in Spain would actually say, with ¿ and ¡ where the phrase is a question or an exclamation.
+- Alternates: other translations a learner might give that are also correct for this sense, most common first, at most four. No near-synonyms that would be wrong in the example sentence.
+- Sense: two to four Spanish words that tell this sense apart from the headword's other senses (for bank: "entidad financiera", "orilla del río"). Empty when the gloss is empty.
+Use the standard Spanish of Spain (ordenador, coche, móvil, zumo, patata), with accents and ñ. No English words, no explanations in brackets.`,
 }
 
 const SYSTEM = (guide: string) => `You translate an English vocabulary course for adult learners.

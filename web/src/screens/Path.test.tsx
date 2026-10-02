@@ -2,7 +2,8 @@ import { act, cleanup, fireEvent, screen, within } from '@testing-library/react'
 import { DAY_MS, Grade } from '@wordado/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { answerNew, renderWith, setup } from '../test/fixtures'
-import { Path } from './Path'
+import { translate, type Locale } from '../i18n/i18n'
+import { LEVEL_STATUS, Path } from './Path'
 
 afterEach(cleanup)
 
@@ -81,6 +82,27 @@ describe('Path', () => {
     expect(screen.getByText('Skipped: you placed above this level.')).toBeTruthy()
     // A1 is unlocked outright once A2 is declared, but is neither current nor complete/mastered.
     expect(within(unit('People and greetings')).getByText('Open')).toBeTruthy()
+  })
+
+  it('names a folded level’s status in a form that agrees with “level”, not “unit” (plan 12, review)', async () => {
+    const ctx = await setup()
+    renderWith(<Path />, { ...ctx, locale: 'bg' })
+    fireEvent.click(document.querySelector<HTMLButtonElement>('.level-toggle')!)
+    expect(document.querySelector('.level-status')!.textContent).toBe('Отворено')
+    cleanup()
+    renderWith(<Path />, { ...ctx, locale: 'es' })
+    expect(within(unit('Food and drink')).getByText('Sin desbloquear')).toBeTruthy()
+    fireEvent.click(document.querySelector<HTMLButtonElement>('.level-toggle')!)
+    expect(document.querySelector('.level-status')!.textContent).toBe('Disponible')
+  })
+
+  it('has level labels of its own: neuter in Bulgarian, masculine in Spanish (plan 12, review)', () => {
+    const label = (locale: Locale, status: keyof typeof LEVEL_STATUS) => translate(locale, LEVEL_STATUS[status])
+    expect(['bg', 'de', 'en', 'es'].map((l) => label(l as Locale, 'complete'))).toEqual(['Завършено', 'Abgeschlossen', 'Complete', 'Completado'])
+    expect(['bg', 'de', 'en', 'es'].map((l) => label(l as Locale, 'locked'))).toEqual(['Заключено', 'Gesperrt', 'Locked', 'Sin desbloquear'])
+    expect(['bg', 'de', 'en', 'es'].map((l) => label(l as Locale, 'open'))).toEqual(['Отворено', 'Offen', 'Open', 'Disponible'])
+    expect(translate('es', 'path.complete')).toBe('Completada')
+    expect(translate('bg', 'path.complete')).toBe('Завършен')
   })
 
   it('uses the pack’s own unit titles in Bulgarian', async () => {

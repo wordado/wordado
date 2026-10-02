@@ -10,6 +10,7 @@ const FALLBACK: Readonly<Record<Locale, ReminderText>> = {
   bg: { title: 'Wordado', body: 'Време е за думите ви.' },
   de: { title: 'Wordado', body: 'Zeit für deine Wörter.' },
   en: { title: 'Wordado', body: 'Time for your words.' },
+  es: { title: 'Wordado', body: 'Es hora de tus palabras.' },
 }
 
 type Fetch = (input: string, init?: RequestInit) => Promise<Response>

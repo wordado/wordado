@@ -370,6 +370,9 @@ export const de: Messages = {
   'path.wordNew': 'Noch nicht begonnen',
   'path.wordActions': 'Aktionen für das Wort: {word}',
   'path.levelSkipped': 'Übersprungen',
+  'path.levelComplete': 'Abgeschlossen',
+  'path.levelLocked': 'Gesperrt',
+  'path.levelOpen': 'Offen',
   'path.unitsComplete': { one: '{count} Einheit abgeschlossen', other: '{count} Einheiten abgeschlossen' },
   'path.showAll': 'Alle {count} Einheiten zeigen',
 

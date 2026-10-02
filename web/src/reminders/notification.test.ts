@@ -23,5 +23,7 @@ describe('reminderNotification (plan 5 contract)', () => {
     expect(refused.body).toBe('Време е за думите ви.')
     const german = await reminderNotification(async () => Promise.reject(new TypeError('Failed to fetch')), 'de', 0)
     expect(german.body).toBe('Zeit für deine Wörter.')
+    const spanish = await reminderNotification(async () => Promise.reject(new TypeError('Failed to fetch')), 'es', 0)
+    expect(spanish).toEqual({ title: 'Wordado', body: 'Es hora de tus palabras.' })
   })
 })

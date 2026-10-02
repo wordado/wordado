@@ -298,7 +298,7 @@ describe('Client.reports', () => {
     const client = await Client.open({ driver, env: testEnv(), l1: 'bg' })
     await client.installPacks(manifest, fromDisk)
     await client.startSession()
-    await writeLocalPatch(driver, DOC.contentReport, 'foreign', { wordId: 'c:hello-1', field: 'translation', packVersion: 0, l1: 'es' })
+    await writeLocalPatch(driver, DOC.contentReport, 'foreign', { wordId: 'c:hello-1', field: 'translation', packVersion: 0, l1: 'fr' })
     const reports = await client.reports()
     expect(reports.find((r) => r.key === 'foreign')).toEqual({ key: 'foreign', wordId: 'c:hello-1', field: 'translation', packVersion: 0 })
   })

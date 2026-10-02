@@ -33,7 +33,7 @@ describe('resendMailer', () => {
     })
   })
 
-  it('sends the code in every interface language, including German (plan 10)', async () => {
+  it('sends the code in every interface language, including German and Spanish (plans 10, 12)', async () => {
     const calls: { url: string; init: RequestInit }[] = []
     const mailer = resendMailer({
       apiKey: 're_test',
@@ -48,6 +48,7 @@ describe('resendMailer', () => {
     expect(body.text).toContain('Your Wordado sign-in code is 123456. It expires in 5 minutes.')
     expect(body.text).toContain('Вашият код за вход в Wordado е 123456. Валиден е 5 минути.')
     expect(body.text).toContain('Dein Wordado-Anmeldecode ist 123456. Er ist 5 Minuten gültig.')
+    expect(body.text).toContain('Tu código de inicio de sesión en Wordado es 123456. Caduca en 5 minutos.')
   })
 
   it('throws when Resend refuses', async () => {

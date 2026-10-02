@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { cacheKey, StageCache } from '../cache'
 import { fakeLlm } from '../llm'
-import { titleUnits } from './titles'
+import { SYSTEM, titleUnits } from './titles'
 
 const run = (answer: (n: string, i: unknown) => unknown) => ({
   llm: fakeLlm(answer),
@@ -43,5 +43,16 @@ describe('titleUnits', () => {
     expect(r.llm.calls.map((c) => (c.input as { l1s: string[] }).l1s)).toEqual([['de']])
     // One English title for every L1: the lead's.
     expect(out.get('a1-04')).toEqual({ bg: { en: 'Food', l1: 'Храна' }, de: { en: 'Food', l1: 'Essen' } })
+  })
+})
+
+describe('SYSTEM', () => {
+  it('names a known L1’s language, so Spanish titles come back in Spain’s Spanish and not a Latin American variety', () => {
+    expect(SYSTEM(['es'])).toContain('es (Spanish, as written in Spain)')
+  })
+
+  it('falls back to the bare code for an unknown L1', () => {
+    expect(SYSTEM(['xx'])).toContain('xx')
+    expect(SYSTEM(['xx'])).not.toContain('xx (')
   })
 })
