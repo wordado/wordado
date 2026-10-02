@@ -350,6 +350,9 @@ export const bg: Messages = {
   'path.wordNew': 'Незапочната',
   'path.wordActions': 'Действия с думата: {word}',
   'path.levelSkipped': 'Пропуснато',
+  'path.levelComplete': 'Завършено',
+  'path.levelLocked': 'Заключено',
+  'path.levelOpen': 'Отворено',
   'path.unitsComplete': { one: '{count} завършен урок', other: '{count} завършени урока' },
   'path.showAll': 'Покажи всички {count} урока',
 
