@@ -107,6 +107,10 @@ export const GROUP_NAMES: Readonly<Record<string, Readonly<Record<string, string
     noun: 'Nomen', verb: 'Verben', adj: 'Adjektive', adv: 'Adverbien', pron: 'Pronomen', prep: 'Präpositionen',
     det: 'Begleiter', num: 'Zahlwörter', conj: 'Konjunktionen', intj: 'Ausrufe', phrase: 'Wendungen', mixed: 'Weitere Wörter',
   },
+  es: {
+    noun: 'Sustantivos', verb: 'Verbos', adj: 'Adjetivos', adv: 'Adverbios', pron: 'Pronombres', prep: 'Preposiciones',
+    det: 'Determinantes', num: 'Numerales', conj: 'Conjunciones', intj: 'Interjecciones', phrase: 'Expresiones', mixed: 'Más palabras',
+  },
 }
 
 /**
