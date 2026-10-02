@@ -10,6 +10,9 @@ export const FLUSH_TIMEOUT_MS = 3_000
 /** How long a new device waits for an account's first pull before deciding on the first-run setup (plan 11). Tuning (§15). */
 export const SETUP_PULL_TIMEOUT_MS = 5_000
 
+/** How long opening a database file may take before the boot fails with "Try again" (a frozen iOS page can hold the file for good). Tuning (§15). */
+export const OPEN_TIMEOUT_MS = 10_000
+
 export type BootState =
   | { readonly status: 'starting' }
   /** Another tab owns the database (spec §9.1). */
@@ -47,6 +50,8 @@ export function defaultL1(account: AccountRecord | null, locale: Locale): L1 {
 export interface LockPort {
   acquire(): Promise<boolean>
   takeOver(): Promise<void>
+  /** Lets go of the lock at once, without asking (the page is being left); `acquire()` takes it again. */
+  drop(): void
 }
 
 export interface BootDeps {
@@ -55,8 +60,10 @@ export interface BootDeps {
   l1(account: AccountRecord | null): string
   /** Which account this device is signed in to, read at every open. Absent: always the demo. */
   readonly accounts?: AccountStorage
-  /** Opens one database file: `demo`, or a learner's `user-<id>`. */
-  openDriver(file: string): Promise<{ readonly driver: SqlDriver; readonly backend: Backend }>
+  /** Opens one database file: `demo`, or a learner's `user-<id>`. An aborted `signal` gives the open up (it took too long). */
+  openDriver(file: string, signal?: AbortSignal): Promise<{ readonly driver: SqlDriver; readonly backend: Backend }>
+  /** Ends every driver `openDriver` has opened or is opening, synchronously (the page is being hidden); their calls fail from then on. */
+  terminateDrivers?(): void
   /** Deletes a closed file: the demo after a carry-over or when left, a learner's after sign-out. */
   deleteDatabase?(file: string): Promise<void>
   /** Every database file kept (`listDatabases`), so each open can sweep the files no account owns. Absent: no sweep. */
@@ -69,6 +76,8 @@ export interface BootDeps {
   readonly flushTimeoutMs?: number
   /** Tests shorten SETUP_PULL_TIMEOUT_MS. */
   readonly setupPullTimeoutMs?: number
+  /** Tests shorten OPEN_TIMEOUT_MS. */
+  readonly openTimeoutMs?: number
   /** The manifest to install from: the demo's (the bundled sample) or a learner's (the CDN, plan 7). */
   fetchManifest(account: AccountRecord | null): Promise<PackManifest>
   readonly fetchPack: PackFetcher
@@ -113,6 +122,12 @@ export class Boot {
    * handed over only once this tab has let go of whatever it opened.
    */
   private opening: Promise<void> | null = null
+  /** Set by `suspend()` and `leave()`, so only a page that let go opens again on `resume()`. */
+  private suspended = false
+  /** Set while `leave()` lets go: the redirect follows, so `resume()` waits for nothing and does nothing. */
+  private leaving = false
+  /** Counts lock requests, so only the latest one decides what a request answered after the page let go does with the lock. */
+  private lockRequests = 0
 
   constructor(
     private readonly deps: BootDeps,
@@ -124,13 +139,16 @@ export class Boot {
   async start(): Promise<void> {
     this.store.set({ status: 'starting' })
     this.lastLockAttempt = 'acquire'
+    const generation = this.generation
+    const request = ++this.lockRequests
     let held: boolean
     try {
       held = await this.lock.acquire()
     } catch (err) {
-      this.store.set({ status: 'failed', message: messageOf(err), reason: 'lock' })
+      if (generation === this.generation) this.store.set({ status: 'failed', message: messageOf(err), reason: 'lock' })
       return
     }
+    if (this.hiddenSince(generation, request, held)) return
     if (!held) {
       this.store.set({ status: 'elsewhere' })
       return
@@ -143,14 +161,29 @@ export class Boot {
   async takeOver(): Promise<void> {
     this.store.set({ status: 'starting' })
     this.lastLockAttempt = 'takeOver'
+    const generation = this.generation
+    const request = ++this.lockRequests
     try {
       await this.lock.takeOver()
     } catch (err) {
-      this.store.set({ status: 'failed', message: messageOf(err), reason: 'lock' })
+      if (generation === this.generation) this.store.set({ status: 'failed', message: messageOf(err), reason: 'lock' })
       return
     }
+    if (this.hiddenSince(generation, request, true)) return
     this.lockHeld = true
     await this.open(true)
+  }
+
+  /**
+   * Whether the page let go (`suspend()`, `leave()`) while this lock request
+   * was pending: nothing opens. The lock it got goes again, unless a newer
+   * request is under way — `TabLock.takeOver()` hands the same grant to every
+   * caller, and the newer one keeps it.
+   */
+  private hiddenSince(generation: number, request: number, acquired: boolean): boolean {
+    if (generation === this.generation) return false
+    if (acquired && request === this.lockRequests) this.lock.drop()
+    return true
   }
 
   /**
@@ -161,20 +194,24 @@ export class Boot {
   async retry(): Promise<void> {
     this.store.set({ status: 'starting' })
     if (!this.lockHeld) {
+      const generation = this.generation
+      const request = ++this.lockRequests
       try {
         if (this.lastLockAttempt === 'takeOver') {
           await this.lock.takeOver()
         } else {
           const held = await this.lock.acquire()
+          if (this.hiddenSince(generation, request, held)) return
           if (!held) {
             this.store.set({ status: 'elsewhere' })
             return
           }
         }
       } catch (err) {
-        this.store.set({ status: 'failed', message: messageOf(err), reason: 'lock' })
+        if (generation === this.generation) this.store.set({ status: 'failed', message: messageOf(err), reason: 'lock' })
         return
       }
+      if (this.hiddenSince(generation, request, true)) return
       this.lockHeld = true
     }
     await this.open(true)
@@ -187,11 +224,67 @@ export class Boot {
    * lock pass on.
    */
   async release(): Promise<void> {
+    await this.letGo({ status: 'elsewhere' })
+  }
+
+  /**
+   * This page is navigating away on purpose (Google's sign-in): flush and
+   * close as a hand-over does, then let go of the tab lock, so whichever
+   * page comes next finds the file and the lock free. `resume()` opens again
+   * if this page is shown once more.
+   */
+  async leave(): Promise<void> {
+    this.suspended = true
+    this.leaving = true
+    try {
+      const generation = await this.letGo({ status: 'starting' })
+      if (generation === this.generation) this.lock.drop()
+    } finally {
+      this.leaving = false
+    }
+  }
+
+  /**
+   * The page is being hidden (`pagehide`) and may be frozen in the back-forward
+   * cache, where it answers nobody (iOS): the database Worker and the locks it
+   * and this tab hold must go now, synchronously. No flush: each answer is
+   * already committed, and the next open picks up any outbox. The Client goes
+   * with its driver; its close only tidies up.
+   */
+  suspend(): void {
     this.generation += 1
     this.lockHeld = false
+    this.suspended = true
+    this.deps.terminateDrivers?.()
+    this.lock.drop()
+    this.stopSync?.()
+    this.stopSync = null
+    const client = this.client
+    this.client = null
+    this.store.set({ status: 'starting' })
+    void client?.close().catch(() => undefined)
+  }
+
+  /** The page is shown again after `suspend()` or `leave()` (`pageshow` from the back-forward cache): open the ordinary way. */
+  async resume(): Promise<void> {
+    if (!this.suspended || this.leaving) return
+    this.suspended = false
+    await this.start()
+  }
+
+  /**
+   * Gives the database up: what `release()` and `leave()` share. Resolves with the generation it started, once the file
+   * is closed — or at once after waiting for an open, if the page let go and came back meanwhile: the Client open now
+   * is a later one, not this call's to close.
+   */
+  private async letGo(state: BootState): Promise<number> {
+    const generation = ++this.generation
+    this.lockHeld = false
     if (this.opening) await this.opening.catch(() => undefined)
-    this.store.set({ status: 'elsewhere' })
+    if (generation !== this.generation) return generation
+    this.store.set(state)
     await this.closeClient(true)
+    return generation
   }
 
   /**
@@ -362,7 +455,7 @@ export class Boot {
     const account = await this.sweep(this.deps.accounts?.read() ?? null)
     if (account?.carryOver) await this.carryOverDemo(account)
     if (generation !== this.generation) return
-    const { driver, backend } = await this.deps.openDriver(account ? learnerFile(account.userId) : DEMO_FILE)
+    const { driver, backend } = await this.openDriver(account ? learnerFile(account.userId) : DEMO_FILE)
     if (generation !== this.generation) {
       await driver.close().catch(() => undefined)
       return
@@ -418,11 +511,31 @@ export class Boot {
     return account
   }
 
+  /**
+   * `deps.openDriver`, failing after OPEN_TIMEOUT_MS rather than waiting for
+   * good on a file another page holds: the open is aborted, and a driver that
+   * arrives later all the same is closed.
+   */
+  private openDriver(file: string): Promise<{ readonly driver: SqlDriver; readonly backend: Backend }> {
+    const cancel = new AbortController()
+    const opening = this.deps.openDriver(file, cancel.signal)
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        reject(new Error('The database took too long to open'))
+        cancel.abort()
+        // Should the open finish anyway, its driver is not used.
+        opening.then(({ driver }) => driver.close()).catch(() => undefined)
+      }, this.deps.openTimeoutMs ?? OPEN_TIMEOUT_MS)
+    })
+    return Promise.race([opening, timeout]).finally(() => clearTimeout(timer))
+  }
+
   /** Whom the demo on disk is attached to (null: nobody); undefined when it cannot be read. */
   private async demoOwner(): Promise<string | null | undefined> {
     let opened: { readonly driver: SqlDriver; readonly backend: Backend }
     try {
-      opened = await this.deps.openDriver(DEMO_FILE)
+      opened = await this.openDriver(DEMO_FILE)
     } catch {
       return undefined
     }
@@ -452,7 +565,7 @@ export class Boot {
     if (!transport) return
     let opened: { readonly driver: SqlDriver; readonly backend: Backend }
     try {
-      opened = await this.deps.openDriver(DEMO_FILE)
+      opened = await this.openDriver(DEMO_FILE)
     } catch {
       return
     }

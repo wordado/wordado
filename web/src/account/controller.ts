@@ -16,6 +16,7 @@ export interface AccountState {
 export interface BootPort {
   readonly store: Store<BootState>
   switchTo(options?: SwitchOptions): Promise<boolean>
+  leave(): Promise<void>
 }
 
 /** An account change asked for while `Boot` is not `'ready'` (spec §9.1). */
@@ -252,6 +253,14 @@ export class AccountController {
     this.announce(await boot.switchTo({ deleteFiles: [learnerFile(account.userId), DEMO_FILE] }), { expired: false, notice: 'deleted' })
   }
 
+  /**
+   * The page is about to go to Google's sign-in: flush, close the database and let go of the tab lock, so the page
+   * Google returns to can open it. iOS keeps the page left frozen in its back-forward cache, file and all.
+   */
+  leavePage(): Promise<void> {
+    return this.deps.boot.leave()
+  }
+
   /** Leaving the demo deletes it (spec §8.6); a fresh one opens. */
   async leaveDemo(): Promise<void> {
     if (this.deps.accounts.read() !== null) return
@@ -260,4 +269,4 @@ export class AccountController {
 }
 
 /** What the screens use of the controller; their tests pass a fake. */
-export type AccountActions = Pick<AccountController, 'store' | 'completeSignIn' | 'resumeGoogle' | 'signOut' | 'deleteAccount' | 'leaveDemo' | 'dismissNotice'>
+export type AccountActions = Pick<AccountController, 'store' | 'completeSignIn' | 'resumeGoogle' | 'signOut' | 'deleteAccount' | 'leaveDemo' | 'dismissNotice' | 'leavePage'>
