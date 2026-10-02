@@ -1,7 +1,14 @@
 import { cleanup, fireEvent, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { renderWith, setup } from '../test/fixtures'
+import { useInterfaceLocales } from './interfaceLanguage'
 import { LanguageMenu } from './LanguageMenu'
+
+/** The shell's rule beside the menu, as App has it. */
+function Shell() {
+  useInterfaceLocales()
+  return <LanguageMenu />
+}
 
 afterEach(cleanup)
 
@@ -29,6 +36,21 @@ describe('LanguageMenu', () => {
     expect(circle.textContent).toBe('BG')
     expect(screen.queryByRole('button', { name: 'English' })).toBeNull()
     expect(document.activeElement).toBe(circle)
+  })
+
+  it('offers only the learner’s L1 and English once a pack is installed (spec §11.2)', async () => {
+    const ctx = await setup()
+    renderWith(<LanguageMenu />, { ...ctx })
+    fireEvent.click(screen.getByRole('button', { name: 'Interface language: English (EN)' }))
+    expect(screen.getByRole('button', { name: 'Български' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'English' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Deutsch' })).toBeNull()
+  })
+
+  it('moves an interface outside the pair to the L1 (a choice saved before this rule)', async () => {
+    const ctx = await setup()
+    renderWith(<Shell />, { ...ctx, locale: 'de' })
+    expect(await screen.findByRole('button', { name: 'Език на интерфейса: Български (BG)' })).toBeTruthy()
   })
 
   it('closes on Escape, returning focus, and on a press outside', async () => {

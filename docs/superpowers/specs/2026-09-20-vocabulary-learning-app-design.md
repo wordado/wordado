@@ -1336,6 +1336,12 @@ Interface strings ship with the app, not the corpus pack; the learner's UI
 language defaults to their L1 and can be changed independently of it. Phase 1a
 ships Bulgarian and English.
 
+The interface offers the learner's **own L1 and English**, nothing else (decided
+2026-10-02): once a pack is installed, the language menu and Settings list just
+those two, and an interface in a third language moves to the L1. Before an L1 is
+chosen (a first visit, the setup's first question) every interface language is
+on offer, so the question that asks for the L1 can be read.
+
 Bulgarian and Russian are Cyrillic-script languages. Consequences:
 
 - Cyrillic-capable fonts must be bundled on every client; web must not

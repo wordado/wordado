@@ -39,6 +39,17 @@ export function localized(text: LocalizedText, locale: Locale, packL1: string): 
   return locale === packL1 ? text.l1 : text.en
 }
 
+/**
+ * The interface languages a learner can choose (spec §11.2): their L1 and English once a pack is installed, so the
+ * interface never speaks a third language over another L1's words; every one before, so a first visit can read the
+ * question that asks for the L1. An L1 with no interface table offers English alone.
+ */
+export function interfaceLocales(packL1: string | null): readonly Locale[] {
+  if (packL1 === null) return LOCALES
+  const own = LOCALES.find((l) => l === packL1 && l !== 'en')
+  return own === undefined ? ['en'] : [own, 'en']
+}
+
 /** A language's name, in `locale`, capitalised (plan 10): for headings such as the Matching translation column. */
 export function languageName(code: string, locale: Locale): string {
   const name = new Intl.DisplayNames([locale], { type: 'language' }).of(code) ?? code

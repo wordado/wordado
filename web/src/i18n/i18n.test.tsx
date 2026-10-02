@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { bg } from './bg'
 import { de } from './de'
 import { en } from './en'
-import { I18nProvider, initialLocale, languageName, LOCALE_KEY, localized, translate, useT, type MessageKey } from './i18n'
+import { I18nProvider, initialLocale, interfaceLocales, languageName, LOCALE_KEY, localized, translate, useT, type MessageKey } from './i18n'
 
 afterEach(() => {
   cleanup()
@@ -55,6 +55,21 @@ describe('initialLocale', () => {
 
   it('matches a browser language tag regardless of case', () => {
     expect(initialLocale(null, ['DE-AT'])).toBe('de')
+  })
+})
+
+describe('interfaceLocales', () => {
+  it('offers every interface language before a pack is installed', () => {
+    expect(interfaceLocales(null)).toEqual(['bg', 'de', 'en'])
+  })
+
+  it('offers the installed pack’s L1 and English once one is (spec §11.2)', () => {
+    expect(interfaceLocales('bg')).toEqual(['bg', 'en'])
+    expect(interfaceLocales('de')).toEqual(['de', 'en'])
+  })
+
+  it('offers English alone for an L1 the interface has no table for', () => {
+    expect(interfaceLocales('ro')).toEqual(['en'])
   })
 })
 
