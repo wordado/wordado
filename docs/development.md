@@ -161,3 +161,14 @@ If `main` has moved on, GitHub asks you to **Update branch** before merging.
    **Approve and deploy**. `https://app.wordado.com` updates a few minutes later.
 
 If a release goes wrong, see *Everyday* in [`deploy.md`](deploy.md) for the rollback.
+
+## 7. Report a bug
+
+Bugs go to GitHub Issues: [new issue](https://github.com/wordado/wordado/issues/new/choose) → **Bug report**, or
+`gh issue create --template bug_report.yml`. The form asks what happened, what you expected, the steps, the
+screen, and the device and browser, and labels the issue `bug`; add `ui`, `mobile` or `accessibility` where they
+fit. The repository is public, so leave out email addresses, sign-in codes and other personal details.
+
+A pull request that fixes one says so in its description (`Fixes #12`), and the issue closes when it is merged.
+A wrong translation, example or audio for a word is not a bug here: learners report it from the word's card
+(**Report a problem**), into the app's own reports.
