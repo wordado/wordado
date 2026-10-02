@@ -62,6 +62,7 @@ describe('checkDocumentWrite', () => {
 
   it('accepts a report’s L1 when it is a supported language, and still accepts a report without one', () => {
     expect(checkDocumentWrite(reportWrite({ l1: 'de' })).ok).toBe(true)
+    expect(checkDocumentWrite(reportWrite({ l1: 'es' })).ok).toBe(true)
     expect(checkDocumentWrite(reportWrite({})).ok).toBe(true)
     expect(checkDocumentWrite(reportWrite({ l1: 'xx' })).ok).toBe(false)
   })
