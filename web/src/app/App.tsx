@@ -15,6 +15,7 @@ import { Themes } from '../screens/Themes'
 import { LanguageStep } from '../setup/LanguageStep'
 import { Setup } from '../setup/Setup'
 import { AccountMenu } from './AccountMenu'
+import { useInterfaceLocales } from './interfaceLanguage'
 import { Banners, NoticeLine } from './Banners'
 import { LanguageMenu } from './LanguageMenu'
 
@@ -77,6 +78,7 @@ const FOCUS: ReadonlySet<Route['name']> = new Set(['study', 'practice-words', 'm
  */
 export function App(props: { readonly resumed: boolean; readonly setup: boolean; onFinishSetup(): void }) {
   const { t } = useT()
+  useInterfaceLocales()
   const route = useRoute()
   const main = useRef<HTMLElement>(null)
   const first = useRef(true)

@@ -57,6 +57,13 @@ describe('Settings: the menu', () => {
     expect(screen.getByRole('heading', { level: 3, name: 'Native language' })).toBeTruthy()
     expect(screen.getByRole('heading', { level: 3, name: 'Interface language' })).toBeTruthy()
   })
+
+  it('offers the learner’s L1 and English as the interface language, nothing else (spec §11.2)', async () => {
+    const ctx = await setup()
+    renderWith(<Settings section="languages" />, ctx)
+    const names = screen.getAllByRole('radio').filter((r) => (r as HTMLInputElement).name === 'locale').map((r) => r.closest('label')?.textContent)
+    expect(names).toEqual(['Български', 'English'])
+  })
 })
 
 describe('Settings: studying (spec §7.1, §7.4, §11.1)', () => {
