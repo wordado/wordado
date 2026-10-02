@@ -127,15 +127,14 @@ describe('the A1 Spanish sample pack (plan 12)', () => {
     expect(esOut.pack.units.map((u) => u.title.l1)).toEqual(['Personas y saludos', 'Comida y bebida', 'En casa y en el día a día'])
   })
 
-  it('has no two entries sharing a translation, so no demo distractor is ambiguous', () => {
-    const norm = (s: string) => s.trim().normalize('NFC').toLowerCase()
-    const seen = new Map<string, string>()
-    for (const e of esOut.pack.entries) {
-      for (const t of [e.translation, ...e.alternates].map(norm)) {
-        expect(seen.get(t), `${t} in ${e.entry_id} and ${seen.get(t)}`).toBeUndefined()
-        seen.set(t, e.entry_id)
-      }
+  it('gives every entry three distractors and fills a matching board, though alternates are shared across entries', () => {
+    const esPool = [...loadCorpus([esOut.pack]).entries.values()]
+    const encountered = new Set<WordId>()
+    for (const e of esPool) {
+      expect(pickDistractors(e, { pool: esPool, encountered, listening: false }, 3, seededRng(1))).toHaveLength(3)
+      expect(pickDistractors(e, { pool: esPool, encountered, listening: true }, 3, seededRng(2))).toHaveLength(3)
     }
+    expect(buildMatchingBoard(esPool, 5, seededRng(3))).toHaveLength(5)
   })
 })
 

@@ -140,7 +140,7 @@
       },
       "description": {
         "en": "Ordering, paying and asking for the menu.",
-        "l1": "Pedir, pagar y preguntar por la carta."
+        "l1": "Pedir la carta, pedir y pagar."
       }
     },
     {
@@ -184,7 +184,7 @@
       },
       "description": {
         "en": "Counting, prices and how much.",
-        "l1": "Contar, precios y cuánto cuesta."
+        "l1": "Contar, cantidades y precios."
       }
     },
     {
@@ -202,7 +202,7 @@
       "theme_id": "directions",
       "name": {
         "en": "Places and directions",
-        "l1": "Lugares y direcciones"
+        "l1": "Lugares y cómo llegar"
       },
       "description": {
         "en": "Finding your way around town.",
@@ -268,7 +268,7 @@
       "theme_id": "clothes",
       "name": {
         "en": "Clothes",
-        "l1": "La ropa"
+        "l1": "Ropa"
       },
       "description": {
         "en": "What you wear, and sizes.",
@@ -345,7 +345,7 @@
       "theme_id": "city",
       "name": {
         "en": "Town and city",
-        "l1": "La ciudad"
+        "l1": "Ciudad"
       },
       "description": {
         "en": "Streets, buildings and public places.",
@@ -774,6 +774,7 @@
       ],
       "translation": "chico",
       "alternates": [
+        "niño",
         "muchacho"
       ],
       "examples": [
@@ -798,6 +799,7 @@
       ],
       "translation": "chica",
       "alternates": [
+        "niña",
         "muchacha"
       ],
       "examples": [
@@ -1180,7 +1182,9 @@
         "daily-life"
       ],
       "translation": "almuerzo",
-      "alternates": [],
+      "alternates": [
+        "comida"
+      ],
       "examples": [
         "We have lunch at work."
       ],
@@ -1322,8 +1326,10 @@
         "home",
         "daily-life"
       ],
-      "translation": "hogar",
-      "alternates": [],
+      "translation": "casa",
+      "alternates": [
+        "hogar"
+      ],
       "examples": [
         "I am at home now."
       ],
