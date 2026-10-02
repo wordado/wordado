@@ -23,6 +23,14 @@ export class LlmError extends Error {
   }
 }
 
+/** Every attempt's answer came back but did not fit (say, one item short): a smaller batch may fit. */
+export class AnswerDoesNotFit extends LlmError {
+  constructor(message: string) {
+    super(message)
+    this.name = 'AnswerDoesNotFit'
+  }
+}
+
 export class ParseError extends Error {
   constructor(message: string) {
     super(message)
@@ -40,7 +48,12 @@ export class BudgetExceeded extends Error {
 const ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions'
 const ATTEMPTS = 4
 
-class Retryable extends Error {}
+class Retryable extends Error {
+  /** The answer came back but did not fit its request. */
+  constructor(message: string, readonly unfit = false) {
+    super(message)
+  }
+}
 
 export interface OpenRouterOptions {
   readonly apiKey: string
@@ -110,7 +123,7 @@ export function openRouterLlm(opts: OpenRouterOptions): Llm {
     try {
       return req.parse(value)
     } catch (err) {
-      if (err instanceof ParseError) throw new Retryable(`the answer does not fit: ${err.message}`)
+      if (err instanceof ParseError) throw new Retryable(`the answer does not fit: ${err.message}`, true)
       throw err
     }
   }
@@ -120,6 +133,7 @@ export function openRouterLlm(opts: OpenRouterOptions): Llm {
     spentUsd: () => spent,
     async json<T>(req: LlmRequest<T>): Promise<T> {
       let last = ''
+      let unfit = false
       for (let i = 0; i < ATTEMPTS; i += 1) {
         if (spent >= opts.maxUsd) throw new BudgetExceeded(spent, opts.maxUsd)
         try {
@@ -127,10 +141,12 @@ export function openRouterLlm(opts: OpenRouterOptions): Llm {
         } catch (err) {
           if (!(err instanceof Retryable)) throw err
           last = err.message
+          unfit = err.unfit
           if (i < ATTEMPTS - 1) await sleep(1000 * 2 ** i)
         }
       }
-      throw new LlmError(`${req.name}: gave up after ${ATTEMPTS} attempts: ${last}`)
+      const message = `${req.name}: gave up after ${ATTEMPTS} attempts: ${last}`
+      throw unfit ? new AnswerDoesNotFit(message) : new LlmError(message)
     },
   }
 }
