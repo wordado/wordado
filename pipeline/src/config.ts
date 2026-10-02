@@ -16,7 +16,7 @@ export interface TtsVoice {
 /** `pipeline.json`: everything a run may tune without a code change. */
 export interface PipelineConfig {
   readonly l1s: readonly string[]
-  /** The levels this corpus ships (spec §14: A1–B1 for Phase 1a). */
+  /** The levels this corpus ships (spec §14: A1–C1 since Phase 1b). */
   readonly levels: readonly CefrLevel[]
   /** Entries per level (spec §5.3); every level has one, for the frequency bands (Decision 7). */
   readonly targets: Readonly<Record<CefrLevel, number>>
