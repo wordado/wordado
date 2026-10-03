@@ -99,14 +99,6 @@ jobs:
             *) echo "::error::no browser for $E2E_PROJECTS"; exit 1 ;;
           esac
           pnpm --filter @wordado/web exec playwright install --with-deps "$browser"
-          # Since Ubuntu's Mesa 25.2.8-0ubuntu0.24.04.4 (2 October 2026), WebKit's storage and network processes fail
-          # on the runner ("An internal error was encountered in the Indexed Database server"). Hold the security
-          # pocket's .2 until a later Mesa works; then remove this.
-          if [ "$browser" = webkit ]; then
-            mesa=25.2.8-0ubuntu0.24.04.2
-            sudo apt-get install -y --allow-downgrades \
-              "libegl-mesa0=$mesa" "libgbm1=$mesa" "libgl1-mesa-dri=$mesa" "libglx-mesa0=$mesa" "mesa-libgallium=$mesa"
-          fi
       - name: The demo
         run: pnpm --filter @wordado/web e2e
       - name: Accounts, against the Worker and Postgres
