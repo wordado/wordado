@@ -16,6 +16,10 @@ const RUN = Math.floor(Math.random() * 250)
 async function context(browser: Browser, options: { readonly serviceWorkers?: 'allow' | 'block' } = {}): Promise<BrowserContext> {
   clientIp += 1
   const ctx = await browser.newContext(options)
+  // DIAGNOSTIC BRANCH ONLY: the app's [diag] lines and every console error, into the CI log.
+  ctx.on('console', (m) => {
+    if (m.text().startsWith('[diag]') || m.type() === 'error') console.log(`[browser ${m.type()}] ${m.text()}`)
+  })
   await ctx.setExtraHTTPHeaders({ 'cf-connecting-ip': `10.${RUN}.${Math.floor(clientIp / 250)}.${(clientIp % 250) + 1}` })
   await ctx.addInitScript(() => {
     if (localStorage.getItem('wordado.locale') === null) localStorage.setItem('wordado.locale', 'en')

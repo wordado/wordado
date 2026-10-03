@@ -79,7 +79,7 @@ jobs:
       fail-fast: false
       matrix:
         # Spec §13's matrix. Pull requests run the three engines; main adds both mobile projects (Actions minutes, §17.2).
-        project: ${{ fromJSON(github.event_name == 'pull_request' && '["chromium","firefox","webkit"]' || '["chromium","firefox","webkit","mobile-chrome","mobile-safari"]') }}
+        project: ${{ fromJSON(github.event_name == 'pull_request' && '["webkit","mobile-safari"]' || '["chromium","firefox","webkit","mobile-chrome","mobile-safari"]') }}
     env:
       E2E_PROJECTS: ${{ matrix.project }}
     steps:
@@ -99,10 +99,9 @@ jobs:
             *) echo "::error::no browser for $E2E_PROJECTS"; exit 1 ;;
           esac
           pnpm --filter @wordado/web exec playwright install --with-deps "$browser"
-      - name: The demo
-        run: pnpm --filter @wordado/web e2e
+      # DIAGNOSTIC BRANCH ONLY: the accounts suite alone, six times over.
       - name: Accounts, against the Worker and Postgres
-        run: pnpm --filter @wordado/web e2e:accounts
+        run: pnpm --filter @wordado/web e2e:accounts --repeat-each 6 --max-failures 0
       # A trace is kept for every failed attempt, including one a WebKit retry got past (web/e2e/projects.ts), so a
       # passing job with a trace had a flaky test: keep those too.
       - name: Keep the traces of a failure or a retry
