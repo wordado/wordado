@@ -18,15 +18,39 @@ async function removeFromOpfs(file: string): Promise<void> {
   for (const name of names) await root.removeEntry(name, { recursive: true })
 }
 
+/** How long a deletion may wait on a connection before the console hears of it. */
+const BLOCKED_WARN_MS = 1_000
+
 function removeFromIdb(name: string): Promise<void> {
   if (typeof indexedDB === 'undefined') return Promise.resolve()
   return new Promise((resolve, reject) => {
+    const started = performance.now()
+    let warning: ReturnType<typeof setTimeout> | undefined
+    let warned = false
+    const settle = () => {
+      clearTimeout(warning)
+      if (warned) console.warn(`IndexedDB: ${name} deleted after ${Math.round(performance.now() - started)} ms`)
+    }
     const request = indexedDB.deleteDatabase(name)
-    request.onsuccess = () => resolve()
-    request.onerror = () => reject(request.error ?? new Error(`${name} could not be deleted`))
+    request.onsuccess = () => {
+      settle()
+      resolve()
+    }
+    request.onerror = () => {
+      settle()
+      reject(request.error ?? new Error(`${name} could not be deleted`))
+    }
     // `blocked` means a connection is not closed yet: another opener, or the Worker's own, which close
     // has closed (sqlite.worker.ts) while its last transaction still commits. Either way the deletion
-    // goes on to `success` once the connection lets go; nothing to do but wait.
+    // goes on to `success` once the connection lets go; nothing to do but wait. A wait of over a second
+    // is said on the console, so a stalled sign-out shows whether it waited here (WebKit on CI stalls now
+    // and then for a reason not yet found: web/e2e/projects.ts).
+    request.onblocked = () => {
+      warning ??= setTimeout(() => {
+        warned = true
+        console.warn(`IndexedDB: deleting ${name} is blocked by a connection still open, ${BLOCKED_WARN_MS} ms so far`)
+      }, BLOCKED_WARN_MS)
+    }
   })
 }
 

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test'
 import { WORKER_LOG } from './accounts.setup'
-import { expectAccessible, finishSetup, heading, studyNew, today } from './helpers'
+import { expectAccessible, finishSetup, forwardConsole, heading, studyNew, today } from './helpers'
 
 let clientIp = 0
 // The second octet, one per run: Better Auth's own per-IP-and-path rate limit (window 60s,
@@ -16,6 +16,7 @@ const RUN = Math.floor(Math.random() * 250)
 async function context(browser: Browser, options: { readonly serviceWorkers?: 'allow' | 'block' } = {}): Promise<BrowserContext> {
   clientIp += 1
   const ctx = await browser.newContext(options)
+  forwardConsole(ctx)
   await ctx.setExtraHTTPHeaders({ 'cf-connecting-ip': `10.${RUN}.${Math.floor(clientIp / 250)}.${(clientIp % 250) + 1}` })
   await ctx.addInitScript(() => {
     if (localStorage.getItem('wordado.locale') === null) localStorage.setItem('wordado.locale', 'en')
