@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { BudgetExceeded, LlmError, openRouterLlm, ParseError, type LlmRequest } from './llm'
+import { AnswerDoesNotFit, BudgetExceeded, LlmError, openRouterLlm, ParseError, type LlmRequest } from './llm'
 
 const req: LlmRequest<{ n: number }> = {
   name: 'count',
@@ -66,6 +66,15 @@ describe('openRouterLlm', () => {
   it('gives up after four attempts, naming the last problem', async () => {
     const { llm } = client([reply('x'), reply('x'), reply('x'), reply('x')])
     await expect(llm.json(req)).rejects.toThrow(/count: .*not JSON/)
+  })
+
+  it('gives up with AnswerDoesNotFit only when the last answer parsed but did not fit', async () => {
+    const unfit = client([reply('{"m":1}'), reply('{"m":1}'), reply('{"m":1}'), reply('{"m":1}')])
+    await expect(unfit.llm.json(req)).rejects.toThrow(AnswerDoesNotFit)
+    const busy = client([reply('{"m":1}'), reply('', 0, 503), reply('', 0, 503), reply('', 0, 503)])
+    const err = await busy.llm.json(req).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(LlmError)
+    expect(err).not.toBeInstanceOf(AnswerDoesNotFit)
   })
 
   it('adds up usage.cost, and stops before a call that would exceed the budget', async () => {

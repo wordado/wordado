@@ -185,9 +185,10 @@ decisions made since the draft still block.
 Never list a translation queue for a public release: learners are marked right or wrong against the translation
 and its alternates. Remove a queue from the list to gate it again; its open items then block the next release.
 
-For the first MVP the content repository ships A1 only (`"levels": ["A1"]`), with every translation reviewed and
-the other queues accepted. A2 and B1 come in a later version, by adding them back to `levels`, drafting again, and
-reviewing them.
+The content repository ships A1–C1 (`"levels"` lists all five since 2026-10-02, with `max_lemmas` at 10,000 and
+`max_forms` at 25,000, enough to fill the B2 and C1 targets). For now it also lists every translation queue in
+`accept_unreviewed`, so translations ship before native-speaker review; review them, then take the queues out of the
+list again.
 
 ## A second review
 

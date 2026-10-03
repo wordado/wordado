@@ -1,6 +1,7 @@
 import { canonicalJson } from '@wordado/core'
 import { sha256Hex } from './checksum'
 import { appendJsonl, readJsonl } from './files'
+import { AnswerDoesNotFit } from './llm'
 import { mapLimit } from './mapLimit'
 
 interface Line {
@@ -69,7 +70,10 @@ export interface CachedBatchOptions<I, O> {
   readonly run: (batch: readonly I[]) => Promise<readonly O[]>
 }
 
-/** Results for every item in item order, asking `run` only for cache misses, `batchSize` at a time. */
+/**
+ * Results for every item in item order, asking `run` only for cache misses, `batchSize` at a time. A batch whose
+ * answer never fits (a long list answered one item short) is asked again in halves, down to single items.
+ */
 export async function cachedBatch<I, O>(opts: CachedBatchOptions<I, O>): Promise<O[]> {
   const keys = opts.items.map((item) => cacheKey(opts.stage, opts.version, opts.keyInput(item)))
   const missing: number[] = []
@@ -83,10 +87,20 @@ export async function cachedBatch<I, O>(opts: CachedBatchOptions<I, O>): Promise
   if (missing.length > 0 && opts.offline) throw new OfflineMiss(opts.stage, missing.length)
   const batches: number[][] = []
   for (let i = 0; i < missing.length; i += opts.batchSize) batches.push(missing.slice(i, i + opts.batchSize))
-  await mapLimit(batches, opts.concurrency, async (batch) => {
-    const out = await opts.run(batch.map((i) => opts.items[i]!))
+  const ask = async (batch: readonly number[]): Promise<void> => {
+    let out: readonly O[]
+    try {
+      out = await opts.run(batch.map((i) => opts.items[i]!))
+    } catch (err) {
+      if (!(err instanceof AnswerDoesNotFit) || batch.length < 2) throw err
+      const half = Math.ceil(batch.length / 2)
+      await ask(batch.slice(0, half))
+      await ask(batch.slice(half))
+      return
+    }
     if (out.length !== batch.length) throw new Error(`${opts.stage}: a batch of ${batch.length} came back with ${out.length}`)
     batch.forEach((i, j) => opts.cache.set(keys[i]!, out[j], opts.model))
-  })
+  }
+  await mapLimit(batches, opts.concurrency, ask)
   return keys.map((k) => opts.cache.get(k) as O)
 }

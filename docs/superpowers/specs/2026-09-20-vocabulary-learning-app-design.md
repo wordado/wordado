@@ -1472,7 +1472,9 @@ stays: it is small, and retrofitting it means a sync-protocol change.
 ### Phase 1b — General launch
 
 - Spanish, German, French, and Russian translations for A1–B1, each released
-  when its native-speaker review is complete. No code change: a new pack per
+  when its native-speaker review is complete.
+- Corpus B2–C1 in every L1 shipped so far (moved up from Phase 2 on
+  2026-10-02; §16). Later L1s get B2–C1 with their A1–B1. No code change: a new pack per
   L1. Russian ships last (R11).
 - iOS and Android apps (Expo), built alongside the language releases and
   shipped when ready, with Sign in with Apple. They are views and a
@@ -1480,7 +1482,6 @@ stays: it is small, and retrofitting it means a sync-protocol change.
 
 ### Phase 2
 
-- Corpus B2–C1 in all five L1s.
 - Example sentences brought up to three to five per entry, all levels.
 - Images for concrete A1–A2 nouns.
 - Personal dictionary with auto-enrichment, metered through `entitlement`.
@@ -1728,6 +1729,13 @@ web client (plan 6a).
   unless an account is created, and the database is deleted when the demo is
   discarded.
 
+**2026-10-02 — B2–C1 moved up.** Decided by the product owner.
+
+- **Phasing (§14):** the B2–C1 corpus moves from Phase 2 to Phase 1b, for
+  every L1 shipped so far (Bulgarian, German, Spanish). It ships the way A1–B1
+  did: translations are accepted unreviewed for now, and native-speaker review
+  follows (pipeline README, *An MVP release*).
+
 ### Approval status
 
 Every change since the original approval that alters a settled product
@@ -1743,6 +1751,7 @@ decision, the phasing, or scope. † in the body marks those still pending.
 | † Bulgarian first: Phase 1 split into 1a and 1b (§14) | Later decisions build on it; formal sign-off pending |
 | † Free-tier principle; monetisation non-goal narrowed (§8.8, §2) | Discussed and welcomed; formal sign-off pending |
 | † Phases chosen for the research improvements: new Phase 1 modes, desired retention, import moved up, images, extra sentences (§14) | Pending |
+| B2–C1 corpus moved from Phase 2 to Phase 1b (§14) | Decided by the product owner, 2026-10-02 |
 | † Scope added to Phase 1a by the second review: error reporting, reminders, known/suspended words, account deletion, data export, accessibility target, interface localisation (§14) | Pending |
 
 ---

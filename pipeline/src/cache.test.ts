@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { cachedBatch, cacheKey, OfflineMiss, StageCache } from './cache'
+import { AnswerDoesNotFit } from './llm'
 
 const file = () => join(mkdtempSync(join(tmpdir(), 'cache-')), 'stage.jsonl')
 
@@ -70,5 +71,31 @@ describe('cachedBatch', () => {
       } }),
     ).rejects.toThrow('down')
     expect(StageCache.open(f).size).toBe(1)
+  })
+
+  it('asks again in halves when a batch’s answer never fits, down to single items', async () => {
+    const cache = StageCache.open(file())
+    const calls: string[][] = []
+    const opts = { cache, stage: 's', version: 1, keyInput: (w: string) => w, batchSize: 4, concurrency: 1, offline: false }
+    const out = await cachedBatch({ ...opts, items: ['a', 'b', 'c', 'd', 'e'], run: async (b) => {
+      calls.push([...b])
+      if (b.length > 2 || b.includes('c') && b.length > 1) throw new AnswerDoesNotFit('s: the answer does not fit')
+      return b.map((w) => w.toUpperCase())
+    } })
+    expect(out).toEqual(['A', 'B', 'C', 'D', 'E'])
+    expect(calls).toEqual([['a', 'b', 'c', 'd'], ['a', 'b'], ['c', 'd'], ['c'], ['d'], ['e']])
+  })
+
+  it('still fails when a single item’s answer never fits, and does not split for other errors', async () => {
+    const opts = { stage: 's', version: 1, keyInput: (w: string) => w, batchSize: 2, concurrency: 1, offline: false }
+    await expect(cachedBatch({ ...opts, cache: StageCache.open(file()), items: ['a'], run: async () => {
+      throw new AnswerDoesNotFit('s: the answer does not fit')
+    } })).rejects.toThrow(AnswerDoesNotFit)
+    const calls: string[][] = []
+    await expect(cachedBatch({ ...opts, cache: StageCache.open(file()), items: ['a', 'b'], run: async (b) => {
+      calls.push([...b])
+      throw new Error('down')
+    } })).rejects.toThrow('down')
+    expect(calls).toEqual([['a', 'b']])
   })
 })

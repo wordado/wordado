@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { LlmError, ParseError, type Llm, type LlmRequest } from './llm'
+import { AnswerDoesNotFit, LlmError, ParseError, type Llm, type LlmRequest } from './llm'
 
 /** The Claude plan's usage limit stopped the run; everything answered so far is cached, so rerun after it resets. */
 export class UsageLimitReached extends Error {
@@ -28,7 +28,12 @@ export interface ClaudeCodeOptions {
 }
 
 const ATTEMPTS = 4
-class Retryable extends Error {}
+class Retryable extends Error {
+  /** The answer came back but did not fit its request. */
+  constructor(message: string, readonly unfit = false) {
+    super(message)
+  }
+}
 
 /**
  * Runs `claude` in an empty directory, so no project's CLAUDE.md or settings join the question, and without an
@@ -101,7 +106,7 @@ export function claudeCodeLlm(opts: ClaudeCodeOptions): Llm {
     try {
       return req.parse(body.structured_output)
     } catch (err) {
-      if (err instanceof ParseError) throw new Retryable(`the answer does not fit: ${err.message}`)
+      if (err instanceof ParseError) throw new Retryable(`the answer does not fit: ${err.message}`, true)
       throw err
     }
   }
@@ -111,16 +116,19 @@ export function claudeCodeLlm(opts: ClaudeCodeOptions): Llm {
     spentUsd: () => spent,
     async json<T>(req: LlmRequest<T>): Promise<T> {
       let last = ''
+      let unfit = false
       for (let i = 0; i < ATTEMPTS; i += 1) {
         try {
           return await attempt(req)
         } catch (err) {
           if (!(err instanceof Retryable)) throw err
           last = err.message
+          unfit = err.unfit
           if (i < ATTEMPTS - 1) await sleep(1000 * 2 ** i)
         }
       }
-      throw new LlmError(`${req.name}: gave up after ${ATTEMPTS} attempts: ${last}`)
+      const message = `${req.name}: gave up after ${ATTEMPTS} attempts: ${last}`
+      throw unfit ? new AnswerDoesNotFit(message) : new LlmError(message)
     },
   }
 }

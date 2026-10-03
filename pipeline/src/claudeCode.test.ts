@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { claudeCodeLlm, UsageLimitReached, type Exec, type ExecResult } from './claudeCode'
-import { LlmError, ParseError, type LlmRequest } from './llm'
+import { AnswerDoesNotFit, LlmError, ParseError, type LlmRequest } from './llm'
 
 const req: LlmRequest<string[]> = {
   name: 'translate',
@@ -68,5 +68,17 @@ describe('claudeCodeLlm', () => {
   it('gives up after four attempts', async () => {
     const exec = fakeExec(Array.from({ length: 4 }, () => answer({ is_error: false })))
     await expect(claudeCodeLlm({ model: 'm', exec, sleep: noSleep }).json(req)).rejects.toThrow(/gave up after 4 attempts/)
+  })
+
+  it('gives up with AnswerDoesNotFit only when the last answer did not fit', async () => {
+    const unfit = fakeExec(Array.from({ length: 4 }, () => answer({ is_error: false, structured_output: { wrong: true } })))
+    await expect(claudeCodeLlm({ model: 'm', exec: unfit, sleep: noSleep }).json(req)).rejects.toThrow(AnswerDoesNotFit)
+    const busy = fakeExec([
+      answer({ is_error: false, structured_output: { wrong: true } }),
+      ...Array.from({ length: 3 }, () => answer({ is_error: true, api_error_status: 529, result: 'Overloaded' })),
+    ])
+    const err = await claudeCodeLlm({ model: 'm', exec: busy, sleep: noSleep }).json(req).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(LlmError)
+    expect(err).not.toBeInstanceOf(AnswerDoesNotFit)
   })
 })
