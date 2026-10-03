@@ -20,6 +20,14 @@ export function Study(props: { readonly kind: RunKind; readonly mode: Mode | nul
     let live = true
     setRun(null)
     setError(null)
+    // DIAGNOSTIC BRANCH ONLY
+    const t0 = performance.now()
+    console.info(`[diag] ${Math.round(t0)}ms study: StudyRun.start`)
+    const watch = setInterval(() => {
+      void navigator.locks.query().then((locks) =>
+        console.info(`[diag] ${Math.round(performance.now())}ms study: STILL STARTING ${Math.round(performance.now() - t0)}ms locks=${JSON.stringify(locks)}`),
+      )
+    }, 1000)
     void StudyRun.start(client, env, {
       kind,
       mode,
@@ -27,14 +35,18 @@ export function Study(props: { readonly kind: RunKind; readonly mode: Mode | nul
       online: () => audio.streamable(),
     }).then(
       (started) => {
+        clearInterval(watch)
+        console.info(`[diag] ${Math.round(performance.now())}ms study: started after ${Math.round(performance.now() - t0)}ms`)
         if (live) setRun(started)
       },
       (err: unknown) => {
+        clearInterval(watch)
         if (live) setError(t(errorMessageKey(err)))
       },
     )
     return () => {
       live = false
+      clearInterval(watch)
     }
   }, [client, env, audio, kind, mode])
 

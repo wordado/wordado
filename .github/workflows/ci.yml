@@ -79,7 +79,7 @@ jobs:
       fail-fast: false
       matrix:
         # Spec §13's matrix. Pull requests run the three engines; main adds both mobile projects (Actions minutes, §17.2).
-        project: ${{ fromJSON(github.event_name == 'pull_request' && '["chromium","firefox","webkit"]' || '["chromium","firefox","webkit","mobile-chrome","mobile-safari"]') }}
+        project: ${{ fromJSON(github.event_name == 'pull_request' && '["webkit","mobile-safari"]' || '["chromium","firefox","webkit","mobile-chrome","mobile-safari"]') }}
     env:
       E2E_PROJECTS: ${{ matrix.project }}
     steps:
@@ -107,10 +107,16 @@ jobs:
             sudo apt-get install -y --allow-downgrades \
               "libegl-mesa0=$mesa" "libgbm1=$mesa" "libgl1-mesa-dri=$mesa" "libglx-mesa0=$mesa" "mesa-libgallium=$mesa"
           fi
+      # DIAGNOSTIC BRANCH ONLY: repeat the WebKit runs, and keep going past failures to collect every stall.
       - name: The demo
-        run: pnpm --filter @wordado/web e2e
+        run: |
+          repeat=1; case "$E2E_PROJECTS" in webkit|mobile-safari) repeat=6 ;; esac
+          pnpm --filter @wordado/web e2e --repeat-each "$repeat" --max-failures 0
       - name: Accounts, against the Worker and Postgres
-        run: pnpm --filter @wordado/web e2e:accounts
+        if: ${{ !cancelled() }}
+        run: |
+          repeat=1; case "$E2E_PROJECTS" in webkit|mobile-safari) repeat=3 ;; esac
+          pnpm --filter @wordado/web e2e:accounts --repeat-each "$repeat" --max-failures 0
       - name: Keep the traces of a failure
         if: failure()
         uses: actions/upload-artifact@v4

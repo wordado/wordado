@@ -228,6 +228,24 @@ createRoot(document.getElementById('root')!).render(
 
 void boot.start()
 
+// DIAGNOSTIC BRANCH ONLY: while the app has been starting for over 2s, dump the locks and databases every second.
+{
+  let since = performance.now()
+  setInterval(() => {
+    const status = (boot.store.get() as { status: string }).status
+    if (status !== 'starting') {
+      since = performance.now()
+      return
+    }
+    if (performance.now() - since < 2000) return
+    void (async () => {
+      const locks = await navigator.locks.query().catch((e: unknown) => String(e))
+      const dbs = await indexedDB.databases?.().catch((e: unknown) => String(e))
+      console.info(`[diag] ${Math.round(performance.now())}ms STILL STARTING ${Math.round(performance.now() - since)}ms locks=${JSON.stringify(locks)} dbs=${JSON.stringify(dbs)}`)
+    })()
+  }, 1000)
+}
+
 // iOS keeps a page left for another (Google's sign-in) frozen in its back-forward cache, where its database Worker
 // would hold the file and its lock from the next page for good: let go as the page is hidden, open again if it returns
 // — from the cache, or because it never went (`resume()` does nothing unless the page let go).

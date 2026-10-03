@@ -1,3 +1,5 @@
+// DIAGNOSTIC BRANCH ONLY: step timings for WebKit CI stalls.
+const diag = (m: string) => console.info(`[diag] ${Math.round(performance.now())}ms ${m}`)
 import { Client, createStore, type ClientEnv, type InstallReport, type PackFetcher, type SqlDriver, type Store, type SyncTransport } from '@wordado/client-data'
 import { isSupportedL1, type L1, type PackManifest } from '@wordado/core'
 import { DEMO_FILE, learnerFile, type AccountRecord, type AccountStorage } from '../account/storage'
@@ -143,7 +145,9 @@ export class Boot {
     const request = ++this.lockRequests
     let held: boolean
     try {
+      diag('start: acquiring tab lock')
       held = await this.lock.acquire()
+      diag(`start: tab lock held=${held}`)
     } catch (err) {
       if (generation === this.generation) this.store.set({ status: 'failed', message: messageOf(err), reason: 'lock' })
       return
@@ -252,6 +256,7 @@ export class Boot {
    * with its driver; its close only tidies up.
    */
   suspend(): void {
+    diag('suspend (pagehide)')
     this.generation += 1
     this.lockHeld = false
     this.suspended = true
@@ -377,6 +382,7 @@ export class Boot {
     }
     try {
       const client = this.client!
+      diag('open: needsSetup?')
       if (await this.needsSetup(client, generation)) {
         if (generation !== this.generation) return
         await client.startSession()
@@ -390,12 +396,15 @@ export class Boot {
       if (generation !== this.generation) return
       let installFailure: unknown = null
       try {
+        diag('open: installPacks')
         const report = await client.installPacks(await this.deps.fetchManifest(this.account), this.deps.fetchPack)
         this.deps.onInstallReport?.(report)
       } catch (err) {
         installFailure = err
       }
+      diag('open: startSession')
       await client.startSession()
+      diag('open: session started')
       if (generation !== this.generation) return
       if (!client.snapshot.corpus) throw installFailure ?? new Error('No words are installed')
       await this.deps.prepare?.(client, this.account).catch(() => undefined)
@@ -452,10 +461,14 @@ export class Boot {
    * closing the driver it was given.
    */
   private async acquireClient(generation: number): Promise<void> {
+    diag('acquireClient: sweep')
     const account = await this.sweep(this.deps.accounts?.read() ?? null)
+    diag('acquireClient: swept')
     if (account?.carryOver) await this.carryOverDemo(account)
     if (generation !== this.generation) return
+    diag('acquireClient: openDriver')
     const { driver, backend } = await this.openDriver(account ? learnerFile(account.userId) : DEMO_FILE)
+    diag(`acquireClient: driver open (${backend})`)
     if (generation !== this.generation) {
       await driver.close().catch(() => undefined)
       return
@@ -464,6 +477,7 @@ export class Boot {
     let client: Client
     try {
       const transport = account ? this.deps.transport?.() : undefined
+      diag('acquireClient: Client.open')
       client = await Client.open({ driver, env: this.deps.env, l1: this.deps.l1(account), ...(transport ? { transport } : {}) })
     } catch (err) {
       await driver.close().catch(() => undefined)
