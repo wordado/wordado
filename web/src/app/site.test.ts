@@ -9,11 +9,7 @@ describe('privacyUrl', () => {
       'https://wordado.com/bg/privacy/',
       'https://wordado.com/de/privacy/',
       'https://wordado.com/en/privacy/',
-      'https://wordado.com/en/privacy/',
+      'https://wordado.com/es/privacy/',
     ])
-  })
-
-  it('falls back to English for Spanish until the website has /es/privacy/ (plan 12)', () => {
-    expect(privacyUrl('es')).toBe('https://wordado.com/en/privacy/')
   })
 })
