@@ -9,20 +9,31 @@ export const heading = (page: Page) => page.getByRole('heading', { level: 1 })
 
 /** What `forwardConsole` needs of a BrowserContext. */
 interface ConsoleSource {
+  browser(): { browserType(): { name(): string } } | null
   on(event: 'console', listener: (message: { type(): string; text(): string }) => void): unknown
 }
 
+/** Console lines every run gives, which say nothing about a stall. */
+const EXPECTED = [
+  // The demo's country lookup has no API to ask.
+  'Failed to load resource: the server responded with a status of',
+  // Contexts made with `serviceWorkers: 'block'`.
+  'Service Worker registration blocked by Playwright',
+]
+
 /**
- * Prints the pages' console warnings and errors into the run's output, so a CI log shows what a stalled page
- * said: WebKit on CI now and then stalls for a reason not yet found (e2e/projects.ts), and a retry that gets
- * past it keeps only a trace. HTTP error statuses are left out: the demo's country lookup has no API to ask.
+ * In WebKit, prints the pages' console warnings and errors into the run's output, so a CI log shows what a
+ * stalled page said: WebKit on CI now and then stalls for a reason not yet found (e2e/projects.ts), and a retry
+ * that gets past it keeps only a trace. The other engines stay quiet: Playwright's Firefox cannot play the m4a
+ * clips on Linux, and the offline tests cut the network, both on every run.
  */
 export function forwardConsole(context: ConsoleSource): void {
+  if (context.browser()?.browserType().name() !== 'webkit') return
   context.on('console', (message) => {
     const type = message.type()
     if (type !== 'warning' && type !== 'error') return
     const text = message.text()
-    if (text.startsWith('Failed to load resource: the server responded with a status of')) return
+    if (EXPECTED.some((start) => text.startsWith(start))) return
     console.log(`[browser ${type}] ${text}`)
   })
 }
