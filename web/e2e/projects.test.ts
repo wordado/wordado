@@ -13,6 +13,12 @@ describe('the end-to-end browser matrix (spec §13)', () => {
     expect(firefox?.use?.launchOptions?.firefoxUserPrefs).toEqual({ 'browser.formfill.enable': false })
   })
 
+  it('retries a test once in the WebKit projects only, whose CI runs stall at random since October 2026', () => {
+    expect(Object.fromEntries(BROWSER_PROJECTS.map((p) => [p.name, p.retries ?? 0]))).toEqual({
+      chromium: 0, firefox: 0, webkit: 1, 'mobile-chrome': 0, 'mobile-safari': 1,
+    })
+  })
+
   it('runs Chromium alone unless told otherwise, as local runs always have', () => {
     expect(names(undefined)).toEqual(['chromium'])
     expect(names('')).toEqual(['chromium'])

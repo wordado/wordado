@@ -15,9 +15,12 @@ export const BROWSER_PROJECTS: readonly BrowserProject[] = [
   // the field, and the click that closes that dropdown is swallowed (the page saw only a mouseup on
   // Continue: run 36315140278). Browser chrome, not the app, so the test browser turns it off.
   { name: 'firefox', use: { ...devices['Desktop Firefox'], launchOptions: { firefoxUserPrefs: { 'browser.formfill.enable': false } } } },
-  { name: 'webkit', use: { ...devices['Desktop Safari'] } },
+  // Since about 2 October 2026, WebKit on GitHub's runners now and then leaves a page that follows a navigation stuck
+  // opening its database, in a different test each run (runs 37101071723, 37103265351); it has not happened on a Mac or
+  // in Playwright's Linux image, even on one CPU. One retry keeps CI honest about real failures until the cause is found.
+  { name: 'webkit', retries: 1, use: { ...devices['Desktop Safari'] } },
   { name: 'mobile-chrome', use: { ...devices['Pixel 7'] } },
-  { name: 'mobile-safari', use: { ...devices['iPhone 15'] } },
+  { name: 'mobile-safari', retries: 1, use: { ...devices['iPhone 15'] } },
 ]
 
 /** The projects `E2E_PROJECTS` names (comma-separated, or `all`); Chromium alone when it is unset, as local runs have always been. */
