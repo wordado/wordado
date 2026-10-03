@@ -1,7 +1,8 @@
 import { expect, test } from '@playwright/test'
-import { answer, expectAccessible, finishSetup, heading, SETTLE_MS, studyNew, today } from './helpers'
+import { answer, expectAccessible, finishSetup, forwardConsole, heading, SETTLE_MS, studyNew, today } from './helpers'
 
 test.beforeEach(async ({ context }) => {
+  forwardConsole(context)
   // English, so the assertions read plainly; the Bulgarian default is covered by the unit suite.
   await context.addInitScript(() => {
     if (localStorage.getItem('wordado.locale') === null) localStorage.setItem('wordado.locale', 'en')
@@ -157,6 +158,7 @@ test('a German browser opens the demo in German, and a studied word’s translat
   // A fresh context, not the English one `beforeEach` forces: no saved locale, so the interface follows
   // the browser's German (spec §11.2, plan 10 Decision 4), and the demo's L1 follows the interface.
   const context = await browser.newContext({ locale: 'de-DE' })
+  forwardConsole(context)
   try {
     const page = await context.newPage()
     await page.goto('/')
@@ -222,6 +224,7 @@ test('a Spanish browser opens the demo in Spanish, and a studied word’s transl
   // A fresh context, not the English one `beforeEach` forces: no saved locale, so the interface follows
   // the browser's Spanish (spec §11.2, plan 10 Decision 4), and the demo's L1 follows the interface.
   const context = await browser.newContext({ locale: 'es-ES' })
+  forwardConsole(context)
   try {
     const page = await context.newPage()
     await page.goto('/')

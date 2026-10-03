@@ -7,6 +7,26 @@ import { es } from '../src/i18n/es'
 
 export const heading = (page: Page) => page.getByRole('heading', { level: 1 })
 
+/** What `forwardConsole` needs of a BrowserContext. */
+interface ConsoleSource {
+  on(event: 'console', listener: (message: { type(): string; text(): string }) => void): unknown
+}
+
+/**
+ * Prints the pages' console warnings and errors into the run's output, so a CI log shows what a stalled page
+ * said: WebKit on CI now and then stalls for a reason not yet found (e2e/projects.ts), and a retry that gets
+ * past it keeps only a trace. HTTP error statuses are left out: the demo's country lookup has no API to ask.
+ */
+export function forwardConsole(context: ConsoleSource): void {
+  context.on('console', (message) => {
+    const type = message.type()
+    if (type !== 'warning' && type !== 'error') return
+    const text = message.text()
+    if (text.startsWith('Failed to load resource: the server responded with a status of')) return
+    console.log(`[browser ${type}] ${text}`)
+  })
+}
+
 // StudyRun ignores a choose/reveal/rate/next that lands within ITEM_SETTLE_MS (250,
 // client-data/src/run.ts) of the item, reveal or feedback it would act on — a stray
 // double press must not land on the next thing shown. A real learner's keystrokes are

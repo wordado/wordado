@@ -64,3 +64,40 @@ describe('deleteDatabase when OPFS fails', () => {
     expect(await tables(file, 'idb')).toEqual([])
   })
 })
+
+describe('deleteDatabase when a connection holds the file', () => {
+  it('waits for it, and says so on the console once it has waited over a second', async () => {
+    const file = unique('held')
+    const held = await new Promise<IDBDatabase>((resolve, reject) => {
+      const open = indexedDB.open(`wordado-${file}`)
+      open.onsuccess = () => resolve(open.result)
+      open.onerror = () => reject(open.error)
+    })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    try {
+      const deleting = deleteDatabase(file)
+      await new Promise((r) => setTimeout(r, 1_300))
+      expect(warn).toHaveBeenCalledTimes(1)
+      expect(warn.mock.calls[0]![0]).toMatch(new RegExp(`wordado-${file}.*blocked`))
+      held.close()
+      await deleting
+      expect(warn).toHaveBeenCalledTimes(2)
+      expect(warn.mock.calls[1]![0]).toMatch(new RegExp(`wordado-${file}.*deleted after \\d+ ms`))
+    } finally {
+      warn.mockRestore()
+      held.close()
+    }
+  })
+
+  it('says nothing when the deletion is not held up', async () => {
+    const file = unique('quiet')
+    await write(file, 'idb', 'gone')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    try {
+      await deleteDatabase(file)
+      expect(warn).not.toHaveBeenCalled()
+    } finally {
+      warn.mockRestore()
+    }
+  })
+})
