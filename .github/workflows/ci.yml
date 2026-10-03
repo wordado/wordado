@@ -103,8 +103,10 @@ jobs:
         run: pnpm --filter @wordado/web e2e
       - name: Accounts, against the Worker and Postgres
         run: pnpm --filter @wordado/web e2e:accounts
-      - name: Keep the traces of a failure
-        if: failure()
+      # A trace is kept for every failed attempt, including one a WebKit retry got past (web/e2e/projects.ts), so a
+      # passing job with a trace had a flaky test: keep those too.
+      - name: Keep the traces of a failure or a retry
+        if: ${{ failure() || hashFiles('web/test-results/**/trace.zip') != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: e2e-${{ matrix.project }}

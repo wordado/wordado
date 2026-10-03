@@ -5,6 +5,9 @@ import { selectProjects } from './e2e/projects'
 export default defineConfig({
   testDir: 'e2e',
   testMatch: 'accounts.spec.ts',
+  // Its own folder: each run empties its outputDir first, and CI runs this suite after the demo's, whose traces
+  // (a failure, or a first attempt the retry got past) must survive until they are uploaded.
+  outputDir: 'test-results/accounts',
   globalSetup: './e2e/accounts.setup.ts',
   fullyParallel: false,
   workers: 1,
