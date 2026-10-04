@@ -15,15 +15,21 @@ export function App() {
   const [notice, setNotice] = useState('')
   const [level, setLevel] = useState('')
   const [severity, setSeverity] = useState('')
+  const [saving, setSaving] = useState(false)
 
-  useEffect(() => void api.reviewer().then(setReviewer), [])
-  useEffect(() => void api.queues().then((q) => (setQueues(q), setQueue((cur) => cur ?? q[0]?.queue ?? null))), [])
+  const fail = useCallback((err: unknown) => setNotice(err instanceof Error ? err.message : String(err)), [])
+  useEffect(() => void api.reviewer().then(setReviewer).catch(fail), [fail])
+  useEffect(() => void api.queues().then((q) => (setQueues(q), setQueue((cur) => cur ?? q[0]?.queue ?? null))).catch(fail), [fail])
   const load = useCallback(async () => {
     if (!queue || reviewer == null) return
-    const r = await api.rows(queue, all)
-    setRows(r)
-    setSelected((cur) => (cur && r.some((x) => x.key === cur) ? cur : (r.find((x) => !x.decided)?.key ?? null)))
-  }, [queue, all, reviewer])
+    try {
+      const r = await api.rows(queue, all)
+      setRows(r)
+      setSelected((cur) => (cur && r.some((x) => x.key === cur) ? cur : (r.find((x) => !x.decided)?.key ?? null)))
+    } catch (err) {
+      fail(err)
+    }
+  }, [queue, all, reviewer, fail])
   useEffect(() => void load(), [load])
 
   const shown = useMemo(
@@ -31,26 +37,47 @@ export function App() {
     [rows, level, severity],
   )
   const row = shown.find((r) => r.key === selected) ?? null
-  const next = useCallback(() => setSelected(shown.find((r) => !r.decided && r.key !== selected)?.key ?? null), [shown, selected])
+  /** The next (dir 1) or previous (dir -1) undecided row from the selected one, wrapping around the list. */
+  const move = useCallback(
+    (dir: 1 | -1) => {
+      if (shown.length === 0) return setSelected(null)
+      const i = shown.findIndex((r) => r.key === selected)
+      for (let step = 1; step <= shown.length; step += 1) {
+        const r = shown[(((i + dir * step) % shown.length) + shown.length) % shown.length]!
+        if (!r.decided) return setSelected(r.key)
+      }
+      setSelected(null)
+    },
+    [shown, selected],
+  )
+  const next = useCallback(() => move(1), [move])
+  const prev = useCallback(() => move(-1), [move])
   const decide = useCallback(
     async (action: Action, cells: Record<string, string>, note: string) => {
-      if (!row) return
-      const res = await api.decide({ queue: row.queue, file: row.file, version: row.version, key: row.key, action, cells, note })
-      if (!res.ok) setNotice(res.reason === 'invalid' ? res.message : 'This file changed; reloaded.')
-      else setNotice('')
-      await load()
-      if (res.ok) next()
+      if (!row || saving) return
+      setSaving(true)
+      try {
+        const res = await api.decide({ queue: row.queue, file: row.file, version: row.version, key: row.key, action, cells, note })
+        if (!res.ok) setNotice(res.reason === 'invalid' ? res.message : 'This file changed; reloaded.')
+        else setNotice('')
+        await load()
+        if (res.ok) next()
+      } catch (err) {
+        fail(err)
+      } finally {
+        setSaving(false)
+      }
     },
-    [row, load, next],
+    [row, saving, load, next, fail],
   )
-  const keys = useMemo(() => ({ s: next, ArrowDown: next }), [next])
+  const keys = useMemo(() => (saving ? {} : { s: next, ArrowDown: next, ArrowUp: prev }), [next, prev, saving])
   useKeys(keys)
   const handleDecide = useCallback((action: Action, cells: Record<string, string>, note: string) => void decide(action, cells, note), [decide])
 
   if (reviewer === undefined) return <p>Loading…</p>
   if (reviewer === null)
     return (
-      <form className="name" onSubmit={(e) => (e.preventDefault(), void api.setReviewer(name).then(setReviewer))}>
+      <form className="name" onSubmit={(e) => (e.preventDefault(), void api.setReviewer(name).then(setReviewer).catch(fail))}>
         <label>
           Your name, as decisions record it <input value={name} onChange={(e) => setName(e.target.value)} required />
         </label>
@@ -60,10 +87,14 @@ export function App() {
   const summary = queues.find((q) => q.queue === queue)
   const decided = rows.filter((r) => r.decided).length
   const importNow = async () => {
-    const r: ImportResult = await api.importDecisions()
-    setNotice(`Imported ${r.applied}; ${r.pending} still open${r.errors.length ? `; ${r.errors.length} rejected: ${r.errors.join('; ')}` : ''}`)
-    await load()
-    setQueues(await api.queues())
+    try {
+      const r: ImportResult = await api.importDecisions()
+      setNotice(`Imported ${r.applied}; ${r.pending} still open${r.errors.length ? `; ${r.errors.length} rejected: ${r.errors.join('; ')}` : ''}`)
+      await load()
+      setQueues(await api.queues())
+    } catch (err) {
+      fail(err)
+    }
   }
   return (
     <div className="app">
@@ -106,7 +137,7 @@ export function App() {
       <main>
         <RowList rows={shown} selected={selected} onSelect={setSelected} />
         {row ? (
-          <RowViewPanel key={`${row.key}:${row.version}`} row={row} onDecide={handleDecide} onSkip={next} />
+          <RowViewPanel key={`${row.key}:${row.version}`} row={row} onDecide={handleDecide} onSkip={next} saving={saving} />
         ) : (
           <p className="muted">Nothing left to decide here.</p>
         )}

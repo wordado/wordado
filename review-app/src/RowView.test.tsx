@@ -11,7 +11,7 @@ const row: RowView = {
   context: { headword: 'hour', pos: 'noun', sense_en: 'specific time period', level: 'A2', example: 'The office hours are from nine to five.' },
   otherSenses: [{ key: 'hour-1', translation: 'час', sense_en: 'sixty minutes' }], reports: '', ai: 'flagged', severity: 'major',
   objections: [{ reviewer: 'flash', model: 'google/gemini-3.8-flash', field: 'translation', category: 'wrong-sense', severity: 'major', reason: 'hour means час', fix: 'час' }],
-  decided: null,
+  decided: null, stale: false,
 }
 
 describe('applyFixes', () => {
@@ -40,7 +40,7 @@ describe('RowViewPanel', () => {
     render(<RowViewPanel row={{ ...row, kind: 'level', queue: 'level', fields: ['level'], cells: { level: 'B1' }, objections: [] }} onDecide={() => {}} onSkip={() => {}} />)
     expect(screen.queryByRole('button', { name: /Drop/ })).toBeNull()
   })
-  it('skips with the button, and with key S', () => {
+  it('skips with the button', () => {
     const onSkip = vi.fn()
     render(<RowViewPanel row={row} onDecide={() => {}} onSkip={onSkip} />)
     fireEvent.click(screen.getByRole('button', { name: /Skip/ }))
@@ -51,6 +51,32 @@ describe('RowViewPanel', () => {
     render(<RowViewPanel row={{ ...row, objections: [] }} onDecide={onDecide} onSkip={() => {}} />)
     expect((screen.getByRole('button', { name: /Accept fix/ }) as HTMLButtonElement).disabled).toBe(true)
     fireEvent.keyDown(window, { key: '1' })
+    expect(onDecide).not.toHaveBeenCalled()
+  })
+  it('ticks only the first objection per field, and ticking the other on that field unticks the first', () => {
+    const twoOnAlternates: RowView = {
+      ...row,
+      objections: [
+        { reviewer: 'flash', model: 'google/gemini-3.8-flash', field: 'alternates', category: 'alternate-wrong', severity: 'minor', reason: 'first fix', fix: 'бряг' },
+        { reviewer: 'bggpt', model: 'bggpt-gemma-3-27b', field: 'alternates', category: 'alternate-missing', severity: 'minor', reason: 'second fix', fix: 'край' },
+      ],
+    }
+    const onDecide = vi.fn()
+    render(<RowViewPanel row={twoOnAlternates} onDecide={onDecide} onSkip={() => {}} />)
+    const boxes = screen.getAllByRole('checkbox') as HTMLInputElement[]
+    expect(boxes.map((b) => b.checked)).toEqual([true, false])
+    fireEvent.click(boxes[1]!)
+    expect(boxes.map((b) => b.checked)).toEqual([false, true])
+    fireEvent.click(screen.getByRole('button', { name: /Accept fix/ }))
+    expect(onDecide).toHaveBeenLastCalledWith('accept', { ...twoOnAlternates.cells, alternates: 'край' }, '')
+  })
+  it('disables the action buttons and ignores action keys while a save is pending', () => {
+    const onDecide = vi.fn()
+    render(<RowViewPanel row={row} onDecide={onDecide} onSkip={() => {}} saving />)
+    for (const name of [/Accept fix/, /Keep/, /Edit/, /Drop/, /Skip/]) {
+      expect((screen.getByRole('button', { name }) as HTMLButtonElement).disabled).toBe(true)
+    }
+    fireEvent.keyDown(window, { key: '2' })
     expect(onDecide).not.toHaveBeenCalled()
   })
 })

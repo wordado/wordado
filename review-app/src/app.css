@@ -42,3 +42,7 @@ main { display: grid; grid-template-columns: 22rem 1fr; gap: 1rem; height: calc(
 .decided { opacity: 0.55; }
 .muted { color: var(--muted); }
 .notice { background: var(--panel); padding: 0.4rem 0.75rem; border-radius: 0.4rem; }
+.stale-notice { background: #fff3cd; color: #664d03; padding: 0.4rem 0.75rem; border-radius: 0.4rem; margin: 0; }
+@media (prefers-color-scheme: dark) {
+  .stale-notice { background: #4a3b00; color: #ffe9a8; }
+}
