@@ -50,4 +50,14 @@ describe('saveDecision', () => {
     expect(saveDecision(dir, { queue: row.queue, file: 'review/translation-bg/none.csv', version: 'x', key: row.key, action: 'keep', cells: row.cells })).toMatchObject({ ok: false, reason: 'gone' })
     if (level) expect(saveDecision(dir, { queue: 'level', file: level.file, version: level.version, key: level.key, action: 'drop', cells: level.cells })).toMatchObject({ ok: false, reason: 'invalid' })
   })
+
+  it('refuses a crafted queue or a file that escapes its queue folder', async () => {
+    const { dir, row } = await flagged()
+    expect(
+      saveDecision(dir, { queue: '../../..', file: '../../../etc/hosts.csv', version: 'x', key: row.key, action: 'keep', cells: row.cells }),
+    ).toMatchObject({ ok: false, reason: 'invalid' })
+    expect(
+      saveDecision(dir, { queue: row.queue, file: 'review/translation-bg/../level/x.csv', version: 'x', key: row.key, action: 'keep', cells: row.cells }),
+    ).toMatchObject({ ok: false, reason: 'invalid' })
+  })
 })

@@ -6,7 +6,13 @@ export const settingsFile = (home = homedir()) => join(home, '.config', 'wordado
 
 export function readReviewer(file: string): string | null {
   if (!existsSync(file)) return null
-  const name = (JSON.parse(readFileSync(file, 'utf8')) as { reviewer?: unknown }).reviewer
+  let data: unknown
+  try {
+    data = JSON.parse(readFileSync(file, 'utf8'))
+  } catch {
+    return null
+  }
+  const name = (data as { reviewer?: unknown }).reviewer
   return typeof name === 'string' && name.trim() !== '' ? name.trim() : null
 }
 
