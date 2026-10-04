@@ -45,6 +45,7 @@ export function App() {
   )
   const keys = useMemo(() => ({ s: next, ArrowDown: next }), [next])
   useKeys(keys)
+  const handleDecide = useCallback((action: Action, cells: Record<string, string>, note: string) => void decide(action, cells, note), [decide])
 
   if (reviewer === undefined) return <p>Loading…</p>
   if (reviewer === null)
@@ -104,7 +105,11 @@ export function App() {
       )}
       <main>
         <RowList rows={shown} selected={selected} onSelect={setSelected} />
-        {row ? <RowViewPanel key={`${row.key}:${row.version}`} row={row} onDecide={(a, c, n) => void decide(a, c, n)} /> : <p className="muted">Nothing left to decide here.</p>}
+        {row ? (
+          <RowViewPanel key={`${row.key}:${row.version}`} row={row} onDecide={handleDecide} onSkip={next} />
+        ) : (
+          <p className="muted">Nothing left to decide here.</p>
+        )}
       </main>
     </div>
   )

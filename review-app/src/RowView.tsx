@@ -16,8 +16,12 @@ export function applyFixes(cells: Record<string, string>, objections: readonly O
   return out
 }
 
-export function RowViewPanel(props: { row: RowView; onDecide: (action: Action, cells: Record<string, string>, note: string) => void }) {
-  const { row, onDecide } = props
+export function RowViewPanel(props: {
+  row: RowView
+  onDecide: (action: Action, cells: Record<string, string>, note: string) => void
+  onSkip: () => void
+}) {
+  const { row, onDecide, onSkip } = props
   const [ticked, setTicked] = useState<ReadonlySet<number>>(() => new Set(row.objections.map((_, i) => i)))
   const [editing, setEditing] = useState(false)
   const [cells, setCells] = useState<Record<string, string>>(row.cells)
@@ -42,7 +46,11 @@ export function RowViewPanel(props: { row: RowView; onDecide: (action: Action, c
     if (canDrop) onDecide('drop', row.cells, note)
   }, [canDrop, onDecide, row.cells, note])
 
-  const keys = useMemo(() => ({ '1': accept, '2': keep, '3': edit, ...(canDrop ? { '4': drop } : {}) }), [accept, keep, edit, drop, canDrop])
+  const hasObjections = row.objections.length > 0
+  const keys = useMemo(
+    () => ({ ...(hasObjections ? { '1': accept } : {}), '2': keep, '3': edit, ...(canDrop ? { '4': drop } : {}) }),
+    [accept, keep, edit, drop, canDrop, hasObjections],
+  )
   useKeys(keys)
   const c = row.context
   return (
@@ -89,6 +97,7 @@ export function RowViewPanel(props: { row: RowView; onDecide: (action: Action, c
         <button onClick={keep}>Keep (2)</button>
         <button onClick={edit}>{editing ? 'Save edit (3)' : 'Edit (3)'}</button>
         {canDrop && <button onClick={drop}>Drop (4)</button>}
+        <button onClick={onSkip}>Skip (S)</button>
       </div>
     </article>
   )
