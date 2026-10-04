@@ -182,13 +182,15 @@ reviewed, so the items stay open, `queues` keeps writing them out, and a later r
 them under *ships unreviewed*, and `release.json` counts them per queue. Missing clips, clips marked `redo` and
 decisions made since the draft still block.
 
-Never list a translation queue for a public release: learners are marked right or wrong against the translation
-and its alternates. Remove a queue from the list to gate it again; its open items then block the next release.
+Learners are marked right or wrong against the translation and its alternates, so a translation queue is listed
+here only under the beta's review tiers (spec §5.4): every row AI-reviewed, and every row the AI review flags checked
+by a native speaker before the release. Remove a queue from the list once its native-speaker review is complete, to
+gate it again; its open items then block the next release.
 
-The content repository ships A1–C1 (`"levels"` lists all five since 2026-10-02, with `max_lemmas` at 10,000 and
-`max_forms` at 25,000, enough to fill the B2 and C1 targets). For now it also lists every translation queue in
-`accept_unreviewed`, so translations ship before native-speaker review; review them, then take the queues out of the
-list again.
+The content repository ships A1–C1: `"levels"` lists all five since 2026-10-02, and `max_lemmas` is 11,000 and
+`max_forms` 25,000 since v5, enough to fill every level's target. It also lists every translation queue in
+`accept_unreviewed`. Up to v5 (2026-10-04) nothing has been AI-reviewed either; the review tiers apply from the
+release that follows the AI review's pilot, before the beta opens.
 
 ## A second review
 
