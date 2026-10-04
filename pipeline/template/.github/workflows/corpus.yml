@@ -15,7 +15,7 @@ on:
         description: What to run
         type: choice
         required: true
-        options: [draft, audio, triage, release, credits]
+        options: [draft, audio, ai-review, triage, release, credits]
       confirm:
         description: For a release, type release
         type: string
@@ -73,6 +73,7 @@ jobs:
             # run online rather than --offline: an --offline draft would fail on the reshaped titles.
             draft) $CORPUS draft "$content" ;;
             audio) $CORPUS draft "$content" && $CORPUS audio "$content" --batch "$(date -u +%Y%m%dT%H%M)" ;;
+            ai-review) $CORPUS draft "$content" --offline && $CORPUS ai-review "$content" ;;
             triage) $CORPUS draft "$content" && $CORPUS triage "$content" ;;
           esac
           $CORPUS queues "$content"
