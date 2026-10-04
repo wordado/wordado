@@ -1,5 +1,6 @@
 import type { AddressInfo } from 'node:net'
 import { mkdtempSync, writeFileSync } from 'node:fs'
+import { request } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -81,5 +82,28 @@ describe('the review server', () => {
     const s = await start()
     expect((await s.json('/api/decision', { method: 'POST', body: '{not json' })).status).toBe(400)
     expect((await s.json('/api/reviewer', { method: 'POST', body: '{not json' })).status).toBe(400)
+  })
+
+  it('refuses a request whose Host header is not this server, with 403', async () => {
+    // fetch() forbids setting a custom Host header (it always sends the URL's own), so this needs node:http directly.
+    const s = await start()
+    const port = Number(new URL(s.base).port)
+    const status = await new Promise<number | undefined>((resolvePromise, reject) => {
+      const req = request({ hostname: '127.0.0.1', port, path: '/api/queues', method: 'GET', headers: { host: 'evil.example' } }, (res) => {
+        res.resume()
+        res.on('end', () => resolvePromise(res.statusCode))
+      })
+      req.on('error', reject)
+      req.end()
+    })
+    expect(status).toBe(403)
+  })
+
+  it('refuses a POST without content-type: application/json, with 415, but still accepts a normal one', async () => {
+    const s = await start()
+    const plain = await fetch(`${s.base}/api/reviewer`, { method: 'POST', headers: { 'content-type': 'text/plain' }, body: '{"reviewer":"tester"}' })
+    expect(plain.status).toBe(415)
+    const ok = await s.json('/api/reviewer', { method: 'POST', body: JSON.stringify({ reviewer: 'tester' }) })
+    expect(ok.status).toBe(200)
   })
 })
