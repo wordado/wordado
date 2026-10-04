@@ -39,3 +39,23 @@ export interface QueueSummary {
   reported: number
   decided: number
 }
+
+export type Action = 'accept' | 'keep' | 'edit' | 'drop'
+
+export interface DecisionRequest {
+  queue: string
+  file: string
+  version: string
+  key: string
+  action: Action
+  cells?: Record<string, string>
+  note?: string
+}
+
+export type DecisionResult = { ok: true; version: string } | { ok: false; reason: 'changed' | 'gone' | 'invalid'; message: string }
+
+export interface ImportResult {
+  applied: number
+  pending: number
+  errors: string[]
+}
