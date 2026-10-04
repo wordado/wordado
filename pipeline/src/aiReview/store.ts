@@ -39,8 +39,9 @@ export class AiReviewStore {
 
   append(queue: string, verdicts: readonly AiVerdict[]): void {
     if (verdicts.length === 0) return
+    const lines = this.lines(queue)
     appendJsonl(contentPaths(this.dir).aiReview(queue), verdicts)
-    this.lines(queue).push(...verdicts)
+    lines.push(...verdicts)
   }
 
   current(queue: string, key: string, reviewer: string, content: string): AiVerdict | undefined {
