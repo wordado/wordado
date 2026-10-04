@@ -30,6 +30,8 @@ export interface RowView {
   objections: ObjectionView[]
   /** a verdict already written in the CSV, not yet imported */
   decided: { verdict: string; note: string } | null
+  /** true when this row's file predates the draft: its frozen proposal no longer matches the draft's current one, so it can never get a matching AI verdict until `corpus queues` writes it out again */
+  stale: boolean
 }
 
 export interface QueueSummary {
