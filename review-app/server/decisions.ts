@@ -4,11 +4,14 @@ import { readConfig } from '@wordado/pipeline/config'
 import { csvRecords, formatCsv } from '@wordado/pipeline/csv'
 import { importQueues, queueSpecs } from '@wordado/pipeline/queues'
 import { fileVersion } from './model'
-import type { DecisionRequest, DecisionResult, ImportResult } from './types'
+import type { Action, DecisionRequest, DecisionResult, ImportResult } from './types'
+
+const ACTIONS: readonly Action[] = ['accept', 'keep', 'edit', 'drop']
 
 export function saveDecision(dir: string, req: DecisionRequest): DecisionResult {
   const spec = queueSpecs(readConfig(dir).l1s).get(req.queue)
   if (!spec) return { ok: false, reason: 'invalid', message: `no queue ${req.queue}` }
+  if (!ACTIONS.includes(req.action)) return { ok: false, reason: 'invalid', message: `${String(req.action)} is not accept, keep, edit or drop` }
   const folder = resolve(dir, 'review', req.queue)
   const path = resolve(dir, req.file)
   const rel = relative(folder, path)
@@ -24,7 +27,8 @@ export function saveDecision(dir: string, req: DecisionRequest): DecisionResult 
   if (!row) return { ok: false, reason: 'gone', message: `${req.key} is no longer in ${req.file}` }
   for (const col of spec.columns) if (req.cells && col in req.cells) row[col] = req.cells[col] ?? ''
   row['verdict'] = req.action === 'drop' ? 'drop' : 'ok'
-  row['note'] = req.note ?? row['note'] ?? ''
+  // An empty note from the UI means "no note given", not "clear the existing one".
+  if (req.note !== undefined && req.note !== '') row['note'] = req.note
   const next = formatCsv([header, ...rows.map((r) => header.map((c) => r[c] ?? ''))])
   writeFileSync(path, next)
   return { ok: true, version: fileVersion(next) }

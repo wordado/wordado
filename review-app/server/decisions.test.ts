@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 import { runImport, saveDecision } from './decisions'
 import { reviewFixture } from './fixture'
 import { listRows } from './model'
+import type { Action } from './types'
 
 async function flagged() {
   const dir = await reviewFixture()
@@ -59,5 +60,30 @@ describe('saveDecision', () => {
     expect(
       saveDecision(dir, { queue: row.queue, file: 'review/translation-bg/../level/x.csv', version: 'x', key: row.key, action: 'keep', cells: row.cells }),
     ).toMatchObject({ ok: false, reason: 'invalid' })
+  })
+
+  it('keeps the existing note when a later decision sends none, and only overwrites it when one is given', async () => {
+    const { dir, row } = await flagged()
+    const first = saveDecision(dir, { queue: row.queue, file: row.file, version: row.version, key: row.key, action: 'keep', cells: row.cells, note: 'first note' })
+    expect(first.ok).toBe(true)
+    expect(rowIn(dir, row.file, row.key)['note']).toBe('first note')
+    const second = saveDecision(dir, { queue: row.queue, file: row.file, version: (first as { ok: true; version: string }).version, key: row.key, action: 'keep', cells: row.cells, note: '' })
+    expect(second.ok).toBe(true)
+    expect(rowIn(dir, row.file, row.key)['note']).toBe('first note')
+  })
+
+  it('answers invalid for an action that is not accept, keep, edit or drop', async () => {
+    const { dir, row } = await flagged()
+    const res = saveDecision(dir, { queue: row.queue, file: row.file, version: row.version, key: row.key, action: 'nope' as Action, cells: row.cells })
+    expect(res).toMatchObject({ ok: false, reason: 'invalid' })
+    expect(rowIn(dir, row.file, row.key)['verdict']).toBe('') // untouched
+  })
+
+  it('answers changed for a decision against a file whose content changed from an external edit, not only through another decision', async () => {
+    const { dir, row } = await flagged()
+    const text = readFileSync(join(dir, row.file), 'utf8')
+    writeFileSync(join(dir, row.file), `${text}\n`) // a reviewer's text editor added a trailing newline
+    const res = saveDecision(dir, { queue: row.queue, file: row.file, version: row.version, key: row.key, action: 'keep', cells: row.cells })
+    expect(res).toMatchObject({ ok: false, reason: 'changed' })
   })
 })
