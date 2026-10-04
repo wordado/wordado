@@ -9,11 +9,22 @@ import type { DecisionRequest } from './types'
 const TYPES: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.woff2': 'font/woff2' }
 const STATUS = { changed: 409, gone: 410, invalid: 400 } as const
 
+/** Thrown by body() for a request the client got wrong (bad JSON); the route catch-all answers 400 for this, 500 for anything else. */
+class BadBody extends Error {}
+
 async function body(req: IncomingMessage): Promise<unknown> {
   const chunks: Buffer[] = []
   for await (const c of req) chunks.push(c as Buffer)
   const text = Buffer.concat(chunks).toString('utf8')
-  return text === '' ? {} : (JSON.parse(text) as unknown)
+  if (text === '') return {}
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(text)
+  } catch {
+    throw new BadBody('the request body is not valid JSON')
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) throw new BadBody('the request body is not valid JSON')
+  return parsed
 }
 
 /** The file to serve for a request path: the one inside staticDir it names, or staticDir/index.html when it names none, escapes staticDir, or the path cannot be decoded. */
@@ -66,6 +77,7 @@ export function createReviewServer(opts: { dir: string; staticDir: string | null
         res.writeHead(200, { 'content-type': TYPES[extname(file)] ?? 'application/octet-stream' })
         res.end(readFileSync(file))
       } catch (err) {
+        if (err instanceof BadBody) return send(res, 400, { message: err.message })
         send(res, 500, { message: err instanceof Error ? err.message : String(err) })
       }
     })()

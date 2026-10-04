@@ -76,4 +76,10 @@ describe('the review server', () => {
     expect(res.status).toBe(200)
     expect(await res.text()).toBe('<html>index</html>')
   })
+
+  it('answers 400, not 500, for a malformed JSON body on a POST route', async () => {
+    const s = await start()
+    expect((await s.json('/api/decision', { method: 'POST', body: '{not json' })).status).toBe(400)
+    expect((await s.json('/api/reviewer', { method: 'POST', body: '{not json' })).status).toBe(400)
+  })
 })
