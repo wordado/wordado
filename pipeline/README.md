@@ -221,6 +221,11 @@ changes is reviewed again. `required` (default: the default reviewer) lists whos
 flagged when `flag_when` of them object. A `local` reviewer is any OpenAI-compatible server, for example llama.cpp's
 `llama-server -m <model.gguf> --port 8091 --jinja`; start it first.
 
+The Actions workflow's `ai-review` action runs `draft --offline` first, so it only rebuilds from the caches already
+on disk: after an import that reshapes units (a drop or a level fix), run the `draft` action before `ai-review`, or
+it reviews stale proposals. The workflow also runs only the configured default reviewer; other reviewers listed in
+`required` must be run locally, one at a time, with `--reviewer <name>`.
+
 `status` lists, per AI-reviewed queue, the rows not yet AI-reviewed and the flagged rows awaiting a decision;
 `release` refuses while either is open, even for queues in `accept_unreviewed`. Decide the flagged rows in the review
 app (`review-app/README.md`), then `corpus import`.

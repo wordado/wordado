@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest'
 import { writeJson } from '../files'
 import { readConfig } from '../config'
 import { contentPaths } from '../content'
-import { runDraft } from '../draft'
+import { Decisions, QUEUES } from '../decisions'
+import { readDraft, runDraft } from '../draft'
 import { AnswerDoesNotFit, type Llm, type LlmRequest } from '../llm'
 import { makeContent, sampleLlm } from '../testing/fixture'
 import { runAiReview } from './run'
@@ -74,6 +75,18 @@ describe('runAiReview', () => {
     expect(out[0]!.asked).toBeGreaterThan(4)
     expect(r.calls.some((n) => n > 4)).toBe(true)
     expect(r.calls.filter((n) => n <= 4).length).toBeGreaterThan(0)
+  })
+
+  it('asks again a row whose learner note changed after a run (its content hash moves)', async () => {
+    const dir = await content()
+    const r = fakeReviewer()
+    const draft = readDraft(dir)
+    const key = draft.live.find((k) => !k.startsWith('bank-'))!
+    const first = await runAiReview({ dir, reviewer: 'flash', queue: 'translation-bg', llm: r.llm, concurrency: 2, now: () => 'n1' })
+    expect(first[0]!.asked).toBeGreaterThan(0)
+    Decisions.read(dir).append(QUEUES.translation('bg'), [{ key, at: 'n2', verdict: 'reopen', by: 'reports', note: 'learners reported: odd word' }])
+    const second = await runAiReview({ dir, reviewer: 'flash', queue: 'translation-bg', llm: r.llm, concurrency: 2, now: () => 'n3' })
+    expect(second[0]!.asked).toBe(1)
   })
 
   it('says plainly when pipeline.json has no ai_review block', async () => {

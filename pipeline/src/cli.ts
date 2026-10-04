@@ -285,9 +285,16 @@ function summarise(lines: readonly string[]): string[] {
   return [...counts].map(([kind, n]) => `  ${n} × ${kind}`)
 }
 
+/** An aiGate line (gate.ts): the same row already counts once in the human-review pending list, so the headline counts it separately instead of twice. */
+const isAiGateLine = (line: string): boolean => /: (not yet AI-reviewed|flagged by AI review, awaiting a decision) \(/.test(line)
+
 function status(dir: string): void {
   const plan = planRelease(dir, { draft: false, now: now() })
-  console.log(`corpus v${plan.corpusVersion}: ${plan.problems.length} problems, ${plan.pending.length} items awaiting review`)
+  const aiPending = plan.pending.filter(isAiGateLine)
+  const reviewPending = plan.pending.filter((p) => !isAiGateLine(p))
+  console.log(
+    `corpus v${plan.corpusVersion}: ${plan.problems.length} problems, ${reviewPending.length} items awaiting review, ${aiPending.length} awaiting AI review`,
+  )
   for (const p of plan.problems) console.log(`  ${p}`)
   for (const s of summarise(plan.pending)) console.log(s)
   if (plan.unreviewed.length > 0) {
