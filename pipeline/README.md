@@ -201,6 +201,30 @@ and the note in the **reopened** column. The release waits for them again, unles
 `accept_unreviewed`. Audio is not reopened; mark a clip `redo` instead. A corrected field is listed in the next
 version's `fixes.json`.
 
+## AI review
+
+The beta's review tiers (spec §5.4, and `docs/superpowers/specs/2026-10-04-ai-review-and-review-app-design.md`): a
+model from another family than the one that wrote the corpus checks every open row of the queues in
+`ai_review.queues`, and a native speaker decides the rows it flags.
+
+    "ai_review": {
+      "queues": ["translation-bg", "title-bg", "level"],
+      "reviewers": { "flash": { "provider": "openrouter", "model": "google/gemini-3.8-flash" },
+                     "bggpt": { "provider": "local", "url": "http://127.0.0.1:8091", "model": "bggpt" } },
+      "default": "flash",
+      "flag_when": 1
+    }
+
+`corpus ai-review "$PWD/content" [--queue <q>] [--reviewer <name>]` reviews every open row the reviewer has not judged
+in its current form, and appends the verdicts to `ai-review/<queue>.jsonl`. A row whose proposal or learner note
+changes is reviewed again. `required` (default: the default reviewer) lists whose verdicts every row needs; a row is
+flagged when `flag_when` of them object. A `local` reviewer is any OpenAI-compatible server, for example llama.cpp's
+`llama-server -m <model.gguf> --port 8091 --jinja`; start it first.
+
+`status` lists, per AI-reviewed queue, the rows not yet AI-reviewed and the flagged rows awaiting a decision;
+`release` refuses while either is open, even for queues in `accept_unreviewed`. Decide the flagged rows in the review
+app (`review-app/README.md`), then `corpus import`.
+
 ## Themes and units
 
 `themes.json` is the curated theme list, each theme named and described in English and every L1. The *themes*
