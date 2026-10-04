@@ -3,10 +3,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { canonicalJson, checkPackSuccession, loadCorpus, validatePack, type Pack } from '@wordado/core'
 import { describe, expect, it } from 'vitest'
+import { AiReviewStore, rowContent } from './aiReview/store'
 import { sha256Hex } from './checksum'
 import { Decisions, QUEUES } from './decisions'
 import { readDraft, runDraft } from './draft'
-import { pendingItems } from './queues'
+import { levelSampled, pendingItems } from './queues'
 import { writeJson } from './files'
 import { publishProblems } from './publishable'
 import { adoptRelease, planRelease, writeRelease } from './release'
@@ -213,5 +214,40 @@ describe('planRelease and writeRelease', () => {
       sources: [{ source: 'Invented test list', attribution: 'Frequencies from the Invented Corpus (CC BY 4.0).' }],
     })
     expect(publishProblems(reader(o))).toEqual([])
+  })
+
+  it('blocks a release on AI review, even for a queue in accept_unreviewed, and passes once it is done', async () => {
+    const dir = await reviewed() // drafted, audio, everything approved
+    const config = JSON.parse(readFileSync(join(dir, 'pipeline.json'), 'utf8'))
+    // Reopen a level row the level queue actually covers (flagged or sampled), so it is open again.
+    const draft = readDraft(dir)
+    const decisions = Decisions.read(dir)
+    const key = draft.entries.find((e) => draft.live.includes(e.entry_id) && (e.level_flagged || levelSampled(e.entry_id)))!.entry_id
+    decisions.append(QUEUES.level, [{ key, at: '2026-10-03T00:00:00Z', verdict: 'reopen', by: 'reports', note: '1 report: too easy' }])
+    writeJson(join(dir, 'pipeline.json'), {
+      ...config,
+      accept_unreviewed: ['level'],
+      ai_review: { queues: ['level'], reviewers: { flash: { provider: 'openrouter', model: 'f' } }, default: 'flash', flag_when: 1 },
+    })
+    const blocked = planRelease(dir, { draft: false, now: NOW })
+    expect(blocked.pending.some((l) => l.endsWith('not yet AI-reviewed (level)'))).toBe(true)
+
+    // Review it: an ok verdict matching the row's current content clears the gate.
+    const item = pendingItems(readDraft(dir), decisions, config.l1s).get(QUEUES.level)!.find((i) => i.key === key)!
+    const store = AiReviewStore.read(dir)
+    store.append(QUEUES.level, [
+      {
+        key,
+        reviewer: 'flash',
+        model: 'f',
+        prompt_version: 1,
+        content: rowContent(QUEUES.level, item.proposed, item.context['reopened'] ?? ''),
+        verdict: 'ok',
+        objections: [],
+        at: NOW,
+      },
+    ])
+    const cleared = planRelease(dir, { draft: false, now: NOW })
+    expect(cleared.pending.some((l) => l.endsWith('not yet AI-reviewed (level)'))).toBe(false)
   })
 })
