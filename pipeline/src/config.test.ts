@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { configProblems, themeProblems } from './config'
+import { aiReviewRequired, configProblems, themeProblems, type AiReviewConfig } from './config'
+import { contentPaths } from './content'
 
 export const validConfig = {
   l1s: ['bg'],
@@ -73,5 +74,52 @@ describe('themeProblems', () => {
       'themes[1].theme_id: food appears twice',
       'themes[1].name.bg: required',
     ])
+  })
+})
+
+describe('ai_review', () => {
+  const ai = {
+    queues: ['translation-bg', 'title-bg', 'level'],
+    reviewers: { flash: { provider: 'openrouter', model: 'google/gemini-3.8-flash' }, bggpt: { provider: 'local', url: 'http://127.0.0.1:8091', model: 'bggpt' } },
+    default: 'flash',
+    flag_when: 1,
+  }
+  it('accepts a valid block, and required defaults to the default reviewer', () => {
+    expect(configProblems({ ...validConfig, l1s: ['bg'], ai_review: ai })).toEqual([])
+    expect(aiReviewRequired(ai as AiReviewConfig)).toEqual(['flash'])
+    expect(aiReviewRequired({ ...ai, required: ['flash', 'bggpt'] } as AiReviewConfig)).toEqual(['flash', 'bggpt'])
+  })
+  it('names every problem', () => {
+    expect(
+      configProblems({
+        ...validConfig,
+        l1s: ['bg'],
+        ai_review: {
+          queues: ['english', 'translation-de'],
+          reviewers: { x: { provider: 'cloud', model: '' }, y: { provider: 'local', model: 'm' } },
+          default: 'z',
+          required: ['x', 'q'],
+          flag_when: 3,
+        },
+      }),
+    ).toEqual([
+      'ai_review.queues[0]: english is not a queue AI review covers (translation-<l1>, title-<l1>, level)',
+      'ai_review.queues[1]: translation-de is not a queue of this content (l1s)',
+      'ai_review.reviewers.x.provider: must be openrouter or local',
+      'ai_review.reviewers.x.model: must be a non-empty string',
+      'ai_review.reviewers.y.url: a local reviewer needs an http(s) URL',
+      'ai_review.default: z is not a reviewer',
+      'ai_review.required[1]: q is not a reviewer',
+      'ai_review.flag_when: must be a whole number from 1 to 2 (the required reviewers)',
+    ])
+  })
+  it('is optional', () => {
+    expect(configProblems({ ...validConfig })).toEqual([])
+  })
+})
+
+describe('contentPaths', () => {
+  it('keeps AI-review verdicts under ai-review/', () => {
+    expect(contentPaths('/c').aiReview('translation-bg')).toBe('/c/ai-review/translation-bg.jsonl')
   })
 })
