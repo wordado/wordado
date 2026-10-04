@@ -1,5 +1,6 @@
 node_modules/
 dist/
+review-app/dist/
 test-results/
 playwright-report/
 .vitest/
