@@ -32,6 +32,20 @@ describe('GET /api/me', () => {
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual({ email: 'admin@example.com', name: 'Coordinator', role: 'admin', languages: ['bg', 'de', 'es', 'en'] })
   })
+  it('creates the first admin once when their first requests race', async () => {
+    const results = await Promise.all([me('admin@example.com'), me('admin@example.com'), me('admin@example.com')])
+    expect(results.map((r) => r.status)).toEqual([200, 200, 200])
+    const n = await env.DB.prepare('SELECT COUNT(*) AS n FROM reviewers').first<{ n: number }>()
+    expect(n?.n).toBe(1)
+  })
+  it('answers 403, not 500, and warns when ADMIN_EMAIL is unset', async () => {
+    const logs: string[] = []
+    const { ADMIN_EMAIL: _, ...rest } = env
+    const noAdmin = rest as Env
+    const res = await createApp(testDeps(noAdmin, { log: (l) => logs.push(l) })).request('/api/me', { headers: { 'cf-access-jwt-assertion': await keys.token('admin@example.com', env) } })
+    expect(res.status).toBe(403)
+    expect(logs.some((l) => l.includes('ADMIN_EMAIL'))).toBe(true)
+  })
   it('knows an invited reviewer whatever the email case, and refuses a disabled one', async () => {
     await insertReviewer(env.DB, { email: 'anna@example.com', name: 'Anna', languages: ['de'], role: 'reviewer', invitedAt: '2026-10-05T00:00:00Z', inviteSentAt: null, disabledAt: null })
     const ok = await me('Anna@Example.com')

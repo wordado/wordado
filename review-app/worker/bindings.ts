@@ -23,7 +23,8 @@ export interface Env {
   readonly ACCESS_AUD: string
   /** Tests and the hosted e2e only: a JWKS JSON used instead of the team's keys. check-config refuses it in production. */
   readonly ACCESS_JWKS?: string
-  readonly ADMIN_EMAIL: string
+  /** A secret; when unset no first admin is created (the Worker logs a warning). */
+  readonly ADMIN_EMAIL?: string
   readonly CONTENT_REPO: string
   readonly GITHUB_APP_ID: string
   readonly GITHUB_INSTALLATION_ID: string

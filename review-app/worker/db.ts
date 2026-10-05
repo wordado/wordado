@@ -31,6 +31,16 @@ export async function insertReviewer(db: D1Database, r: ReviewerRow): Promise<vo
     .bind(r.email.toLowerCase(), r.name, JSON.stringify(r.languages), r.role, r.invitedAt, r.inviteSentAt, r.disabledAt)
     .run()
 }
+/** Inserts the reviewer unless the address is already there (two first requests racing); the row as stored. */
+export async function insertReviewerIfAbsent(db: D1Database, r: ReviewerRow): Promise<ReviewerRow> {
+  await db
+    .prepare('INSERT INTO reviewers (email, name, languages, role, invited_at, invite_sent_at, disabled_at) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (email) DO NOTHING')
+    .bind(r.email.toLowerCase(), r.name, JSON.stringify(r.languages), r.role, r.invitedAt, r.inviteSentAt, r.disabledAt)
+    .run()
+  const stored = await getReviewer(db, r.email)
+  if (!stored) throw new Error(`reviewer ${r.email} vanished after insert`)
+  return stored
+}
 export async function updateReviewer(
   db: D1Database,
   email: string,
@@ -115,7 +125,7 @@ export async function moveDecisions(db: D1Database, from: number, to: number): P
   await db.prepare('UPDATE decisions SET assignment = ? WHERE assignment = ? AND submission IS NULL').bind(to, from).run()
 }
 export async function markSubmitted(db: D1Database, assignmentId: number, keys: readonly string[], submission: number): Promise<void> {
-  await db.batch(keys.map((k) => db.prepare('UPDATE decisions SET submission = ? WHERE assignment = ? AND key = ?').bind(submission, assignmentId, k)))
+  await db.batch(keys.map((k) => db.prepare('UPDATE decisions SET submission = ? WHERE assignment = ? AND key = ? AND submission IS NULL').bind(submission, assignmentId, k)))
 }
 export async function unsubmit(db: D1Database, submission: number): Promise<void> {
   await db.prepare('UPDATE decisions SET submission = NULL WHERE submission = ?').bind(submission).run()

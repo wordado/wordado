@@ -1,7 +1,7 @@
 import { Hono, type Context } from 'hono'
 import { accessKeys, verifyAccessJwt } from './access'
 import type { Env } from './bindings'
-import { getReviewer, insertReviewer, type ReviewerRow } from './db'
+import { getReviewer, insertReviewerIfAbsent, type ReviewerRow } from './db'
 import { adminRoutes } from './routes/admin'
 import { decisionRoutes } from './routes/decision'
 import { meRoutes } from './routes/me'
@@ -37,8 +37,15 @@ export const apiError = (c: Context, status: 400 | 401 | 403 | 404 | 409 | 410 |
 /** Paths that are not called by the browser and so carry no Origin or Access token (GitHub's webhook). */
 const MACHINE_PATHS = new Set(['/api/github/webhook'])
 
+let warnedNoAdmin = false
+
 export function createApp(deps: Deps): Hono<AppEnv> {
   const app = new Hono<AppEnv>()
+  const adminEmail = (deps.env.ADMIN_EMAIL ?? '').trim().toLowerCase()
+  if (adminEmail === '' && !warnedNoAdmin) {
+    warnedNoAdmin = true
+    deps.log('ADMIN_EMAIL is not set: no first admin can be created')
+  }
   app.onError((err, c) => {
     if (err instanceof BadBody) return apiError(c, 400, err.message)
     deps.log(`error: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`)
@@ -60,9 +67,8 @@ export function createApp(deps: Deps): Hono<AppEnv> {
     if (!who) return apiError(c, 401, 'sign in again')
     let me = await getReviewer(deps.env.DB, who.email)
     // The first admin (spec §5) is created on their first request.
-    if (!me && who.email === deps.env.ADMIN_EMAIL.toLowerCase()) {
-      me = { email: who.email, name: 'Coordinator', languages: ['bg', 'de', 'es', 'en'], role: 'admin', invitedAt: deps.now().toISOString(), inviteSentAt: null, disabledAt: null }
-      await insertReviewer(deps.env.DB, me)
+    if (!me && adminEmail !== '' && who.email === adminEmail) {
+      me = await insertReviewerIfAbsent(deps.env.DB, { email: who.email, name: 'Coordinator', languages: ['bg', 'de', 'es', 'en'], role: 'admin', invitedAt: deps.now().toISOString(), inviteSentAt: null, disabledAt: null })
     }
     if (!me || me.disabledAt) return apiError(c, 403, 'This address has no invitation. Ask the coordinator for one.')
     c.set('me', me)
