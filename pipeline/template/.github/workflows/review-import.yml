@@ -1,0 +1,95 @@
+name: Review import
+
+# A pull request the hosted review app opened (spec 2026-10-05 §7.3): run corpus import on its branch, as the
+# local app's Import button does, and push the result onto the same pull request.
+on:
+  pull_request:
+    types: [opened]
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  CORPUS: pnpm --dir ${{ github.workspace }}/wordado --filter @wordado/pipeline corpus
+
+jobs:
+  import:
+    name: import
+    if: startsWith(github.head_ref, 'review/') && github.event.pull_request.user.login == vars.REVIEW_APP_BOT && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.head_ref }}
+          path: content
+      - uses: actions/checkout@v5
+        with:
+          repository: wordado/wordado
+          ref: ${{ vars.PIPELINE_REF }}
+          path: wordado
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: wordado/package.json
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: wordado/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+        working-directory: wordado
+      - name: Import the reviewer's decisions
+        id: import
+        run: |
+          content="$GITHUB_WORKSPACE/content"
+          by=$(git -C "$content" log -1 --format=%an)
+          echo "by=$by" >> "$GITHUB_OUTPUT"
+          # The queue is read from the review commit's subject ("review: <queue>, N decisions by <name>"),
+          # not from the branch name: a reviewer's slug (from their name) can itself contain hyphens
+          # (review/level-ivan-petrov-20261005-1), so stripping the branch's last three "-" parts is not
+          # reliable — it would take "level-ivan" as the queue instead of "level".
+          subject=$(git -C "$content" log -1 --format=%s)
+          case "$subject" in
+            "review: "*) queue=${subject#review: }; queue=${queue%%,*} ;;
+            *) echo "::error::review commit subject does not start with 'review: ': $subject"; exit 1 ;;
+          esac
+          if [[ ! "$queue" =~ ^(translation|title)-[a-z]{2}$ && "$queue" != level ]]; then
+            echo "::error::unexpected queue '$queue' from commit subject: $subject"
+            exit 1
+          fi
+          echo "queue=$queue" >> "$GITHUB_OUTPUT"
+          $CORPUS draft "$content" --offline
+          # Rows import cannot apply stay in the review file and exit 1; report them rather than fail.
+          set +e
+          $CORPUS import "$content" --by "$by" > "$RUNNER_TEMP/import.log" 2>&1
+          echo "status=$?" >> "$GITHUB_OUTPUT"
+          set -e
+          cat "$RUNNER_TEMP/import.log"
+      - name: Push the import onto the pull request
+        working-directory: content
+        env:
+          BY: ${{ steps.import.outputs.by }}
+          QUEUE: ${{ steps.import.outputs.queue }}
+          HEAD: ${{ github.head_ref }}
+        run: |
+          git add -A review decisions
+          if git diff --cached --quiet; then echo "Nothing imported."; exit 0; fi
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            commit -m "import: $QUEUE by $BY"
+          git push origin "HEAD:$HEAD"
+      - name: Comment on rows import could not apply
+        if: steps.import.outputs.status != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          {
+            echo "Some rows could not be imported; they stay in the review file:"
+            echo
+            echo '```'
+            cat "$RUNNER_TEMP/import.log"
+            echo '```'
+          } > "$RUNNER_TEMP/comment.md"
+          gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/comment.md"

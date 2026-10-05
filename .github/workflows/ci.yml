@@ -36,8 +36,8 @@ jobs:
       - run: pnpm lint
       - name: Lint the workflows
         run: docker run --rm -v "$PWD:/repo" --workdir /repo rhysd/actionlint:1.7.7 -color
-      - name: Lint the content repository's workflow
-        run: docker run --rm -v "$PWD:/repo" --workdir /repo rhysd/actionlint:1.7.7 -color pipeline/template/.github/workflows/corpus.yml
+      - name: Lint the content repository's workflows
+        run: docker run --rm -v "$PWD:/repo" --workdir /repo rhysd/actionlint:1.7.7 -color pipeline/template/.github/workflows/corpus.yml pipeline/template/.github/workflows/review-snapshot.yml pipeline/template/.github/workflows/review-import.yml
       - name: Build the web app
         run: pnpm --filter @wordado/web build
       - name: Dry-run both deployments
