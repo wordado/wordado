@@ -2,6 +2,8 @@
 
 Date: 2026-10-05. Status: draft for the product owner's review.
 Builds on: `2026-10-04-ai-review-and-review-app-design.md` (the local review app, §5; "Remote reviewers later", §8).
+Revised 2026-10-05 after the implementation's final review: §7.2 defers listing branches left without a pull
+request; §5.1 notes that a closed assignment can be reassigned.
 
 ## 1. Purpose
 
@@ -136,6 +138,9 @@ submissions (id INTEGER PRIMARY KEY, assignment INTEGER NOT NULL REFERENCES assi
   assignment closes and a new one opens on the same files.
 - **Close an assignment:** frees its files; its unsubmitted decisions are kept on the closed assignment (visible to
   the admin, never submitted) so a later reassignment can still take them over.
+  The admin page's closed assignments therefore offer *Reassign* too; reassigning a closed assignment opens a new
+  one on the same files (refused while another open assignment holds any of them) and moves or discards its
+  unsubmitted decisions as above.
 - **Change languages:** removing a language closes that reviewer's open assignments in it, as above.
 
 ## 6. API
@@ -196,7 +201,8 @@ columns), the verdict (`drop` or `ok`) and the note (an empty note keeps the exi
 
 If any GitHub call fails before the pull request exists, nothing is recorded: the decisions stay unsubmitted, the
 reviewer sees *could not reach GitHub, try again*, and a later Submit uses a new branch name (`<n>` + 1). A branch
-left behind without a pull request is harmless; the admin page lists such branches for deletion.
+left behind without a pull request is harmless. Listing such branches on the admin page for deletion is deferred
+(not built in the first version); until then they are deleted by hand in wordado-content.
 
 ### 7.3 Import, in wordado-content
 

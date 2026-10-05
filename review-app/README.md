@@ -135,14 +135,28 @@ account needed).
 
 ### How a reviewer works
 
-A reviewer gets an invite email, signs in with the one-time code it contains, and lands on *My assignments*.
-Deciding a row uses the same keys as the local app (see "Each session" above). **Submit** opens (or updates) a
-pull request in the content repository and emails the coordinator (`ADMIN_EMAIL`) a link to it; `corpus import`
-then records the decisions once that pull request is merged.
+A reviewer gets an invite email from the app, and signs in at `https://review.wordado.com` with a one-time code
+that Cloudflare Access sends in a separate email when they ask for it; they land on *My assignments*. Deciding a
+row uses the same keys as the local app (see "Each session" above). Each **Submit** opens a new pull request in
+the content repository and emails every active admin a link to it. When that pull request is opened, the
+content repository's `review-import.yml` runs `corpus import` on its branch and pushes the result onto the same
+pull request as an extra commit, so merging it lands both the decisions and the import.
 
 ### Changing reviewers
 
-- **Disable** a reviewer to revoke their access without losing their decisions (spec §5).
-- **Reassign** moves a reviewer's open rows to someone else (spec §5).
-- **Close** ends an assignment once its rows are all decided (spec §5).
-- **Split** divides a large assignment between two reviewers (spec §5.1).
+- **Disable** a reviewer to revoke their access; their open assignments close and their unsubmitted decisions
+  are kept (spec §5.1).
+- **Reassign** moves an assignment, open or closed, to another reviewer with the language; its unsubmitted
+  decisions move with it or are discarded (spec §5.1).
+- **Close** ends an assignment and frees its files; its unsubmitted decisions are kept for a later reassignment
+  (spec §5.1).
+- **Split** divides a queue's free files between two or more reviewers (spec §5).
+
+### Recovering work
+
+Closing an assignment, disabling its reviewer or removing their language closes the assignment but keeps its
+unsubmitted decisions; so does a pull request closed without merging, whose decisions become unsubmitted again.
+To hand that work to someone, open *Admin → Assignments*, find the assignment under *Closed*, choose
+**Reassign…**, pick the reviewer and *Move their decisions*. Reassigning to the same reviewer (after enabling them
+again) works too. It is refused while another open assignment already holds any of its files; close or reassign
+that one first.
