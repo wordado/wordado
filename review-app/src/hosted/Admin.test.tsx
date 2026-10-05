@@ -72,6 +72,19 @@ describe('Admin', () => {
     await waitFor(() => expect(split).toHaveBeenLastCalledWith(expect.objectContaining({ confirm: true, proposal: expect.any(Array) })))
   })
 
+  it('reassigns a closed assignment so its unsubmitted decisions are not stranded', async () => {
+    const closedOne = { id: 7, reviewer: anna.email, reviewerName: 'Anna', queue: 'translation-de', files: '*' as const, flaggedOnly: false, createdAt: 't', closedAt: '2026-10-05T11:00:00Z', progress: { inScope: 13, decided: 3, changed: 0, submitted: 0, merged: 0, remaining: 10 } }
+    vi.spyOn(hostedApi.admin, 'assignments').mockResolvedValue([closedOne])
+    vi.spyOn(hostedApi.admin, 'reviewers').mockResolvedValue([anna, { ...anna, email: 'hans@example.com', name: 'Hans' }])
+    const reassign = vi.spyOn(hostedApi.admin, 'reassign').mockResolvedValue({ ...closedOne, id: 8, reviewer: 'hans@example.com', reviewerName: 'Hans', closedAt: null })
+    render(<Admin />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Reassign…' }))
+    expect(screen.queryByRole('button', { name: 'Close' })).toBeNull()
+    fireEvent.change(screen.getByLabelText('Reassign to'), { target: { value: 'hans@example.com' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Reassign' }))
+    await waitFor(() => expect(reassign).toHaveBeenCalledWith(7, 'hans@example.com', 'move'))
+  })
+
   it('disables a reviewer after confirming', async () => {
     const patch = vi.spyOn(hostedApi.admin, 'patchReviewer').mockResolvedValue({ ...anna, disabledAt: 't' })
     vi.spyOn(window, 'confirm').mockReturnValue(true)

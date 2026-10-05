@@ -119,6 +119,23 @@ describe('admin assignments', () => {
     expect((await admin('POST', `/api/admin/assignments/${again.id}/reassign`, { to: 'hans@example.com', decisions: 'move' })).status).toBe(400)
   })
 
+  it('reassigns a closed assignment, carrying its unsubmitted decisions over (spec §5.1)', async () => {
+    const a = (await (await admin('POST', '/api/admin/assignments', { reviewer: 'ivan@example.com', queue: 'translation-bg', files: '*', flaggedOnly: true })).json()) as AssignmentView
+    const row = ((await (await as('ivan@example.com', 'GET', `/api/rows?assignment=${a.id}`)).json()) as RowsResponse).rows[0]!
+    await as('ivan@example.com', 'POST', '/api/decision', { assignment: a.id, queue: row.queue, file: row.file, key: row.key, rowHash: row.rowHash, action: 'keep' })
+    await admin('POST', `/api/admin/assignments/${a.id}/close`, {})
+    const res = await admin('POST', `/api/admin/assignments/${a.id}/reassign`, { to: 'eve@example.com', decisions: 'move' })
+    expect(res.status).toBe(200)
+    const moved = (await res.json()) as AssignmentView
+    expect(moved.reviewer).toBe('eve@example.com')
+    expect(moved.closedAt).toBeNull()
+    expect(moved.progress!.decided).toBe(1)
+    const old = (await env.DB.prepare('SELECT closed_at FROM assignments WHERE id = ?').bind(a.id).first<{ closed_at: string }>())!
+    expect(old.closed_at).not.toBeNull()
+    // The files are now held by the new assignment, so a second reassignment of the closed one clashes.
+    expect((await admin('POST', `/api/admin/assignments/${a.id}/reassign`, { to: 'ivan@example.com', decisions: 'move' })).status).toBe(409)
+  })
+
   it('400s reassigning with a decisions value other than move or discard', async () => {
     const a = (await (await admin('POST', '/api/admin/assignments', { reviewer: 'ivan@example.com', queue: 'translation-bg', files: '*', flaggedOnly: true })).json()) as AssignmentView
     expect((await admin('POST', `/api/admin/assignments/${a.id}/reassign`, { to: 'eve@example.com', decisions: 'zap' })).status).toBe(400)

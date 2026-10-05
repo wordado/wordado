@@ -60,7 +60,7 @@ export function AdminAssignments(props: Props) {
       {open.length > 0 && (
         <ul className="settings-rows">
           {open.map((a) => (
-            <OpenAssignment key={a.id} assignment={a} reviewers={props.reviewers} act={props.act} />
+            <AssignmentItem key={a.id} assignment={a} reviewers={props.reviewers} act={props.act} />
           ))}
         </ul>
       )}
@@ -69,17 +69,7 @@ export function AdminAssignments(props: Props) {
           <h3>Closed</h3>
           <ul className="settings-rows">
             {closed.map((a) => (
-              <li key={a.id} className="settings-row">
-                <span className="settings-row-text">
-                  <span className="settings-row-title">
-                    {a.reviewerName} · {a.queue}
-                  </span>
-                  <span className="note">{scopeOf(a)}</span>
-                  <span className="note">
-                    {progressOf(a)} · closed {dateOf(a.closedAt ?? '')}
-                  </span>
-                </span>
-              </li>
+              <AssignmentItem key={a.id} assignment={a} reviewers={props.reviewers} act={props.act} />
             ))}
           </ul>
         </>
@@ -304,10 +294,16 @@ function SplitForm(props: Props) {
   )
 }
 
-function OpenAssignment(props: { assignment: AssignmentView; reviewers: readonly ReviewerView[] | undefined; act: Act }) {
+/**
+ * One assignment, open or closed. A closed one can still be reassigned (spec §5.1): closing, disabling its
+ * reviewer or removing their language keep its unsubmitted decisions for whoever takes it over, its own
+ * reviewer included.
+ */
+function AssignmentItem(props: { assignment: AssignmentView; reviewers: readonly ReviewerView[] | undefined; act: Act }) {
   const { assignment: a, act } = props
+  const isClosed = Boolean(a.closedAt)
   const [reassigning, setReassigning] = useState(false)
-  const others = reviewersFor(props.reviewers, a.queue).filter((r) => r.email !== a.reviewer)
+  const others = reviewersFor(props.reviewers, a.queue).filter((r) => isClosed || r.email !== a.reviewer)
   const [to, setTo] = useState('')
   const [decisions, setDecisions] = useState<'move' | 'discard'>('move')
 
@@ -324,7 +320,7 @@ function OpenAssignment(props: { assignment: AssignmentView; reviewers: readonly
           {a.reviewerName} · {a.queue}
         </span>
         <span className="note">{scopeOf(a)}</span>
-        <span className="note">{progressOf(a)}</span>
+        <span className="note">{isClosed ? `${progressOf(a)} · closed ${dateOf(a.closedAt ?? '')}` : progressOf(a)}</span>
         {reassigning && (
           <span className="row-edit">
             <select aria-label="Reassign to" value={to} onChange={(e) => setTo(e.target.value)}>
@@ -352,7 +348,7 @@ function OpenAssignment(props: { assignment: AssignmentView; reviewers: readonly
         )}
       </span>
       <span className="row-actions">
-        <button onClick={close}>Close</button>
+        {!isClosed && <button onClick={close}>Close</button>}
         {!reassigning && <button onClick={() => setReassigning(true)}>Reassign…</button>}
       </span>
     </li>

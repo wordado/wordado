@@ -70,11 +70,13 @@ export function adminRoutes(app: Hono<AppEnv>, deps: Deps): void {
   app.post('/api/admin/assignments/:id/reassign', async (c) => {
     const body = await jsonBody<{ to?: unknown; decisions?: unknown }>(c)
     const a = await getAssignment(deps.env.DB, Number(c.req.param('id')))
-    if (!a || a.closedAt !== null) return apiError(c, 404, 'no such open assignment')
+    // A closed assignment can be reassigned too (spec §5.1): closing, disabling a reviewer and removing a
+    // language keep its unsubmitted decisions so that a later reassignment can take them over.
+    if (!a) return apiError(c, 404, 'no such assignment')
     if (body.decisions !== 'move' && body.decisions !== 'discard') return apiError(c, 400, 'decisions must be move or discard')
     const made = await createAssignment(deps, { reviewer: String(body.to), queue: a.queue, files: a.files, flaggedOnly: a.flaggedOnly }, a.id)
     if ('status' in made) return apiError(c, made.status, made.message)
-    await closeAssignment(deps.env.DB, a.id, deps.now().toISOString())
+    if (a.closedAt === null) await closeAssignment(deps.env.DB, a.id, deps.now().toISOString())
     if (body.decisions === 'move') await moveDecisions(deps.env.DB, a.id, made.id)
     else await deleteDecisions(deps.env.DB, a.id, (await listDecisions(deps.env.DB, a.id)).filter((d) => d.submission === null).map((d) => d.key))
     return c.json(await view(made.id))
