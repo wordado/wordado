@@ -115,7 +115,12 @@ submissions (id INTEGER PRIMARY KEY, assignment INTEGER NOT NULL REFERENCES assi
 - **Languages:** a reviewer can be assigned a queue only in one of their languages. `en` covers `level` and
   `english`.
 - **No overlap:** creating an assignment fails when another open assignment on the same queue shares a file; `"*"`
-  (which every flagged-only assignment uses) shares every file. So a row has at most one reviewer.
+  shares every file. So a row has at most one reviewer. A flagged-only assignment takes a file list too, so the
+  flagged rows of one queue can be shared out as well.
+- **Splitting a queue:** the admin page's *Split* picks a queue, *all rows* or *flagged rows only*, and two or more
+  reviewers with that language, and creates one assignment per reviewer, dealing out the queue's files that no
+  open assignment holds so each gets about the same number of rows (whole files, never a file cut in two). The
+  coordinator can adjust the proposed split before confirming.
 - **The first admin** is the email in the Worker variable `ADMIN_EMAIL` (the product owner), created on first
   request if missing. Other admins can be added on the admin page.
 
@@ -229,7 +234,7 @@ the link to copy), and a submission is still recorded.
   submitted*. After Submit: the pull request link and any left-out rows. No name prompt: the name comes from the
   invite.
 - **Admin:** reviewers (invite with email, name, languages; disable or enable; resend invite), assignments (reviewer → queue
-  in their languages → files or *flagged rows only*; the overlap error in words), progress, reassign or close an assignment (§5.1), submissions with links,
+  in their languages → files or *flagged rows only*; the overlap error in words), *Split* (§5), progress, reassign or close an assignment (§5.1), submissions with links,
   snapshot status (built when, from which commit).
 - The new screens use the web app's Settings look (panel sections, segmented controls, settings rows).
 - The local and hosted modes are one build: `api.ts` asks `GET /api/me`; a 404 means local mode.
@@ -280,6 +285,8 @@ the link to copy), and a submission is still recorded.
   (records blobs, trees, commits, pull requests) and a fake Resend; reviewer and admin flows end to end at the API
   level, including 403 outside an assignment, a submit with a changed row, a disabled reviewer's 403, and a
   reassignment that moves and one that discards unsubmitted decisions.
+- **Split:** files dealt out by row count (or flagged count) across reviewers, files already assigned skipped,
+  fewer files than reviewers refused in words.
 - **E2E:** Playwright against `wrangler dev` with the fixture snapshot and test JWTs: a reviewer decides three
   rows with the keys and submits (the fake GitHub receives one commit); an admin invites a reviewer and assigns
   files; an overlapping assignment is refused. Runs in CI with the local review app's e2e.
