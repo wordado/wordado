@@ -212,13 +212,15 @@ model from another family than the one that wrote the corpus checks every open r
       "reviewers": { "flash": { "provider": "openrouter", "model": "google/gemini-3.8-flash" },
                      "bggpt": { "provider": "local", "url": "http://127.0.0.1:8091", "model": "bggpt" } },
       "default": "flash",
-      "flag_when": 1
+      "flag_when": 1,
+      "flag_severity": "major"
     }
 
 `corpus ai-review "$PWD/content" [--queue <q>] [--reviewer <name>]` reviews every open row the reviewer has not judged
 in its current form, and appends the verdicts to `ai-review/<queue>.jsonl`. A row whose proposal or learner note
 changes is reviewed again. `required` (default: the default reviewer) lists whose verdicts every row needs; a row is
-flagged when `flag_when` of them object. A `local` reviewer is any OpenAI-compatible server, for example llama.cpp's
+flagged when `flag_when` of them object. `flag_severity` sets what counts as an objection: `minor` (the default) counts any
+objection, `major` only major ones, so minor objections stay visible on the row without blocking a release. A `local` reviewer is any OpenAI-compatible server, for example llama.cpp's
 `llama-server -m <model.gguf> --port 8091 --jinja`; start it first.
 
 The Actions workflow's `ai-review` action runs `draft --offline` first, so it only rebuilds from the caches already

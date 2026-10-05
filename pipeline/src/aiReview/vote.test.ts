@@ -33,6 +33,14 @@ describe('aiState', () => {
     expect(aiState(store(verdict('flash', 'major'), verdict('pro', 'ok'), verdict('gpt', 'ok')), three, 'level', 'a-1', 'C').status).toBe('passed')
     expect(aiState(store(verdict('flash', 'major'), verdict('pro', 'minor'), verdict('gpt', 'ok')), three, 'level', 'a-1', 'C').status).toBe('flagged')
   })
+  it('with flag_severity major, counts only major verdicts', () => {
+    const majorOnly = cfg({ flag_severity: 'major' })
+    expect(aiState(store(verdict('flash', 'minor')), majorOnly, 'level', 'a-1', 'C').status).toBe('passed')
+    expect(aiState(store(verdict('flash', 'major')), majorOnly, 'level', 'a-1', 'C').status).toBe('flagged')
+    const three = cfg({ required: ['flash', 'pro', 'gpt'], flag_when: 2, flag_severity: 'major' })
+    expect(aiState(store(verdict('flash', 'major'), verdict('pro', 'minor'), verdict('gpt', 'ok')), three, 'level', 'a-1', 'C').status).toBe('passed')
+    expect(aiState(store(verdict('flash', 'major'), verdict('pro', 'major'), verdict('gpt', 'ok')), three, 'level', 'a-1', 'C').status).toBe('flagged')
+  })
   it('ignores a reviewer that is not required, but shows it', () => {
     const s = store(verdict('flash', 'ok'), verdict('bggpt', 'major'))
     expect(aiState(s, cfg(), 'level', 'a-1', 'C').status).toBe('passed')
