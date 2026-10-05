@@ -46,11 +46,25 @@ export async function verifyAccessJwt(
 }
 
 let cached: { url: string; at: number; keys: readonly JsonWebKey[] } | null = null
+let warnedProdJwks = false
 
-/** The keys Access signs with: ACCESS_JWKS when set (tests, e2e), else the team's certs, cached for an hour. */
+/**
+ * The keys Access signs with: ACCESS_JWKS when set (tests, e2e), else the team's certs, cached for an
+ * hour. In production (APP_ORIGIN is the review app's real origin) ACCESS_JWKS is ignored even if it
+ * were ever set as a Worker secret: scripts/check-config.ts only inspects wrangler.jsonc and would
+ * never see a secret, so honoring it here would let anyone holding that key's private half sign in as
+ * any reviewer, including the admin.
+ */
 export function accessKeys(deps: Deps): () => Promise<readonly JsonWebKey[]> {
   return async () => {
-    if (deps.env.ACCESS_JWKS) return (JSON.parse(deps.env.ACCESS_JWKS) as { keys: JsonWebKey[] }).keys
+    const isProd = deps.env.APP_ORIGIN === 'https://review.wordado.com'
+    if (deps.env.ACCESS_JWKS) {
+      if (!isProd) return (JSON.parse(deps.env.ACCESS_JWKS) as { keys: JsonWebKey[] }).keys
+      if (!warnedProdJwks) {
+        warnedProdJwks = true
+        deps.log('ACCESS_JWKS is set in production and ignored')
+      }
+    }
     const url = `https://${deps.env.ACCESS_TEAM_DOMAIN}/cdn-cgi/access/certs`
     const now = deps.now().getTime()
     if (cached && cached.url === url && now - cached.at < 3_600_000) return cached.keys
