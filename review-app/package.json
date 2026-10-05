@@ -7,6 +7,7 @@
     "build": "vite build",
     "test": "vitest run",
     "e2e": "playwright test",
+    "snapshot": "tsx server/snapshotMain.ts",
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
