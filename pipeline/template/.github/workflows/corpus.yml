@@ -82,20 +82,31 @@ jobs:
           esac
           $CORPUS queues "$content"
           $CORPUS status "$content"
+      # Also after a failed step: draft and ai-review save each batch as it comes back (the LLM cache, the
+      # ai-review verdicts), and a rerun skips what is saved. Opening the pull request anyway keeps what a run
+      # paid for when it stops early (a spending limit, a provider outage); merge it, then run the action again.
       - name: Open a pull request with the results
+        if: ${{ !cancelled() }}
         working-directory: content
         env:
           GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
         run: |
           git add -A
           if git diff --cached --quiet; then echo "Nothing changed."; exit 0; fi
           branch="corpus/$ACTION-$GITHUB_RUN_ID"
+          title="corpus: $ACTION ($GITHUB_RUN_ID)"
+          note="New review files are under review/."
+          if [ "$JOB_STATUS" != success ]; then
+            title="$title, stopped early"
+            note="The run stopped early (see its log): this holds what it saved before stopping. Merge it, then run $ACTION again; it continues from here."
+          fi
           git switch -c "$branch"
           git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
-            commit -m "corpus: $ACTION (run $GITHUB_RUN_ID)"
+            commit -m "$title"
           git push origin "$branch"
-          gh pr create --base main --head "$branch" --title "corpus: $ACTION ($GITHUB_RUN_ID)" \
-            --body "Results of the Corpus workflow's $ACTION run $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID. New review files are under review/."
+          gh pr create --base main --head "$branch" --title "$title" \
+            --body "Results of the Corpus workflow's $ACTION run $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID. $note"
 
   release:
     name: release
