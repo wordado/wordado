@@ -6,7 +6,7 @@ import { closeAssignment, deleteDecisions, getAssignment, getReviewer, insertAss
 import { currentSnapshot } from '../snapshotStore'
 import { assignmentView, NO_SNAPSHOT, reviewerNames } from './reviewer'
 
-type Created = { id: number } | { status: 400 | 409; message: string }
+type Created = { id: number } | { status: 400 | 409 | 503; message: string }
 
 /** Shared by create, reassign and split (spec §5): validates the reviewer's language, the files against the
  * snapshot, and that no other open assignment already covers any of them. `ignore` lets reassign and split leave
@@ -21,7 +21,8 @@ export async function createAssignment(
   const lang = languageOf(String(input.queue))
   if (!lang || !r.languages.includes(lang)) return { status: 400, message: `${r.name} does not review ${String(input.queue)}` }
   const snap = await currentSnapshot(deps)
-  const q = snap?.queue(input.queue)
+  if (!snap) return { status: 503, message: NO_SNAPSHOT }
+  const q = snap.queue(input.queue)
   if (!q) return { status: 400, message: `${input.queue} has no open review files` }
   const files = input.files === '*' ? '*' : Array.isArray(input.files) ? input.files.map(String) : null
   if (files === null || (files !== '*' && files.length === 0)) return { status: 400, message: 'pick files, or all files' }

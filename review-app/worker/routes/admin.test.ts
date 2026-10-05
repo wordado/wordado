@@ -8,6 +8,7 @@ import { resetSnapshotCache } from '../snapshotStore'
 import { testKeys } from '../test/jwt'
 import { resetDb, startPlatform, testDeps } from '../test/platform'
 import { putSnapshot } from '../test/snapshot'
+import { NO_SNAPSHOT } from './reviewer'
 
 let env: Env
 let dispose: () => Promise<void>
@@ -73,6 +74,14 @@ describe('admin assignments', () => {
   it('refuses files that are not in the snapshot', async () => {
     const res = await admin('POST', '/api/admin/assignments', { reviewer: 'ivan@example.com', queue: 'translation-bg', files: ['review/translation-bg/nope.csv'], flaggedOnly: false })
     expect(res.status).toBe(400)
+  })
+
+  it('is 503 creating an assignment while no snapshot exists at all (distinct from a queue with no open files)', async () => {
+    await env.SNAPSHOTS.put('current.json', JSON.stringify({ id: 'missing', built: 't', commit: 'c' }))
+    resetSnapshotCache()
+    const res = await admin('POST', '/api/admin/assignments', { reviewer: 'ivan@example.com', queue: 'translation-bg', files: '*', flaggedOnly: true })
+    expect(res.status).toBe(503)
+    expect(((await res.json()) as { message: string }).message).toBe(NO_SNAPSHOT)
   })
 
   it('closes an assignment, which frees its files', async () => {
