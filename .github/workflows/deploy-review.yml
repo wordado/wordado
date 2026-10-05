@@ -1,0 +1,53 @@
+name: Deploy the review app
+
+# Called by CI on main when review-app/ or what it builds on changed (spec 2026-10-05 §14): D1 migrations
+# first (forward-only), then the Worker with the UI. Its secrets live in Cloudflare, not here.
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy (review)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment:
+      name: production-review
+      url: https://review.wordado.com
+    concurrency:
+      group: deploy-review
+      cancel-in-progress: false
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      WRANGLER_SEND_METRICS: 'false'
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Refuse a production config that is not filled in
+        working-directory: review-app
+        run: pnpm exec tsx scripts/check-config.ts wrangler.jsonc
+      - name: Build the UI
+        run: pnpm --filter @wordado/review-app build
+      - name: Migrate D1 (forward-only, before the Worker)
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: review-app
+          packageManager: pnpm
+          command: d1 migrations apply DB --remote --env production
+      - name: Deploy the Worker and the UI
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: review-app
+          packageManager: pnpm
+          command: deploy --env production

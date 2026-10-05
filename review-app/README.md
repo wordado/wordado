@@ -89,3 +89,60 @@ learner report sent back. Each verdict belongs to exactly what the reviewer saw:
 note. A row is asked again only when that changes (a new or re-proposed word after a draft, a new report) or when the
 reviewer's instructions change. Rows a human has decided are never sent. A change only to a row's surroundings (its
 example sentence, the word's other senses) does not send it again.
+
+## Hosted
+
+A hosted copy of this app (spec 2026-10-05) runs at `https://review.wordado.com` as a Cloudflare Worker, behind
+Cloudflare Access. Coordinators invite reviewers by email; each reviewer gets their own assignments and submits them
+as a pull request against the content repository, with no local checkout and no CLI.
+
+### One-time setup (operator)
+
+1. `wrangler d1 create wordado-review`; put its id into `env.production.d1_databases[0].database_id` in
+   `review-app/wrangler.jsonc`.
+2. `wrangler r2 bucket create wordado-review` (no public access, no custom domain).
+3. Cloudflare Zero Trust → Access → Applications → Self-hosted, domain `review.wordado.com`; login method
+   *One-time PIN*; policy *Allow*, include *Everyone* (the Worker decides who is invited); a second application
+   for the path `review.wordado.com/api/github/webhook` with a *Bypass* policy. Copy the application's AUD tag
+   to `ACCESS_AUD` and the team domain (`<team>.cloudflareaccess.com`) to `ACCESS_TEAM_DOMAIN`.
+4. GitHub App (organisation `wordado` → Settings → Developer settings → GitHub Apps → New): no homepage
+   needed; webhook URL `https://review.wordado.com/api/github/webhook` with a secret; permissions *Contents:
+   read and write*, *Pull requests: read and write*; event *Pull request*; install it on `wordado-content`
+   only. Put the app id and installation id in `GITHUB_APP_ID` / `GITHUB_INSTALLATION_ID`. Generate a private
+   key and convert it to PKCS#8 before it is ever pasted anywhere: `openssl pkcs8 -topk8 -nocrypt -in app.pem
+   -out app-pkcs8.pem`.
+5. Worker secrets, set in the Cloudflare dashboard (Workers → wordado-review → Settings → Variables and
+   secrets) — never pasted into chat or committed: `GITHUB_APP_PRIVATE_KEY` (the PKCS#8 file's content),
+   `GITHUB_WEBHOOK_SECRET`, `RESEND_API_KEY` (a new sending-only Resend key for `wordado.com`), `ADMIN_EMAIL`.
+6. GitHub environment `production-review` in `wordado/wordado` with a required reviewer; repository variable
+   `REVIEW_DEPLOY_ENABLED=true` once steps 1–5 are done.
+7. In wordado-content: an R2 API token limited to the `wordado-review` bucket (read and write), set as
+   secrets `R2_REVIEW_ACCESS_KEY_ID` / `R2_REVIEW_SECRET_ACCESS_KEY` in that repository's settings; variable
+   `REVIEW_BUCKET=wordado-review`; variable `REVIEW_APP_BOT` set to the app's bot login (`<app-slug>[bot]`);
+   and the two workflows from `pipeline/template/.github/workflows/review-snapshot.yml` and
+   `review-import.yml`.
+
+`scripts/check-config.ts` refuses to deploy while any of the above is still a placeholder; it runs in
+`deploy-review.yml` before the Worker is built.
+
+### Running it locally
+
+    pnpm --filter @wordado/review-app snapshot "$PWD/content" /tmp/snap
+    pnpm --filter @wordado/review-app e2e:hosted
+
+The second command runs the full hosted flow against fakes (no real Cloudflare Access, GitHub App or Resend
+account needed).
+
+### How a reviewer works
+
+A reviewer gets an invite email, signs in with the one-time code it contains, and lands on *My assignments*.
+Deciding a row uses the same keys as the local app (see "Each session" above). **Submit** opens (or updates) a
+pull request in the content repository and emails the coordinator (`ADMIN_EMAIL`) a link to it; `corpus import`
+then records the decisions once that pull request is merged.
+
+### Changing reviewers
+
+- **Disable** a reviewer to revoke their access without losing their decisions (spec §5).
+- **Reassign** moves a reviewer's open rows to someone else (spec §5).
+- **Close** ends an assignment once its rows are all decided (spec §5).
+- **Split** divides a large assignment between two reviewers (spec §5.1).
