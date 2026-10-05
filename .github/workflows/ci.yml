@@ -42,6 +42,8 @@ jobs:
         run: pnpm --filter @wordado/web build
       - name: Dry-run both deployments
         run: pnpm --filter @wordado/server deploy:check
+      - name: Dry-run the review app's deployment
+        run: pnpm --filter @wordado/review-app deploy:check
 
   test:
     name: Suites and the Worker smoke run
@@ -71,6 +73,8 @@ jobs:
       - run: pnpm test
       - name: The review app, end to end
         run: pnpm --filter @wordado/review-app e2e
+      - name: The hosted review app, end to end
+        run: pnpm --filter @wordado/review-app e2e:hosted
       - run: pnpm --filter @wordado/server smoke
 
   e2e:
