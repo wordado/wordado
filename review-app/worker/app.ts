@@ -2,6 +2,7 @@ import { Hono, type Context } from 'hono'
 import { accessKeys, verifyAccessJwt } from './access'
 import type { Env } from './bindings'
 import { getReviewer, insertReviewer, type ReviewerRow } from './db'
+import { decisionRoutes } from './routes/decision'
 import { meRoutes } from './routes/me'
 import { reviewerRoutes } from './routes/reviewer'
 
@@ -66,6 +67,7 @@ export function createApp(deps: Deps): Hono<AppEnv> {
   })
   meRoutes(app)
   reviewerRoutes(app, deps)
+  decisionRoutes(app, deps)
   // Routes added by later tasks are registered before this catch-all; keep the catch-all last.
   app.all('/api/*', (c) => apiError(c, 404, 'no such API'))
   return app
