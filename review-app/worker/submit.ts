@@ -41,6 +41,8 @@ export async function submit(deps: Deps, me: ReviewerRow, a: AssignmentRow, gh: 
     }
     if (ok.length === 0) continue
     const out = applyDecisions(csv, rules, ok.map((d) => ({ key: d.key, action: d.action, cells: d.cells, note: d.note })))
+    for (const key of out.missing) leftOut.push({ key, reason: 'gone' })
+    if (out.applied.length === 0) continue
     files.push({ path: file, content: out.text })
     sent.push(...ok.filter((d) => out.applied.includes(d.key)))
   }

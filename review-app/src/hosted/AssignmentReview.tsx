@@ -60,7 +60,7 @@ export function AssignmentReview(props: { assignment: AssignmentView }) {
             pull request {sent.pr}
           </a>{' '}
           ({sent.count} decisions)
-          {sent.leftOut.length > 0 && <> · Left out because they changed: {sent.leftOut.map((l) => l.key).join(', ')}</>}
+          {sent.leftOut.length > 0 && <> · Left out because they changed or are gone: {sent.leftOut.map((l) => `${l.key} (${l.reason})`).join(', ')}</>}
         </p>
       )}
       {changed.length > 0 && <p className="stale-notice">Changed since you decided it: {changed.join(', ')}</p>}

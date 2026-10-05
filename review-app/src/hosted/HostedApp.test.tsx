@@ -39,6 +39,19 @@ describe('HostedApp', () => {
     expect(await screen.findByRole('link', { name: /pull request 12/i })).toBeTruthy()
   })
 
+  it('gives each left-out row of a submit its own reason', async () => {
+    vi.spyOn(hostedApi, 'assignments').mockResolvedValue([assignment])
+    const decision = { action: 'keep' as const, cells: {}, note: '', submission: null, changed: false }
+    vi.spyOn(hostedApi, 'rows').mockResolvedValue({ rows: [row('bank-2', { decided: { verdict: 'ok', note: '' }, decision })], discarded: [] })
+    vi.spyOn(hostedApi, 'submit').mockResolvedValue({ pr: 5, url: 'https://github.com/x/pull/5', count: 1, leftOut: [{ key: 'bank-3', reason: 'changed' }, { key: 'bank-4', reason: 'gone' }] })
+    render(<HostedApp me={me} />)
+    fireEvent.click(await screen.findByRole('button', { name: /translation-de/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /Submit 1 decision/ }))
+    const status = await screen.findByRole('status')
+    await waitFor(() => expect(status.textContent).toMatch(/bank-3 \(changed\)/))
+    expect(status.textContent).toMatch(/bank-4 \(gone\)/)
+  })
+
   it('says when a decided row changed and when decisions were discarded', async () => {
     vi.spyOn(hostedApi, 'assignments').mockResolvedValue([assignment])
     vi.spyOn(hostedApi, 'rows').mockResolvedValue({ rows: [row('bank-2', { decision: { action: 'keep', cells: {}, note: '', submission: null, changed: true } })], discarded: ['gone-1'] })
