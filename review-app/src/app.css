@@ -46,3 +46,32 @@ main { display: grid; grid-template-columns: 22rem 1fr; gap: 1rem; height: calc(
 @media (prefers-color-scheme: dark) {
   .stale-notice { background: #4a3b00; color: #ffe9a8; }
 }
+
+/* Hosted screens: the web app's Settings look (web/src/styles.css), on the review app's tokens.
+   The local screen keeps its look above. */
+.hosted-bar { padding: 0.75rem 1rem 0; margin-bottom: 0; }
+.hosted-bar-actions { display: flex; gap: 0.5rem; margin-left: auto; }
+.hosted > .app main { height: calc(100vh - 8rem); }
+.hosted > .notice, .hosted > .stale-notice { margin: 0.75rem 1rem 0; }
+
+.panel { background: var(--panel); border: 1px solid var(--border); border-radius: 1rem; padding: 1rem; margin: 1rem; max-width: 40rem; }
+.panel.centered { margin: 4rem auto; text-align: center; }
+.panel-title { margin: 0 0 0.5rem; font-size: 1.125rem; }
+
+.settings-rows { margin: 0.5rem 0 0; padding: 0; list-style: none; overflow: hidden; background: var(--bg); border: 1px solid var(--border); border-radius: 1.125rem; }
+.settings-rows li + li { border-top: 1px solid var(--border); }
+.settings-row { display: flex; align-items: center; gap: 0.75rem; min-height: 3.75rem; padding: 0.5rem 0.75rem; color: var(--fg); text-decoration: none; }
+button.settings-row { width: 100%; font: inherit; text-align: start; background: none; border: 0; cursor: pointer; }
+.settings-row:focus-visible { outline-offset: -3px; border-radius: 1.125rem; }
+.settings-row:hover { background: var(--panel); }
+.settings-row-text { display: flex; flex-direction: column; flex-grow: 1; min-width: 0; }
+.settings-row-title { font-weight: 600; }
+.settings-row-text .note { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+
+.segmented { display: inline-flex; border: 1px solid var(--border); border-radius: 0.5rem; overflow: hidden; }
+.segmented button { font: inherit; color: var(--fg); background: var(--bg); border: 0; padding: 0.4rem 0.9rem; cursor: pointer; }
+.segmented button + button { border-left: 1px solid var(--border); }
+.segmented button[aria-pressed='true'] { background: var(--accent); color: #fff; }
+
+.field { display: flex; flex-direction: column; gap: 0.75rem; }
+.note { color: var(--muted); font-size: 0.875rem; }
