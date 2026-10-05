@@ -7,6 +7,7 @@ import { decisionRoutes } from './routes/decision'
 import { meRoutes } from './routes/me'
 import { reviewerRoutes } from './routes/reviewer'
 import { reviewersRoutes } from './routes/reviewers'
+import { submitRoutes } from './routes/submit'
 
 export interface Deps {
   readonly env: Env
@@ -72,6 +73,8 @@ export function createApp(deps: Deps): Hono<AppEnv> {
   decisionRoutes(app, deps)
   adminRoutes(app, deps)
   reviewersRoutes(app, deps)
+  // After adminRoutes, so /api/admin/submissions is behind the admin-only middleware.
+  submitRoutes(app, deps)
   // Routes added by later tasks are registered before this catch-all; keep the catch-all last.
   app.all('/api/*', (c) => apiError(c, 404, 'no such API'))
   return app
