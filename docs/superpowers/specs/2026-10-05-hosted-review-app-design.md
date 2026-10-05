@@ -69,12 +69,13 @@ current.json                                  { "id": "<id>", "built": "<iso>", 
 
 - `<id>` is the content commit's short sha plus the build time (`3f2a91c-20261005T1012Z`).
 - `index.json`: for every queue with open files, its `columns` and `verdicts` (from `queueSpecs`, so the Worker
-  never reads `pipeline.json`), its language (`bg`, `de`, `es`, or `en` for `level` and `english`), and per file:
+  never reads `pipeline.json`), its language (`bg`, `de`, `es`, or `en` for `level`), and per file:
   path, row count, flagged count, reported count.
 - A file's JSON: `{ "file": "review/translation-de/2026-10-03-01.csv", "version": "<sha256 of the CSV>", "rows":
   RowView[] }`, where each `RowView` (local `types.ts`) gains `rowHash`: `rowContent(queue, proposed, reopened)`,
-  the same hash the AI-review store keys on. Rows in queues without AI review (`english`, `audio`) are included with
-  `ai: 'unreviewed'` and no objections; `audio` is left out (§12).
+  the same hash the AI-review store keys on. The snapshot covers the queues the review app can show: `translation-<l1>`,
+  `title-<l1>` and `level`, whether or not AI review covers them (rows it does not cover read `ai: 'unreviewed'`).
+  `english` and `audio` stay on files (§12).
 - The snapshot holds rows only: never the draft, the decisions log, or the corpus as a whole.
 
 ### 4.2 Building
@@ -85,7 +86,7 @@ apps.
 
 ### 4.3 Publishing
 
-A `snapshot` job in `corpus.yml` builds from `main` only, so a reviewer never sees rows that are not merged. It
+A workflow of its own, `review-snapshot.yml` (beside `corpus.yml`, which stays started by hand), builds from `main` only, so a reviewer never sees rows that are not merged. It
 runs on every push to `main` that touches `review/`, `decisions/`, `ai-review/` or `pipeline.json` (which is how the
 `draft`, `queues` and `ai-review` pull requests reach it once merged), and by hand (`workflow_dispatch`).
 
@@ -112,8 +113,7 @@ submissions (id INTEGER PRIMARY KEY, assignment INTEGER NOT NULL REFERENCES assi
              status TEXT NOT NULL CHECK (status IN ('open','merged','closed')), created_at TEXT NOT NULL)
 ```
 
-- **Languages:** a reviewer can be assigned a queue only in one of their languages. `en` covers `level` and
-  `english`.
+- **Languages:** a reviewer can be assigned a queue only in one of their languages. `en` covers `level`.
 - **No overlap:** creating an assignment fails when another open assignment on the same queue shares a file; `"*"`
   shares every file. So a row has at most one reviewer. A flagged-only assignment takes a file list too, so the
   flagged rows of one queue can be shared out as well.
@@ -146,8 +146,7 @@ The reviewer API is the local app's (spec 2026-10-04 §5.4), scoped to the signe
 |---|---|
 | `GET /api/me` | email, name, role, languages; 403 when not invited or disabled |
 | `GET /api/assignments` | the reviewer's open assignments with progress (§6.1) |
-| `GET /api/queues` | summaries of the queues the reviewer has open assignments in |
-| `GET /api/rows?assignment=<id>&all=1` | the assignment's rows from the current snapshot (flagged only unless `all`, and only flagged ones at all for a flagged-only assignment), each with the reviewer's unsubmitted decision as `decided` |
+| `GET /api/rows?assignment=<id>` | `{ rows, discarded }`: the assignment's rows from the current snapshot (a flagged-only assignment: rows the AI flagged or a learner reported, worst first; otherwise every row, in file order), each with the reviewer's decision on it; `discarded` names unsubmitted decisions just deleted because their row left the snapshot |
 | `POST /api/decision` | `{ assignment, queue, file, key, rowHash, action, cells?, note? }` → stores or replaces the decision in D1; 409 `changed` when the snapshot's `rowHash` for the key differs, 410 `gone` when the row left the snapshot, 400 `invalid` as locally (unknown action, `drop` where the queue has none, a cell outside the queue's columns), 403 when the row is outside the assignment |
 | `DELETE /api/decision` | `{ assignment, key }` → undoes an unsubmitted decision |
 | `POST /api/submit` | `{ assignment }` → §7; returns `{ pr, count, leftOut: [{ key, reason }] }` |
@@ -272,7 +271,7 @@ the link to copy), and a submission is still recorded.
 ## 12. Out of scope
 
 - Several reviewers voting on one row (one reviewer per row, §5).
-- Audio review in the browser (the `audio` queue stays on files).
+- Audio review in the browser, and the `english` queue (both stay on files).
 - Polishing the layout for phones (it must work, not shine).
 - Learner reports as an assignment source of their own (reported rows already come first in a queue).
 
@@ -281,7 +280,7 @@ the link to copy), and a submission is still recorded.
 - **Unit:** `applyDecisions` (all actions, columns outside the queue ignored, empty note keeps the old one, left-out
   rows), the snapshot builder against the local app's fixture, assignment overlap, row-hash checks, the Access JWT
   check (valid, wrong audience, expired, bad signature), the GitHub App JWT signing, the webhook signature.
-- **Worker:** Vitest with Wrangler's Workers pool: local D1 and R2 holding a fixture snapshot, a fake GitHub API
+- **Worker:** Vitest in Node with Wrangler's `getPlatformProxy` (local D1 and R2 bindings): local D1 and R2 holding a fixture snapshot, a fake GitHub API
   (records blobs, trees, commits, pull requests) and a fake Resend; reviewer and admin flows end to end at the API
   level, including 403 outside an assignment, a submit with a changed row, a disabled reviewer's 403, and a
   reassignment that moves and one that discards unsubmitted decisions.
