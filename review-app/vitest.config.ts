@@ -5,6 +5,7 @@ export default defineConfig({
     passWithNoTests: true,
     projects: [
       { test: { name: 'server', include: ['server/**/*.test.ts'], environment: 'node' } },
+      { test: { name: 'shared', include: ['shared/**/*.test.ts'], environment: 'node' } },
       { test: { name: 'ui', include: ['src/**/*.test.tsx'], environment: 'happy-dom' } },
     ],
   },
