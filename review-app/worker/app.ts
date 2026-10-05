@@ -1,5 +1,8 @@
 import { Hono, type Context } from 'hono'
+import { accessKeys, verifyAccessJwt } from './access'
 import type { Env } from './bindings'
+import { getReviewer, insertReviewer, type ReviewerRow } from './db'
+import { meRoutes } from './routes/me'
 
 export interface Deps {
   readonly env: Env
@@ -8,7 +11,7 @@ export interface Deps {
   readonly log: (line: string) => void
 }
 
-export type AppEnv = { Variables: { me: unknown } }
+export type AppEnv = { Variables: { me: ReviewerRow } }
 
 /** A request body the client got wrong; answered 400. */
 export class BadBody extends Error {}
@@ -44,6 +47,23 @@ export function createApp(deps: Deps): Hono<AppEnv> {
     }
     await next()
   })
+  // Every /api/* request except MACHINE_PATHS must carry a valid Cloudflare Access token for an invited reviewer.
+  app.use('/api/*', async (c, next) => {
+    if (MACHINE_PATHS.has(c.req.path)) return next()
+    const token = c.req.header('cf-access-jwt-assertion') ?? ''
+    const who = await verifyAccessJwt(token, { aud: deps.env.ACCESS_AUD, issuer: `https://${deps.env.ACCESS_TEAM_DOMAIN}`, keys: accessKeys(deps), now: deps.now() })
+    if (!who) return apiError(c, 401, 'sign in again')
+    let me = await getReviewer(deps.env.DB, who.email)
+    // The first admin (spec §5) is created on their first request.
+    if (!me && who.email === deps.env.ADMIN_EMAIL.toLowerCase()) {
+      me = { email: who.email, name: 'Coordinator', languages: ['bg', 'de', 'es', 'en'], role: 'admin', invitedAt: deps.now().toISOString(), inviteSentAt: null, disabledAt: null }
+      await insertReviewer(deps.env.DB, me)
+    }
+    if (!me || me.disabledAt) return apiError(c, 403, 'This address has no invitation. Ask the coordinator for one.')
+    c.set('me', me)
+    await next()
+  })
+  meRoutes(app)
   // Routes added by later tasks are registered before this catch-all; keep the catch-all last.
   app.all('/api/*', (c) => apiError(c, 404, 'no such API'))
   return app
