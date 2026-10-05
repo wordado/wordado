@@ -21,6 +21,8 @@ export function contentPaths(dir: string) {
     audioRecords: join(dir, 'audio.jsonl'),
     lastPublished: join(dir, 'last-published'),
     essentials: join(dir, 'essentials.txt'),
+    aiReviewDir: join(dir, 'ai-review'),
+    aiReview: (queue: string) => join(dir, 'ai-review', `${queue}.jsonl`),
   }
 }
 

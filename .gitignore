@@ -1,5 +1,6 @@
 node_modules/
 dist/
+review-app/dist/
 test-results/
 playwright-report/
 .vitest/
@@ -16,3 +17,6 @@ docs/research/
 
 # The corpus lives in the private repo wordado/wordado-content, cloned here (pipeline/README.md).
 content/
+
+# Brainstorming companion mockups
+.superpowers/

@@ -69,6 +69,8 @@ jobs:
       - name: ffmpeg, for the pipeline's encoder tests
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
       - run: pnpm test
+      - name: The review app, end to end
+        run: pnpm --filter @wordado/review-app e2e
       - run: pnpm --filter @wordado/server smoke
 
   e2e:

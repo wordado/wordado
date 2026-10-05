@@ -1,6 +1,8 @@
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { checkPackSuccession, MANIFEST_SCHEMA_VERSION, type PackManifest, type CreditsFile } from '@wordado/core'
+import { aiGate } from './aiReview/gate'
+import { AiReviewStore } from './aiReview/store'
 import { assemble, type Unreviewed } from './assemble'
 import { audioGate, readAudioRecords } from './audio'
 import { AUDIO_EXT, BuildError, buildPack, type BuildOutput } from './build'
@@ -12,6 +14,7 @@ import { readDraft } from './draft'
 import { writeJson } from './files'
 import { diffFixes, nextFixesFile } from './fixes'
 import { readLastPublished, type Fix, type FixesFile } from './lastPublished'
+import { pendingItems } from './queues'
 import { readClearedSources } from './sources'
 
 export interface ReleaseInfo {
@@ -72,6 +75,8 @@ export function planRelease(dir: string, opts: { draft: boolean; now: string }):
   pending.push(...audio.missing)
   if (accepted.has(QUEUES.audio)) unreviewed.push(...audio.unheard.map((line) => ({ queue: QUEUES.audio, line })))
   else pending.push(...audio.unheard)
+  // AI review gates every release (spec §5.4), whether or not its queue is in accept_unreviewed.
+  pending.push(...aiGate(config.ai_review, pendingItems(draft, decisions, config.l1s), AiReviewStore.read(dir)))
 
   for (const l1 of config.l1s) {
     const previous = last.packs.get(l1) ?? null

@@ -1,6 +1,8 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { checkPackSuccession, loadCorpus, offeredThemes, themeEntries, validatePack, type CreditsFile, type Pack, type PackError } from '@wordado/core'
+import { aiReviewConfig, runAiReview } from './aiReview/run'
+import { reviewerLlm } from './aiReview/reviewers'
 import { audioQueueItems, clipsNeeded, generateClips, readAudioRecords } from './audio'
 import { BuildError, buildPack, type BuildOutput, type ClipFile } from './build'
 import { claudeCodeLlm } from './claudeCode'
@@ -35,6 +37,8 @@ const USAGE = `usage: corpus <command>
     import <dir> --by <name>       apply reviewed rows as decisions
     compare <dir> [--sample <n>] [--stage senses|translate|themes]
                                    ask the chosen LLM a sample of the draft's questions; writes work/compare.md
+    ai-review <dir> [--queue <q>] [--reviewer <name>]
+                                   a second model reviews the open rows of ai_review.queues (pipeline.json)
     reopen <dir> <queue> --by <name> (--all | --keys <file>) [--note <text>]
                                    send reviewed items back for a second review
     triage <dir>                   read content reports (REPORTS_DATABASE_URL) and reopen what they cross
@@ -53,7 +57,7 @@ const USAGE = `usage: corpus <command>
     build <source-dir> | validate <pack-file> | check <previous-pack> <next-pack> | publishable <dir>`
 
 const argv = process.argv.slice(2)
-const VALUED = new Set(['--by', '--batch', '--from', '--to', '--keys', '--note', '--sample', '--stage'])
+const VALUED = new Set(['--by', '--batch', '--from', '--to', '--keys', '--note', '--sample', '--stage', '--queue', '--reviewer'])
 const option = (name: string): string | undefined => {
   const i = argv.indexOf(name)
   return i >= 0 ? argv[i + 1] : undefined
@@ -180,6 +184,22 @@ async function compare(dir: string): Promise<void> {
   console.log(`wrote ${file}; LLM spend ${spendNote(llm)}`)
 }
 
+async function aiReview(dir: string): Promise<void> {
+  const config = readConfig(dir)
+  const cfg = aiReviewConfig(dir)
+  const name = option('--reviewer') ?? cfg.default
+  const reviewer = cfg.reviewers[name]
+  if (!reviewer) {
+    console.error(`${name} is not a reviewer in ai_review.reviewers`)
+    process.exit(2)
+  }
+  const llm = reviewerLlm(reviewer, { maxUsd: config.llm.max_usd_per_run, apiKey })
+  const queue = option('--queue')
+  const out = await runAiReview({ dir, reviewer: name, ...(queue !== undefined ? { queue } : {}), llm, concurrency: llmConcurrency() ?? config.llm.concurrency, now })
+  for (const s of out) console.log(`${s.queue}: ${s.asked} reviewed by ${name}, ${s.flagged} with objections; ${s.alreadyReviewed} already reviewed`)
+  console.log(`spend ${spendNote(llm)}`)
+}
+
 async function audio(dir: string): Promise<void> {
   const config = readConfig(dir)
   const d = readDraft(dir)
@@ -265,9 +285,16 @@ function summarise(lines: readonly string[]): string[] {
   return [...counts].map(([kind, n]) => `  ${n} × ${kind}`)
 }
 
+/** An aiGate line (gate.ts): the same row already counts once in the human-review pending list, so the headline counts it separately instead of twice. */
+const isAiGateLine = (line: string): boolean => /: (not yet AI-reviewed|flagged by AI review, awaiting a decision) \(/.test(line)
+
 function status(dir: string): void {
   const plan = planRelease(dir, { draft: false, now: now() })
-  console.log(`corpus v${plan.corpusVersion}: ${plan.problems.length} problems, ${plan.pending.length} items awaiting review`)
+  const aiPending = plan.pending.filter(isAiGateLine)
+  const reviewPending = plan.pending.filter((p) => !isAiGateLine(p))
+  console.log(
+    `corpus v${plan.corpusVersion}: ${plan.problems.length} problems, ${reviewPending.length} items awaiting review, ${aiPending.length} awaiting AI review`,
+  )
   for (const p of plan.problems) console.log(`  ${p}`)
   for (const s of summarise(plan.pending)) console.log(s)
   if (plan.unreviewed.length > 0) {
@@ -332,6 +359,9 @@ async function main(): Promise<void> {
       break
     case 'compare':
       await compare(arg(first))
+      break
+    case 'ai-review':
+      await aiReview(arg(first))
       break
     case 'reopen':
       reopen(arg(first), arg(second))

@@ -4,6 +4,7 @@ packages:
   - client-data
   - server
   - web
+  - review-app
 
 # esbuild (via tsx, vitest and wrangler) and workerd (via wrangler) run from their
 # optional platform packages; their postinstall scripts are not needed.

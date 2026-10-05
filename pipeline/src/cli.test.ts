@@ -4,6 +4,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import { readConfig } from './config'
+import { contentPaths } from './content'
+import { runDraft } from './draft'
+import { writeJson } from './files'
+import { makeContent, sampleLlm } from './testing/fixture'
 
 const PIPELINE = fileURLToPath(new URL('..', import.meta.url))
 const corpus = (...args: string[]) =>
@@ -32,5 +37,24 @@ describe('corpus (the CLI)', () => {
     corpus('init', dir)
     expect(corpus('draft', dir).stderr).toMatch(/OPENROUTER_API_KEY/)
     expect(corpus('import', dir).status).toBe(2)
+  })
+
+  it("status counts a row's human review and AI review waits separately, so the headline does not double-count it", async () => {
+    const dir = makeContent()
+    await runDraft({ dir, llm: sampleLlm(), offline: false })
+    const config = readConfig(dir)
+    writeJson(contentPaths(dir).config, {
+      ...config,
+      ai_review: { queues: ['translation-bg'], reviewers: { flash: { provider: 'openrouter', model: 'google/gemini-3.8-flash' } }, default: 'flash', flag_when: 1 },
+    })
+    const out = corpus('status', dir)
+    expect(out.status).toBe(0)
+    const headline = out.stdout.split('\n')[0]!
+    const review = Number(headline.match(/(\d+) items awaiting review/)?.[1])
+    const ai = Number(headline.match(/(\d+) awaiting AI review/)?.[1])
+    expect(ai).toBeGreaterThan(0)
+    expect(review).toBeGreaterThan(0)
+    // Every open translation-bg row is pending for both reasons; the grouped lines still show the AI-gate one.
+    expect(out.stdout).toMatch(/× not yet AI-reviewed \(translation-bg\)/)
   })
 })

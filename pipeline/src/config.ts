@@ -13,6 +13,20 @@ export interface TtsVoice {
   readonly response_format?: 'mp3' | 'pcm'
 }
 
+export interface AiReviewer {
+  readonly provider: 'openrouter' | 'local'
+  readonly model: string
+  readonly url?: string
+}
+
+export interface AiReviewConfig {
+  readonly queues: readonly string[]
+  readonly reviewers: Readonly<Record<string, AiReviewer>>
+  readonly default: string
+  readonly required?: readonly string[]
+  readonly flag_when: number
+}
+
 /** `pipeline.json`: everything a run may tune without a code change. */
 export interface PipelineConfig {
   readonly l1s: readonly string[]
@@ -38,6 +52,8 @@ export interface PipelineConfig {
     readonly accents: Readonly<Partial<Record<Accent, TtsVoice>>>
     readonly max_clips_per_run: number
   }
+  /** Second-model review of the review queues (spec 2026-10-04 §3). Absent: no AI review and no AI gate. */
+  readonly ai_review?: AiReviewConfig
 }
 
 /** A curated theme (spec §8.9) as the content repository keeps it: named in English and in every L1. */
@@ -64,9 +80,54 @@ export const reviewQueues = (l1s: readonly string[]): string[] => [
   ...l1s.flatMap((l1) => [QUEUES.translation(l1), QUEUES.title(l1)]),
 ]
 
+export const AI_REVIEW_QUEUE = /^(translation|title)-[a-z]{2}$|^level$/
+
+export function aiReviewRequired(cfg: AiReviewConfig): readonly string[] {
+  return cfg.required ?? [cfg.default]
+}
+
 const isRecord =(v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v)
 const LANG = /^[a-z]{2}$/
 const THEME_ID = /^[a-z0-9][a-z0-9-]*$/
+
+function aiReviewProblems(raw: unknown, l1s: readonly string[]): string[] {
+  const p: string[] = []
+  if (!isRecord(raw)) return ['ai_review: must be an object']
+  const queues = raw['queues']
+  const known = reviewQueues(l1s)
+  if (!Array.isArray(queues) || queues.length === 0) p.push('ai_review.queues: must list at least one queue')
+  else
+    queues.forEach((q, i) => {
+      if (typeof q !== 'string' || !AI_REVIEW_QUEUE.test(q)) p.push(`ai_review.queues[${i}]: ${String(q)} is not a queue AI review covers (translation-<l1>, title-<l1>, level)`)
+      else if (!known.includes(q)) p.push(`ai_review.queues[${i}]: ${q} is not a queue of this content (l1s)`)
+    })
+  const reviewers = raw['reviewers']
+  const names = isRecord(reviewers) ? Object.keys(reviewers) : []
+  if (!isRecord(reviewers) || names.length === 0) p.push('ai_review.reviewers: must name at least one reviewer')
+  else
+    for (const [name, r] of Object.entries(reviewers)) {
+      const path = `ai_review.reviewers.${name}`
+      if (!isRecord(r)) {
+        p.push(`${path}: must be an object`)
+        continue
+      }
+      if (r['provider'] !== 'openrouter' && r['provider'] !== 'local') p.push(`${path}.provider: must be openrouter or local`)
+      if (typeof r['model'] !== 'string' || r['model'].trim() === '') p.push(`${path}.model: must be a non-empty string`)
+      if (r['provider'] === 'local' && !(typeof r['url'] === 'string' && /^https?:\/\//.test(r['url']))) p.push(`${path}.url: a local reviewer needs an http(s) URL`)
+    }
+  const def = raw['default']
+  if (typeof def !== 'string' || !names.includes(def)) p.push(`ai_review.default: ${String(def)} is not a reviewer`)
+  const required = raw['required'] === undefined ? (typeof def === 'string' ? [def] : []) : raw['required']
+  if (!Array.isArray(required) || required.length === 0) p.push('ai_review.required: must list at least one reviewer')
+  else if (raw['required'] !== undefined)
+    required.forEach((r, i) => {
+      if (typeof r !== 'string' || !names.includes(r)) p.push(`ai_review.required[${i}]: ${String(r)} is not a reviewer`)
+    })
+  const n = Array.isArray(required) ? required.length : 1
+  const fw = raw['flag_when']
+  if (typeof fw !== 'number' || !Number.isInteger(fw) || fw < 1 || fw > n) p.push(`ai_review.flag_when: must be a whole number from 1 to ${n} (the required reviewers)`)
+  return p
+}
 
 export function configProblems(raw: unknown): string[] {
   const p: string[] = []
@@ -141,6 +202,7 @@ export function configProblems(raw: unknown): string[] {
       }
     }
   }
+  if (raw['ai_review'] !== undefined) p.push(...aiReviewProblems(raw['ai_review'], Array.isArray(l1s) ? l1s.filter((l): l is string => typeof l === 'string') : []))
   return p
 }
 
