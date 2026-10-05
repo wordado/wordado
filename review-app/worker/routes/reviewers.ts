@@ -9,6 +9,10 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const languagesOf = (v: unknown): Language[] | null =>
   Array.isArray(v) && v.length > 0 && v.every((l) => (LANGUAGES as readonly unknown[]).includes(l)) ? [...new Set(v as Language[])] : null
 
+/** Names go into mail headers, commit authors and pull request titles: no control characters. */
+const hasControl = (s: string) => [...s].some((ch) => ch.charCodeAt(0) < 0x20 || ch.charCodeAt(0) === 0x7f)
+const NAME_CONTROL = 'a name cannot contain control characters such as line breaks or tabs'
+
 export function reviewersRoutes(app: Hono<AppEnv>, deps: Deps): void {
   const mailer = reviewMailer(deps)
   const invite = async (r: ReviewerRow): Promise<boolean> => {
@@ -27,6 +31,7 @@ export function reviewersRoutes(app: Hono<AppEnv>, deps: Deps): void {
   app.post('/api/admin/reviewers', async (c) => {
     const body = await jsonBody<{ email?: unknown; name?: unknown; languages?: unknown; role?: unknown }>(c)
     const email = String(body.email ?? '').trim().toLowerCase()
+    if (hasControl(String(body.name ?? ''))) return apiError(c, 400, NAME_CONTROL)
     const name = String(body.name ?? '').trim()
     const languages = languagesOf(body.languages)
     const role: Role = body.role === 'admin' ? 'admin' : 'reviewer'
@@ -48,6 +53,7 @@ export function reviewersRoutes(app: Hono<AppEnv>, deps: Deps): void {
     if (self && (body.disabled === true || body.role === 'reviewer')) return apiError(c, 400, 'you cannot disable or demote yourself')
     const patch: { name?: string; languages?: Language[]; role?: Role; disabledAt?: string | null } = {}
     if (body.name !== undefined) {
+      if (hasControl(String(body.name))) return apiError(c, 400, NAME_CONTROL)
       const name = String(body.name).trim()
       if (name === '') return apiError(c, 400, 'a name is needed')
       patch.name = name

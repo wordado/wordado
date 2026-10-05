@@ -76,6 +76,13 @@ describe('admin reviewers', () => {
     await admin('POST', '/api/admin/reviewers', { email: 'n@example.com', name: 'N', languages: ['de'] })
     expect((await admin('POST', '/api/admin/reviewers', { email: 'N@example.com', name: 'N', languages: ['de'] })).status).toBe(409)
   })
+  it('refuses a name with control characters, on invite and on rename', async () => {
+    expect((await admin('POST', '/api/admin/reviewers', { email: 'c@example.com', name: 'Eve\r\nBcc: x@example.com', languages: ['de'] })).status).toBe(400)
+    expect((await admin('POST', '/api/admin/reviewers', { email: 'c@example.com', name: 'Eve\u007f', languages: ['de'] })).status).toBe(400)
+    expect((await admin('POST', '/api/admin/reviewers', { email: 'c@example.com', name: 'Eve', languages: ['de'] })).status).toBe(201)
+    expect((await admin('PATCH', '/api/admin/reviewers/c@example.com', { name: 'Eve\tX' })).status).toBe(400)
+    expect((await admin('PATCH', '/api/admin/reviewers/c@example.com', { name: 'Eve Müller' })).status).toBe(200)
+  })
   it('disabling closes the reviewer’s assignments and locks them out; enabling lets them back in', async () => {
     await admin('POST', '/api/admin/reviewers', { email: 'ivan@example.com', name: 'Ivan', languages: ['bg'] })
     await admin('POST', '/api/admin/assignments', { reviewer: 'ivan@example.com', queue: 'translation-bg', files: '*', flaggedOnly: true })
