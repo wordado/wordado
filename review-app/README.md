@@ -46,6 +46,16 @@ which `corpus import` then records. It runs on your machine only (127.0.0.1); no
    | S, ↓ | Skip | nothing; moves to the next row |
    | ↑ | | moves to the previous row |
 
+   What a row shows depends on its queue:
+   - **Translations:** the translation, its alternates and its sense gloss, the word's other senses, and objections
+     such as a wrong sense, a wrong alternate or a missing gloss.
+   - **Titles:** the unit's English and native-language titles beside the unit's words. There is no Drop.
+   - **Levels** (the `level` queue: about 335 rows, the uncertain cases and a 1-in-20 sample): the meaning, an example,
+     the frequency band and the proposed level, with an objection *too low* or *too high* and the level the AI
+     proposes. Accept sets that level; Edit takes `A1`–`C1`; there is no Drop. A level change moves the word to another
+     unit at the next draft, so change one only when you are sure (the level reviewer guide in the research
+     repository, `levels.md`, has the descriptors).
+
    Add a note when something needs the coordinator's attention. Every decision is written into the review file at
    once, so you can stop at any point. Keys do nothing while you type in a field or a picker.
 
