@@ -1,0 +1,50 @@
+import { Hono, type Context } from 'hono'
+import type { Env } from './bindings'
+
+export interface Deps {
+  readonly env: Env
+  readonly fetch: (input: string, init?: RequestInit) => Promise<Response>
+  readonly now: () => Date
+  readonly log: (line: string) => void
+}
+
+export type AppEnv = { Variables: { me: unknown } }
+
+/** A request body the client got wrong; answered 400. */
+export class BadBody extends Error {}
+
+export async function jsonBody<T>(c: Context): Promise<T> {
+  let parsed: unknown
+  try {
+    parsed = await c.req.json()
+  } catch {
+    throw new BadBody('the request body is not valid JSON')
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) throw new BadBody('the request body is not valid JSON')
+  return parsed as T
+}
+
+export const apiError = (c: Context, status: 400 | 401 | 403 | 404 | 409 | 410 | 415 | 503, message: string) => c.json({ message }, status)
+
+/** Paths that are not called by the browser and so carry no Origin or Access token (GitHub's webhook). */
+const MACHINE_PATHS = new Set(['/api/github/webhook'])
+
+export function createApp(deps: Deps): Hono<AppEnv> {
+  const app = new Hono<AppEnv>()
+  app.onError((err, c) => {
+    if (err instanceof BadBody) return apiError(c, 400, err.message)
+    deps.log(`error: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`)
+    return c.json({ message: 'internal error' }, 500)
+  })
+  // Spec §6.2: in place of the local Host check, a state-changing request must come from the app's own origin.
+  app.use('/api/*', async (c, next) => {
+    if (c.req.method !== 'GET' && !MACHINE_PATHS.has(c.req.path)) {
+      if (c.req.header('origin') !== deps.env.APP_ORIGIN) return apiError(c, 403, 'bad origin')
+      if (!(c.req.header('content-type') ?? '').toLowerCase().startsWith('application/json')) return apiError(c, 415, 'a request with a body needs content-type: application/json')
+    }
+    await next()
+  })
+  // Routes added by later tasks are registered before this catch-all; keep the catch-all last.
+  app.all('/api/*', (c) => apiError(c, 404, 'no such API'))
+  return app
+}
