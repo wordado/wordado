@@ -1,0 +1,40 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // The top level is local development and tests only; a deploy always names --env production
+  // (spec 2026-10-05 §14). Its own name means a bare `wrangler deploy` can never replace the real Worker.
+  "name": "wordado-review-local",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-09-01",
+  "assets": { "directory": "dist", "not_found_handling": "single-page-application", "run_worker_first": ["/api/*"] },
+  "d1_databases": [{ "binding": "DB", "database_name": "wordado-review", "database_id": "00000000-0000-0000-0000-000000000000", "migrations_dir": "migrations" }],
+  "r2_buckets": [{ "binding": "SNAPSHOTS", "bucket_name": "wordado-review" }],
+  "vars": {
+    "APP_ORIGIN": "http://127.0.0.1:4181",
+    "ACCESS_TEAM_DOMAIN": "",
+    "ACCESS_AUD": "",
+    "CONTENT_REPO": "wordado/wordado-content",
+    "GITHUB_APP_ID": "",
+    "GITHUB_INSTALLATION_ID": "",
+    "MAIL_FROM": "Wordado Review <review@wordado.com>"
+  },
+  "observability": { "enabled": true },
+  "env": {
+    "production": {
+      "name": "wordado-review",
+      "routes": [{ "pattern": "review.wordado.com", "custom_domain": true }],
+      // The operator's ids and values (review-app/README.md, "Hosted"); scripts/check-config.ts refuses
+      // a deploy while any is still the placeholder. ADMIN_EMAIL and the keys are secrets, not vars.
+      "d1_databases": [{ "binding": "DB", "database_name": "wordado-review", "database_id": "00000000-0000-0000-0000-000000000000", "migrations_dir": "migrations" }],
+      "r2_buckets": [{ "binding": "SNAPSHOTS", "bucket_name": "wordado-review" }],
+      "vars": {
+        "APP_ORIGIN": "https://review.wordado.com",
+        "ACCESS_TEAM_DOMAIN": "",
+        "ACCESS_AUD": "",
+        "CONTENT_REPO": "wordado/wordado-content",
+        "GITHUB_APP_ID": "",
+        "GITHUB_INSTALLATION_ID": "",
+        "MAIL_FROM": "Wordado Review <review@wordado.com>"
+      }
+    }
+  }
+}

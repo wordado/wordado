@@ -7,11 +7,16 @@
     "build": "vite build",
     "test": "vitest run",
     "e2e": "playwright test",
+    "snapshot": "tsx server/snapshotMain.ts",
+    "dev:hosted": "vite build && wrangler dev --port 4181 --ip 127.0.0.1",
+    "e2e:hosted": "playwright test -c playwright.hosted.config.ts",
+    "deploy:check": "vite build && wrangler deploy --dry-run --env production --outdir dist-worker",
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
     "@wordado/core": "workspace:*",
     "@wordado/pipeline": "workspace:*",
+    "hono": "^4.13.8",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },
@@ -24,6 +29,7 @@
     "@vitejs/plugin-react": "^6.1.1",
     "happy-dom": "^20.14.5",
     "tsx": "^4.19.0",
-    "vite": "^8.3.0"
+    "vite": "^8.3.0",
+    "wrangler": "^4.136.3"
   }
 }
