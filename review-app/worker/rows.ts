@@ -10,10 +10,18 @@ export function scopeFiles(snap: Snapshot, a: AssignmentRow): string[] {
   return a.files === '*' ? inSnapshot : inSnapshot.filter((f) => a.files.includes(f))
 }
 
-/** The assignment's rows (spec §6): flagged-only → flagged or reported, worst first; otherwise every row in file order. */
-export async function assignmentRows(snap: Snapshot, a: AssignmentRow): Promise<{ rows: RowView[]; keys: ReadonlySet<string> }> {
+/**
+ * The assignment's rows (spec §6): flagged-only → flagged or reported, worst first; otherwise every row in file order.
+ * Null when a file the snapshot lists is missing from R2: the data is unavailable, not empty, so nobody may read
+ * its rows as gone and discard decisions on them.
+ */
+export async function assignmentRows(snap: Snapshot, a: AssignmentRow): Promise<{ rows: RowView[]; keys: ReadonlySet<string> } | null> {
   const all: RowView[] = []
-  for (const f of scopeFiles(snap, a)) all.push(...((await snap.file(f))?.rows ?? []))
+  for (const f of scopeFiles(snap, a)) {
+    const file = await snap.file(f)
+    if (!file) return null
+    all.push(...file.rows)
+  }
   const keys = new Set(all.map((r) => r.key))
   if (!a.flaggedOnly) return { rows: all, keys }
   return { rows: all.filter((r) => r.ai === 'flagged' || r.reports !== '').sort((x, y) => rank(x) - rank(y)), keys }

@@ -8,7 +8,8 @@ import { currentSnapshot, type Snapshot } from '../snapshotStore'
 export const NO_SNAPSHOT = 'The review data is not available yet.'
 
 export async function assignmentView(deps: Deps, snap: Snapshot | null, a: AssignmentRow, names: ReadonlyMap<string, string>): Promise<AssignmentView> {
-  const p = snap ? progress((await assignmentRows(snap, a)).rows, await listDecisions(deps.env.DB, a.id), await listSubmissions(deps.env.DB, { assignment: a.id })) : null
+  const scoped = snap ? await assignmentRows(snap, a) : null
+  const p = scoped ? progress(scoped.rows, await listDecisions(deps.env.DB, a.id), await listSubmissions(deps.env.DB, { assignment: a.id })) : null
   return { id: a.id, reviewer: a.reviewer, reviewerName: names.get(a.reviewer) ?? a.reviewer, queue: a.queue, files: a.files, flaggedOnly: a.flaggedOnly, createdAt: a.createdAt, closedAt: a.closedAt, progress: p }
 }
 
@@ -36,7 +37,9 @@ export function reviewerRoutes(app: Hono<AppEnv>, deps: Deps): void {
     if (!a) return apiError(c, 403, 'not your assignment')
     const snap = await currentSnapshot(deps)
     if (!snap) return apiError(c, 503, NO_SNAPSHOT)
-    const { rows, keys } = await assignmentRows(snap, a)
+    const scoped = await assignmentRows(snap, a)
+    if (!scoped) return apiError(c, 503, NO_SNAPSHOT)
+    const { rows, keys } = scoped
     const decisions = await listDecisions(deps.env.DB, a.id)
     const discarded = decisions.filter((d) => d.submission === null && !keys.has(d.key)).map((d) => d.key)
     await deleteDecisions(deps.env.DB, a.id, discarded)

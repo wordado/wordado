@@ -25,12 +25,15 @@ export function decisionRoutes(app: Hono<AppEnv>, deps: Deps): void {
     const bad = Object.keys(cells).find((k) => !rules.columns.includes(k) || typeof cells[k] !== 'string')
     if (bad !== undefined) return c.json(fail('invalid', `${bad} cannot be edited in ${a.queue}`), 400)
     if (req.note !== undefined && typeof req.note !== 'string') return c.json(fail('invalid', 'the note must be text'), 400)
-    const row = (await snap.file(req.file))?.rows.find((r) => r.key === req.key)
+    const file = await snap.file(req.file)
+    if (!file) return apiError(c, 503, NO_SNAPSHOT)
+    const row = file.rows.find((r) => r.key === req.key)
     if (!row) return c.json(fail('gone', `${req.key} is no longer in ${req.file}`), 410)
     if (row.rowHash !== req.rowHash) return c.json(fail('changed', `${req.key} changed since it was loaded`), 409)
-    const open = new Set((await listSubmissions(deps.env.DB, { assignment: a.id, status: 'open' })).map((s) => s.id))
+    // A decision in an open or merged submission is final; only a closed (unmerged) one could be decided again.
+    const closed = new Set((await listSubmissions(deps.env.DB, { assignment: a.id, status: 'closed' })).map((s) => s.id))
     const existing = (await listDecisions(deps.env.DB, a.id)).find((d) => d.key === req.key)
-    if (existing?.submission != null && open.has(existing.submission)) return c.json(fail('changed', `${req.key} is already submitted`), 409)
+    if (existing?.submission != null && !closed.has(existing.submission)) return c.json(fail('changed', `${req.key} is already submitted`), 409)
     await upsertDecision(deps.env.DB, {
       assignment: a.id, queue: a.queue, file: req.file, key: req.key, rowHash: req.rowHash, action: req.action,
       cells, note: req.note ?? '', decidedAt: deps.now().toISOString(), submission: null,

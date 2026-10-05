@@ -21,7 +21,7 @@ export interface Env {
   readonly APP_ORIGIN: string
   readonly ACCESS_TEAM_DOMAIN: string
   readonly ACCESS_AUD: string
-  /** Tests and the hosted e2e only: a JWKS JSON used instead of the team's keys. check-config refuses it in production. */
+  /** Tests and the hosted e2e only: a JWKS JSON used instead of the team's keys. Honoured only on a local or test APP_ORIGIN (access.ts); check-config refuses it in production. */
   readonly ACCESS_JWKS?: string
   /** A secret; when unset no first admin is created (the Worker logs a warning). */
   readonly ADMIN_EMAIL?: string

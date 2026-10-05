@@ -88,6 +88,16 @@ describe('POST /api/decision', () => {
     expect(res.status).toBe(409)
     expect(await res.json()).toMatchObject({ reason: 'changed', message: expect.stringMatching(/submitted/) })
   })
+
+  it('is 409 for a row whose submission was merged', async () => {
+    const req = { assignment: id, queue: row.queue, file: row.file, key: row.key, rowHash: row.rowHash, action: 'keep' }
+    await post('POST', req)
+    const sub = await insertSubmission(env.DB, { assignment: id, branch: 'b', pr: 1, url: null, count: 1, leftOut: 0, status: 'merged', createdAt: 't' })
+    await markSubmitted(env.DB, id, [row.key], sub)
+    const res = await post('POST', { ...req, action: 'drop' })
+    expect(res.status).toBe(409)
+    expect(await res.json()).toMatchObject({ reason: 'changed', message: expect.stringMatching(/submitted/) })
+  })
 })
 
 describe('DELETE /api/decision', () => {
