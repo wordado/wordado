@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { AssignmentView, Me } from '../../shared/hosted'
+import { Admin } from './Admin'
 import { AssignmentReview } from './AssignmentReview'
 import { Assignments } from './Assignments'
 
@@ -21,7 +22,7 @@ export function HostedApp(props: { me: Me }) {
       </header>
       {view.kind === 'list' && <Assignments onOpen={(assignment) => setView({ kind: 'review', assignment })} />}
       {view.kind === 'review' && <AssignmentReview key={view.assignment.id} assignment={view.assignment} />}
-      {view.kind === 'admin' && <p>Admin</p>}
+      {view.kind === 'admin' && <Admin />}
     </div>
   )
 }

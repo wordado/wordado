@@ -75,3 +75,16 @@ button.settings-row { width: 100%; font: inherit; text-align: start; background:
 
 .field { display: flex; flex-direction: column; gap: 0.75rem; }
 .note { color: var(--muted); font-size: 0.875rem; }
+
+/* The admin page */
+.admin > .notice { margin: 0.75rem 1rem 0; }
+.admin form { margin: 0.5rem 0 1rem; }
+.admin form h3, .admin h3 { margin: 0.5rem 0 0; font-size: 1rem; }
+.admin label.field { gap: 0.25rem; }
+.checkbox-group { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; }
+.row-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: flex-end; }
+.row-edit { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-top: 0.5rem; }
+.settings-row-text details .note { white-space: normal; }
+.proposal-file { display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; }
+.invite-unsent { background: var(--bg); border: 1px solid var(--border); padding: 0.4rem 0.75rem; border-radius: 0.4rem; }
+.invite-link { user-select: all; word-break: break-all; }
