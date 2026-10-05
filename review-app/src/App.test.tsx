@@ -10,7 +10,7 @@ afterEach(() => {
 
 describe('App', () => {
   it('filters the list by level and severity', async () => {
-    const base = { queue: 'translation-bg', file: 'f', version: 'v', kind: 'translation' as const, cells: {}, fields: [], otherSenses: [], ai: 'flagged' as const, objections: [], decided: null, stale: false }
+    const base = { queue: 'translation-bg', file: 'f', version: 'v', kind: 'translation' as const, cells: {}, fields: [], otherSenses: [], ai: 'flagged' as const, objections: [], decided: null, stale: false, rowHash: 'h' }
     vi.spyOn(api, 'reviewer').mockResolvedValue('Tester')
     vi.spyOn(api, 'queues').mockResolvedValue([{ queue: 'translation-bg', open: 2, flagged: 2, reported: 0, decided: 0 }])
     vi.spyOn(api, 'rows').mockResolvedValue([
@@ -27,7 +27,7 @@ describe('App', () => {
   })
 
   it('skips to the next undecided row without deciding', async () => {
-    const base = { queue: 'translation-bg', file: 'f', version: 'v', kind: 'translation' as const, cells: {}, fields: [], otherSenses: [], ai: 'flagged' as const, objections: [], decided: null, stale: false }
+    const base = { queue: 'translation-bg', file: 'f', version: 'v', kind: 'translation' as const, cells: {}, fields: [], otherSenses: [], ai: 'flagged' as const, objections: [], decided: null, stale: false, rowHash: 'h' }
     vi.spyOn(api, 'reviewer').mockResolvedValue('Tester')
     vi.spyOn(api, 'queues').mockResolvedValue([{ queue: 'translation-bg', open: 2, flagged: 2, reported: 0, decided: 0 }])
     const decide = vi.spyOn(api, 'decide')
@@ -43,7 +43,7 @@ describe('App', () => {
   })
 
   it('skips forward through every undecided row without bouncing back, and ArrowUp moves back', async () => {
-    const base = { queue: 'translation-bg', file: 'f', version: 'v', kind: 'translation' as const, cells: {}, fields: [], otherSenses: [], ai: 'flagged' as const, objections: [], decided: null, stale: false }
+    const base = { queue: 'translation-bg', file: 'f', version: 'v', kind: 'translation' as const, cells: {}, fields: [], otherSenses: [], ai: 'flagged' as const, objections: [], decided: null, stale: false, rowHash: 'h' }
     vi.spyOn(api, 'reviewer').mockResolvedValue('Tester')
     vi.spyOn(api, 'queues').mockResolvedValue([{ queue: 'translation-bg', open: 3, flagged: 3, reported: 0, decided: 0 }])
     vi.spyOn(api, 'rows').mockResolvedValue([

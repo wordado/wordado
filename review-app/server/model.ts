@@ -95,6 +95,7 @@ function rowsOf(dir: string, queue: string, ctx: Ctx, opts: { withOtherSenses: b
         objections: verdicts.flatMap((v) => v.objections.map((o) => ({ reviewer: v.reviewer, model: v.model, ...o }))),
         decided: verdict === '' ? null : { verdict, note: row['note'] ?? '' },
         stale,
+        rowHash: content,
       })
     }
   }
@@ -110,6 +111,11 @@ export function listRows(dir: string, queue: string, opts: { withUnflagged: bool
   return rowsOf(dir, queue, ctx, { withOtherSenses: true })
     .filter((r) => opts.withUnflagged || r.reports !== '' || r.ai === 'flagged' || r.stale)
     .sort((a, b) => rank(a) - rank(b))
+}
+
+/** Every row of every open file of one queue, unfiltered, in file order: the snapshot's view (spec 2026-10-05 §4). */
+export function allRows(dir: string, queue: string): RowView[] {
+  return rowsOf(dir, queue, makeCtx(dir), { withOtherSenses: true })
 }
 
 export function listQueues(dir: string): QueueSummary[] {

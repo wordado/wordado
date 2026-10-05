@@ -247,6 +247,9 @@ importers:
       '@wordado/pipeline':
         specifier: workspace:*
         version: link:../pipeline
+      hono:
+        specifier: ^4.13.8
+        version: 4.13.8
       react:
         specifier: ^19.3.0
         version: 19.3.0
@@ -281,6 +284,9 @@ importers:
       vite:
         specifier: ^8.3.0
         version: 8.3.0(@types/node@24.13.6)(esbuild@0.28.2)(terser@5.51.2)(tsx@4.23.15)
+      wrangler:
+        specifier: ^4.136.3
+        version: 4.136.3(@types/node@24.13.6)
 
   server:
     dependencies:
