@@ -20,6 +20,10 @@ on:
         description: For a release, type release
         type: string
         required: false
+      queue:
+        description: For ai-review, one queue only (e.g. translation-de); empty reviews every queue
+        type: string
+        required: false
 
 permissions:
   contents: write
@@ -31,6 +35,7 @@ concurrency:
 
 env:
   ACTION: ${{ inputs.action }}
+  QUEUE: ${{ inputs.queue }}
   # Absolute, so it works from any step's working directory.
   CORPUS: pnpm --dir ${{ github.workspace }}/wordado --filter @wordado/pipeline corpus
 
@@ -77,7 +82,9 @@ jobs:
             # import that reshapes units (a drop or a level fix), run the draft action first, or this one reviews
             # stale proposals. It also runs only the default reviewer; other reviewers in ai_review.required must
             # be run locally with --reviewer.
-            ai-review) $CORPUS draft "$content" --offline && $CORPUS ai-review "$content" ;;
+            # One queue at a time keeps a long review inside the job's time limit (a timed-out job opens no
+            # pull request, so its verdicts would be lost).
+            ai-review) $CORPUS draft "$content" --offline && $CORPUS ai-review "$content" ${QUEUE:+--queue "$QUEUE"} ;;
             triage) $CORPUS draft "$content" && $CORPUS triage "$content" ;;
           esac
           $CORPUS queues "$content"
@@ -95,7 +102,7 @@ jobs:
           git add -A
           if git diff --cached --quiet; then echo "Nothing changed."; exit 0; fi
           branch="corpus/$ACTION-$GITHUB_RUN_ID"
-          title="corpus: $ACTION ($GITHUB_RUN_ID)"
+          title="corpus: $ACTION${QUEUE:+ $QUEUE} ($GITHUB_RUN_ID)"
           note="New review files are under review/."
           if [ "$JOB_STATUS" != success ]; then
             title="$title, stopped early"
