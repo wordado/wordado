@@ -166,7 +166,7 @@ On a workstation, not in Actions:
    `redo`.
 5. **Triage** (`triage`) whenever reports have come in, before a release. It reopens items and marks clips
    `redo`: run `audio` and review again.
-6. **Status**, locally, until it says `0 problems, 0 items awaiting review`. It reads `work/draft.json`, which is
+6. **Status**, locally, until it says `0 problems, 0 items awaiting review, 0 awaiting AI review` (the AI count appears once `pipeline.json` has an `ai_review` block). It reads `work/draft.json`, which is
    not committed, so first pull `main` (the Corpus › `draft` action's merged caches) and run
    `corpus draft "$PWD/content" --offline`, which rebuilds the draft from the caches without spending money.
 7. **Release** (`release`, with `release` typed in the *confirm* field; only users in `RELEASE_ACTORS` can run it). It checks that the CDN serves
