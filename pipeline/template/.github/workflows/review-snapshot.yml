@@ -1,0 +1,70 @@
+name: Review snapshot
+
+# Builds the hosted review app's rows from main and uploads them to the private R2 bucket (spec 2026-10-05 §4.3):
+# the files first, current.json last, so the app reads either the whole old snapshot or the whole new one.
+on:
+  push:
+    branches: [main]
+    paths: ['review/**', 'decisions/**', 'ai-review/**', 'pipeline.json']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: review-snapshot
+  cancel-in-progress: true
+
+env:
+  CORPUS: pnpm --dir ${{ github.workspace }}/wordado --filter @wordado/pipeline corpus
+
+jobs:
+  snapshot:
+    name: snapshot
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      R2: https://${{ vars.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
+      BUCKET: s3://${{ vars.REVIEW_BUCKET }}
+      AWS_DEFAULT_REGION: auto
+      # R2 does not take the AWS CLI's default integrity headers.
+      AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+      AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          path: content
+      - uses: actions/checkout@v5
+        with:
+          repository: wordado/wordado
+          ref: ${{ vars.PIPELINE_REF }}
+          path: wordado
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: wordado/package.json
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: wordado/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+        working-directory: wordado
+      - name: Rebuild the draft (no LLM calls)
+        run: $CORPUS draft "$GITHUB_WORKSPACE/content" --offline
+      - name: Build the snapshot
+        run: pnpm --dir "$GITHUB_WORKSPACE/wordado" --filter @wordado/review-app snapshot "$GITHUB_WORKSPACE/content" "$RUNNER_TEMP/snap" --commit "$GITHUB_SHA"
+      - name: Upload it, current.json last, and keep the newest two
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_REVIEW_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_REVIEW_SECRET_ACCESS_KEY }}
+        run: |
+          prev=$(aws s3 cp "$BUCKET/current.json" - --endpoint-url "$R2" 2>/dev/null | jq -r .id || true)
+          new=$(jq -r .id "$RUNNER_TEMP/snap/current.json")
+          aws s3 sync "$RUNNER_TEMP/snap/snapshots" "$BUCKET/snapshots" --endpoint-url "$R2" --only-show-errors
+          aws s3 cp "$RUNNER_TEMP/snap/current.json" "$BUCKET/current.json" --endpoint-url "$R2" --content-type application/json
+          for id in $(aws s3 ls "$BUCKET/snapshots/" --endpoint-url "$R2" | awk '{print $2}' | tr -d /); do
+            if [ "$id" != "$new" ] && [ "$id" != "$prev" ]; then
+              aws s3 rm "$BUCKET/snapshots/$id" --recursive --endpoint-url "$R2" --only-show-errors
+            fi
+          done
+          echo "snapshot $new is current (kept $prev)"

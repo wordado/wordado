@@ -36,12 +36,14 @@ jobs:
       - run: pnpm lint
       - name: Lint the workflows
         run: docker run --rm -v "$PWD:/repo" --workdir /repo rhysd/actionlint:1.7.7 -color
-      - name: Lint the content repository's workflow
-        run: docker run --rm -v "$PWD:/repo" --workdir /repo rhysd/actionlint:1.7.7 -color pipeline/template/.github/workflows/corpus.yml
+      - name: Lint the content repository's workflows
+        run: docker run --rm -v "$PWD:/repo" --workdir /repo rhysd/actionlint:1.7.7 -color pipeline/template/.github/workflows/corpus.yml pipeline/template/.github/workflows/review-snapshot.yml pipeline/template/.github/workflows/review-import.yml
       - name: Build the web app
         run: pnpm --filter @wordado/web build
       - name: Dry-run both deployments
         run: pnpm --filter @wordado/server deploy:check
+      - name: Dry-run the review app's deployment
+        run: pnpm --filter @wordado/review-app deploy:check
 
   test:
     name: Suites and the Worker smoke run
@@ -71,6 +73,8 @@ jobs:
       - run: pnpm test
       - name: The review app, end to end
         run: pnpm --filter @wordado/review-app e2e
+      - name: The hosted review app, end to end
+        run: pnpm --filter @wordado/review-app e2e:hosted
       - run: pnpm --filter @wordado/server smoke
 
   e2e:
@@ -134,4 +138,31 @@ jobs:
     with:
       environment: production
       smoke: false
+    secrets: inherit
+
+  review-changes:
+    name: Did the review app change
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    outputs:
+      changed: ${{ steps.diff.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - id: diff
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if git diff --name-only "$BEFORE" "$GITHUB_SHA" | grep -qE '^(review-app/|pipeline/src/|core/src/|pnpm-lock.yaml)'; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  deploy-review:
+    name: Review app deployment
+    needs: [static, test, review-changes]
+    if: needs.review-changes.outputs.changed == 'true' && vars.REVIEW_DEPLOY_ENABLED == 'true'
+    uses: ./.github/workflows/deploy-review.yml
     secrets: inherit
