@@ -171,7 +171,8 @@ export async function runDraft(opts: DraftOptions): Promise<Draft> {
   const live = selectLive(
     proposed.map((e) => ({ entry_id: e.entry_id, level: e.level, rank: e.rank, order: e.order, pinned: e.pinned || e.essential, wasLive: last.live.has(e.entry_id), dropped: dropped(e) })),
     config.levels,
-    config.targets,
+    config.sizes ?? config.targets,
+    config.main_meanings ?? {},
   )
   // Themes are asked for live entries only: they group units, and ship with the pack.
   const liveProposed = proposed.filter((e) => live.has(e.entry_id))
