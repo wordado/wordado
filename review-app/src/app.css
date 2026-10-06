@@ -1,5 +1,7 @@
-/* The learner app's look (web/src/styles.css): its tokens, light and dark, with the same names.
-   Colours are written as hex only in the two :root blocks; everything below uses the tokens (app.css.test.ts). */
+/* The learner app's look (web/src/styles.css): its tokens with the same names. The light colours are the learner
+   app's; the dark ones are the review app's own (deeper navy, three clear layers: page, card, box in a card), since
+   its screens nest more than the learner app's do. Colours are written as hex only in the two :root blocks;
+   everything below uses the tokens (app.css.test.ts). */
 :root {
   --paper: #f6f7fb;
   --paper-raised: #ffffff;
@@ -16,6 +18,10 @@
   --rose-soft: #fbeef2;
   --blue: #2b5aa0;
   --blue-soft: #e6edf9;
+  /* A box inside a card, the header, and the lift a card has off the page: in the light all as the card itself. */
+  --paper-inset: #ffffff;
+  --paper-head: #ffffff;
+  --lift: none;
 
   --font-ui: 'Golos Text Variable', system-ui, sans-serif;
   --font-entry: 'Literata Variable', Georgia, serif;
@@ -41,21 +47,24 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --paper: #141c33;
-    --paper-raised: #1b2542;
-    --ink: #e8ebf5;
-    --ink-soft: #a9b1c9;
-    --rule: #2e3a5c;
-    --rose: #f07a9a;
-    --rose-ink: #141c33;
-    --leaf: #74cfa3;
-    --leaf-soft: #17372b;
-    --leaf-ink: #74cfa3;
-    --amber: #f2a863;
-    --amber-soft: #3b2a17;
-    --rose-soft: #3b2130;
-    --blue: #8fb4f0;
-    --blue-soft: #1c2b47;
+    --paper: #0b1020;
+    --paper-raised: #151c33;
+    --paper-inset: #1e2847;
+    --paper-head: #10172b;
+    --ink: #f2f4fa;
+    --ink-soft: #aeb7d0;
+    --rule: #33406a;
+    --rose: #ff7da1;
+    --rose-ink: #2a0713;
+    --leaf: #6fe0ab;
+    --leaf-soft: #123a2b;
+    --leaf-ink: #6fe0ab;
+    --amber: #ffb86b;
+    --amber-soft: #40290f;
+    --rose-soft: #4a1e30;
+    --blue: #9bbcff;
+    --blue-soft: #1b2c55;
+    --lift: 0 0.5rem 1.5rem rgb(0 0 0 / 0.3);
   }
 }
 
@@ -125,7 +134,7 @@ p {
   gap: var(--space-2) var(--space-3);
   min-height: 3.75rem;
   padding: var(--space-2) 1.125rem;
-  background: var(--paper-raised);
+  background: var(--paper-head);
   border-bottom: 1px solid var(--rule);
 }
 
@@ -263,6 +272,7 @@ p {
   background: var(--paper-raised);
   border: 1px solid var(--rule);
   border-radius: 1.125rem;
+  box-shadow: var(--lift);
 }
 
 .panel.centered,
@@ -405,7 +415,7 @@ p {
   padding: var(--space-2) var(--space-3);
   font: 400 var(--step-0) / 1.3 var(--font-ui);
   color: var(--ink);
-  background: var(--paper-raised);
+  background: var(--paper-inset);
   border: 1px solid var(--rule);
   border-radius: 0.625rem;
 }
@@ -480,6 +490,7 @@ input[type='checkbox'] {
   background: var(--paper-raised);
   border: 1px solid var(--rule);
   border-radius: 1.125rem;
+  box-shadow: var(--lift);
 }
 
 .settings-rows li + li {
@@ -802,7 +813,7 @@ kbd {
 
 .compare-col {
   padding: 0.875rem;
-  background: var(--paper-raised);
+  background: var(--paper-inset);
   border: 1px solid var(--rule);
   border-radius: 0.875rem;
 }
@@ -1130,6 +1141,7 @@ kbd {
   background: var(--paper-raised);
   border: 1px solid var(--rule);
   border-radius: 0.875rem;
+  box-shadow: var(--lift);
 }
 
 .stat b {
