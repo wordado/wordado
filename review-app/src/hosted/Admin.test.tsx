@@ -270,6 +270,20 @@ describe('Admin', () => {
     await waitFor(() => expect(patch).toHaveBeenCalledWith(anna.email, { disabled: true }))
   })
 
+  it('drops the page notice when the tab changes', async () => {
+    vi.spyOn(hostedApi.admin, 'patchReviewer').mockRejectedValue(new Error('the last admin cannot be disabled'))
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(<Admin />)
+    await openTab('Reviewers')
+    fireEvent.click(await screen.findByRole('button', { name: 'Disable Anna' }))
+    expect((await screen.findByRole('status')).textContent).toBe('the last admin cannot be disabled')
+    // choosing the tab that is shown changes nothing
+    fireEvent.click(screen.getByRole('tab', { name: 'Reviewers' }))
+    expect(screen.getByRole('status')).toBeTruthy()
+    await openTab('Assignments')
+    expect(screen.queryByRole('status')).toBeNull()
+  })
+
   it('lists the submissions with the queue’s plain name, the state and the pull request', async () => {
     vi.spyOn(hostedApi.admin, 'submissions').mockResolvedValue([submission])
     render(<Admin />)

@@ -49,7 +49,8 @@ export function Assignments(props: { onOpen(a: AssignmentView): void }) {
                     {p && <span className="submitted" style={{ width: share(p.submitted, p.inScope) }} />}
                     {p && <span className="decided" style={{ width: share(p.decided, p.inScope) }} />}
                   </span>
-                  <button className={started ? 'button primary' : 'button'} aria-describedby={`assignment-${a.id}`} onClick={() => props.onOpen(a)}>
+                  {/* without review data there are no rows to open */}
+                  <button className={started ? 'button primary' : 'button'} aria-describedby={`assignment-${a.id}`} disabled={p === null} onClick={() => props.onOpen(a)}>
                     {started ? 'Continue' : 'Start'}
                   </button>
                 </li>

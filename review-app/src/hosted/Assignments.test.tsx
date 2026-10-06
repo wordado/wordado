@@ -64,9 +64,13 @@ describe('Assignments', () => {
     expect(screen.queryByRole('list')).toBeNull()
   })
 
-  it('says so when there is no review data yet', async () => {
-    await show([assignment({ progress: null })])
+  it('says so when there is no review data yet, and has nothing to open', async () => {
+    const onOpen = await show([assignment({ progress: null })])
     expect(await screen.findByText('The review data is not available yet.')).toBeTruthy()
+    const start = screen.getByRole<HTMLButtonElement>('button', { name: 'Start' })
+    expect(start.disabled).toBe(true)
+    fireEvent.click(start)
+    expect(onOpen).not.toHaveBeenCalled()
   })
 
   it('names the keys under the list', async () => {

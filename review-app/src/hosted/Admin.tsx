@@ -46,17 +46,25 @@ export function Admin(props: { onBack?: () => void }) {
 
   useEffect(() => void reload(), [reload])
 
+  /** Shows a tab. The notice is about what was done on the tab that is left, so it goes with it. */
+  const shown = useRef(tab)
+  const show = useCallback((next: Tab) => {
+    if (next !== shown.current) setNotice('')
+    shown.current = next
+    setTab(next)
+  }, [])
+
   // The address names the tab from the start (without a step in the history), and the tab follows it: Back and
   // Forward move between the tabs.
   useEffect(() => {
     if (!adminTabOf(window.location.hash)) window.history.replaceState(window.history.state, '', '#overview')
-    const onHash = () => setTab(adminTabOf(window.location.hash) ?? 'overview')
+    const onHash = () => show(adminTabOf(window.location.hash) ?? 'overview')
     window.addEventListener('hashchange', onHash)
     return () => window.removeEventListener('hashchange', onHash)
-  }, [])
+  }, [show])
 
   const go = (next: Tab) => {
-    setTab(next)
+    show(next)
     if (adminTabOf(window.location.hash) !== next) window.location.hash = next
   }
 

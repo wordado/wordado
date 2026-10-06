@@ -33,6 +33,18 @@ function setup() {
 }
 
 describe('useSwipe', () => {
+  it('keeps a swipe that is under way when the handlers change, and ends it with the new ones', () => {
+    const first = { onLeft: vi.fn(), onRight: vi.fn() }
+    const second = { onLeft: vi.fn(), onRight: vi.fn() }
+    const { rerender } = render(<Harness {...first} />)
+    const el = screen.getByText('bank')
+    fireEvent.pointerDown(el, { pointerId: 1, isPrimary: true, pointerType: 'touch', clientX: 300, clientY: 200 })
+    rerender(<Harness {...second} />)
+    fireEvent.pointerUp(el, { pointerId: 1, isPrimary: true, pointerType: 'touch', clientX: 200, clientY: 205 })
+    expect(second.onLeft).toHaveBeenCalledTimes(1)
+    expect(first.onLeft).not.toHaveBeenCalled()
+  })
+
   it('calls onLeft for a swipe to the left and onRight for one to the right', () => {
     const { onLeft, onRight } = setup()
     swipe(screen.getByText('bank'), [300, 200], [200, 210])
