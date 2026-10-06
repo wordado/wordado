@@ -113,7 +113,7 @@ describe('the corpus pipeline, end to end (spec §13)', () => {
     const v1 = pack(v1Dir, 'corpus-v1-bg.pack')
     adoptRelease(dir, v1Dir)
 
-    // New band boundaries, the old sizes, and leave to replace version 1's units.
+    // New band boundaries, and leave to replace version 1's units. The sizes stay those of the first draft, so only the levels are in play.
     const file = join(dir, 'pipeline.json')
     writeFileSync(
       file,

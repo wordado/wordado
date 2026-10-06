@@ -288,6 +288,63 @@ describe('runDraft', () => {
     const second = await runDraft({ dir, llm: sampleLlm(), offline: true })
     expect(second.entries.find((e) => e.entry_id === 'bank-2')).toMatchObject({ level: 'B1', level_flagged: true })
   })
+
+  const fixLevel = (dir: string, key: string, proposed: string, value: string) =>
+    Decisions.read(dir).append(QUEUES.level, [{ key, at: '2026-10-03T00:00:00Z', verdict: 'fix', proposed, value, by: 'r' }])
+  const levelQueue = (dir: string, d: Awaited<ReturnType<typeof runDraft>>) => pendingItems(d, Decisions.read(dir), ['bg']).get(QUEUES.level)!
+
+  it('a level a person chose is not a proposal to review again at the next draft', async () => {
+    const dir = await publishedV1()
+    fixLevel(dir, 'go-1', 'A1', 'A2')
+    await runDraft({ dir, llm: sampleLlm(), offline: false })
+    const second = await runDraft({ dir, llm: sampleLlm(), offline: false })
+    expect(second.entries.find((e) => e.entry_id === 'go-1')!.level).toBe('A2')
+    expect(levelQueue(dir, second).find((i) => i.key === 'go-1')).toBeUndefined()
+  })
+
+  it('after a rebuild, a level a person chose is not a proposal to review again either', async () => {
+    const dir = await publishedV1(ALL_LEVELS)
+    editConfig(dir, { ...FAR_BANDS })
+    await runDraft({ dir, llm: sampleLlm(), offline: false, rebuild: true })
+    fixLevel(dir, 'bank-2', 'B1', 'B2')
+    await runDraft({ dir, llm: sampleLlm(), offline: false })
+    const second = await runDraft({ dir, llm: sampleLlm(), offline: false })
+    expect(second.entries.find((e) => e.entry_id === 'bank-2')!.level).toBe('B2')
+    expect(levelQueue(dir, second).find((i) => i.key === 'bank-2')).toBeUndefined()
+  })
+
+  it('main_meanings reaches the selection: a main meaning within the rule is live beyond the size', async () => {
+    const live = async (main?: Record<string, 'all' | number>) => {
+      const sizes = { A1: 1, A2: 2, B1: 1, B2: 1, C1: 1 }
+      const dir = makeContent({ config: { sizes, ...(main ? { main_meanings: main } : {}) } })
+      return new Set((await runDraft({ dir, llm: sampleLlm(), offline: false })).live)
+    }
+    const none = await live()
+    const one = await live({ A1: 1 })
+    const all = await live({ A1: 'all' })
+    expect([none.has('the-1'), none.has('go-1')]).toEqual([false, false])
+    expect([one.has('the-1'), one.has('go-1')]).toEqual([true, false])
+    expect([all.has('the-1'), all.has('go-1')]).toEqual([true, true])
+  })
+
+  it('a rebuild with two published L1s releases both packs with every live entry', async () => {
+    const dir = await publishedV1(ALL_LEVELS)
+    nameThemesInGerman(dir)
+    editConfig(dir, { l1s: ['bg', 'de'], accept_unreviewed: ['translation-de', 'title-de'] })
+    await runDraft({ dir, llm: sampleLlm(), offline: false })
+    const out2 = join(mkdtempSync(join(tmpdir(), 'release-')), 'out')
+    writeRelease(dir, out2, planRelease(dir, { draft: false, now: '2026-10-05T09:00:00Z' }))
+    adoptRelease(dir, out2)
+    editConfig(dir, { ...FAR_BANDS, units_rebuilt_after: 2 })
+    const rebuilt = await runDraft({ dir, llm: sampleLlm(), offline: false, rebuild: true })
+    approveAll(dir)
+    const plan = planRelease(dir, { draft: false, now: '2026-10-06T09:00:00Z' })
+    expect([plan.problems, plan.pending]).toEqual([[], []])
+    expect(plan.outputs.map((o) => o.pack.l1).sort()).toEqual(['bg', 'de'])
+    for (const o of plan.outputs) {
+      expect(o.pack.entries.filter((e) => !e.retired).map((e) => e.entry_id).sort()).toEqual([...rebuilt.live].sort())
+    }
+  })
 })
 
 const nameThemesInGerman = (dir: string) => {

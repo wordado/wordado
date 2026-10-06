@@ -23,6 +23,12 @@ describe('selectLive (Decision 9)', () => {
   it('breaks rank ties by sense order, then ID', () => {
     expect([...selectLive([c('y', 'A1', 1, { order: 1 }), c('x', 'A1', 1, { order: 1 }), c('z', 'A1', 1, { order: 0 })], ['A1'], targets)]).toEqual(['z', 'x'])
   })
+
+  it('brings in main meanings up to the numeric bound, inclusive, though the size is exceeded', () => {
+    const sizes = { A1: 1, A2: 1, B1: 1, B2: 1, C1: 1 }
+    const out = selectLive([c('m1', 'B1', 50), c('m2', 'B1', 100), c('m3', 'B1', 99), c('past', 'B1', 101)], ['B1'], sizes, { B1: 100 })
+    expect([...out].sort()).toEqual(['m1', 'm2', 'm3'])
+  })
 })
 
 describe('senseRank', () => {

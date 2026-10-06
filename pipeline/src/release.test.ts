@@ -91,6 +91,24 @@ describe('planRelease and writeRelease', () => {
     expect(v2.units.find((u) => u.unit_id === old.unit_id)).toMatchObject({ level: 'A1', entry_ids: ['the-1'] })
   })
 
+  it('carries an entry dropped after a rebuild, retired, in its old unit only', async () => {
+    const { dir, v1 } = await rebuiltAfterV1()
+    const go = readDraft(dir).entries.find((e) => e.entry_id === 'go-1')!
+    Decisions.read(dir).append(QUEUES.translation('bg'), [{ key: 'go-1', at: NOW, verdict: 'drop', proposed: go.l1['bg']!, by: 'r' }])
+    // Online: the unit that loses a word is named again.
+    await runDraft({ dir, llm: sampleLlm(), offline: false })
+    approveAll(dir)
+    setConfig(dir, { units_rebuilt_after: 1 })
+    const plan = planRelease(dir, { draft: false, now: NOW })
+    expect([plan.problems, plan.pending, plan.retired]).toEqual([[], [], ['go-1']])
+    const o = out()
+    writeRelease(dir, o, plan)
+    const v2 = packOf(o, 'corpus-v2-bg.pack')
+    const old = v1.entries.find((e) => e.entry_id === 'go-1')!
+    expect(v2.entries.find((e) => e.entry_id === 'go-1')).toEqual({ ...old, retired: true })
+    expect(v2.units.filter((u) => u.entry_ids.includes('go-1')).map((u) => u.unit_id)).toEqual([old.unit_id])
+  })
+
   it('releases a fully reviewed corpus as version 1, a valid successor of the sample', async () => {
     const dir = await reviewed()
     const plan = planRelease(dir, { draft: false, now: NOW })

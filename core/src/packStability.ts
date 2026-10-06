@@ -12,8 +12,8 @@ export interface SuccessionOptions {
 /**
  * What version n+1 of a pack owes version n (spec §5.1): the same pack and
  * L1, a higher corpus version, a schema that does not go back, and every
- * entry and unit ID still present — a retired entry stays in the pack. The
- * pipeline runs this against the last published pack before publishing.
+ * entry and unit ID still present — a retired entry stays in the pack. Units
+ * may be waived with `allowRemovedUnits`; entries never. The pipeline runs this against the last published pack before publishing.
  */
 export function checkPackSuccession(previous: Pack, next: Pack, opts: SuccessionOptions = {}): PackError[] {
   const errors: PackError[] = []

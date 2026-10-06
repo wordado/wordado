@@ -37,11 +37,11 @@ export interface DraftEntry {
   /** The first sense of a word in essentials.txt: live at the LLM's level whatever its frequency (Decision 19). */
   readonly essential: boolean
   readonly band: CefrLevel
-  /** What the banding queue judges: the unit's level for a placed entry, else the banded LLM level. */
+  /** What the banding queue judges: the unit's level for a placed entry, else the banded level; the banded level for every entry under `rebuild`. */
   readonly level_proposal: CefrLevel
   /** The proposal after any banding decision. */
   readonly level: CefrLevel
-  /** The frequency band clamped the LLM's level (Decision 7). */
+  /** The frequency limit changed the level of an entry not yet published, or a published entry's proposed level differs from its published one. */
   readonly level_flagged: boolean
   readonly themes: readonly string[]
   readonly english: EnglishFields
@@ -169,7 +169,8 @@ export async function runDraft(opts: DraftOptions): Promise<Draft> {
       level_proposal: proposal,
       level: foldField(proposal, decisions.for(QUEUES.level, entry_id)).value,
       // A limited level stays flagged until it is published; a published entry is flagged when its level moved.
-      level_flagged: was === undefined ? s.flagged : was !== proposal,
+      // Only while the proposal is the banded level itself: a level a person chose is a unit's level, not a proposal to review again.
+      level_flagged: proposal === s.banded && (was === undefined ? s.flagged : was !== proposal),
       themes: [],
       english: { ipa: s.ipa, variants: s.variants, examples: s.examples },
       l1: s.l1,

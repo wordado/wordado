@@ -112,7 +112,8 @@ export function assemble(input: AssembleInput): Assembled {
     entries.push({ ...old, audio, retired: true })
   }
 
-  const present = new Set(entries.map((e) => e.entry_id))
+  // A unit lists only the entries whose pack unit_id it is: a retired entry keeps its old unit, whatever the draft says.
+  const unitIdOf = new Map(entries.map((e) => [e.entry_id, e.unit_id]))
   const byUnit = new Map<string, string[]>()
   for (const e of entries) byUnit.set(e.unit_id, [...(byUnit.get(e.unit_id) ?? []), e.entry_id])
   const previousUnits = new Map((input.previous?.units ?? []).map((u) => [u.unit_id, u]))
@@ -124,7 +125,7 @@ export function assemble(input: AssembleInput): Assembled {
     [...unitIds].map((id) => ({ unit_id: id, level: (draftUnits.get(id) ?? previousUnits.get(id))!.level, entry_ids: [] as string[] })),
   )
   const units = ordered.map((u, i) => {
-    const members = draftUnits.get(u.unit_id)?.entry_ids.filter((id) => present.has(id)) ?? []
+    const members = draftUnits.get(u.unit_id)?.entry_ids.filter((id) => unitIdOf.get(id) === u.unit_id) ?? []
     const listed = new Set(members)
     const entry_ids = [...members, ...byUnit.get(u.unit_id)!.filter((id) => !listed.has(id))]
     const hasLive = entry_ids.some((id) => live.has(id))
