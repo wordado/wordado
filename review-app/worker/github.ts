@@ -83,6 +83,14 @@ export class GitHub {
     return { number: pr.number, url: pr.html_url }
   }
 
+  /** The pull request opened from a branch, whatever its state; null when there is none. */
+  async findPr(branch: string): Promise<{ number: number; url: string } | null> {
+    const owner = this.cfg.repo.split('/')[0] ?? ''
+    const list = await this.json<{ number: number; html_url: string }[]>(await this.call('GET', `/pulls?head=${encodeURIComponent(`${owner}:${branch}`)}&state=all`), 'pull requests')
+    const pr = list[0]
+    return pr ? { number: pr.number, url: pr.html_url } : null
+  }
+
   async prState(n: number): Promise<'open' | 'merged' | 'closed'> {
     const pr = await this.json<{ state: string; merged: boolean }>(await this.call('GET', `/pulls/${n}`), 'pull request')
     return pr.merged ? 'merged' : pr.state === 'open' ? 'open' : 'closed'

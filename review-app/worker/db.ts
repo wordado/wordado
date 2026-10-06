@@ -141,6 +141,37 @@ export async function insertSubmission(db: D1Database, s: Omit<SubmissionRow, 'i
     .run()
   return res.meta.last_row_id
 }
+/**
+ * Claims a submit: a submission with no pull request yet, and the given unsubmitted decisions marked with it.
+ * Null when the assignment already has a claim (the unique index submissions_claim), so two submits at once
+ * cannot both go to GitHub.
+ */
+export async function claimSubmission(db: D1Database, s: Pick<SubmissionRow, 'assignment' | 'branch' | 'count' | 'leftOut' | 'createdAt'>, keys: readonly string[]): Promise<number | null> {
+  let id: number
+  try {
+    id = await insertSubmission(db, { ...s, pr: null, url: null, status: 'open' })
+  } catch (err) {
+    if (/UNIQUE constraint failed/i.test(err instanceof Error ? err.message : String(err))) return null
+    throw err
+  }
+  await markSubmitted(db, s.assignment, keys, id)
+  return id
+}
+/** The assignment's claim that has no pull request yet, if any. */
+export async function pendingClaim(db: D1Database, assignmentId: number): Promise<SubmissionRow | null> {
+  const r = await db.prepare("SELECT * FROM submissions WHERE assignment = ? AND pr IS NULL AND status = 'open'").bind(assignmentId).first<SubmissionRecord>()
+  return r ? submissionRow(r) : null
+}
+export async function setSubmissionBranch(db: D1Database, id: number, branch: string): Promise<void> {
+  await db.prepare('UPDATE submissions SET branch = ? WHERE id = ?').bind(branch, id).run()
+}
+export async function completeSubmission(db: D1Database, id: number, pr: number, url: string): Promise<void> {
+  await db.prepare('UPDATE submissions SET pr = ?, url = ? WHERE id = ?').bind(pr, url, id).run()
+}
+/** Gives a claim up: its decisions are unsubmitted again and the claim is gone. */
+export async function releaseSubmission(db: D1Database, id: number): Promise<void> {
+  await db.batch([db.prepare('UPDATE decisions SET submission = NULL WHERE submission = ?').bind(id), db.prepare('DELETE FROM submissions WHERE id = ? AND pr IS NULL').bind(id)])
+}
 export async function listSubmissions(db: D1Database, filter: { assignment?: number; status?: SubmissionRow['status'] } = {}): Promise<SubmissionRow[]> {
   const where: string[] = []
   const args: unknown[] = []

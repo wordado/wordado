@@ -45,6 +45,8 @@ export function AssignmentReview(props: { assignment: AssignmentView }) {
       setSent(await hostedApi.submit(a.id))
       await load()
     } catch (err) {
+      // Reload first (it sets its own notice): after a refused or failed submit the rows show what is really pending.
+      await load()
       setNotice(err instanceof Error ? err.message : String(err))
     } finally {
       setSubmitting(false)

@@ -2,6 +2,8 @@
 
 Date: 2026-10-05. Status: draft for the product owner's review.
 Builds on: `2026-10-04-ai-review-and-review-app-design.md` (the local review app, §5; "Remote reviewers later", §8).
+Revised 2026-10-06: §7.2 gains the submission claim (one submit at a time; no duplicate pull request after a
+failure that follows the pull request).
 Revised 2026-10-05 after the implementation's final review: §7.2 defers listing branches left without a pull
 request; §5.1 notes that a closed assignment can be reassigned.
 
@@ -203,6 +205,14 @@ If any GitHub call fails before the pull request exists, nothing is recorded: th
 reviewer sees *could not reach GitHub, try again*, and a later Submit uses a new branch name (`<n>` + 1). A branch
 left behind without a pull request is harmless. Listing such branches on the admin page for deletion is deferred
 (not built in the first version); until then they are deleted by hand in wordado-content.
+
+**One submit at a time (the claim).** Before any write to GitHub, Submit records the submission with no pull
+request number and marks its decisions with it; a unique index allows one such claim per assignment, so a second
+Submit at the same moment is refused (409, *a submit is already in progress*). When GitHub fails before the pull
+request exists, the claim is released. When something fails after it exists, the claim stays, so a retry cannot open
+a second pull request; the next Submit of that assignment, or the admin's submissions list, settles it: a pull
+request found on GitHub for the claimed branch completes the claim, and a claim older than two minutes with none is
+released.
 
 ### 7.3 Import, in wordado-content
 

@@ -5,7 +5,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import type { RowsResponse, SubmissionView, SubmitResult } from '../../shared/hosted'
 import { createApp, type Deps } from '../app'
 import type { Env } from '../bindings'
-import { insertAssignment, insertReviewer, listDecisions, listSubmissions } from '../db'
+import { insertAssignment, insertReviewer, insertSubmission, listDecisions, listSubmissions, markSubmitted } from '../db'
 import { resetGitHubTokens } from '../github'
 import { resetSnapshotCache } from '../snapshotStore'
 import { branchSlug } from '../submit'
@@ -139,6 +139,71 @@ describe('POST /api/submit', () => {
     failGitHub = true
     expect((await as('ivan@example.com', 'POST', '/api/submit', { assignment: id })).status).toBe(502)
     expect(await listSubmissions(env.DB)).toHaveLength(0)
+    expect((await listDecisions(env.DB, id)).every((d) => d.submission === null)).toBe(true)
+  })
+})
+
+describe('one submit at a time (the claim)', () => {
+  /** A claim as a submit leaves it before its pull request is recorded: pr null, the decisions marked with it. */
+  async function pendingClaim(branch: string, createdAt: string, n = 1): Promise<number> {
+    const rows = await decideFirst(n)
+    const claim = await insertSubmission(env.DB, { assignment: id, branch, pr: null, url: null, count: n, leftOut: 0, status: 'open', createdAt })
+    await markSubmitted(env.DB, id, rows.map((r) => r.key), claim)
+    return claim
+  }
+
+  it('two submits at once open one pull request; the other is refused', async () => {
+    await decideFirst(2)
+    const both = await Promise.all([as('ivan@example.com', 'POST', '/api/submit', { assignment: id }), as('ivan@example.com', 'POST', '/api/submit', { assignment: id })])
+    expect(both.map((r) => r.status).sort()).toEqual([200, 409])
+    const refused = both.find((r) => r.status === 409)!
+    expect(((await refused.json()) as { message: string }).message).toMatch(/already in progress/)
+    expect(fake.pulls).toHaveLength(1)
+    expect(await listSubmissions(env.DB)).toHaveLength(1)
+  })
+
+  it('releases the claim when GitHub fails before the pull request, so a retry is clean', async () => {
+    await decideFirst(1)
+    failGitHub = true
+    expect((await as('ivan@example.com', 'POST', '/api/submit', { assignment: id })).status).toBe(502)
+    expect(await listSubmissions(env.DB)).toHaveLength(0)
+    failGitHub = false
+    expect((await as('ivan@example.com', 'POST', '/api/submit', { assignment: id })).status).toBe(200)
+    expect(fake.pulls).toHaveLength(1)
+  })
+
+  it('a claim whose pull request exists on GitHub is completed, not submitted again', async () => {
+    const claim = await pendingClaim('review/translation-bg-ivan-20261005-1', '2026-10-05T11:59:30Z')
+    fake.branches.set('review/translation-bg-ivan-20261005-1', fake.mainSha)
+    fake.pulls.push({ number: 1, title: 't', head: 'review/translation-bg-ivan-20261005-1', body: '', state: 'open', merged: false })
+    const res = await as('ivan@example.com', 'POST', '/api/submit', { assignment: id })
+    expect(res.status).toBe(200)
+    expect(await res.json()).toMatchObject({ pr: 1, url: 'https://github.com/wordado/wordado-content/pull/1', count: 1 })
+    expect(fake.pulls).toHaveLength(1)
+    expect(await listSubmissions(env.DB)).toMatchObject([{ id: claim, pr: 1, status: 'open' }])
+  })
+
+  it('a fresh claim with no pull request yet means a submit is still running', async () => {
+    await pendingClaim('review/translation-bg-ivan-20261005-1', '2026-10-05T11:59:30Z')
+    expect((await as('ivan@example.com', 'POST', '/api/submit', { assignment: id })).status).toBe(409)
+    expect(fake.pulls).toHaveLength(0)
+  })
+
+  it('a stale claim with no pull request is released and the decisions go out', async () => {
+    await pendingClaim('review/translation-bg-ivan-20261005-1', '2026-10-05T11:50:00Z')
+    const res = await as('ivan@example.com', 'POST', '/api/submit', { assignment: id })
+    expect(res.status).toBe(200)
+    expect(((await res.json()) as SubmitResult).count).toBe(1)
+    expect(fake.pulls).toHaveLength(1)
+    const subs = await listSubmissions(env.DB)
+    expect(subs).toHaveLength(1)
+    expect(subs[0]!.pr).toBe(1)
+  })
+
+  it('the admin list repairs claims too', async () => {
+    await pendingClaim('review/translation-bg-ivan-20261005-1', '2026-10-05T11:50:00Z')
+    const list = (await (await as('admin@example.com', 'GET', '/api/admin/submissions')).json()) as SubmissionView[]
+    expect(list).toHaveLength(0)
     expect((await listDecisions(env.DB, id)).every((d) => d.submission === null)).toBe(true)
   })
 })
