@@ -27,7 +27,7 @@ export function HostedApp(props: { me: Me }) {
         )}
       </AppHeader>
       {view.kind === 'list' && <Assignments onOpen={(assignment) => setView({ kind: 'review', assignment })} />}
-      {view.kind === 'review' && <AssignmentReview key={view.assignment.id} assignment={view.assignment} />}
+      {view.kind === 'review' && <AssignmentReview key={view.assignment.id} assignment={view.assignment} onBack={() => setView({ kind: 'list' })} />}
       {view.kind === 'admin' && <Admin />}
     </div>
   )

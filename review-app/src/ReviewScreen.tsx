@@ -1,19 +1,26 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { Action, RowView } from '../server/types'
-import { RowList } from './RowList'
-import { RowViewPanel } from './RowView'
+import { HeaderSlot } from './AppHeader'
+import { RowCard } from './RowCard'
+import { RowDrawer } from './RowDrawer'
 import { useKeys } from './useKeys'
 
-/** The review screen both modes share, under the app header: the level and severity filters, the decided count,
- * the row list, the row panel and the keys. The parent owns the rows and how a decision is stored; `onDecide` resolves to a notice to show
- * (null when the decision went through, and the screen then moves on to the next undecided row). */
+/** The review screen both modes share: one row at a time in a centred column, the row list with the level and
+ * severity filters in a drawer (All rows, key L), and its own part of the app header (what is reviewed, the
+ * parent's controls and actions). The parent owns the rows and how a decision is stored; `onDecide` resolves to a
+ * notice to show (null when the decision went through, and the screen then moves on to the next undecided row). */
 export function ReviewScreen(props: {
   rows: readonly RowView[]
   onDecide(row: RowView, action: Action, cells: Record<string, string>, note: string): Promise<string | null>
   onReload(): Promise<void>
+  /** what is being reviewed, for the header */
+  title?: string
   controls?: ReactNode
+  /** the screen's main action (Submit, Import decisions): in the header, and in the done state instead */
   actions?: ReactNode
   notice?: string
+  /** the way back to the list this was opened from, offered when nothing is left */
+  onBack?: () => void
 }) {
   const { rows } = props
   const [selected, setSelected] = useState<string | null>(null)
@@ -21,21 +28,24 @@ export function ReviewScreen(props: {
   const [level, setLevel] = useState('')
   const [severity, setSeverity] = useState('')
   const [saving, setSaving] = useState(false)
-
-  // Selection keeps the current row while it is still listed, else falls to the first undecided one.
-  useEffect(() => setSelected((cur) => (cur && rows.some((x) => x.key === cur) ? cur : (rows.find((x) => !x.decided)?.key ?? null))), [rows])
+  const [listOpen, setListOpen] = useState(false)
 
   const shown = useMemo(
     () => rows.filter((r) => (level === '' || r.context['level'] === level) && (severity === '' || (severity === 'report' ? r.reports !== '' : r.severity === severity))),
     [rows, level, severity],
   )
-  const row = shown.find((r) => r.key === selected) ?? null
-  /** The next (dir 1) or previous (dir -1) undecided row from the selected one, wrapping around the list. */
+  // Selection keeps the current row while it is still shown, else falls to the first undecided one.
+  useEffect(() => setSelected((cur) => (cur && shown.some((x) => x.key === cur) ? cur : (shown.find((x) => !x.decided)?.key ?? null))), [shown])
+
+  const index = shown.findIndex((r) => r.key === selected)
+  const row = index === -1 ? null : shown[index]!
+  /** The next (dir 1) or previous (dir -1) undecided row from the selected one, wrapping around the list. After a
+   * decision the selected row itself no longer counts (`shown` is from before the reload and still has it open). */
   const move = useCallback(
-    (dir: 1 | -1) => {
+    (dir: 1 | -1, afterDecision = false) => {
       if (shown.length === 0) return setSelected(null)
       const i = shown.findIndex((r) => r.key === selected)
-      for (let step = 1; step <= shown.length; step += 1) {
+      for (let step = 1; step <= shown.length - (afterDecision ? 1 : 0); step += 1) {
         const r = shown[(((i + dir * step) % shown.length) + shown.length) % shown.length]!
         if (!r.decided) return setSelected(r.key)
       }
@@ -53,61 +63,57 @@ export function ReviewScreen(props: {
         const message = await props.onDecide(row, action, cells, note)
         setNotice(message ?? '')
         await props.onReload()
-        if (message === null) next()
+        if (message === null) move(1, true)
       } catch (err) {
         setNotice(err instanceof Error ? err.message : String(err))
       } finally {
         setSaving(false)
       }
     },
-    [row, saving, props, next],
+    [row, saving, props, move],
   )
-  const keys = useMemo(() => (saving ? {} : { s: next, ArrowDown: next, ArrowUp: prev }), [next, prev, saving])
+  const openList = useCallback(() => setListOpen(true), [])
+  const closeList = useCallback(() => setListOpen(false), [])
+  const keys = useMemo(() => ({ l: openList, ...(saving ? {} : { s: next, ArrowDown: next, ArrowUp: prev }) }), [openList, next, prev, saving])
   useKeys(keys)
   const handleDecide = useCallback((action: Action, cells: Record<string, string>, note: string) => void decide(action, cells, note), [decide])
 
-  const decided = rows.filter((r) => r.decided).length
   const shownNotice = notice || props.notice || ''
   return (
-    <div className="app page wide">
-      <header className="toolbar">
+    <>
+      <HeaderSlot>
+        {props.title && <span className="crumb">{props.title}</span>}
         {props.controls}
-        <span className="field">
-          <select value={level} onChange={(e) => setLevel(e.target.value)} aria-label="Level">
-            <option value="">all levels</option>
-            {['A1', 'A2', 'B1', 'B2', 'C1'].map((l) => (
-              <option key={l} value={l}>
-                {l}
-              </option>
-            ))}
-          </select>
+        <span className="header-actions">
+          <button className="button" onClick={openList}>
+            <span aria-hidden="true">☰</span> All rows
+          </button>
+          {row && props.actions}
         </span>
-        <span className="field">
-          <select value={severity} onChange={(e) => setSeverity(e.target.value)} aria-label="Severity">
-            <option value="">all objections</option>
-            <option value="report">learner reports</option>
-            <option value="major">major</option>
-            <option value="minor">minor</option>
-          </select>
-        </span>
-        <span className="muted">
-          {decided} of {rows.length} decided
-        </span>
-        {props.actions}
-      </header>
-      {shownNotice && (
-        <p role="status" className="notice">
-          {shownNotice}
-        </p>
-      )}
-      <main>
-        <RowList rows={shown} selected={selected} onSelect={setSelected} />
+      </HeaderSlot>
+      <main className="review page">
+        {shownNotice && (
+          <p role="status" className="notice">
+            {shownNotice}
+          </p>
+        )}
         {row ? (
-          <RowViewPanel key={`${row.key}:${row.version}`} row={row} onDecide={handleDecide} onSkip={next} saving={saving} />
+          <RowCard key={`${row.key}:${row.version}`} row={row} position={{ index, total: shown.length }} onDecide={handleDecide} onSkip={next} onPrev={prev} saving={saving} />
         ) : (
-          <p className="muted">Nothing left to decide here.</p>
+          <section className="panel done">
+            <p>Nothing left to decide here.</p>
+            <div className="actions">
+              {props.actions}
+              {props.onBack && (
+                <button className="button" onClick={props.onBack}>
+                  Back to assignments
+                </button>
+              )}
+            </div>
+          </section>
         )}
       </main>
-    </div>
+      <RowDrawer open={listOpen} rows={shown} selected={selected} onSelect={setSelected} onClose={closeList} level={level} severity={severity} onLevel={setLevel} onSeverity={setSeverity} />
+    </>
   )
 }

@@ -20,3 +20,10 @@ export function scopeLabel(a: { files: readonly string[] | '*'; flaggedOnly: boo
 export function assignmentLabel(a: { queue: string; files: readonly string[] | '*'; flaggedOnly: boolean }): string {
   return `${queueLabel(a.queue)} · ${scopeLabel(a)}`
 }
+
+const FIELD_LABELS: Readonly<Record<string, string>> = { translation: 'Translation', alternates: 'Alternates', sense: 'Sense', title_en: 'English title', title_l1: 'Translated title', level: 'Level' }
+
+/** A row's field in plain words: "title_l1" → "Translated title". A field it does not know comes back as it is. */
+export function fieldLabel(field: string): string {
+  return FIELD_LABELS[field] ?? field
+}

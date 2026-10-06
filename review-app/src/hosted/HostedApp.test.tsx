@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { hostedApi } from '../hostedApi'
 import { HostedApp } from './HostedApp'
@@ -20,6 +20,50 @@ describe('HostedApp', () => {
     render(<HostedApp me={me} />)
     fireEvent.click(await screen.findByRole('button', { name: /translation-de/ }))
     expect(await screen.findByRole('article', { name: 'Row bank-2' })).toBeTruthy()
+    // the header says what is being reviewed, in plain words
+    expect(within(screen.getByRole('banner')).getByText('German translations · flagged rows')).toBeTruthy()
+    expect(within(screen.getByRole('banner')).getByText('Anna')).toBeTruthy()
+  })
+
+  it('shows one row at a time; L opens the row list and its filters narrow the rows', async () => {
+    vi.spyOn(hostedApi, 'assignments').mockResolvedValue([assignment])
+    vi.spyOn(hostedApi, 'rows').mockResolvedValue({ rows: [row('bank-2'), row('carbon-1', { context: { level: 'B2' } })], discarded: [] })
+    render(<HostedApp me={me} />)
+    fireEvent.click(await screen.findByRole('button', { name: /translation-de/ }))
+    await screen.findByRole('article', { name: 'Row bank-2' })
+    expect(screen.getByText('1 of 2')).toBeTruthy()
+    expect(screen.queryByRole('list', { name: 'Rows' })).toBeNull()
+    fireEvent.keyDown(window, { key: 'l' })
+    const list = within(screen.getByRole('list', { name: 'Rows' }))
+    expect(list.getAllByRole('button').length).toBe(2)
+    fireEvent.change(screen.getByLabelText('Level'), { target: { value: 'B2' } })
+    expect(list.getAllByRole('button').length).toBe(1)
+    fireEvent.click(list.getByRole('button', { name: /carbon-1/ }))
+    expect(screen.queryByRole('list', { name: 'Rows' })).toBeNull()
+    expect(screen.getByRole('article', { name: 'Row carbon-1' })).toBeTruthy()
+    expect(screen.getByText('1 of 1')).toBeTruthy()
+  })
+
+  it('moves on after a decision and, with every row decided, offers Submit and the way back', async () => {
+    vi.spyOn(hostedApi, 'assignments').mockResolvedValue([assignment])
+    const decision = { action: 'keep' as const, cells: {}, note: '', submission: null, changed: false }
+    const decidedRow = (key: string) => row(key, { decided: { verdict: 'ok', note: '' }, decision })
+    const rows = vi.spyOn(hostedApi, 'rows').mockResolvedValue({ rows: [row('bank-2'), row('bank-3')], discarded: [] })
+    vi.spyOn(hostedApi, 'decide').mockResolvedValue({ ok: true, version: 'h' })
+    render(<HostedApp me={me} />)
+    fireEvent.click(await screen.findByRole('button', { name: /translation-de/ }))
+    await screen.findByRole('article', { name: 'Row bank-2' })
+    rows.mockResolvedValue({ rows: [decidedRow('bank-2'), row('bank-3')], discarded: [] })
+    fireEvent.keyDown(window, { key: '2' })
+    expect(await screen.findByRole('article', { name: 'Row bank-3' })).toBeTruthy()
+    expect(screen.getByText('2 of 2')).toBeTruthy()
+    rows.mockResolvedValue({ rows: [decidedRow('bank-2'), decidedRow('bank-3')], discarded: [] })
+    await waitFor(() => expect((screen.getByRole('button', { name: /Keep/ }) as HTMLButtonElement).disabled).toBe(false))
+    fireEvent.keyDown(window, { key: '2' })
+    expect(await screen.findByText('Nothing left to decide here.')).toBeTruthy()
+    expect(screen.getAllByRole('button', { name: /Submit 2 decisions/ }).length).toBe(1)
+    fireEvent.click(screen.getByRole('button', { name: 'Back to assignments' }))
+    expect(await screen.findByRole('region', { name: 'My assignments' })).toBeTruthy()
   })
 
   it('decides with the row hash and submits', async () => {

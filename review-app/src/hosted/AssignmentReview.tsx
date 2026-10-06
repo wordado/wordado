@@ -2,12 +2,12 @@ import { useCallback, useEffect, useState } from 'react'
 import type { Action, RowView } from '../../server/types'
 import type { AssignmentView, HostedRow, SubmitResult } from '../../shared/hosted'
 import { hostedApi } from '../hostedApi'
+import { assignmentLabel } from '../labels'
 import { ReviewScreen } from '../ReviewScreen'
-import { scopeOf } from './Assignments'
 
 /** One assignment on the shared review screen: decisions go to the Worker with the row hash they were made on,
  * and Submit sends the open ones as one pull request. */
-export function AssignmentReview(props: { assignment: AssignmentView }) {
+export function AssignmentReview(props: { assignment: AssignmentView; onBack(): void }) {
   const a = props.assignment
   const [rows, setRows] = useState<readonly HostedRow[]>([])
   const [notice, setNotice] = useState('')
@@ -71,14 +71,10 @@ export function AssignmentReview(props: { assignment: AssignmentView }) {
         onDecide={onDecide}
         onReload={load}
         notice={notice}
-        controls={
-          <>
-            <strong>{a.queue}</strong>
-            <span className="muted">{scopeOf(a)}</span>
-          </>
-        }
+        title={assignmentLabel(a)}
+        onBack={props.onBack}
         actions={
-          <button className="button primary" onClick={() => void submitNow()} disabled={open === 0 || submitting}>
+          <button className={open > 0 ? 'button primary' : 'button'} onClick={() => void submitNow()} disabled={open === 0 || submitting}>
             Submit {open} {open === 1 ? 'decision' : 'decisions'}
           </button>
         }

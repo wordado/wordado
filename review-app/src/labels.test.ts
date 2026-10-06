@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { assignmentLabel, queueLabel, scopeLabel } from './labels'
+import { assignmentLabel, fieldLabel, queueLabel, scopeLabel } from './labels'
 
 describe('labels', () => {
   it('names queues in plain words', () => {
@@ -14,5 +14,10 @@ describe('labels', () => {
     expect(scopeLabel({ files: ['a', 'b'], flaggedOnly: false })).toBe('2 files')
     expect(scopeLabel({ files: ['a'], flaggedOnly: true })).toBe('flagged rows in 1 file')
     expect(assignmentLabel({ queue: 'translation-es', files: '*', flaggedOnly: true })).toBe('Spanish translations · flagged rows')
+  })
+  it('names a row’s fields in plain words', () => {
+    expect(fieldLabel('translation')).toBe('Translation')
+    expect(fieldLabel('title_l1')).toBe('Translated title')
+    expect(fieldLabel('something_new')).toBe('something_new')
   })
 })

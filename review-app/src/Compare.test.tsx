@@ -1,0 +1,55 @@
+import { cleanup, render, screen, within } from '@testing-library/react'
+import { afterEach, describe, expect, it } from 'vitest'
+import { Compare } from './Compare'
+import { bank, bankClean, bankThree } from './testRows'
+
+afterEach(cleanup)
+
+const now = () => within(screen.getByRole('region', { name: 'Now' }))
+const suggested = () => within(screen.getByRole('region', { name: 'AI suggests' }))
+
+describe('Compare', () => {
+  it('strikes the questioned value under Now and shows the fix under AI suggests', () => {
+    render(<Compare row={bank} ticked={new Set([0])} />)
+    expect(now().getByText('банка').classList.contains('struck')).toBe(true)
+    expect(suggested().getByText('бряг')).toBeTruthy()
+    expect(suggested().queryByText('банка')).toBeNull()
+    // the fields no objection touches read the same on both sides
+    expect(now().getByText('край на река').classList.contains('struck')).toBe(false)
+    expect(suggested().getByText('край на река')).toBeTruthy()
+    expect(now().getByText('none')).toBeTruthy()
+    expect(suggested().getByText('none')).toBeTruthy()
+  })
+
+  it('marks only the changed values as changed', () => {
+    render(<Compare row={bank} ticked={new Set([0])} />)
+    expect(suggested().getByText('бряг').tagName).toBe('B')
+    expect(suggested().getByText('край на река').tagName).not.toBe('B')
+  })
+
+  it('applies exactly the ticked fixes when a field has two objections', () => {
+    const first = render(<Compare row={bankThree} ticked={new Set([0, 2])} />)
+    expect(suggested().getByText('бряг')).toBeTruthy()
+    expect(suggested().getByText('бряг на река')).toBeTruthy()
+    expect(suggested().queryByText('крайбрежие')).toBeNull()
+    first.unmount()
+    render(<Compare row={bankThree} ticked={new Set([1, 2])} />)
+    expect(suggested().getByText('крайбрежие')).toBeTruthy()
+    expect(suggested().queryByText('бряг')).toBeNull()
+    expect(suggested().getByText('бряг на река')).toBeTruthy()
+  })
+
+  it('leaves a questioned value unstruck when its fix is not ticked', () => {
+    render(<Compare row={bankThree} ticked={new Set([0])} />)
+    expect(now().getByText('банка').classList.contains('struck')).toBe(true)
+    expect(now().getByText('край на река').classList.contains('struck')).toBe(false)
+    expect(suggested().getByText('край на река')).toBeTruthy()
+  })
+
+  it('has no AI suggests box for a row without objections', () => {
+    render(<Compare row={bankClean} ticked={new Set()} />)
+    expect(screen.getByRole('region', { name: 'Now' })).toBeTruthy()
+    expect(screen.queryByRole('region', { name: 'AI suggests' })).toBeNull()
+    expect(screen.queryByText('AI suggests')).toBeNull()
+  })
+})
