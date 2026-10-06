@@ -25,7 +25,7 @@ absolutely: `"$PWD/content"` from the repository root.
 | Command | What it does |
 |---|---|
 | `init <dir>` | A new content directory: the template, the sample's IDs pinned in `registry.json`, the curated themes, and the sample as `last-published/` (v0). |
-| `draft <dir> [--offline] [--regroup]` | Every LLM stage, then IDs, selection, themes, units and titles. Needs `OPENROUTER_API_KEY`, except `--offline`, which uses the caches only. `--regroup` rebuilds every unit no published pack carries. |
+| `draft <dir> [--offline] [--regroup \| --rebuild]` | Every LLM stage, then IDs, selection, themes, units and titles. Needs `OPENROUTER_API_KEY`, except `--offline`, which uses the caches only. `--regroup` rebuilds every unit no published pack carries. `--rebuild` is for one deliberate release: see *Levels, sizes and which words are in*. |
 | `audio <dir> [--batch <id>]` | Clips for live entries that have none, whose voice settings changed, or that were marked `redo`. Needs ffmpeg and `OPENROUTER_API_KEY`. |
 | `queues <dir>` | Writes pending review items to `review/<queue>/`. |
 | `import <dir> --by <name>` | Applies every reviewed row as a decision. |
@@ -231,6 +231,47 @@ it reviews stale proposals. The workflow also runs only the configured default r
 `status` lists, per AI-reviewed queue, the rows not yet AI-reviewed and the flagged rows awaiting a decision;
 `release` refuses while either is open, even for queues in `accept_unreviewed`. Decide the flagged rows in the review
 app (`review-app/README.md`), then `corpus import`.
+
+## Levels, sizes and which words are in
+
+A sense's level is the LLM's judgement, kept within **two** bands of its word's frequency band (one band, until
+2026-10-06, put everyday words that print mentions rarely two levels too high). `targets` in `pipeline.json` sets
+the band boundaries and nothing else needs to change them.
+
+Which entries are live is decided in this order:
+
+1. Pinned entries and entries live in the last published pack. A learner's words never vanish.
+2. The main meanings named by `main_meanings`: `"A1": "all"` takes every main meaning of the level, and
+   `"B1": 5100` takes those whose word is among the 5,100 most frequent. An easy word is then never left out
+   because more frequent ones filled its level.
+3. The most frequent of the rest, until a level holds `sizes[level]` entries. Without `sizes`, `targets` is used.
+
+    "sizes": { "A1": 600, "A2": 1000, "B1": 1500, "B2": 1600, "C1": 2000 },
+    "main_meanings": { "A1": "all", "A2": "all", "B1": 5100 }
+
+A word form whose lemma answer came back empty counts as its own headword, unless it holds an apostrophe.
+
+### Rebuilding levels and units, once
+
+A published entry keeps its unit, and so its level; a published unit keeps its words. To apply a new level rule
+to the whole corpus, run **once**, locally:
+
+    pnpm --filter @wordado/pipeline corpus draft "$PWD/content" --rebuild
+
+Every entry takes its banded level and all units are built again. The old units stay in `registry.json`, empty,
+so their numbers are never reused. Every entry keeps its ID and stays live. Commit the caches and
+`registry.json`; later plain drafts read the new units.
+
+A published entry whose level changed is in the `level` queue, so the AI review checks it and a person decides its
+objections, as for any row.
+
+The release refuses removed units. For this one release, name the version being replaced in `pipeline.json`:
+
+    "units_rebuilt_after": 5
+
+It has an effect only while version 5 is the last published one, and `corpus status` says so while it does.
+Remove it after the release. Learners keep every word's progress; the saved unit unlocks are lost, and the app
+works the path out again from the words they have met.
 
 ## Themes and units
 

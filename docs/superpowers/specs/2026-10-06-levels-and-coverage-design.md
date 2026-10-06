@@ -122,10 +122,14 @@ After the run, `registry.json` holds the new units. A later plain `corpus draft 
 
 ### 3.5 A published entry whose level changed is in the `level` queue
 
-`level_flagged` (`src/draft.ts`) is true today when the limit changed a new entry's level. It becomes true also
-when a live entry's proposal differs from its level in the last published pack. This holds in every draft, not
-only with `--rebuild`, so the rows stay in the queue for the actions that follow, and leave it by themselves once
-version 6 is published.
+`level_flagged` (`src/draft.ts`) was true only in the one draft that first placed a limited entry in a unit: the
+next draft found the entry in a unit and cleared the flag, before the ai-review action could see the row. It is
+now decided against the last published pack, in every draft, not only with `--rebuild`:
+
+- an entry that was never published is flagged while the limit changed its level;
+- a published entry is flagged when its proposal differs from its published level.
+
+So the rows stay in the queue for the actions that follow, and leave it by themselves once version 6 is published.
 
 Nothing else changes in the queue: `level` is one of the queues the AI reviewer covers, the release waits until
 every open row has a verdict, and a row with a major objection waits for a person.
