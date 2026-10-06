@@ -25,6 +25,8 @@ export interface AiReviewConfig {
   readonly default: string
   readonly required?: readonly string[]
   readonly flag_when: number
+  /** The least severe verdict that counts as an objection: `minor` (the default, any objection) or `major`. */
+  readonly flag_severity?: 'minor' | 'major'
 }
 
 /** `pipeline.json`: everything a run may tune without a code change. */
@@ -126,6 +128,8 @@ function aiReviewProblems(raw: unknown, l1s: readonly string[]): string[] {
   const n = Array.isArray(required) ? required.length : 1
   const fw = raw['flag_when']
   if (typeof fw !== 'number' || !Number.isInteger(fw) || fw < 1 || fw > n) p.push(`ai_review.flag_when: must be a whole number from 1 to ${n} (the required reviewers)`)
+  const fs = raw['flag_severity']
+  if (fs !== undefined && fs !== 'minor' && fs !== 'major') p.push('ai_review.flag_severity: must be minor or major')
   return p
 }
 

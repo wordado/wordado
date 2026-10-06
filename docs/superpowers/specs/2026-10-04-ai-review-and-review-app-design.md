@@ -3,6 +3,7 @@
 **Date:** 2026-10-04 · **Status:** draft for the product owner's review
 **Parent spec:** `2026-09-20-vocabulary-learning-app-design.md`, §5.4 *Review tiers* and §8.10 (as amended
 2026-10-04: the beta opens on AI-reviewed content).
+**Revised 2026-10-05:** `ai_review.flag_severity` (§3.2, §3.3): the release gates on major objections only.
 
 ## 1. Purpose
 
@@ -70,7 +71,8 @@ corpus ai-review <dir> [--queue <queue>] [--reviewer <name>]
   },
   "default": "flash",
   "required": ["flash"],
-  "flag_when": 1
+  "flag_when": 1,
+  "flag_severity": "major"
 }
 ```
 
@@ -80,13 +82,17 @@ corpus ai-review <dir> [--queue <queue>] [--reviewer <name>]
 - `required` lists the reviewers whose verdict every row needs; it defaults to `[default]`. Other configured
   reviewers can be run for comparison without gating anything.
 - `configProblems` validates the block: known queues, a default and `required` that name configured reviewers,
-  and 1 ≤ `flag_when` ≤ the number of required reviewers.
+  and 1 ≤ `flag_when` ≤ the number of required reviewers, and `flag_severity` (if given) is `minor` or `major`.
 
 ### 3.3 What a row is flagged by
 
 A reviewer's verdict on a row is `ok`, `minor` or `major`, with a list of objections. A row is **AI-reviewed**
 when every `required` reviewer has a verdict on its **current content**, and then **flagged** when at least
-`flag_when` of those verdicts are `minor` or `major`. With Flash alone, `flag_when: 1` means "flagged if Flash
+`flag_when` of those verdicts are objections. With `flag_severity: "minor"` (the default) a `minor` or `major`
+verdict is an objection; with `"major"` only a `major` one is, so minor objections stay visible in the app (under
+*show unflagged*) without gating the release. Decided 2026-10-05: Flash flagged 8,323 of about 22,700 rows (37–41% of
+each language), most of them minor; the beta gates on major objections only (about 1,970 rows), and the minor ones
+go to native review. With Flash alone, `flag_when: 1` means "flagged if Flash
 objects". With three required reviewers, `2` is a majority. The app shows the objections of every configured
 reviewer that has a current verdict, required or not.
 
