@@ -56,6 +56,18 @@ export interface PipelineConfig {
   }
   /** Second-model review of the review queues (spec 2026-10-04 §3). Absent: no AI review and no AI gate. */
   readonly ai_review?: AiReviewConfig
+  /** How many entries the frequency fill brings each level to (spec 2026-10-06 §3.3). Absent: `targets`. */
+  readonly sizes?: Readonly<Record<CefrLevel, number>>
+  /**
+   * Main meanings (sense order 0) that are live whatever their level's size: every one of a level (`all`), or
+   * those whose word's frequency rank is within a bound.
+   */
+  readonly main_meanings?: Readonly<Partial<Record<CefrLevel, 'all' | number>>>
+  /**
+   * The corpus version whose units the next release may replace (spec 2026-10-06 §3.6). It has an effect only
+   * while that version is the last published one.
+   */
+  readonly units_rebuilt_after?: number
 }
 
 /** A curated theme (spec §8.9) as the content repository keeps it: named in English and in every L1. */
@@ -165,6 +177,24 @@ export function configProblems(raw: unknown): string[] {
   posInt(raw['max_lemmas'], 'max_lemmas')
   posInt(raw['unit_size'], 'unit_size')
   posInt(raw['report_threshold'], 'report_threshold')
+  const sizes = raw['sizes']
+  if (sizes !== undefined) {
+    if (!isRecord(sizes)) p.push('sizes: must be an object')
+    else for (const level of CEFR_LEVELS) posInt(sizes[level], `sizes.${level}`)
+  }
+  const main = raw['main_meanings']
+  if (main !== undefined) {
+    if (!isRecord(main)) p.push('main_meanings: must be an object')
+    else
+      for (const [level, rule] of Object.entries(main)) {
+        if (!Array.isArray(levels) || !levels.includes(level)) p.push(`main_meanings.${level}: must be a level this corpus ships`)
+        else if (rule !== 'all' && !(typeof rule === 'number' && Number.isInteger(rule) && rule >= 1)) p.push(`main_meanings.${level}: must be "all" or a positive integer`)
+      }
+  }
+  const rebuilt = raw['units_rebuilt_after']
+  if (rebuilt !== undefined && !(typeof rebuilt === 'number' && Number.isInteger(rebuilt) && rebuilt >= 0)) {
+    p.push('units_rebuilt_after: must be a corpus version (0 or more)')
+  }
   const accept = raw['accept_unreviewed']
   if (accept !== undefined) {
     const queues = reviewQueues(Array.isArray(l1s) ? l1s.filter((l): l is string => typeof l === 'string') : [])
