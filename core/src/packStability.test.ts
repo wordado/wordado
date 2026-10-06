@@ -84,4 +84,17 @@ describe('checkPackSuccession', () => {
     expect(checkPackSuccession({ ...v0, schema_version: 2 }, { ...v0, corpus_version: 1 }).map((e) => e.path)).toEqual(['schema_version'])
     expect(checkPackSuccession(v0, { ...v0, corpus_version: 1, pack_id: 'corpus-es', l1: 'es' }).map((e) => e.path)).toEqual(['pack_id', 'l1'])
   })
+
+  it('accepts removed units when the units were rebuilt, and still refuses a removed entry', () => {
+    const rebuilt: Pack = {
+      ...v0,
+      corpus_version: 1,
+      entries: [entry('hello-1', 'a1-02'), entry('water-1', 'a1-02')],
+      units: [unit('a1-02', 1, ['hello-1', 'water-1'])],
+    }
+    expect(checkPackSuccession(v0, rebuilt)).toEqual([{ path: 'units', message: 'unit a1-01 was removed' }])
+    expect(checkPackSuccession(v0, rebuilt, { allowRemovedUnits: true })).toEqual([])
+    const lost: Pack = { ...rebuilt, entries: [entry('hello-1', 'a1-02')], units: [unit('a1-02', 1, ['hello-1'])] }
+    expect(checkPackSuccession(v0, lost, { allowRemovedUnits: true })).toEqual([{ path: 'entries', message: 'entry water-1 was removed; retire it instead' }])
+  })
 })
