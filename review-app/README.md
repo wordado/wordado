@@ -31,11 +31,12 @@ which `corpus import` then records. It runs on your machine only (127.0.0.1); no
    It builds the UI, starts a server on 127.0.0.1 and opens the browser. The first time it asks your name, which
    `corpus import` records with every decision (kept in `~/.config/wordado/review-app.json`).
 
-4. **Decide the rows.** Pick a queue at the top (`translation-bg`, then `title-bg`, then `level`). The list shows
-   learner-reported rows first, then major and minor objections; filter it by level or severity, or tick
-   *show unflagged* to add the rows the AI passed. For each row you see the English sense and example, the word's
-   other senses, the current values with the questioned field highlighted, each objection's reason and proposed fix,
-   and the learners' notes.
+4. **Decide the rows.** Pick a queue at the top (`translation-bg`, then `title-bg`, then `level`); tick *show unflagged* to add the
+   rows the AI passed. The screen shows one row at a time, with a bar for how far you are: the word and its example,
+   then **Now** (the current values, a value a fix would replace struck through) beside **AI suggests** (the row with
+   the ticked fixes applied), then the learners' notes, each objection's reason and the word's other senses. **All
+   rows** (key `L`) opens the list, learner-reported rows first, then major and minor objections, with filters for
+   level and severity; choosing a row there shows it.
 
    | Key | Button | What it writes |
    |---|---|---|
@@ -44,7 +45,11 @@ which `corpus import` then records. It runs on your machine only (127.0.0.1); no
    | 3 | Edit | the cells as you change them; press 3 again to save |
    | 4 | Drop | drops the sense (translations only) |
    | S, ↓ | Skip | nothing; moves to the next row |
-   | ↑ | | moves to the previous row |
+   | ↑ | Previous | nothing; moves to the previous row |
+   | L | All rows | nothing; opens the row list (Escape closes it, and cancels an edit) |
+
+   A row with one objection has no tick: Accept fix takes its fix. With two or more, each objection has a tick and
+   names its field and fix, so you can take one field's fix and leave another's.
 
    What a row shows depends on its queue:
    - **Translations:** the translation, its alternates and its sense gloss, the word's other senses, and objections
@@ -134,16 +139,33 @@ as a pull request against the content repository, with no local checkout and no 
     pnpm --filter @wordado/review-app e2e:hosted
 
 The second command runs the full hosted flow against fakes (no real Cloudflare Access, GitHub App or Resend
-account needed).
+account needed), on a desktop screen and on a phone-sized one.
+
+    pnpm --filter @wordado/review-app screenshots
+
+writes a picture of every screen of both modes (desktop and phone, light and dark) into
+`review-app/.e2e/screenshots/`, for a pull request description or for a look at the whole app after a change to its
+styles. The pictures are not committed. It ends by naming any screen where something is wider than the screen.
 
 ### How a reviewer works
 
 A reviewer gets an invite email from the app, and signs in at `https://review.wordado.com` with a one-time code
-that Cloudflare Access sends in a separate email when they ask for it; they land on *My assignments*. Deciding a
-row uses the same keys as the local app (see "Each session" above). Each **Submit** opens a new pull request in
+that Cloudflare Access sends in a separate email when they ask for it; they land on *Your assignments*, one line
+per assignment with its progress and **Start** or **Continue**. Deciding a row uses the same screen and keys as
+the local app (see "Each session" above). The app works on a phone: the decisions are a bar at the bottom of the
+screen, a swipe to the left goes to the next row and one to the right to the previous, and the row list has the
+way back to the assignments. Each **Submit** opens a new pull request in
 the content repository and emails every active admin a link to it. When that pull request is opened, the
 content repository's `review-import.yml` runs `corpus import` on its branch and pushes the result onto the same
 pull request as an extra commit, so merging it lands both the decisions and the import.
+
+### The admin page
+
+An admin has **Admin** in the header. The page has four tabs, kept in the address so a reload stays put:
+**Overview** (rows to decide, decided and not submitted, open pull requests, active reviewers, then a line per
+language with its progress and **Assign** where nobody holds it), **Reviewers**, **Assignments** and
+**Submissions**. Inviting, assigning, splitting, reassigning and editing a reviewer's languages each open a dialog;
+when the server refuses, the dialog stays open and says why. The page is made for a laptop and usable on a phone.
 
 ### Changing reviewers
 

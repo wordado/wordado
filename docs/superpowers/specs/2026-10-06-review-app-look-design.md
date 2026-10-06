@@ -2,6 +2,9 @@
 
 Date: 2026-10-06. Status: approved by the product owner in brainstorming (mockups in
 `2026-10-06-review-app-look-mockups/`).
+Revised 2026-10-06: §4.2 and §5 follow the rulings made during the build (what is struck under *Now*, when an
+objection has a tick, when the reviewer shows, the way back on a phone; how the Overview counts, the review-data
+listing, errors in a dialog).
 Builds on: `2026-10-05-hosted-review-app-design.md` §9 (UI) and `2026-10-04-ai-review-and-review-app-design.md` §5.2.
 
 ## 1. Purpose
@@ -71,12 +74,15 @@ One row at a time, in a centred column (max 48rem):
    - the word in Literata (`headword`; a title row shows the unit's key), the example in Literata italics-free
      quotes, a title row's `words`, a level row's frequency band;
    - **Now** beside **AI suggests** (stacked below 40rem). *Now* lists the row's fields (translation, alternates,
-     sense; title_en, title_l1; level) with their current values, the value of a field an objection targets struck
-     through in rose. *AI suggests* (leaf border and background) lists the same fields with the ticked fixes applied,
+     sense; title_en, title_l1; level) with their current values; a value is struck through in rose when a ticked
+     fix replaces it (not merely because an objection targets its field; an empty field a fix fills has nothing to
+     strike). *AI suggests* (leaf border and background) lists the same fields with the ticked fixes applied,
      changed values in bold. With no objections there is no *AI suggests* box and *Now* takes the full width;
-   - **the objections:** one line each: a chip with the category, the reason, and when a field has more than one
-     objection a radio-like tick to choose which fix applies (the existing one-fix-per-field rule). The reviewer and
-     model show as a muted suffix when more than one reviewer is configured;
+   - **the objections:** one line each: a chip with the category and the reason. When the row has two or more
+     objections in all, every line has a tick and names its field and fix, so the reviewer can take one field's fix
+     and leave another's; at most one fix per field is ticked (the existing rule). A row with a single objection has
+     no tick: Accept or Keep is the choice. The reviewer and model show as a muted suffix when more than one
+     reviewer objected on the row;
    - **learner reports** (when any) in a blue-tinted box above the objections;
    - **other senses** of the word as one muted line each;
    - the stale-file notice, as today;
@@ -88,7 +94,8 @@ One row at a time, in a centred column (max 48rem):
 4. **Editing** (Edit, or key 3): the *Now*/*AI suggests* boxes give way to one labelled input per field, prefilled
    with the ticked fixes; **Save** (primary, key 3 again) and **Cancel** (Escape). On a phone it fills the screen.
 5. **All rows** (header button, key `L`): a drawer from the left (a full-screen sheet on a phone) with the level and
-   severity filters and the row list (key, level, chip, the decision when decided); choosing a row closes it.
+   severity filters and the row list (key, level, chip, the decision when decided); choosing a row closes it. On a
+   phone the header has no room for what is reviewed and for **Back to my assignments**: both are in the row list.
    The local mode's queue picker and *show unflagged* live in the header as today.
 6. **Header actions:** hosted: **Submit n decisions** (primary when n > 0) and the name; local: **Import
    decisions**. After a submit: a notice with the pull request link and any left-out rows with their reasons.
@@ -105,11 +112,14 @@ on the card and can be decided again until submitted.
 Tabs in the header: **Overview**, **Reviewers**, **Assignments**, **Submissions**, plus **My assignments** (back
 to the reviewer view). The tab is kept in the URL hash (`#overview`, `#reviewers`, …) so a reload stays put.
 
-- **Overview:** four numbers (rows to decide, decided and not submitted, pull requests open, active reviewers), then
+- **Overview:** four numbers (rows to decide, decided and not submitted, pull requests open, active reviewers;
+  "rows to decide" sums the flagged and the reported rows of every file, so a row that is both counts twice: the
+  review data carries no count of their union), then
   **By language**: one row per language with open rows (Bulgarian, German, Spanish, English levels): "741
   translations · 8 titles · Anna, Hans", a progress bar over that language's flagged rows, and a chip (*on track*
   when someone is assigned, *done* when nothing is left) or an **Assign** button when nobody is. Then the snapshot
-  line ("Review data built <time> from commit <7 chars>").
+  line ("Review data built <time> from commit <7 chars>"). The per-file listing of the review data is not on the
+  page: the files and who holds them show in the Assign dialog.
   All of it is computed in the browser from what the API already returns (`/api/admin/snapshot`,
   `/api/admin/assignments`, `/api/admin/submissions`, `/api/admin/reviewers`); no API change.
 - **Reviewers:** **Invite a reviewer** (primary) opens a dialog (email, name, languages, admin). A row per person:
@@ -119,7 +129,9 @@ to the reviewer view). The tab is kept in the URL hash (`#overview`, `#reviewers
   rows: plain name, reviewer, progress bar and counts, **Reassign…** (dialog) and **Close**; closed ones under
   "Closed" with **Reassign…**.
 - **Submissions:** rows with reviewer, plain queue name, counts, status chip, link.
-- One page notice (`<p role="status" class="notice">`) for errors, as today. Confirmations stay `window.confirm`.
+- One page notice (`<p role="status" class="notice">`) for errors, as today; it goes when the tab changes. An action
+  that fails inside a dialog keeps the dialog open and repeats the message there (the page's notice is behind it).
+  Confirmations stay `window.confirm`.
 
 ## 6. Kept as is
 
@@ -139,8 +151,8 @@ to the reviewer view). The tab is kept in the URL hash (`#overview`, `#reviewers
   with `L` and closing on choosing a row; the swipe handler (left → next, right → previous, vertical ignored).
 - The hosted browser run gains a phone project (viewport 390×844): a reviewer decides a row with the bottom
   buttons and opens the row list.
-- Screenshots of the five screens (assignments, reviewing, editing, overview, reviewers) in light and dark, desktop
-  and phone, are produced by a script for the pull request description; they are not committed.
+- Screenshots of every screen and dialog of both modes in light and dark, desktop and phone, are produced by a
+  script (`pnpm --filter @wordado/review-app screenshots`) for the pull request description; they are not committed.
 
 ## 8. Out of scope
 
