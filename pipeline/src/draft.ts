@@ -74,6 +74,11 @@ export interface DraftOptions {
    * Their unit IDs are free again, since no learner has seen them.
    */
   readonly regroup?: boolean
+  /**
+   * Once, for a deliberate release (spec 2026-10-06 §3.4): every entry takes its banded level, whatever unit it
+   * sat in, and all units are built again. The old units stay in the registry, empty, so no number is reused.
+   */
+  readonly rebuild?: boolean
   /** LLM calls at a time; `llm.concurrency` when absent (CORPUS_LLM_CONCURRENCY). */
   readonly concurrency?: number | undefined
 }
@@ -86,6 +91,9 @@ export async function runDraft(opts: DraftOptions): Promise<Draft> {
   const themes = readThemes(dir, config.l1s)
   const sources = readClearedSources(dir)
   const last = readLastPublished(dir)
+  // What each live entry's level was when last published: a proposal that differs from it is a move a reviewer sees.
+  const publishedLevel = new Map<string, CefrLevel>()
+  for (const pack of last.packs.values()) for (const e of pack.entries) if (!e.retired) publishedLevel.set(e.entry_id, e.level)
   const lead = config.l1s[0]
   if (last.packs.size > 0 && lead !== undefined && !last.packs.has(lead)) {
     throw new Error("the lead L1 (the first in pipeline.json's l1s) must be one published before: senses merge on it; append a new L1 instead")
@@ -144,8 +152,10 @@ export async function runDraft(opts: DraftOptions): Promise<Draft> {
   const proposed: DraftEntry[] = merged.map((s, i) => {
     const entry_id = assigned.ids[i]!
     const unit = unitOf.get(entry_id)
-    // An entry keeps its unit, and so its level, unless a banding decision moves it (Decision 9).
-    const proposal = unit ? unit.level : s.banded
+    // An entry keeps its unit, and so its level, unless a banding decision moves it (Decision 9) or the units are
+    // being rebuilt.
+    const proposal = unit && !opts.rebuild ? unit.level : s.banded
+    const was = publishedLevel.get(entry_id)
     return {
       entry_id,
       headword: s.headword,
@@ -158,7 +168,8 @@ export async function runDraft(opts: DraftOptions): Promise<Draft> {
       band: s.band,
       level_proposal: proposal,
       level: foldField(proposal, decisions.for(QUEUES.level, entry_id)).value,
-      level_flagged: !unit && s.flagged,
+      // A limited level stays flagged until it is published; a published entry is flagged when its level moved.
+      level_flagged: was === undefined ? s.flagged : was !== proposal,
       themes: [],
       english: { ipa: s.ipa, variants: s.variants, examples: s.examples },
       l1: s.l1,
@@ -186,7 +197,11 @@ export async function runDraft(opts: DraftOptions): Promise<Draft> {
   const liveEntries = entries.filter((e) => live.has(e.entry_id))
   const publishedUnits = new Set([...last.packs.values()].flatMap((p) => p.units.map((u) => u.unit_id)))
   const units = assignUnits(
-    opts.regroup ? registry.units.filter((u) => publishedUnits.has(u.unit_id)) : registry.units,
+    opts.rebuild
+      ? registry.units.map((u) => ({ ...u, entry_ids: [] }))
+      : opts.regroup
+        ? registry.units.filter((u) => publishedUnits.has(u.unit_id))
+        : registry.units,
     liveEntries.map((e) => ({ entry_id: e.entry_id, level: e.level, theme: e.themes[0] ?? '', pos: e.pos, rank: e.rank, order: e.order })),
     last.published,
     config.unit_size,

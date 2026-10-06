@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { OfflineMiss } from './cache'
+import type { PipelineConfig } from './config'
 import { Decisions, QUEUES } from './decisions'
 import { readDraft, runDraft } from './draft'
 import { writeJson } from './files'
@@ -15,8 +16,8 @@ import { SENSES_THEME_IDS, type SenseProposal } from './stages/senses'
 import { approveAll, FIXTURE_TSV, makeContent, recordAudio, sampleLlm } from './testing/fixture'
 
 /** A content directory whose first draft was reviewed, released as version 1 and recorded in last-published/. */
-async function publishedV1(): Promise<string> {
-  const dir = makeContent()
+async function publishedV1(config: Partial<PipelineConfig> = {}): Promise<string> {
+  const dir = makeContent({ config })
   await runDraft({ dir, llm: sampleLlm(), offline: false })
   await recordAudio(dir)
   approveAll(dir)
@@ -213,6 +214,79 @@ describe('runDraft', () => {
     const llm = sampleLlm()
     await expect(runDraft({ dir, llm, offline: false })).rejects.toThrow(LicenceError)
     expect(llm.calls).toEqual([])
+  })
+
+  const ALL_LEVELS: Partial<PipelineConfig> = { levels: ['A1', 'A2', 'B1', 'B2', 'C1'] }
+  // New boundaries put almost every word in a far band; `sizes` keeps the old sizes, so only levels are in play.
+  const FAR_BANDS: Partial<PipelineConfig> = { targets: { A1: 1, A2: 1, B1: 1, B2: 1, C1: 1 }, sizes: { A1: 62, A2: 2, B1: 1, B2: 1, C1: 1 } }
+
+  it('without rebuild, new band boundaries move no published entry and no unit', async () => {
+    const dir = await publishedV1(ALL_LEVELS)
+    const before = readDraft(dir)
+    editConfig(dir, { ...FAR_BANDS })
+    const plain = await runDraft({ dir, llm: sampleLlm(), offline: true })
+    expect(plain.entries.map((e) => [e.entry_id, e.level, e.level_flagged])).toEqual(before.entries.map((e) => [e.entry_id, e.level, false]))
+    expect(plain.units.map((u) => [u.unit_id, u.entry_ids])).toEqual(before.units.map((u) => [u.unit_id, u.entry_ids]))
+  })
+
+  it('with rebuild, gives every entry its banded level and builds all units again, after the old numbers', async () => {
+    const dir = await publishedV1(ALL_LEVELS)
+    const before = readDraft(dir)
+    editConfig(dir, { ...FAR_BANDS })
+    const rebuilt = await runDraft({ dir, llm: sampleLlm(), offline: false, rebuild: true })
+    expect(rebuilt.problems).toEqual([])
+    expect([...rebuilt.live].sort()).toEqual([...before.live].sort())
+    const byId = new Map(rebuilt.entries.map((e) => [e.entry_id, e]))
+    // go (rank 2, band A2) keeps the LLM's A1. bank's river sense (rank 27, band C1) is limited to two steps: B1.
+    expect(byId.get('go-1')).toMatchObject({ level: 'A1', level_flagged: false })
+    expect(byId.get('bank-2')).toMatchObject({ level_proposal: 'B1', level: 'B1', level_flagged: true })
+    const oldIds = new Set(before.units.map((u) => u.unit_id))
+    const liveUnits = rebuilt.units.filter((u) => u.entry_ids.length > 0)
+    expect(liveUnits.every((u) => !oldIds.has(u.unit_id))).toBe(true)
+    // Every live entry is in exactly one unit, of its own level.
+    const placed = liveUnits.flatMap((u) => u.entry_ids.map((id) => [id, u.level] as const))
+    expect(placed.map(([id]) => id).sort()).toEqual([...rebuilt.live].sort())
+    expect(placed.every(([id, level]) => byId.get(id)!.level === level)).toBe(true)
+    // the and go are still A1: their new unit takes the number after the four old A1 units.
+    expect(rebuilt.units.find((u) => u.entry_ids.includes('go-1'))).toMatchObject({ unit_id: 'a1-05', level: 'A1' })
+    // The old units stay in the registry, empty, so their numbers are never given out again.
+    const registry = JSON.parse(readFileSync(join(dir, 'registry.json'), 'utf8')) as { units: { unit_id: string; entry_ids: string[] }[] }
+    expect(registry.units.filter((u) => oldIds.has(u.unit_id)).map((u) => u.entry_ids)).toEqual([...oldIds].map(() => []))
+  })
+
+  it('after a rebuild, a plain offline draft gives the same course and keeps the moved entry in the level queue', async () => {
+    const dir = await publishedV1(ALL_LEVELS)
+    editConfig(dir, { ...FAR_BANDS })
+    const rebuilt = await runDraft({ dir, llm: sampleLlm(), offline: false, rebuild: true })
+    const again = await runDraft({ dir, llm: sampleLlm(), offline: true })
+    expect(again.units).toEqual(rebuilt.units)
+    expect(again.entries.map((e) => [e.entry_id, e.level, e.level_flagged])).toEqual(rebuilt.entries.map((e) => [e.entry_id, e.level, e.level_flagged]))
+    const pending = pendingItems(again, Decisions.read(dir), ['bg'])
+    expect(pending.get(QUEUES.level)!.find((i) => i.key === 'bank-2')).toMatchObject({ proposed: 'B1' })
+    // A unit that lost all its words asks for no title.
+    const emptied = ['a1-01', 'a1-02', 'a1-03', 'a1-04', 'a2-01']
+    expect(pending.get(QUEUES.title('bg'))!.some((i) => emptied.includes(i.key))).toBe(false)
+  })
+
+  it('a second rebuild reuses no unit number and still places every live entry once', async () => {
+    const dir = await publishedV1(ALL_LEVELS)
+    editConfig(dir, { ...FAR_BANDS })
+    const first = await runDraft({ dir, llm: sampleLlm(), offline: false, rebuild: true })
+    const second = await runDraft({ dir, llm: sampleLlm(), offline: false, rebuild: true })
+    const firstIds = new Set(first.units.map((u) => u.unit_id))
+    const liveUnits = second.units.filter((u) => u.entry_ids.length > 0)
+    expect(liveUnits.every((u) => !firstIds.has(u.unit_id))).toBe(true)
+    expect(liveUnits.flatMap((u) => u.entry_ids).sort()).toEqual([...second.live].sort())
+  })
+
+  it('keeps a limited level flagged from draft to draft until the entry is published', async () => {
+    // B1 has room for bank's river sense beside the pinned sample words, so it is live and gets a unit.
+    const dir = makeContent({ config: { ...ALL_LEVELS, ...FAR_BANDS, sizes: { A1: 62, A2: 2, B1: 100, B2: 1, C1: 1 } } })
+    const first = await runDraft({ dir, llm: sampleLlm(), offline: false })
+    expect(first.live).toContain('bank-2')
+    expect(first.entries.find((e) => e.entry_id === 'bank-2')).toMatchObject({ level: 'B1', level_flagged: true })
+    const second = await runDraft({ dir, llm: sampleLlm(), offline: true })
+    expect(second.entries.find((e) => e.entry_id === 'bank-2')).toMatchObject({ level: 'B1', level_flagged: true })
   })
 })
 
