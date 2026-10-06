@@ -67,6 +67,11 @@
   box-sizing: border-box;
 }
 
+/* A swipe to the side belongs to the page (next and previous row): the browser must not take it for "back". */
+html {
+  overscroll-behavior-x: none;
+}
+
 body {
   margin: 0;
   background: var(--paper);

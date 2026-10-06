@@ -26,7 +26,7 @@ async function expectFits(page: Page, selector = 'header *, article *, dialog[op
 /** One finger across the screen at height `y`, as real touch input. */
 async function swipe(page: Page, fromX: number, toX: number, y: number) {
   const cdp = await page.context().newCDPSession(page)
-  const at = (x: number) => [{ x, y, id: 1 }]
+  const at = (x: number) => [{ x, y }]
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: at(fromX) })
   for (let i = 1; i <= 5; i += 1) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: at(fromX + ((toX - fromX) * i) / 5) })
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
@@ -61,7 +61,16 @@ test('@phone a reviewer decides a row with the bottom buttons, swipes and opens 
   await expect(article).toHaveAttribute('aria-label', first!)
 
   // Editing fills the screen; a swipe that starts on its input does nothing.
+  // DIAGNOSTIC (temporary)
+  await page.evaluate(() => {
+    const w = window as unknown as { __ev: string[] }
+    w.__ev = []
+    for (const n of ['pointerdown', 'pointerup', 'pointercancel', 'touchstart', 'touchend', 'touchcancel', 'mousedown', 'click'])
+      window.addEventListener(n, (e) => w.__ev.push(`${n} ${(e.target as Element)?.textContent?.slice(0, 8) ?? ''} id=${(e as PointerEvent).pointerId ?? ''} primary=${(e as PointerEvent).isPrimary ?? ''} touches=${(e as TouchEvent).touches?.length ?? ''}`), true)
+  })
   await page.getByRole('button', { name: /Edit/ }).tap()
+  await page.waitForTimeout(800)
+  console.log('DIAG events=' + JSON.stringify(await page.evaluate(() => (window as unknown as { __ev: string[] }).__ev)))
   const input = article.getByRole('textbox').first()
   await expect(input).toBeVisible()
   expect(await article.boundingBox()).toEqual({ x: 0, y: 0, width: 390, height: 844 })
