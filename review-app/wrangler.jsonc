@@ -24,15 +24,15 @@
       "routes": [{ "pattern": "review.wordado.com", "custom_domain": true }],
       // The operator's ids and values (review-app/README.md, "Hosted"); scripts/check-config.ts refuses
       // a deploy while any is still the placeholder. ADMIN_EMAIL and the keys are secrets, not vars.
-      "d1_databases": [{ "binding": "DB", "database_name": "wordado-review", "database_id": "00000000-0000-0000-0000-000000000000", "migrations_dir": "migrations" }],
+      "d1_databases": [{ "binding": "DB", "database_name": "wordado-review", "database_id": "b52cb790-18a9-485d-8e40-4d78af13e324", "migrations_dir": "migrations" }],
       "r2_buckets": [{ "binding": "SNAPSHOTS", "bucket_name": "wordado-review" }],
       "vars": {
         "APP_ORIGIN": "https://review.wordado.com",
-        "ACCESS_TEAM_DOMAIN": "",
-        "ACCESS_AUD": "",
+        "ACCESS_TEAM_DOMAIN": "wordado.cloudflareaccess.com",
+        "ACCESS_AUD": "01070f9e8cb88c84b710cb53794ae60e5bb109c408fd474f679f571409b2125b",
         "CONTENT_REPO": "wordado/wordado-content",
-        "GITHUB_APP_ID": "",
-        "GITHUB_INSTALLATION_ID": "",
+        "GITHUB_APP_ID": "5208152",
+        "GITHUB_INSTALLATION_ID": "168429558",
         "MAIL_FROM": "Wordado Review <review@wordado.com>"
       }
     }
