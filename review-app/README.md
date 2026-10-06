@@ -114,7 +114,10 @@ as a pull request against the content repository, with no local checkout and no 
 5. Worker secrets, set in the Cloudflare dashboard (Workers → wordado-review → Settings → Variables and
    secrets) — never pasted into chat or committed: `GITHUB_APP_PRIVATE_KEY` (the PKCS#8 file's content),
    `GITHUB_WEBHOOK_SECRET`, `RESEND_API_KEY` (a new sending-only Resend key for `wordado.com`), `ADMIN_EMAIL`.
-6. GitHub environment `production-review` in `wordado/wordado` with a required reviewer; repository variable
+6. GitHub environment `production-review` in `wordado/wordado` with a required reviewer, limited to `main`, and
+   its own secret `CLOUDFLARE_API_TOKEN` (environment secrets are not shared: the learner app's token lives in
+   `production`). The token needs, on this account: *Workers Scripts: Edit*, *D1: Edit*, *Workers R2 Storage:
+   Edit*, and on the `wordado.com` zone: *Workers Routes: Edit* (the custom domain). Then the repository variable
    `REVIEW_DEPLOY_ENABLED=true` once steps 1–5 are done.
 7. In wordado-content: an R2 API token limited to the `wordado-review` bucket (read and write), set as
    secrets `R2_REVIEW_ACCESS_KEY_ID` / `R2_REVIEW_SECRET_ACCESS_KEY` in that repository's settings; variable
