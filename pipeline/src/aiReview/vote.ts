@@ -15,7 +15,9 @@ export function aiState(store: AiReviewStore, cfg: AiReviewConfig, queue: string
     else missing.push(r)
   }
   if (missing.length > 0) return { status: 'unreviewed', missing }
-  const objecting = verdicts.filter((v) => v.verdict !== 'ok').length
+  // flag_severity major: only major verdicts count, so minor objections stay visible without gating the release.
+  const objects = (v: AiVerdict) => (cfg.flag_severity === 'major' ? v.verdict === 'major' : v.verdict !== 'ok')
+  const objecting = verdicts.filter(objects).length
   return { status: objecting >= cfg.flag_when ? 'flagged' : 'passed', verdicts }
 }
 

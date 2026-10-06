@@ -100,6 +100,7 @@ describe('ai_review', () => {
           default: 'z',
           required: ['x', 'q'],
           flag_when: 3,
+          flag_severity: 'severe',
         },
       }),
     ).toEqual([
@@ -111,6 +112,7 @@ describe('ai_review', () => {
       'ai_review.default: z is not a reviewer',
       'ai_review.required[1]: q is not a reviewer',
       'ai_review.flag_when: must be a whole number from 1 to 2 (the required reviewers)',
+      'ai_review.flag_severity: must be minor or major',
     ])
   })
   it('is optional', () => {
