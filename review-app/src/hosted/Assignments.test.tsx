@@ -17,6 +17,9 @@ async function show(list: AssignmentView[]) {
   const onOpen = vi.fn()
   render(<Assignments onOpen={onOpen} />)
   await screen.findByRole('heading', { name: 'Your assignments' })
+  // the page is named by its heading: one wording for both
+  expect(screen.getByRole('region', { name: 'Your assignments' })).toBeTruthy()
+  expect(screen.queryByRole('region', { name: 'My assignments' })).toBeNull()
   return onOpen
 }
 

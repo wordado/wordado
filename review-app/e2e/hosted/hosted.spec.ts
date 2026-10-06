@@ -149,6 +149,15 @@ test('a reviewer decides rows with the keys and submits a pull request', async (
   await expect(page.getByText('2 of 3 decided')).toBeVisible()
   await page.keyboard.press('Escape')
   await expect(list).toBeHidden()
+  // The focus goes back to where it was, not to the page: after Escape, and after choosing a row.
+  await expect(page.getByRole('button', { name: 'All rows' })).toBeFocused()
+  // (the browser says that it closed the dialog a frame later: only then is the row list gone, and Enter opens a new one)
+  await expect(page.locator('dialog')).toHaveCount(0)
+  await page.keyboard.press('Enter')
+  await list.locator('button[aria-current="true"]').click()
+  await expect(page.locator('dialog')).toHaveCount(0)
+  expect(await page.evaluate(() => document.activeElement?.tagName)).not.toBe('BODY')
+  await expect(page.getByRole('button', { name: 'All rows' })).toBeFocused()
   await page.getByRole('button', { name: /Submit 2 decisions/ }).click()
   await expect(page.getByRole('link', { name: /pull request 1/ })).toBeVisible()
   const state = (await (await fetch('http://127.0.0.1:4182/_state')).json()) as { pulls: { title: string }[] }
@@ -166,6 +175,12 @@ test('an admin invites a reviewer and assigns files; an overlap is refused', asy
 
   await page.getByRole('tab', { name: 'Reviewers' }).click()
   await page.getByRole('button', { name: 'Invite a reviewer' }).click()
+  // Escape closes the dialog and the focus is on the button that opened it again.
+  await expect(page.getByRole('dialog', { name: 'Invite a reviewer' }).getByLabel('Email')).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(page.locator('dialog')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Invite a reviewer' })).toBeFocused()
+  await page.keyboard.press('Enter')
   const invite = page.getByRole('dialog', { name: 'Invite a reviewer' }).getByRole('form', { name: 'Invite a reviewer' })
   await invite.getByLabel('Email').fill('new@example.com')
   await invite.getByLabel('Name').fill('Nora')

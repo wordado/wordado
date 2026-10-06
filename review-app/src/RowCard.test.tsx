@@ -43,10 +43,21 @@ describe('RowCard', () => {
     expect(screen.getByRole('heading', { name: 'a2-u03' })).toBeTruthy()
     expect(screen.getByText('bank, coin, pay')).toBeTruthy()
     first.unmount()
-    show({ ...bankClean, kind: 'level', queue: 'level', fields: ['level'], cells: { level: 'B1' }, context: { headword: 'bank', pos: 'noun', band: '3' } })
-    expect(screen.getByText('noun · level')).toBeTruthy()
+    show({ ...bankClean, kind: 'level', queue: 'level', fields: ['level'], cells: { level: 'B1' }, context: { headword: 'bank', pos: 'noun', sense_en: 'edge of river', band: '3' } })
     expect(screen.getByRole('heading', { name: 'bank' })).toBeTruthy()
     expect(screen.getByText('frequency band 3')).toBeTruthy()
+  })
+
+  it('says which meaning a level row grades: part of speech · level · English sense, without the parts that are empty', () => {
+    const level: RowView = { ...bankClean, kind: 'level', queue: 'level', fields: ['level'], cells: { level: 'B1' }, context: { headword: 'bank', pos: 'noun', sense_en: 'edge of river', band: '3' } }
+    const first = render(<RowCard row={level} position={position} onDecide={() => {}} onSkip={() => {}} onPrev={() => {}} />)
+    expect(screen.getByText('noun · level · edge of river').classList.contains('eyebrow')).toBe(true)
+    first.unmount()
+    const second = render(<RowCard row={{ ...level, context: { headword: 'bank', pos: 'noun', sense_en: '', band: '3' } }} position={position} onDecide={() => {}} onSkip={() => {}} onPrev={() => {}} />)
+    expect(screen.getByText('noun · level')).toBeTruthy()
+    second.unmount()
+    show({ ...level, context: { headword: 'bank', pos: '', sense_en: 'edge of river' } })
+    expect(screen.getByText('level · edge of river')).toBeTruthy()
   })
 
   it('makes Accept fix the one primary button when the row has objections', () => {
@@ -216,13 +227,28 @@ describe('RowCard', () => {
     expect((screen.getByLabelText('Translation') as HTMLInputElement).value).toBe('бряг')
   })
 
+  it('tells the screen while an edit is open, and when it is over', () => {
+    const onEditing = vi.fn()
+    const view = render(<RowCard row={bank} position={position} onDecide={() => {}} onSkip={() => {}} onPrev={() => {}} onEditing={onEditing} />)
+    expect(onEditing).not.toHaveBeenCalled()
+    fireEvent.click(button('Edit'))
+    expect(onEditing).toHaveBeenLastCalledWith(true)
+    fireEvent.click(button('Cancel'))
+    expect(onEditing).toHaveBeenLastCalledWith(false)
+    // a row that goes away in the middle of an edit takes the edit with it
+    fireEvent.click(button('Edit'))
+    expect(onEditing).toHaveBeenLastCalledWith(true)
+    view.unmount()
+    expect(onEditing).toHaveBeenLastCalledWith(false)
+  })
+
   it('has no Drop, and no key 4, for a title row or a level row', () => {
     const { onDecide } = show({ ...bank, kind: 'title', queue: 'title-bg', fields: ['title_l1'], cells: { title_l1: 'Пари' }, objections: [] })
     expect(screen.queryByRole('button', { name: /Drop/ })).toBeNull()
     fireEvent.keyDown(window, { key: '4' })
     expect(onDecide).not.toHaveBeenCalled()
     cleanup()
-    show({ ...bank, kind: 'level', queue: 'level', fields: ['level'], cells: { level: 'B1' }, objections: [] })
+    show({ ...bank, kind: 'level', queue: 'level', fields: ['level'], cells: { level: 'B1' }, context: { headword: 'bank', pos: 'noun', sense_en: 'edge of river', band: '3' }, objections: [] })
     expect(screen.queryByRole('button', { name: /Drop/ })).toBeNull()
   })
 

@@ -12,6 +12,9 @@ describe('Compare', () => {
   it('strikes the questioned value under Now and shows the fix under AI suggests', () => {
     render(<Compare row={bank} ticked={new Set([0])} />)
     expect(now().getByText('банка').classList.contains('struck')).toBe(true)
+    // struck for assistive technology too, not only by its style
+    expect(now().getByText('банка').tagName).toBe('S')
+    expect(now().getByText('край на река').tagName).toBe('SPAN')
     expect(suggested().getByText('бряг')).toBeTruthy()
     expect(suggested().queryByText('банка')).toBeNull()
     // the fields no objection touches read the same on both sides
@@ -24,6 +27,7 @@ describe('Compare', () => {
   it('does not strike the "none" of an empty field that a fix fills', () => {
     render(<Compare row={{ ...bank, objections: [objection({ field: 'alternates', category: 'missing', severity: 'minor', fix: 'бряг' })] }} ticked={new Set([0])} />)
     expect(now().getByText('none').classList.contains('struck')).toBe(false)
+    expect(now().getByText('none').tagName).toBe('SPAN')
     expect(suggested().getByText('бряг').tagName).toBe('B')
   })
 

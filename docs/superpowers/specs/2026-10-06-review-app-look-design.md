@@ -4,7 +4,8 @@ Date: 2026-10-06. Status: approved by the product owner in brainstorming (mockup
 `2026-10-06-review-app-look-mockups/`).
 Revised 2026-10-06: §4.2 and §5 follow the rulings made during the build (what is struck under *Now*, when an
 objection has a tick, when the reviewer shows, the way back on a phone; how the Overview counts, the review-data
-listing, errors in a dialog).
+listing, errors in a dialog) and the final review (a level row's sense, the focus after a dialog, a failed load, no
+row list during an edit).
 Builds on: `2026-10-05-hosted-review-app-design.md` §9 (UI) and `2026-10-04-ai-review-and-review-app-design.md` §5.2.
 
 ## 1. Purpose
@@ -70,7 +71,8 @@ One row at a time, in a centred column (max 48rem):
    `minor`).
 2. **The card:**
    - eyebrow: part of speech · level · English sense (`pos`, `level`, `sense_en`); for a title row: level · "unit
-     title"; for a level row: part of speech · "level";
+     title"; for a level row: part of speech · "level" · English sense (the sense says which meaning is being
+     graded). Parts that are empty are left out;
    - the word in Literata (`headword`; a title row shows the unit's key), the example in Literata italics-free
      quotes, a title row's `words`, a level row's frequency band;
    - **Now** beside **AI suggests** (stacked below 40rem). *Now* lists the row's fields (translation, alternates,
@@ -96,11 +98,14 @@ One row at a time, in a centred column (max 48rem):
 5. **All rows** (header button, key `L`): a drawer from the left (a full-screen sheet on a phone) with the level and
    severity filters and the row list (key, level, chip, the decision when decided); choosing a row closes it. On a
    phone the header has no room for what is reviewed and for **Back to my assignments**: both are in the row list.
-   The local mode's queue picker and *show unflagged* live in the header as today.
+   The local mode's queue picker and *show unflagged* live in the header as today. While a row is being edited the
+   row list is off (the button is disabled, `L` does nothing): choosing another row would drop the edit. When the
+   drawer or a dialog closes, the focus goes back to what opened it.
 6. **Header actions:** hosted: **Submit n decisions** (primary when n > 0) and the name; local: **Import
    decisions**. After a submit: a notice with the pull request link and any left-out rows with their reasons.
-7. **Done state:** "Nothing left to decide here." with **Submit** (hosted) or **Import decisions** (local) and a link
-   back to the assignments.
+7. **Done state:** "Nothing left to decide here." with **Submit** (hosted) or **Import decisions** (local) and
+   **Back to my assignments**. When the rows could not be loaded at all it is not the done state: the error, "The
+   rows could not be loaded." and **Try again** (and the way back), without Submit or Import.
 8. **Phone gestures:** swipe left for the next undecided row, right for the previous (horizontal movement over
    60px that is larger than the vertical one). Keys are unchanged.
 

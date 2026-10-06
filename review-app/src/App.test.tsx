@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { App } from './App'
 import { api } from './api'
+import { pressEscapeInDialog } from './testRows'
 
 afterEach(() => {
   cleanup()
@@ -89,8 +90,25 @@ describe('App', () => {
     fireEvent.keyDown(window, { key: 's' })
     expect(decide).not.toHaveBeenCalled()
     expect(screen.getByRole('article', { name: 'Row a-1' })).toBeTruthy()
-    fireEvent.keyDown(window, { key: 'Escape' })
+    pressEscapeInDialog()
     expect(screen.queryByRole('list', { name: 'Rows' })).toBeNull()
+  })
+
+  it('keeps the row list shut while a row is being edited: no All rows, no L', async () => {
+    mockTwoRows()
+    render(<App />)
+    await waitFor(() => expect(screen.getByRole('article', { name: 'Row a-1' })).toBeTruthy())
+    const allRows = screen.getByRole<HTMLButtonElement>('button', { name: 'All rows' })
+    expect(allRows.disabled).toBe(false)
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    expect(allRows.disabled).toBe(true)
+    for (const key of ['l', 'L']) fireEvent.keyDown(window, { key })
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Save' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(allRows.disabled).toBe(false)
+    fireEvent.keyDown(window, { key: 'l' })
+    expect(screen.getByRole('dialog', { name: 'All rows' })).toBeTruthy()
   })
 
   it('does not open the row list or skip while typing a note', async () => {
@@ -192,6 +210,37 @@ describe('App', () => {
     vi.spyOn(api, 'rows').mockRejectedValue(new Error('pipeline.json has no ai_review block'))
     render(<App />)
     await waitFor(() => expect(screen.getByRole('status').textContent).toBe('pipeline.json has no ai_review block'))
+  })
+
+  it('offers Try again when the first rows load fails, not "nothing left" and Import', async () => {
+    vi.spyOn(api, 'reviewer').mockResolvedValue('Tester')
+    vi.spyOn(api, 'queues').mockResolvedValue([{ queue: 'translation-bg', open: 1, flagged: 1, reported: 0, decided: 0 }])
+    const rows = vi.spyOn(api, 'rows').mockRejectedValue(new Error('the server is not running'))
+    render(<App />)
+    const again = await screen.findByRole('button', { name: 'Try again' })
+    expect(screen.getByRole('status').textContent).toBe('the server is not running')
+    expect(screen.queryByText('Nothing left to decide here.')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Import decisions' })).toBeNull()
+    rows.mockResolvedValue([a1])
+    fireEvent.click(again)
+    expect(await screen.findByRole('article', { name: 'Row a-1' })).toBeTruthy()
+    expect(rows).toHaveBeenCalledTimes(2)
+    // the error went with the retry that worked
+    expect(screen.queryByRole('status')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull()
+  })
+
+  it('offers Try again when the queues cannot be loaded, and loads them again', async () => {
+    vi.spyOn(api, 'reviewer').mockResolvedValue('Tester')
+    const queues = vi.spyOn(api, 'queues').mockRejectedValue(new Error('the server is not running'))
+    vi.spyOn(api, 'rows').mockResolvedValue([a1])
+    render(<App />)
+    const again = await screen.findByRole('button', { name: 'Try again' })
+    expect(screen.queryByText('Nothing left to decide here.')).toBeNull()
+    queues.mockResolvedValue([{ queue: 'translation-bg', open: 1, flagged: 1, reported: 0, decided: 0 }])
+    fireEvent.click(again)
+    expect(await screen.findByRole('article', { name: 'Row a-1' })).toBeTruthy()
+    expect(screen.queryByRole('status')).toBeNull()
   })
 
   it('shows a failed import as a notice instead of crashing ("Imported undefined")', async () => {

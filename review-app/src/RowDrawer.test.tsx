@@ -1,7 +1,8 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { useState } from 'react'
 import { RowDrawer } from './RowDrawer'
-import { bank, bankClean } from './testRows'
+import { bank, bankClean, pressEscapeInDialog, withoutShowModal } from './testRows'
 
 afterEach(cleanup)
 
@@ -49,12 +50,49 @@ describe('RowDrawer', () => {
     expect(onSelect.mock.invocationCallOrder[0]!).toBeLessThan(onClose.mock.invocationCallOrder[0]!)
   })
 
-  it('closes on Escape and with the Close button', () => {
+  it('closes with the Close button, and once on Escape, which a modal dialog handles itself', () => {
     const { onClose } = show(true)
-    fireEvent.keyDown(window, { key: 'Escape' })
-    expect(onClose).toHaveBeenCalledTimes(1)
     fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    expect(onClose).toHaveBeenCalledTimes(1)
+    pressEscapeInDialog()
     expect(onClose).toHaveBeenCalledTimes(2)
+  })
+
+  it('closes on Escape where there is no showModal', () => {
+    withoutShowModal(() => {
+      const { onClose } = show(true)
+      fireEvent.keyDown(window, { key: 'Escape' })
+      expect(onClose).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  it('gives the focus back to what opened it: after Close, after Escape and after choosing a row', () => {
+    const onClose = vi.fn()
+    function Page() {
+      const [open, setOpen] = useState(false)
+      return (
+        <>
+          <button onClick={() => setOpen(true)}>All rows</button>
+          <RowDrawer open={open} rows={rows} selected="bank-2" level="" severity="" onSelect={() => {}} onClose={() => (onClose(), setOpen(false))} onLevel={() => {}} onSeverity={() => {}} />
+        </>
+      )
+    }
+    render(<Page />)
+    const opener = screen.getByRole('button', { name: 'All rows' })
+    const closings = [
+      () => fireEvent.click(screen.getByRole('button', { name: 'Close' })),
+      pressEscapeInDialog,
+      () => fireEvent.click(screen.getByRole('button', { name: /the-1/ })),
+    ]
+    closings.forEach((close, i) => {
+      opener.focus()
+      fireEvent.click(opener)
+      screen.getByRole<HTMLButtonElement>('button', { name: 'Close' }).focus()
+      close()
+      expect(screen.queryByRole('dialog')).toBeNull()
+      expect(document.activeElement).toBe(opener)
+      expect(onClose).toHaveBeenCalledTimes(i + 1)
+    })
   })
 
   it('says so when the filters leave no row', () => {

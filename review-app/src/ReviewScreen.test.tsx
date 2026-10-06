@@ -25,6 +25,63 @@ describe('ReviewScreen', () => {
     expect(screen.getByText('Nothing left to decide here.')).toBeTruthy()
   })
 
+  it('shows a first load that failed as that, with Try again, not as nothing left', async () => {
+    const onReload = vi.fn(() => Promise.resolve())
+    const onBack = vi.fn()
+    render(<ReviewScreen rows={[]} loadFailed notice="no database" onBack={onBack} onDecide={() => Promise.resolve(null)} onReload={onReload} actions={<button>Submit 0 decisions</button>} />)
+    expect(screen.getByRole('status').textContent).toBe('no database')
+    expect(screen.queryByText('Nothing left to decide here.')).toBeNull()
+    expect(screen.queryByRole('button', { name: /Submit/ })).toBeNull()
+    // the way back stays
+    expect(screen.getByRole('button', { name: 'Back to my assignments' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(onReload).toHaveBeenCalledTimes(1)
+    await waitFor(() => expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Try again' }).disabled).toBe(false))
+  })
+
+  it('keeps the rows on the screen when a later reload fails', () => {
+    render(<ReviewScreen rows={[row('a-1')]} loadFailed notice="no database" onDecide={() => Promise.resolve(null)} onReload={never} />)
+    expect(screen.getByRole('article', { name: 'Row a-1' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull()
+  })
+
+  it('offers the way back as "Back to my assignments" when nothing is left', () => {
+    const onBack = vi.fn()
+    render(<ReviewScreen rows={[decided('a-1')]} onBack={onBack} onDecide={() => Promise.resolve(null)} onReload={never} />)
+    expect(screen.queryByRole('button', { name: 'Back to assignments' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Back to my assignments' }))
+    expect(onBack).toHaveBeenCalledTimes(1)
+  })
+
+  it('has no row list while a row is being edited: All rows is disabled and L does nothing', () => {
+    render(<ReviewScreen rows={[row('a-1'), row('b-1')]} onDecide={() => Promise.resolve(null)} onReload={never} />)
+    const allRows = screen.getByRole<HTMLButtonElement>('button', { name: 'All rows' })
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    fireEvent.change(screen.getByLabelText('Translation'), { target: { value: 'речен бряг' } })
+    expect(allRows.disabled).toBe(true)
+    fireEvent.keyDown(window, { key: 'l' })
+    fireEvent.keyDown(window, { key: 'L' })
+    expect(screen.queryByRole('dialog')).toBeNull()
+    // the edit is still there
+    expect((screen.getByLabelText('Translation') as HTMLInputElement).value).toBe('речен бряг')
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(allRows.disabled).toBe(false)
+    fireEvent.keyDown(window, { key: 'l' })
+    expect(screen.getByRole('dialog', { name: 'All rows' })).toBeTruthy()
+  })
+
+  it('opens the row list again after an edit was saved', async () => {
+    function Parent() {
+      const [rows, setRows] = useState<readonly RowView[]>([row('a-1'), row('b-1')])
+      return <ReviewScreen rows={rows} onDecide={() => Promise.resolve(null)} onReload={() => (setRows([decided('a-1'), row('b-1')]), Promise.resolve())} />
+    }
+    render(<Parent />)
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(await screen.findByRole('article', { name: 'Row b-1' })).toBeTruthy()
+    await waitFor(() => expect(screen.getByRole<HTMLButtonElement>('button', { name: 'All rows' }).disabled).toBe(false))
+  })
+
   it('shows the first undecided row in its very first render', () => {
     const html = renderToStaticMarkup(<ReviewScreen rows={[decided('a-1'), row('b-1')]} onDecide={() => Promise.resolve(null)} onReload={never} />)
     expect(html).toContain('aria-label="Row b-1"')

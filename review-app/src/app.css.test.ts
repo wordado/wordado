@@ -15,6 +15,13 @@ describe('app.css', () => {
     expect(shown).toEqual(['(pointer: coarse)'])
     expect(css).toMatch(/\n\.swipe-hint \{\s*display: none;/)
   })
+  it('hides visually hidden text from the eye only: it stays in the page for a screen reader', () => {
+    const rule = /\n\.visually-hidden \{([^}]*)\}/.exec(css)?.[1] ?? ''
+    expect(rule).toMatch(/position: absolute;/)
+    expect(rule).toMatch(/clip-path: inset\(50%\);/)
+    expect(rule).toMatch(/width: 1px;/)
+    expect(rule).not.toMatch(/display: none|visibility: hidden/)
+  })
   it('has the learner app’s tokens, light and dark', () => {
     for (const t of ['--paper', '--paper-raised', '--ink', '--ink-soft', '--rule', '--rose', '--leaf', '--blue', '--font-ui', '--font-entry']) expect(css).toContain(`${t}:`)
     expect(css).toMatch(/prefers-color-scheme: dark/)

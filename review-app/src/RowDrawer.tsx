@@ -1,11 +1,12 @@
-import { useEffect, useLayoutEffect, useRef } from 'react'
 import type { RowView } from '../server/types'
 import { RowList } from './RowList'
+import { useModal } from './useModal'
 
 const LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1']
 
 /** The row list, behind "All rows": a drawer from the left with the level and severity filters and the shown
- * rows. It is a modal dialog, so the focus stays in it and Escape closes it; choosing a row closes it too. */
+ * rows. It is a modal dialog, so the focus stays in it and Escape closes it; choosing a row closes it too, and the
+ * focus goes back to what opened it. */
 export function RowDrawer(props: {
   open: boolean
   rows: readonly RowView[]
@@ -21,46 +22,22 @@ export function RowDrawer(props: {
   title?: string
   onBack?: () => void
 }) {
-  const { open, onClose } = props
-  const ref = useRef<HTMLDialogElement>(null)
-
-  // The dialog exists only while the drawer is open: shown as a modal when it appears, closed before it goes, so
-  // the browser gives the focus back to where it was.
-  useLayoutEffect(() => {
-    const dialog = ref.current
-    if (!open || !dialog) return
-    if (!dialog.open) {
-      // happy-dom and old browsers: no showModal, the open attribute shows it.
-      if (typeof dialog.showModal === 'function') dialog.showModal()
-      else dialog.setAttribute('open', '')
-    }
-    return () => {
-      if (dialog.open && typeof dialog.close === 'function') dialog.close()
-    }
-  }, [open])
-
-  // A modal dialog closes itself on Escape (onClose below hears it); this covers a dialog that is not modal.
-  useEffect(() => {
-    if (!open) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [open, onClose])
+  const { open } = props
+  // The dialog exists only while the drawer is open.
+  const { ref, close } = useModal(open, props.onClose)
 
   if (!open) return null
   const decided = props.rows.filter((r) => r.decided).length
   return (
     // A click on the dialog itself is a click on the backdrop: everything visible is inside drawer-body.
-    <dialog ref={ref} className="drawer" aria-label="All rows" onClose={onClose} onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <dialog ref={ref} className="drawer" aria-label="All rows" onClose={close} onClick={(e) => e.target === e.currentTarget && close()}>
       <div className="drawer-body">
         <div className="drawer-head">
           <h2>All rows</h2>
           <span className="note">
             {decided} of {props.rows.length} decided
           </span>
-          <button className="button small ghost" onClick={onClose}>
+          <button className="button small ghost" onClick={close}>
             Close
           </button>
         </div>
@@ -102,7 +79,7 @@ export function RowDrawer(props: {
             selected={props.selected}
             onSelect={(key) => {
               props.onSelect(key)
-              onClose()
+              close()
             }}
           />
         )}

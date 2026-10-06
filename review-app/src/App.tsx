@@ -14,27 +14,36 @@ export function App() {
   // until the first rows are there (or it is known that there is no queue to load them from)
   const [loading, setLoading] = useState(true)
   const [notice, setNotice] = useState('')
+  /** why the last load of the queues or the rows failed; empty when it worked */
+  const [loadError, setLoadError] = useState('')
 
-  const fail = useCallback((err: unknown) => setNotice(err instanceof Error ? err.message : String(err)), [])
+  const message = (err: unknown) => (err instanceof Error ? err.message : String(err))
+  const fail = useCallback((err: unknown) => setNotice(message(err)), [])
   useEffect(() => void api.reviewer().then(setReviewer).catch(fail), [fail])
-  useEffect(
-    () =>
-      void api
-        .queues()
-        .then((q) => (setQueues(q), setQueue((cur) => cur ?? q[0]?.queue ?? null), q.length === 0 && setLoading(false)))
-        .catch((err: unknown) => (fail(err), setLoading(false))),
-    [fail],
-  )
+  const loadQueues = useCallback(async () => {
+    try {
+      const q = await api.queues()
+      setQueues(q)
+      setQueue((cur) => cur ?? q[0]?.queue ?? null)
+      setLoadError('')
+      if (q.length === 0) setLoading(false)
+    } catch (err) {
+      setLoadError(message(err))
+      setLoading(false)
+    }
+  }, [])
+  useEffect(() => void loadQueues(), [loadQueues])
   const load = useCallback(async () => {
     if (!queue || reviewer == null) return
     try {
       setRows(await api.rows(queue, all))
+      setLoadError('')
     } catch (err) {
-      fail(err)
+      setLoadError(message(err))
     } finally {
       setLoading(false)
     }
-  }, [queue, all, reviewer, fail])
+  }, [queue, all, reviewer])
   useEffect(() => void load(), [load])
 
   const onDecide = useCallback(async (row: RowView, action: Action, cells: Record<string, string>, note: string) => {
@@ -76,8 +85,10 @@ export function App() {
         rows={rows}
         loading={loading}
         onDecide={onDecide}
-        onReload={load}
-        notice={notice}
+        // without a queue it is the queues that did not load: the rows follow once there is one
+        onReload={queue ? load : loadQueues}
+        notice={loadError || notice}
+        loadFailed={loadError !== ''}
         controls={
           <>
             <span className="field">

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Action, RowView } from '../server/types'
 import { Compare } from './Compare'
 import { fieldLabel } from './labels'
@@ -9,10 +9,12 @@ import { useSwipe } from './useSwipe'
 
 const nothing = () => {}
 
-/** What stands above the word: part of speech · level · English sense; a unit title and a level row say what they are. */
+/** What stands above the word: part of speech · level · English sense; a unit title and a level row say what they
+ * are (a level row's level is what is being decided, so the word "level" stands in its place: the sense says which
+ * meaning is graded). Parts that are empty are left out. */
 function eyebrowOf(row: RowView): string {
   const c = row.context
-  const parts = row.kind === 'title' ? [c['level'], 'unit title'] : row.kind === 'level' ? [c['pos'], 'level'] : [c['pos'], c['level'], c['sense_en']]
+  const parts = row.kind === 'title' ? [c['level'], 'unit title'] : row.kind === 'level' ? [c['pos'], 'level', c['sense_en']] : [c['pos'], c['level'], c['sense_en']]
   return parts.filter(Boolean).join(' · ')
 }
 
@@ -27,8 +29,10 @@ export function RowCard(props: {
   onSkip: () => void
   onPrev: () => void
   saving?: boolean
+  /** told true when an edit opens and false when it is over (saved, cancelled, or the row is gone) */
+  onEditing?: (editing: boolean) => void
 }) {
-  const { row, position, onDecide, onSkip, onPrev, saving = false } = props
+  const { row, position, onDecide, onSkip, onPrev, saving = false, onEditing } = props
   const [ticked, setTicked] = useState<ReadonlySet<number>>(() => firstPerField(row.objections))
   const [editing, setEditing] = useState(false)
   const [cells, setCells] = useState<Record<string, string>>(row.cells)
@@ -46,6 +50,11 @@ export function RowCard(props: {
   }, [row.cells, row.objections, ticked])
   const save = useCallback(() => onDecide('edit', cells, note), [onDecide, cells, note])
   const cancel = useCallback(() => setEditing(false), [])
+  useEffect(() => {
+    if (!editing || !onEditing) return
+    onEditing(true)
+    return () => onEditing(false)
+  }, [editing, onEditing])
 
   // While editing, only Save (3) and Cancel (Escape) are on offer, as buttons and as keys.
   const keys = useMemo((): Record<string, () => void> => {

@@ -21,8 +21,10 @@ export function Assignments(props: { onOpen(a: AssignmentView): void }) {
   useEffect(() => void hostedApi.assignments().then(setList, (err: unknown) => setError(err instanceof Error ? err.message : String(err))), [])
 
   return (
-    <section className="page" aria-label="My assignments">
-      <h2 className="page-title">Your assignments</h2>
+    <section className="page" aria-labelledby="assignments-title">
+      <h2 className="page-title" id="assignments-title">
+        Your assignments
+      </h2>
       <p className="note page-lead">Pick up where you stopped. Your decisions are saved as you go; Submit sends them to the coordinator.</p>
       {error && (
         <p role="status" className="notice">

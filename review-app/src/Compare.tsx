@@ -18,9 +18,8 @@ export function Compare(props: { row: RowView; ticked: ReadonlySet<number> }) {
           {row.fields.map((f) => (
             <div key={f}>
               <dt>{fieldLabel(f)}</dt>
-              <dd>
-                <span className={`${row.cells[f] ? '' : 'none'} ${hasObjections && row.cells[f] && changed(f) ? 'struck' : ''}`.trim() || undefined}>{row.cells[f] || 'none'}</span>
-              </dd>
+              {/* <s>, not a styled span: assistive technology says that it is struck */}
+              <dd>{hasObjections && row.cells[f] && changed(f) ? <s className="struck">{row.cells[f]}</s> : <span className={row.cells[f] ? undefined : 'none'}>{row.cells[f] || 'none'}</span>}</dd>
             </div>
           ))}
         </dl>

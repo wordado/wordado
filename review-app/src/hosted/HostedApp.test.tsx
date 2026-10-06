@@ -46,6 +46,37 @@ describe('HostedApp', () => {
     expect(screen.queryByText('Loading…')).toBeNull()
   })
 
+  it('offers Try again when the rows cannot be loaded, not "nothing left" and Submit', async () => {
+    vi.spyOn(hostedApi, 'assignments').mockResolvedValue([assignment])
+    const rows = vi.spyOn(hostedApi, 'rows').mockRejectedValue(new Error('no review data'))
+    render(<HostedApp me={me} />)
+    await openAssignment()
+    const again = await screen.findByRole('button', { name: 'Try again' })
+    expect(screen.getByRole('status').textContent).toBe('no review data')
+    expect(screen.queryByText('Nothing left to decide here.')).toBeNull()
+    expect(screen.queryByRole('button', { name: /Submit/ })).toBeNull()
+    rows.mockResolvedValue({ rows: [row('bank-2')], discarded: [] })
+    fireEvent.click(again)
+    expect(await screen.findByRole('article', { name: 'Row bank-2' })).toBeTruthy()
+    expect(rows).toHaveBeenCalledTimes(2)
+    expect(screen.queryByRole('status')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull()
+  })
+
+  it('keeps the row list shut while a row is being edited', async () => {
+    vi.spyOn(hostedApi, 'assignments').mockResolvedValue([assignment])
+    vi.spyOn(hostedApi, 'rows').mockResolvedValue({ rows: [row('bank-2'), row('bank-3')], discarded: [] })
+    render(<HostedApp me={me} />)
+    await openAssignment()
+    await screen.findByRole('article', { name: 'Row bank-2' })
+    fireEvent.keyDown(window, { key: '3' })
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'All rows' }).disabled).toBe(true)
+    fireEvent.keyDown(window, { key: 'l' })
+    expect(screen.queryByRole('dialog')).toBeNull()
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'All rows' }).disabled).toBe(false)
+  })
+
   it('shows one row at a time; L opens the row list and its filters narrow the rows', async () => {
     vi.spyOn(hostedApi, 'assignments').mockResolvedValue([assignment])
     vi.spyOn(hostedApi, 'rows').mockResolvedValue({ rows: [row('bank-2'), row('carbon-1', { context: { level: 'B2' } })], discarded: [] })
@@ -83,8 +114,8 @@ describe('HostedApp', () => {
     fireEvent.keyDown(window, { key: '2' })
     expect(await screen.findByText('Nothing left to decide here.')).toBeTruthy()
     expect(screen.getAllByRole('button', { name: /Submit 2 decisions/ }).length).toBe(1)
-    fireEvent.click(screen.getByRole('button', { name: 'Back to assignments' }))
-    expect(await screen.findByRole('region', { name: 'My assignments' })).toBeTruthy()
+    fireEvent.click(within(screen.getByRole('main')).getByRole('button', { name: 'Back to my assignments' }))
+    expect(await screen.findByRole('region', { name: 'Your assignments' })).toBeTruthy()
   })
 
   it('decides with the row hash and submits', async () => {
@@ -163,7 +194,7 @@ describe('HostedApp', () => {
       fireEvent.click(header.getByRole('tab', { name: 'Reviewers' }))
       expect(window.location.hash).toBe('#reviewers')
       fireEvent.click(header.getByRole('button', { name: 'My assignments' }))
-      expect(await screen.findByRole('region', { name: 'My assignments' })).toBeTruthy()
+      expect(await screen.findByRole('region', { name: 'Your assignments' })).toBeTruthy()
       expect(screen.queryByRole('tab')).toBeNull()
       // the tab has gone from the address with the admin page
       expect(window.location.hash).toBe('')
@@ -180,7 +211,7 @@ describe('HostedApp', () => {
       mockAdmin()
       window.location.hash = '#submissions'
       render(<HostedApp me={me} />)
-      expect(await screen.findByRole('region', { name: 'My assignments' })).toBeTruthy()
+      expect(await screen.findByRole('region', { name: 'Your assignments' })).toBeTruthy()
       expect(screen.queryByRole('tab')).toBeNull()
     })
   })

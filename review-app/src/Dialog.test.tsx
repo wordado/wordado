@@ -1,6 +1,8 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Dialog } from './Dialog'
+import { pressEscapeInDialog, withoutShowModal } from './testRows'
 
 afterEach(cleanup)
 
@@ -32,12 +34,82 @@ describe('Dialog', () => {
     expect(within(dialog).queryByRole('alert')).toBeNull()
   })
 
-  it('closes on Escape and with the Close button', () => {
+  it('closes with the Close button, and once on Escape, which a modal dialog handles itself', () => {
     const onClose = show(true)
-    fireEvent.keyDown(window, { key: 'Escape' })
-    expect(onClose).toHaveBeenCalledTimes(1)
     fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    expect(onClose).toHaveBeenCalledTimes(1)
+    pressEscapeInDialog()
     expect(onClose).toHaveBeenCalledTimes(2)
+  })
+
+  it('closes on Escape where there is no showModal', () => {
+    withoutShowModal(() => {
+      const onClose = show(true)
+      expect((screen.getByRole('dialog') as HTMLDialogElement).open).toBe(true)
+      fireEvent.keyDown(window, { key: 'Escape' })
+      expect(onClose).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  it('gives the focus back to what opened it, however it closes', () => {
+    const onClose = vi.fn()
+    function Page() {
+      const [open, setOpen] = useState(false)
+      return (
+        <>
+          <button onClick={() => setOpen(true)}>Invite a reviewer</button>
+          <Dialog open={open} title="Invite" onClose={() => (onClose(), setOpen(false))}>
+            <label>
+              Email <input />
+            </label>
+            <button onClick={() => setOpen(false)}>Send</button>
+          </Dialog>
+        </>
+      )
+    }
+    render(<Page />)
+    const opener = screen.getByRole('button', { name: 'Invite a reviewer' })
+    const open = () => {
+      opener.focus()
+      fireEvent.click(opener)
+      expect(document.activeElement).toBe(screen.getByLabelText('Email'))
+    }
+    open()
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(document.activeElement).toBe(opener)
+    expect(onClose).toHaveBeenCalledTimes(1)
+    // an action in it that went through
+    open()
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(document.activeElement).toBe(opener)
+    expect(onClose).toHaveBeenCalledTimes(1)
+    // Escape
+    open()
+    pressEscapeInDialog()
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(document.activeElement).toBe(opener)
+    expect(onClose).toHaveBeenCalledTimes(2)
+  })
+
+  it('leaves the focus alone when what opened it is gone', () => {
+    function Page() {
+      const [state, setState] = useState<'closed' | 'open' | 'done'>('closed')
+      return (
+        <>
+          {state !== 'done' && <button onClick={() => setState('open')}>Disable Rita</button>}
+          <Dialog open={state === 'open'} title="Disable" onClose={() => setState('closed')}>
+            <button onClick={() => setState('done')}>Yes</button>
+          </Dialog>
+        </>
+      )
+    }
+    render(<Page />)
+    screen.getByRole('button', { name: 'Disable Rita' }).focus()
+    fireEvent.click(screen.getByRole('button', { name: 'Disable Rita' }))
+    expect(() => fireEvent.click(screen.getByRole('button', { name: 'Yes' }))).not.toThrow()
+    expect(screen.queryByRole('dialog')).toBeNull()
   })
 
   it('shows an error inside it, where the page behind cannot', () => {

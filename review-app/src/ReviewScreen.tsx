@@ -13,6 +13,8 @@ export function ReviewScreen(props: {
   rows: readonly RowView[]
   /** the rows are not there yet: an empty list then means "loading", not "nothing left" */
   loading?: boolean
+  /** the last load failed (`notice` says why): an empty list then means "could not load", with Try again */
+  loadFailed?: boolean
   onDecide(row: RowView, action: Action, cells: Record<string, string>, note: string): Promise<string | null>
   onReload(): Promise<void>
   /** what is being reviewed, for the header */
@@ -24,7 +26,7 @@ export function ReviewScreen(props: {
   /** the way back to the list this was opened from, offered when nothing is left (and, on a phone, in the row list) */
   onBack?: () => void
 }) {
-  const { rows, loading = false } = props
+  const { rows, loading = false, loadFailed = false } = props
   /** the row the reviewer (or the move after a decision) chose; null: none, the first undecided row is shown */
   const [picked, setPicked] = useState<string | null>(null)
   const [notice, setNotice] = useState('')
@@ -32,6 +34,9 @@ export function ReviewScreen(props: {
   const [severity, setSeverity] = useState('')
   const [saving, setSaving] = useState(false)
   const [listOpen, setListOpen] = useState(false)
+  /** the shown row is being edited: the row list is off, choosing another row there would silently drop the edit */
+  const [editing, setEditing] = useState(false)
+  const [retrying, setRetrying] = useState(false)
 
   const shown = useMemo(
     () => rows.filter((r) => (level === '' || r.context['level'] === level) && (severity === '' || (severity === 'report' ? r.reports !== '' : r.severity === severity))),
@@ -79,9 +84,17 @@ export function ReviewScreen(props: {
   )
   const openList = useCallback(() => setListOpen(true), [])
   const closeList = useCallback(() => setListOpen(false), [])
-  const keys = useMemo(() => ({ l: openList, ...(saving ? {} : { s: next, ArrowDown: next, ArrowUp: prev }) }), [openList, next, prev, saving])
+  const keys = useMemo(() => ({ ...(editing ? {} : { l: openList }), ...(saving ? {} : { s: next, ArrowDown: next, ArrowUp: prev }) }), [editing, openList, next, prev, saving])
   useKeys(keys)
   const handleDecide = useCallback((action: Action, cells: Record<string, string>, note: string) => void decide(action, cells, note), [decide])
+  const retry = async () => {
+    setRetrying(true)
+    try {
+      await props.onReload()
+    } finally {
+      setRetrying(false)
+    }
+  }
 
   const shownNotice = notice || props.notice || ''
   return (
@@ -90,7 +103,7 @@ export function ReviewScreen(props: {
         {props.title && <span className="crumb">{props.title}</span>}
         {props.controls && <span className="header-controls">{props.controls}</span>}
         <span className="header-actions">
-          <button className="button list-button" onClick={openList}>
+          <button className="button list-button" onClick={openList} disabled={editing}>
             <span aria-hidden="true">☰</span> <span className="wide-label">All rows</span>
           </button>
           {row && props.actions}
@@ -103,9 +116,24 @@ export function ReviewScreen(props: {
           </p>
         )}
         {row ? (
-          <RowCard key={`${row.key}:${row.version}`} row={row} position={{ index, total: shown.length }} onDecide={handleDecide} onSkip={next} onPrev={prev} saving={saving} />
+          <RowCard key={`${row.key}:${row.version}`} row={row} position={{ index, total: shown.length }} onDecide={handleDecide} onSkip={next} onPrev={prev} saving={saving} onEditing={setEditing} />
         ) : loading && rows.length === 0 ? (
           <p className="note loading">Loading…</p>
+        ) : loadFailed && rows.length === 0 ? (
+          // The notice above says what went wrong. No Submit or Import here: there is nothing to send.
+          <section className="panel done">
+            <p>The rows could not be loaded.</p>
+            <div className="actions">
+              <button className="button primary" onClick={() => void retry()} disabled={retrying}>
+                Try again
+              </button>
+              {props.onBack && (
+                <button className="button" onClick={props.onBack}>
+                  Back to my assignments
+                </button>
+              )}
+            </div>
+          </section>
         ) : (
           <section className="panel done">
             <p>Nothing left to decide here.</p>
@@ -113,7 +141,7 @@ export function ReviewScreen(props: {
               {props.actions}
               {props.onBack && (
                 <button className="button" onClick={props.onBack}>
-                  Back to assignments
+                  Back to my assignments
                 </button>
               )}
             </div>

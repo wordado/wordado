@@ -12,6 +12,8 @@ export function AssignmentReview(props: { assignment: AssignmentView; onBack(): 
   const [rows, setRows] = useState<readonly HostedRow[]>([])
   const [loading, setLoading] = useState(true)
   const [notice, setNotice] = useState('')
+  /** why the last load of the rows failed; empty when it worked */
+  const [loadError, setLoadError] = useState('')
   const [sent, setSent] = useState<SubmitResult | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
@@ -19,9 +21,10 @@ export function AssignmentReview(props: { assignment: AssignmentView; onBack(): 
     try {
       const r = await hostedApi.rows(a.id)
       setRows(r.rows)
+      setLoadError('')
       if (r.discarded.length > 0) setNotice(`Removed decisions on rows that are gone: ${r.discarded.join(', ')}`)
     } catch (err) {
-      setNotice(err instanceof Error ? err.message : String(err))
+      setLoadError(err instanceof Error ? err.message : String(err))
     } finally {
       setLoading(false)
     }
@@ -74,7 +77,8 @@ export function AssignmentReview(props: { assignment: AssignmentView; onBack(): 
         loading={loading}
         onDecide={onDecide}
         onReload={load}
-        notice={notice}
+        notice={loadError || notice}
+        loadFailed={loadError !== ''}
         title={assignmentLabel(a)}
         onBack={props.onBack}
         actions={

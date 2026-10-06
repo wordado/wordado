@@ -22,6 +22,8 @@ export function Objections(props: { objections: readonly ObjectionView[]; report
         const line = (
           <>
             <span className={`chip ${o.severity}`} title={o.severity}>
+              {/* the severity is the chip's colour; in words for who does not see it */}
+              <span className="visually-hidden">{o.severity}: </span>
               {o.category}
             </span>
             <span className="reason">{o.reason}</span>
