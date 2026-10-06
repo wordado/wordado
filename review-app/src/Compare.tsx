@@ -3,7 +3,8 @@ import { fieldLabel } from './labels'
 import { applyFixes } from './RowView'
 
 /** The row as it is now and, when the AI objects, as it would be with the ticked fixes: a value a ticked fix
- * replaces is struck through under "Now" and bold under "AI suggests". */
+ * replaces is struck through under "Now" and bold under "AI suggests". An empty field a fix fills has nothing to
+ * strike: its "none" stays as it is. */
 export function Compare(props: { row: RowView; ticked: ReadonlySet<number> }) {
   const { row, ticked } = props
   const hasObjections = row.objections.length > 0
@@ -18,7 +19,7 @@ export function Compare(props: { row: RowView; ticked: ReadonlySet<number> }) {
             <div key={f}>
               <dt>{fieldLabel(f)}</dt>
               <dd>
-                <span className={`${row.cells[f] ? '' : 'none'} ${hasObjections && changed(f) ? 'struck' : ''}`.trim() || undefined}>{row.cells[f] || 'none'}</span>
+                <span className={`${row.cells[f] ? '' : 'none'} ${hasObjections && row.cells[f] && changed(f) ? 'struck' : ''}`.trim() || undefined}>{row.cells[f] || 'none'}</span>
               </dd>
             </div>
           ))}

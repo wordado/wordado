@@ -371,6 +371,15 @@ p {
   max-width: 24rem;
 }
 
+/* The local mode's name form is a panel in the middle of the page (.form alone has no margin at its sides). */
+.form.name {
+  margin: var(--space-6) auto;
+}
+
+.form.name > .field {
+  max-width: none;
+}
+
 .field input:not([type='checkbox']),
 .field select {
   width: 100%;
@@ -535,9 +544,21 @@ button.settings-row:hover {
   margin: 0.875rem 0.125rem 0;
 }
 
-/* The swipes are said on a phone, the keys elsewhere. */
+/* The swipes are said on a touch screen, not in a narrow window on a desktop; a phone has no keys to name. */
 .swipe-hint {
   display: none;
+}
+
+@media (pointer: coarse) {
+  .swipe-hint {
+    display: block;
+  }
+}
+
+@media (pointer: coarse) and (max-width: 40rem) {
+  .keys-hint {
+    display: none;
+  }
 }
 
 /* Progress: how much is decided (leaf) and how much of that is submitted (blue); the parts get an inline width. */
@@ -582,10 +603,12 @@ button.settings-row:hover {
   color: var(--ink);
 }
 
+/* The ring keeps the chosen tab apart in the dark scheme, where blue-soft is close to the header's own colour. */
 .tabs [aria-selected='true'],
 .tabs [aria-current='page'] {
   color: var(--blue);
   background: var(--blue-soft);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--blue) 30%, transparent);
 }
 
 .tabs [role='tablist'] {
@@ -822,9 +845,11 @@ kbd {
   margin: 0;
 }
 
+/* The border keeps the box apart from the card in the dark scheme, where blue-soft is close to the card's colour. */
 .objections .report {
   padding: var(--space-3) var(--space-4);
   background: var(--blue-soft);
+  border: 1px solid color-mix(in srgb, var(--blue) 30%, transparent);
   border-radius: 0.875rem;
 }
 
@@ -845,9 +870,25 @@ kbd {
   gap: var(--space-1) var(--space-2);
 }
 
+/* With a tick: the tick in a column of its own, so the lines that wrap start under the category. */
 .objection.choice {
-  align-items: center;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-2);
   cursor: pointer;
+}
+
+.objection.choice input {
+  margin-top: 0.1875rem;
+}
+
+.objection-text {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-2);
+  min-width: 0;
 }
 
 .objection.choice:has(input:disabled) {
@@ -1141,6 +1182,15 @@ kbd {
     flex-basis: 100%;
   }
 
+  /* The local mode's queue picker: the whole line. */
+  .header-controls > .field {
+    flex: 1 1 100%;
+  }
+
+  .header-controls > .field select {
+    width: 100%;
+  }
+
   .header-actions {
     flex-wrap: nowrap;
     gap: var(--space-2);
@@ -1178,14 +1228,6 @@ kbd {
     border-radius: 0.875rem;
   }
 
-  .keys-hint {
-    display: none;
-  }
-
-  .swipe-hint {
-    display: block;
-  }
-
   /* Room under the card for the decision bar (two rows of buttons). */
   .review.page {
     padding-bottom: calc(9.5rem + env(safe-area-inset-bottom, 0px));
@@ -1218,6 +1260,11 @@ kbd {
     white-space: normal;
   }
 
+  /* Three decisions (a unit title, a level: no Drop): the third takes the whole second row. */
+  .decisions .button:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+
   /* No keyboard, no key hints. */
   .decisions kbd,
   .card-nav kbd {
@@ -1236,6 +1283,12 @@ kbd {
 
   .row-card.editing :is(.progress-line, .card-nav, .example) {
     display: none;
+  }
+
+  /* The notices above the review screen keep to the page's narrower gutter. */
+  .hosted > .notice,
+  .hosted > .stale-notice {
+    width: calc(100% - 2 * var(--space-3));
   }
 
   .drawer {

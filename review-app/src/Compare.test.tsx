@@ -1,7 +1,7 @@
 import { cleanup, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { Compare } from './Compare'
-import { bank, bankClean, bankThree, bankTwoFields } from './testRows'
+import { bank, bankClean, bankThree, bankTwoFields, objection } from './testRows'
 
 afterEach(cleanup)
 
@@ -19,6 +19,12 @@ describe('Compare', () => {
     expect(suggested().getByText('край на река')).toBeTruthy()
     expect(now().getByText('none')).toBeTruthy()
     expect(suggested().getByText('none')).toBeTruthy()
+  })
+
+  it('does not strike the "none" of an empty field that a fix fills', () => {
+    render(<Compare row={{ ...bank, objections: [objection({ field: 'alternates', category: 'missing', severity: 'minor', fix: 'бряг' })] }} ticked={new Set([0])} />)
+    expect(now().getByText('none').classList.contains('struck')).toBe(false)
+    expect(suggested().getByText('бряг').tagName).toBe('B')
   })
 
   it('marks only the changed values as changed', () => {

@@ -40,7 +40,8 @@ export function Objections(props: { objections: readonly ObjectionView[]; report
         return choice ? (
           <label key={i} className="objection choice">
             <input type="checkbox" checked={props.ticked.has(i)} disabled={props.disabled} onChange={() => props.onTick(i)} />
-            {line}
+            {/* one piece beside the tick: what wraps stays in line with the category, not under the tick */}
+            <span className="objection-text">{line}</span>
           </label>
         ) : (
           <p key={i} className="objection">
