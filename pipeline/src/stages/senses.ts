@@ -163,11 +163,17 @@ export function frequencyBand(rank: number, targets: Readonly<Record<CefrLevel, 
   return 'C1'
 }
 
-/** The LLM's judgement, kept within one band of frequency; clamping flags the sense for banding review. */
+/**
+ * How far the LLM's level may sit from the frequency band. One band (Decision 7) put everyday words that print
+ * mentions rarely two levels too high: "pen" at B1, "spoon" at B2 (level check, 2026-10-06).
+ */
+export const LEVEL_LIMIT_STEPS = 2
+
+/** The LLM's judgement, kept within LEVEL_LIMIT_STEPS bands of frequency; a limited sense is flagged for banding review. */
 export function bandLevel(llm: LlmLevel, band: CefrLevel): { readonly level: CefrLevel | null; readonly flagged: boolean } {
   if (llm === 'C2') return { level: null, flagged: false }
   const b = levelIndex(band)
   const l = levelIndex(llm)
-  const clamped = Math.min(Math.max(l, b - 1), b + 1)
+  const clamped = Math.min(Math.max(l, b - LEVEL_LIMIT_STEPS), b + LEVEL_LIMIT_STEPS)
   return { level: CEFR_LEVELS[clamped]!, flagged: clamped !== l }
 }

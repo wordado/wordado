@@ -67,14 +67,23 @@ describe('frequencyBand (Decision 7)', () => {
   })
 })
 
-describe('bandLevel (Decision 7)', () => {
-  it('keeps the LLM level within one band of frequency', () => {
+describe('bandLevel (Decision 7; two steps since 2026-10-06)', () => {
+  it('keeps the LLM level when it is at most two bands from frequency', () => {
     expect(bandLevel('A2', 'A1')).toEqual({ level: 'A2', flagged: false })
     expect(bandLevel('B1', 'B1')).toEqual({ level: 'B1', flagged: false })
+    expect(bandLevel('B1', 'A1')).toEqual({ level: 'B1', flagged: false })
+    expect(bandLevel('A1', 'B1')).toEqual({ level: 'A1', flagged: false })
   })
-  it('clamps a level more than one band away, and flags it for banding review', () => {
-    expect(bandLevel('B2', 'A1')).toEqual({ level: 'A2', flagged: true })
-    expect(bandLevel('A1', 'B2')).toEqual({ level: 'B1', flagged: true })
+  it('limits a level more than two bands away, and flags it for banding review', () => {
+    expect(bandLevel('B2', 'A1')).toEqual({ level: 'B1', flagged: true })
+    expect(bandLevel('C1', 'A1')).toEqual({ level: 'B1', flagged: true })
+    expect(bandLevel('A1', 'B2')).toEqual({ level: 'A2', flagged: true })
+    expect(bandLevel('A1', 'C1')).toEqual({ level: 'B1', flagged: true })
+  })
+  it('never leaves the scale at its ends', () => {
+    expect(bandLevel('A1', 'A1')).toEqual({ level: 'A1', flagged: false })
+    expect(bandLevel('C1', 'C1')).toEqual({ level: 'C1', flagged: false })
+    expect(bandLevel('C1', 'B1')).toEqual({ level: 'C1', flagged: false })
   })
   it('drops C2, which no Phase 1 path teaches', () => {
     expect(bandLevel('C2', 'A1')).toEqual({ level: null, flagged: false })
