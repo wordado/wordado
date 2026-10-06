@@ -236,7 +236,7 @@ app (`review-app/README.md`), then `corpus import`.
 
 A sense's level is the LLM's judgement, kept within **two** bands of its word's frequency band (one band, until
 2026-10-06, put everyday words that print mentions rarely two levels too high). `targets` in `pipeline.json` sets
-the band boundaries and nothing else needs to change them.
+the band boundaries. The settings below do not change them.
 
 Which entries are live is decided in this order:
 
@@ -246,8 +246,12 @@ Which entries are live is decided in this order:
    because more frequent ones filled its level.
 3. The most frequent of the rest, until a level holds `sizes[level]` entries. Without `sizes`, `targets` is used.
 
-    "sizes": { "A1": 600, "A2": 1000, "B1": 1500, "B2": 1600, "C1": 2000 },
-    "main_meanings": { "A1": "all", "A2": "all", "B1": 5100 }
+For example:
+
+```json
+"sizes": { "A1": 600, "A2": 1000, "B1": 1500, "B2": 1600, "C1": 2000 },
+"main_meanings": { "A1": "all", "A2": "all", "B1": 5100 }
+```
 
 A word form whose lemma answer came back empty counts as its own headword, unless it holds an apostrophe.
 
@@ -270,6 +274,10 @@ The release refuses removed units. For this one release, name the version being 
     "units_rebuilt_after": 5
 
 It has an effect only while version 5 is the last published one, and `corpus status` says so while it does.
+Before the release, run a plain `corpus draft --offline` and then `corpus status`: it must print the *units
+rebuilt* line and no `retires:` line that you did not expect. A reviewer may still `drop` an entry after the
+rebuild; it then ships retired, in the unit it had before.
+
 Remove it after the release. Learners keep every word's progress; the saved unit unlocks are lost, and the app
 works the path out again from the words they have met.
 

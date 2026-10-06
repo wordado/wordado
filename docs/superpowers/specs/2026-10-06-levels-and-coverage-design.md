@@ -184,20 +184,19 @@ little.
 | Step | Who | What |
 |---|---|---|
 | 1 | Pull request in `wordado` | §3, with tests and the README. CI must be green |
-| 2 | Pull request in `wordado-content` | §4. Move `PIPELINE_REF` |
-| 3 | Operator, locally | `corpus draft "$PWD/content" --rebuild`, with `OPENROUTER_API_KEY` or `CORPUS_LLM=claude-code`. Commit the caches and `registry.json`; pull request |
-| 4 | Operator | `python3 check.py` from the level check, to compare with §1 and §5 before spending more |
-| 5 | Actions | **ai-review**, one queue at a time |
-| 6 | Product owner | Decide the rows with a major objection in the review app; import; pull request |
-| 7 | Actions | **audio**, then listen to the sample |
-| 8 | Product owner | `corpus status`, then **release** |
-| 9 | Pull request in `wordado-content` | Remove `units_rebuilt_after` |
+| 2 | Operator; one pull request in `wordado-content` | §4 and the rebuild together: the settings, the months and the output of `corpus draft "$PWD/content" --rebuild` (with `OPENROUTER_API_KEY` or `CORPUS_LLM=claude-code`; commit the caches and `registry.json`). Move `PIPELINE_REF` just before that draft is run. One pull request, because between two a workflow could draft with the new settings on the old registry |
+| 3 | Operator | `python3 check.py` from the level check, to compare with §1 and §5 before spending more |
+| 4 | Actions | **ai-review**, one queue at a time |
+| 5 | Product owner | Decide the rows with a major objection in the review app; import; pull request |
+| 6 | Actions | **audio**, then listen to the sample |
+| 7 | Product owner | `corpus status`, then **release** |
+| 8 | Pull request in `wordado-content` | Remove `units_rebuilt_after` |
 
-What step 3 asks the model: meanings and translations for the roughly 130 restored words and 12 months, themes
+What step 2 asks the model: meanings and translations for the roughly 130 restored words and 12 months, themes
 for about 1,850 new live entries, and a title in three languages for every themed unit (all units are new).
 Everything else is in the caches.
 
-Estimated API cost for steps 3, 5 and 7 together: 15 to 25 dollars. The audio price is not verified.
+Estimated API cost for steps 2, 4 and 6 together: 15 to 25 dollars. The audio price is not verified.
 
 ## 7. Errors and edge cases
 

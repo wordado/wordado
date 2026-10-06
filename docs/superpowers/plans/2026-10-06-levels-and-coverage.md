@@ -1156,11 +1156,10 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 These are the product owner's steps from spec §6. None of them is run by an agent without an explicit go-ahead: they spend money, change the private content repository, or publish.
 
 1. Open a pull request from `spec/levels-and-coverage` and merge it when CI is green.
-2. In `wordado-content`: add the twelve months to `essentials.txt`; add `sizes`, `main_meanings` and `"units_rebuilt_after": 5` to `pipeline.json` (values in spec §3.3 and §3.6); move the variable `PIPELINE_REF` to the merged commit.
-3. Locally: `pnpm --filter @wordado/pipeline corpus draft "$PWD/content" --rebuild`, with `OPENROUTER_API_KEY` or `CORPUS_LLM=claude-code`. Commit the caches and `registry.json` in a pull request.
-4. `python3 check.py "$PWD/content"` in the research repository's `2026-10-06-level-check/`, and compare with spec §1 and §5 before spending more.
-5. Actions › Corpus › `ai-review`, one queue at a time.
-6. Decide the rows with a major objection in the review app; import; pull request.
-7. Actions › Corpus › `audio`; listen to the sample.
-8. `corpus status`, then Actions › Corpus › `release`.
-9. Remove `units_rebuilt_after` from `pipeline.json`.
+2. In `wordado-content`, ONE pull request: add the twelve months to `essentials.txt`; add `sizes`, `main_meanings` and `"units_rebuilt_after": 5` to `pipeline.json` (values in spec §3.3 and §3.6); move the variable `PIPELINE_REF` to the merged commit just before running, locally, `pnpm --filter @wordado/pipeline corpus draft "$PWD/content" --rebuild` (with `OPENROUTER_API_KEY` or `CORPUS_LLM=claude-code`); commit the caches and `registry.json` in the same pull request. Reason: between two pull requests a workflow could draft with the new settings on the old registry.
+3. `python3 check.py "$PWD/content"` in the research repository's `2026-10-06-level-check/`, and compare with spec §1 and §5 before spending more.
+4. Actions › Corpus › `ai-review`, one queue at a time.
+5. Decide the rows with a major objection in the review app; import; pull request.
+6. Actions › Corpus › `audio`; listen to the sample.
+7. `corpus status`, then Actions › Corpus › `release`.
+8. Remove `units_rebuilt_after` from `pipeline.json`.
