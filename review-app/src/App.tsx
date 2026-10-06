@@ -11,17 +11,28 @@ export function App() {
   const [queue, setQueue] = useState<string | null>(null)
   const [all, setAll] = useState(false)
   const [rows, setRows] = useState<RowView[]>([])
+  // until the first rows are there (or it is known that there is no queue to load them from)
+  const [loading, setLoading] = useState(true)
   const [notice, setNotice] = useState('')
 
   const fail = useCallback((err: unknown) => setNotice(err instanceof Error ? err.message : String(err)), [])
   useEffect(() => void api.reviewer().then(setReviewer).catch(fail), [fail])
-  useEffect(() => void api.queues().then((q) => (setQueues(q), setQueue((cur) => cur ?? q[0]?.queue ?? null))).catch(fail), [fail])
+  useEffect(
+    () =>
+      void api
+        .queues()
+        .then((q) => (setQueues(q), setQueue((cur) => cur ?? q[0]?.queue ?? null), q.length === 0 && setLoading(false)))
+        .catch((err: unknown) => (fail(err), setLoading(false))),
+    [fail],
+  )
   const load = useCallback(async () => {
     if (!queue || reviewer == null) return
     try {
       setRows(await api.rows(queue, all))
     } catch (err) {
       fail(err)
+    } finally {
+      setLoading(false)
     }
   }, [queue, all, reviewer, fail])
   useEffect(() => void load(), [load])
@@ -63,6 +74,7 @@ export function App() {
       <AppHeader who={reviewer} />
       <ReviewScreen
         rows={rows}
+        loading={loading}
         onDecide={onDecide}
         onReload={load}
         notice={notice}

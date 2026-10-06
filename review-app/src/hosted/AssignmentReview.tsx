@@ -10,6 +10,7 @@ import { ReviewScreen } from '../ReviewScreen'
 export function AssignmentReview(props: { assignment: AssignmentView; onBack(): void }) {
   const a = props.assignment
   const [rows, setRows] = useState<readonly HostedRow[]>([])
+  const [loading, setLoading] = useState(true)
   const [notice, setNotice] = useState('')
   const [sent, setSent] = useState<SubmitResult | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -21,6 +22,8 @@ export function AssignmentReview(props: { assignment: AssignmentView; onBack(): 
       if (r.discarded.length > 0) setNotice(`Removed decisions on rows that are gone: ${r.discarded.join(', ')}`)
     } catch (err) {
       setNotice(err instanceof Error ? err.message : String(err))
+    } finally {
+      setLoading(false)
     }
   }, [a.id])
   useEffect(() => void load(), [load])
@@ -68,6 +71,7 @@ export function AssignmentReview(props: { assignment: AssignmentView; onBack(): 
       {changed.length > 0 && <p className="stale-notice">Changed since you decided it: {changed.join(', ')}</p>}
       <ReviewScreen
         rows={rows}
+        loading={loading}
         onDecide={onDecide}
         onReload={load}
         notice={notice}
@@ -75,7 +79,11 @@ export function AssignmentReview(props: { assignment: AssignmentView; onBack(): 
         onBack={props.onBack}
         actions={
           <button className={open > 0 ? 'button primary' : 'button'} onClick={() => void submitNow()} disabled={open === 0 || submitting}>
-            Submit {open} {open === 1 ? 'decision' : 'decisions'}
+            {/* one piece, so the button's gap does not come between the words; a phone shows "Submit 2" */}
+            <span>
+              Submit {open}
+              <span className="wide-label"> {open === 1 ? 'decision' : 'decisions'}</span>
+            </span>
           </button>
         }
       />

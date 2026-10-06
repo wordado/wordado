@@ -45,6 +45,26 @@ describe('App', () => {
     expect(screen.getByText('1 of 1')).toBeTruthy()
   })
 
+  it('says it is loading until the first rows are there, not that nothing is left', async () => {
+    vi.spyOn(api, 'reviewer').mockResolvedValue('Tester')
+    vi.spyOn(api, 'queues').mockResolvedValue([{ queue: 'translation-bg', open: 2, flagged: 2, reported: 0, decided: 0 }])
+    let arrive: (rows: (typeof a1)[]) => void = () => {}
+    vi.spyOn(api, 'rows').mockImplementation(() => new Promise((resolve) => (arrive = resolve)))
+    render(<App />)
+    expect(await screen.findByRole('button', { name: 'All rows' })).toBeTruthy()
+    expect(screen.getByText('Loading…')).toBeTruthy()
+    expect(screen.queryByText('Nothing left to decide here.')).toBeNull()
+    arrive([a1])
+    expect(await screen.findByRole('article', { name: 'Row a-1' })).toBeTruthy()
+  })
+
+  it('says nothing is left when there is no queue at all', async () => {
+    vi.spyOn(api, 'reviewer').mockResolvedValue('Tester')
+    vi.spyOn(api, 'queues').mockResolvedValue([])
+    render(<App />)
+    expect(await screen.findByText('Nothing left to decide here.')).toBeTruthy()
+  })
+
   it('shows one row at a time with its place, and L opens the row list, which closes on choosing a row', async () => {
     mockTwoRows()
     render(<App />)

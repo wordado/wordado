@@ -16,12 +16,12 @@ export function HostedApp(props: { me: Me }) {
       <AppHeader who={me.name}>
         <span className="spacer" />
         {view.kind !== 'list' && (
-          <button className="button" onClick={() => setView({ kind: 'list' })}>
+          <button className="button header-nav" onClick={() => setView({ kind: 'list' })}>
             Back to my assignments
           </button>
         )}
         {me.role === 'admin' && view.kind !== 'admin' && (
-          <button className="button" onClick={() => setView({ kind: 'admin' })}>
+          <button className="button header-nav" onClick={() => setView({ kind: 'admin' })}>
             Admin
           </button>
         )}

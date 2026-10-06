@@ -161,6 +161,19 @@ p {
   max-width: 72rem;
 }
 
+.page-title {
+  margin: 0 0 var(--space-1);
+}
+
+.page-lead {
+  margin: 0 0 0.875rem;
+}
+
+.page > .loading {
+  margin-top: var(--space-5);
+  text-align: center;
+}
+
 /* Controls */
 
 .button {
@@ -515,6 +528,26 @@ button.settings-row:hover {
   font-size: var(--step--1);
 }
 
+/* The reviewer's assignments: a name and its counts, the progress, one button. */
+.assignments .settings-row-text {
+  gap: 0.125rem;
+}
+
+.assignments .progress,
+.assignments .button {
+  flex-shrink: 0;
+}
+
+.keys-hint,
+.swipe-hint {
+  margin: 0.875rem 0.125rem 0;
+}
+
+/* The swipes are said on a phone, the keys elsewhere. */
+.swipe-hint {
+  display: none;
+}
+
 /* Progress: how much is decided (leaf) and how much of that is submitted (blue); the parts get an inline width. */
 
 .progress {
@@ -598,6 +631,14 @@ button.settings-row:hover {
   margin-left: auto;
 }
 
+.header-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  min-width: 0;
+}
+
 .crumb {
   color: var(--ink-soft);
 }
@@ -618,6 +659,7 @@ kbd {
 
 .progress-line {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-3);
   margin-bottom: 0.875rem;
@@ -627,6 +669,12 @@ kbd {
 .progress-line .progress {
   flex: 1;
   width: auto;
+  min-width: 5rem;
+}
+
+/* A swipe to the side is the page's (useSwipe); scrolling up and down stays the browser's. */
+.row-card {
+  touch-action: pan-y;
 }
 
 .card {
@@ -655,6 +703,7 @@ kbd {
   font-family: var(--font-entry);
   font-size: 1.0625rem;
   color: var(--ink-soft);
+  overflow-wrap: anywhere;
 }
 
 .card-head .note {
@@ -873,6 +922,10 @@ kbd {
   padding: 0 var(--space-4) var(--space-3);
 }
 
+.drawer-where {
+  display: none;
+}
+
 .drawer-empty {
   padding: var(--space-3) var(--space-4);
 }
@@ -956,19 +1009,146 @@ kbd {
   cursor: pointer;
 }
 
+/* Phones: one column, the decisions in a bar at the bottom of the screen, edit and the row list full-screen. */
 @media (max-width: 40rem) {
+  .page {
+    padding: var(--space-3) var(--space-3) var(--space-5);
+  }
+
+  /* The header: everything in it is one wrapping row. */
+  .app-header {
+    min-height: 3.25rem;
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .app-header-content {
+    display: contents;
+  }
+
+  .app-header .spacer {
+    flex: 1;
+  }
+
+  /* While reviewing only the wordmark, the row list and the screen's action are left: what is reviewed and the
+     way back are in the row list. The local mode's queue picker takes a line of its own below. */
+  .app-header:has(.header-actions) :is(.crumb, .header-nav, .app-header-who, .wordmark-tail) {
+    display: none;
+  }
+
+  .header-controls {
+    order: 3;
+    flex-basis: 100%;
+  }
+
+  .header-actions {
+    flex-wrap: nowrap;
+    gap: var(--space-2);
+    min-width: 0;
+  }
+
+  .header-actions .button {
+    padding-inline: var(--space-3);
+  }
+
+  /* Words a narrow header has no room for: not drawn, still the control's name. */
+  .wide-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  /* An assignment: the name, the counts, the bar, a button across. */
+  .assignments .settings-row {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: var(--space-2);
+  }
+
+  .assignments .progress {
+    width: 100%;
+  }
+
+  .assignments .button {
+    min-height: 2.75rem;
+    border-radius: 0.875rem;
+  }
+
+  .keys-hint {
+    display: none;
+  }
+
+  .swipe-hint {
+    display: block;
+  }
+
+  /* Room under the card for the decision bar (two rows of buttons). */
+  .review.page {
+    padding-bottom: calc(9.5rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  .panel.card {
+    padding: 0.875rem;
+  }
+
+  .word {
+    font-size: var(--step-2);
+  }
+
   .compare {
     grid-template-columns: minmax(0, 1fr);
   }
 
   .decisions {
+    position: fixed;
+    inset: auto 0 0;
+    z-index: 5;
     grid-auto-flow: row;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 0.625rem var(--space-3) calc(0.875rem + env(safe-area-inset-bottom, 0px));
+    background: var(--paper-raised);
+    border-top: 1px solid var(--rule);
+  }
+
+  .decisions .button {
+    white-space: normal;
+  }
+
+  /* No keyboard, no key hints. */
+  .decisions kbd,
+  .card-nav kbd {
+    display: none;
+  }
+
+  /* Editing fills the screen: the fields one under another, Save and Cancel in the bar. */
+  .row-card.editing {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    overflow-y: auto;
+    padding: var(--space-3) var(--space-3) calc(6rem + env(safe-area-inset-bottom, 0px));
+    background: var(--paper);
+  }
+
+  .row-card.editing :is(.progress-line, .card-nav, .example) {
+    display: none;
   }
 
   .drawer {
     width: 100%;
     border: 0;
+  }
+
+  .drawer-where {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    padding: 0 var(--space-4) var(--space-3);
   }
 
   .settings-row {

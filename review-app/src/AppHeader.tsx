@@ -7,7 +7,8 @@ export function AppHeader(props: { children?: ReactNode; who?: string }) {
   return (
     <header className="app-header">
       <span className="wordmark">
-        Word<b>ado</b> review
+        Word<b>ado</b>
+        <span className="wordmark-tail"> review</span>
       </span>
       <span className="app-header-content">
         <span className="app-header-slot" data-header-slot="" />

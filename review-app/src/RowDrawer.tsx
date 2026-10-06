@@ -16,6 +16,10 @@ export function RowDrawer(props: {
   severity: string
   onLevel(level: string): void
   onSeverity(severity: string): void
+  /** what is being reviewed and the way back to where it was opened from: shown on a phone, where the header has
+   * no room for them */
+  title?: string
+  onBack?: () => void
 }) {
   const { open, onClose } = props
   const ref = useRef<HTMLDialogElement>(null)
@@ -80,6 +84,16 @@ export function RowDrawer(props: {
             </select>
           </span>
         </div>
+        {(props.title || props.onBack) && (
+          <div className="drawer-where">
+            {props.title && <span className="note">{props.title}</span>}
+            {props.onBack && (
+              <button className="button small" onClick={props.onBack}>
+                Back to my assignments
+              </button>
+            )}
+          </div>
+        )}
         {props.rows.length === 0 ? (
           <p className="note drawer-empty">No rows match these filters.</p>
         ) : (

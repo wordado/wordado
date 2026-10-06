@@ -1,10 +1,13 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import type { Action, RowView } from '../server/types'
 import { Compare } from './Compare'
 import { fieldLabel } from './labels'
 import { Objections } from './Objections'
 import { applyFixes, firstPerField, toggleTick } from './RowView'
 import { useKeys } from './useKeys'
+import { useSwipe } from './useSwipe'
+
+const nothing = () => {}
 
 /** What stands above the word: part of speech · level · English sense; a unit title and a level row say what they are. */
 function eyebrowOf(row: RowView): string {
@@ -14,7 +17,8 @@ function eyebrowOf(row: RowView): string {
 }
 
 /** One row to decide: where it is among the shown rows, the word, "Now" beside "AI suggests", the objections, and
- * the decisions with their keys (1 accept, 2 keep, 3 edit and save, 4 drop). */
+ * the decisions with their keys (1 accept, 2 keep, 3 edit and save, 4 drop). On a touch screen a swipe to the left
+ * skips to the next row and one to the right goes back. */
 export function RowCard(props: {
   row: RowView
   /** the row's place among the shown rows; `index` counts from 0 */
@@ -51,9 +55,14 @@ export function RowCard(props: {
   }, [saving, editing, save, cancel, hasObjections, accept, keep, startEdit, canDrop, drop])
   useKeys(keys)
 
+  // A swipe leaves the row, so not while an edit is open (it would be lost) or a decision saves.
+  const card = useRef<HTMLElement>(null)
+  const still = editing || saving
+  useSwipe(card, { onLeft: still ? nothing : onSkip, onRight: still ? nothing : onPrev })
+
   const c = row.context
   return (
-    <article className="row-card" aria-label={`Row ${row.key}`}>
+    <article ref={card} className={editing ? 'row-card editing' : 'row-card'} aria-label={`Row ${row.key}`}>
       <div className="progress-line">
         <div className="progress" aria-hidden="true">
           <span className="decided" style={{ width: `${position.total > 0 ? (position.index / position.total) * 100 : 0}%` }} />
