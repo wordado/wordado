@@ -41,6 +41,8 @@ export interface ReleasePlan {
   /** Open review items that ship anyway (`accept_unreviewed`); they block nothing. */
   readonly unreviewed: readonly Unreviewed[]
   readonly retired: readonly string[]
+  /** `units_rebuilt_after` names the last published version: this release may leave out its units (spec 2026-10-06 §3.6). */
+  readonly unitsRebuilt: boolean
 }
 
 /** Everything a release would write, and what stands in its way. Writes nothing. */
@@ -54,6 +56,8 @@ export function planRelease(dir: string, opts: { draft: boolean; now: string }):
   const records = readAudioRecords(dir)
   const last = readLastPublished(dir)
   const corpusVersion = last.manifest.corpus_version + 1
+  // One release only: the setting stops matching as soon as its successor is published.
+  const unitsRebuilt = config.units_rebuilt_after === last.manifest.corpus_version
   const problems: string[] = [...draft.problems]
   const pending: string[] = []
   const unreviewed: Unreviewed[] = []
@@ -93,7 +97,7 @@ export function planRelease(dir: string, opts: { draft: boolean; now: string }):
       problems.push(...err.errors.map((e) => `${l1}: ${e.path || '(pack)'}: ${e.message}`))
       continue
     }
-    if (previous) problems.push(...checkPackSuccession(previous, out.pack).map((e) => `${l1}: ${e.path}: ${e.message}`))
+    if (previous) problems.push(...checkPackSuccession(previous, out.pack, { allowRemovedUnits: unitsRebuilt }).map((e) => `${l1}: ${e.path}: ${e.message}`))
     for (const e of out.pack.entries) if (e.retired && last.live.has(e.entry_id)) retired.add(e.entry_id)
     for (const f of diffFixes(previous, out.pack)) {
       const key = `${f.word_id}|${f.field}|${f.l1 ?? ''}`
@@ -134,6 +138,7 @@ export function planRelease(dir: string, opts: { draft: boolean; now: string }):
     pending,
     unreviewed,
     retired: [...retired].sort(),
+    unitsRebuilt,
   }
 }
 

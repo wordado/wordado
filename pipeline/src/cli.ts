@@ -30,8 +30,9 @@ import { openRouterTts } from './tts'
 const USAGE = `usage: corpus <command>
   content (a content directory, e.g. an absolute path to your clone of wordado-content):
     init <dir>                     a new content directory, seeded with the sample
-    draft <dir> [--offline] [--regroup]
-                                   every LLM stage; --offline uses the cache only; --regroup rebuilds unpublished units
+    draft <dir> [--offline] [--regroup | --rebuild]
+                                   every LLM stage; --offline uses the cache only; --regroup rebuilds unpublished units;
+                                   --rebuild, once: every entry takes its banded level and all units are built again
     audio <dir> [--batch <id>]     TTS clips for live entries that need one
     queues <dir>                   write pending review items to review/
     import <dir> --by <name>       apply reviewed rows as decisions
@@ -156,10 +157,11 @@ const spendNote = (llm: Llm) =>
   llm.model.startsWith('claude-code:') ? `$${llm.spentUsd().toFixed(2)} API-equivalent, on your Claude plan` : `$${llm.spentUsd().toFixed(2)}`
 
 async function draft(dir: string): Promise<void> {
+  if (flag('--rebuild') && flag('--regroup')) usage()
   const config = readConfig(dir)
   const offline = flag('--offline')
   const llm = offline ? offlineLlm : chosenLlm(config)
-  const d = await runDraft({ dir, llm, offline, regroup: flag('--regroup'), concurrency: llmConcurrency() })
+  const d = await runDraft({ dir, llm, offline, regroup: flag('--regroup'), rebuild: flag('--rebuild'), concurrency: llmConcurrency() })
   const live = new Set(d.live)
   const perLevel = config.levels.map((level) => `${level} ${d.entries.filter((e) => live.has(e.entry_id) && e.level === level).length}`).join(', ')
   const units = d.units.filter((u) => u.entry_ids.some((id) => live.has(id))).length
@@ -295,6 +297,7 @@ function status(dir: string): void {
   console.log(
     `corpus v${plan.corpusVersion}: ${plan.problems.length} problems, ${reviewPending.length} items awaiting review, ${aiPending.length} awaiting AI review`,
   )
+  if (plan.unitsRebuilt) console.log('  units rebuilt: this release may leave out the published units (units_rebuilt_after)')
   for (const p of plan.problems) console.log(`  ${p}`)
   for (const s of summarise(plan.pending)) console.log(s)
   if (plan.unreviewed.length > 0) {

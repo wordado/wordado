@@ -15,6 +15,22 @@ const corpus = (...args: string[]) =>
   spawnSync(process.execPath, ['--import', 'tsx', 'src/cli.ts', ...args], { cwd: PIPELINE, encoding: 'utf8', env: { ...process.env, OPENROUTER_API_KEY: '' } })
 
 describe('corpus (the CLI)', () => {
+  it('draft refuses --rebuild together with --regroup', () => {
+    const out = corpus('draft', makeContent(), '--rebuild', '--regroup', '--offline')
+    expect(out.status).toBe(2)
+    expect(out.stderr).toMatch(/usage: corpus/)
+  })
+
+  it('status says when the next release may replace the published units, and only then', async () => {
+    const dir = makeContent()
+    await runDraft({ dir, llm: sampleLlm(), offline: false })
+    // The fixture's last published version is the sample, version 0.
+    writeJson(contentPaths(dir).config, { ...readConfig(dir), units_rebuilt_after: 0 })
+    expect(corpus('status', dir).stdout).toMatch(/units_rebuilt_after/)
+    writeJson(contentPaths(dir).config, { ...readConfig(dir), units_rebuilt_after: 7 })
+    expect(corpus('status', dir).stdout).not.toMatch(/units_rebuilt_after/)
+  })
+
   it('init makes a content directory, and refuses to overwrite one', () => {
     const dir = join(mkdtempSync(join(tmpdir(), 'cli-')), 'content')
     expect(corpus('init', dir).status).toBe(0)
