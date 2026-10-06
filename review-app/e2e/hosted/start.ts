@@ -31,6 +31,9 @@ await proxy.env.SNAPSHOTS.put(CURRENT_KEY, readFileSync(join(snap, CURRENT_KEY),
 await proxy.env.DB.prepare("INSERT INTO reviewers (email, name, languages, role, invited_at) VALUES ('reviewer@example.com', 'Rita', '[\"bg\",\"en\"]', 'reviewer', '2026-10-05T00:00:00Z')").run()
 await proxy.env.DB.prepare("INSERT INTO reviewers (email, name, languages, role, invited_at) VALUES ('hans@example.com', 'Hans', '[\"de\",\"bg\"]', 'reviewer', '2026-10-05T00:00:00Z')").run()
 await proxy.env.DB.prepare("INSERT INTO assignments (reviewer, queue, files, flagged_only, created_at) VALUES ('reviewer@example.com', 'translation-bg', '*', 1, '2026-10-05T00:00:00Z')").run()
+// The phone run has a reviewer and a queue of its own, so the two browser projects can run side by side.
+await proxy.env.DB.prepare("INSERT INTO reviewers (email, name, languages, role, invited_at) VALUES ('phone@example.com', 'Petra', '[\"en\"]', 'reviewer', '2026-10-05T00:00:00Z')").run()
+await proxy.env.DB.prepare("INSERT INTO assignments (reviewer, queue, files, flagged_only, created_at) VALUES ('phone@example.com', 'level', '*', 0, '2026-10-05T00:00:00Z')").run()
 await proxy.dispose()
 
 // The fake GitHub: main holds the fixture's review files.
@@ -55,7 +58,7 @@ createServer((req, res) => {
 const keys = await testKeys()
 const env = { ACCESS_AUD: AUD, ACCESS_TEAM_DOMAIN: TEAM }
 mkdirSync(join(root, '.e2e'), { recursive: true })
-writeFileSync(join(root, '.e2e', 'tokens.json'), JSON.stringify({ admin: await keys.token('admin@example.com', env), reviewer: await keys.token('reviewer@example.com', env) }))
+writeFileSync(join(root, '.e2e', 'tokens.json'), JSON.stringify({ admin: await keys.token('admin@example.com', env), reviewer: await keys.token('reviewer@example.com', env), phone: await keys.token('phone@example.com', env) }))
 
 const vars = {
   ACCESS_JWKS: keys.jwks, ACCESS_TEAM_DOMAIN: TEAM, ACCESS_AUD: AUD, ADMIN_EMAIL: 'admin@example.com',

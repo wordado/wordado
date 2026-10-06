@@ -1,28 +1,31 @@
 import { useEffect, useState } from 'react'
 import type { AssignmentView } from '../../shared/hosted'
 import { hostedApi } from '../hostedApi'
+import { assignmentLabel } from '../labels'
 
-/** What an assignment covers: "flagged rows · all files", "all rows · 3 files". */
-export function scopeOf(a: AssignmentView): string {
-  const files = a.files === '*' ? 'all files' : `${a.files.length} ${a.files.length === 1 ? 'file' : 'files'}`
-  return `${a.flaggedOnly ? 'flagged rows' : 'all rows'} · ${files}`
-}
-
-function progressOf(a: AssignmentView): string {
+/** How far an assignment is: "741 rows · 212 decided · 60 submitted", "8 rows · none decided yet". */
+function countsOf(a: AssignmentView): string {
   const p = a.progress
   if (!p) return 'The review data is not available yet.'
-  return `${p.decided} decided · ${p.submitted} submitted · ${p.remaining} to go`
+  const rows = `${p.inScope} ${p.inScope === 1 ? 'row' : 'rows'}`
+  if (p.decided === 0 && p.submitted === 0) return `${rows} · none decided yet`
+  return [rows, p.decided > 0 ? `${p.decided} decided` : '', p.submitted > 0 ? `${p.submitted} submitted` : ''].filter(Boolean).join(' · ')
 }
 
-/** The signed-in reviewer's open assignments, one settings row each. */
+const share = (part: number, whole: number) => `${whole > 0 ? (part / whole) * 100 : 0}%`
+
+/** The signed-in reviewer's open assignments: a plain name, how far it is, and one button each. */
 export function Assignments(props: { onOpen(a: AssignmentView): void }) {
   const [list, setList] = useState<AssignmentView[] | undefined>(undefined)
   const [error, setError] = useState('')
   useEffect(() => void hostedApi.assignments().then(setList, (err: unknown) => setError(err instanceof Error ? err.message : String(err))), [])
 
   return (
-    <section className="panel" aria-label="My assignments">
-      <h2 className="panel-title">My assignments</h2>
+    <section className="page" aria-labelledby="assignments-title">
+      <h2 className="page-title" id="assignments-title">
+        Your assignments
+      </h2>
+      <p className="note page-lead">Pick up where you stopped. Your decisions are saved as you go; Submit sends them to the coordinator.</p>
       {error && (
         <p role="status" className="notice">
           {error}
@@ -31,19 +34,34 @@ export function Assignments(props: { onOpen(a: AssignmentView): void }) {
       {list === undefined && !error && <p className="note">Loading…</p>}
       {list?.length === 0 && <p className="note">Nothing is assigned to you yet.</p>}
       {list && list.length > 0 && (
-        <ul className="settings-rows">
-          {list.map((a) => (
-            <li key={a.id}>
-              <button className="settings-row" onClick={() => props.onOpen(a)}>
-                <span className="settings-row-text">
-                  <span className="settings-row-title">{a.queue}</span>
-                  <span className="note">{scopeOf(a)}</span>
-                  <span className="note">{progressOf(a)}</span>
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
+        <>
+          <ul className="settings-rows assignments">
+            {list.map((a) => {
+              const p = a.progress
+              const started = p !== null && (p.decided > 0 || p.submitted > 0)
+              return (
+                <li key={a.id} className="settings-row" title={a.queue}>
+                  <span className="settings-row-text">
+                    <span className="settings-row-title" id={`assignment-${a.id}`}>
+                      {assignmentLabel(a)}
+                    </span>
+                    <span className="note">{countsOf(a)}</span>
+                  </span>
+                  <span className="progress" aria-hidden="true">
+                    {p && <span className="submitted" style={{ width: share(p.submitted, p.inScope) }} />}
+                    {p && <span className="decided" style={{ width: share(p.decided, p.inScope) }} />}
+                  </span>
+                  {/* without review data there are no rows to open */}
+                  <button className={started ? 'button primary' : 'button'} aria-describedby={`assignment-${a.id}`} disabled={p === null} onClick={() => props.onOpen(a)}>
+                    {started ? 'Continue' : 'Start'}
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+          <p className="note keys-hint">Keys: 1 accept, 2 keep, 3 edit, 4 drop, S skip.</p>
+          <p className="note swipe-hint">Swipe left for the next row, right for the previous one.</p>
+        </>
       )}
     </section>
   )

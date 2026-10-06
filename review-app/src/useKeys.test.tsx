@@ -23,4 +23,19 @@ describe('useKeys', () => {
     fireEvent.keyDown(window, { key: '2' })
     expect(onKey).toHaveBeenCalledTimes(1)
   })
+
+  it('ignores the keys while a dialog is open, wherever the focus is', () => {
+    const onKey = vi.fn()
+    render(
+      <>
+        <Harness onKey={onKey} />
+        <dialog open>
+          <button>inside</button>
+        </dialog>
+      </>,
+    )
+    fireEvent.keyDown(window, { key: '2' })
+    fireEvent.keyDown(document.body, { key: '2' })
+    expect(onKey).not.toHaveBeenCalled()
+  })
 })

@@ -11,9 +11,12 @@
     "dev:hosted": "vite build && wrangler dev --port 4181 --ip 127.0.0.1",
     "e2e:hosted": "playwright test -c playwright.hosted.config.ts",
     "deploy:check": "vite build && wrangler deploy --dry-run --env production --outdir dist-worker",
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json",
+    "screenshots": "pnpm build && tsx scripts/screenshots.ts"
   },
   "dependencies": {
+    "@fontsource-variable/golos-text": "^5.3.0",
+    "@fontsource-variable/literata": "^5.3.0",
     "@wordado/core": "workspace:*",
     "@wordado/pipeline": "workspace:*",
     "hono": "^4.13.8",
