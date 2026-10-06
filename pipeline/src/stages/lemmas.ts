@@ -93,13 +93,22 @@ export interface RankedLemma {
   readonly pinned: boolean
 }
 
+/**
+ * The stage sometimes answers "a word, an inflection of nothing" with an empty list. In the first real run that
+ * took 91 of the 100 most frequent forms out of the corpus (level check, 2026-10-06). Such a form is its own
+ * headword. A contraction piece ("they're") is not: the stage should have called it a fragment.
+ */
+const ownLemma = (form: string): readonly string[] => (/['’]/.test(form) ? [] : [norm(form)].filter((l) => l !== ''))
+
 /** Lemmas by summed rate: the top `max`, plus every pinned headword wherever it ranks. */
 export function rankLemmas(forms: readonly RankedForm[], results: readonly LemmaResult[], pinned: readonly string[], max: number): RankedLemma[] {
   const rates = new Map<string, number>()
   results.forEach((r, i) => {
-    if (r.kind !== 'word' || r.lemmas.length === 0) return
-    const share = forms[i]!.perMillion / r.lemmas.length
-    for (const l of r.lemmas) rates.set(l, (rates.get(l) ?? 0) + share)
+    if (r.kind !== 'word') return
+    const lemmas = r.lemmas.length > 0 ? r.lemmas : ownLemma(forms[i]!.form)
+    if (lemmas.length === 0) return
+    const share = forms[i]!.perMillion / lemmas.length
+    for (const l of lemmas) rates.set(l, (rates.get(l) ?? 0) + share)
   })
   const pins = new Set(pinned.map(norm))
   for (const p of pins) if (!rates.has(p)) rates.set(p, 0)

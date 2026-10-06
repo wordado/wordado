@@ -54,7 +54,12 @@ export function sampleLlm() {
   return fakeLlm((name, input) => {
     if (name === 'lemmas') {
       const forms = (input as { forms: string[] }).forms
-      return { items: forms.map((form) => (form === 'london' ? { form, kind: 'name', lemmas: [] } : { form, kind: 'word', lemmas: [form === 'went' ? 'go' : form] })) }
+      // `the` comes back with an empty list, as the real stage answered its first batch (level check, 2026-10-06).
+      return {
+        items: forms.map((form) =>
+          form === 'london' ? { form, kind: 'name', lemmas: [] } : { form, kind: 'word', lemmas: form === 'the' ? [] : [form === 'went' ? 'go' : form] },
+        ),
+      }
     }
     if (name === 'senses') {
       const headwords = (input as { headwords: string[] }).headwords

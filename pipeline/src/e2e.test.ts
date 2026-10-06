@@ -99,4 +99,47 @@ describe('the corpus pipeline, end to end (spec §13)', () => {
     const fixes = JSON.parse(readFileSync(join(v2Dir, 'fixes.json'), 'utf8'))
     expect(fixes.fixes.filter((f: { fixed_in: number }) => f.fixed_in === 2)).toEqual([{ word_id: 'c:go-1', field: 'translation', fixed_in: 2, l1: 'bg' }])
   }, 30_000)
+
+  it('rebuilds levels and units once, reviews the moved level in a spreadsheet, and releases v2 with every entry kept', async () => {
+    const dir = makeContent({ config: { levels: ['A1', 'A2', 'B1', 'B2', 'C1'] } })
+    const specs = queueSpecs(['bg'])
+    await runDraft({ dir, llm: sampleLlm(), offline: false })
+    await recordAudio(dir, '20261001T1000')
+    queues(dir, '2026-10-01')
+    review(dir)
+    expect(importQueues(dir, specs, { by: 'Мария', now: '2026-10-01T12:00:00Z' }).errors).toEqual([])
+    const v1Dir = join(mkdtempSync(join(tmpdir(), 'e2e-')), 'v1')
+    writeRelease(dir, v1Dir, planRelease(dir, { draft: false, now: '2026-10-01T13:00:00Z' }))
+    const v1 = pack(v1Dir, 'corpus-v1-bg.pack')
+    adoptRelease(dir, v1Dir)
+
+    // New band boundaries, and leave to replace version 1's units. The sizes stay those of the first draft, so only the levels are in play.
+    const file = join(dir, 'pipeline.json')
+    writeFileSync(
+      file,
+      JSON.stringify({ ...JSON.parse(readFileSync(file, 'utf8')), targets: { A1: 1, A2: 1, B1: 1, B2: 1, C1: 1 }, sizes: { A1: 62, A2: 2, B1: 1, B2: 1, C1: 1 }, units_rebuilt_after: 1 }),
+    )
+    const rebuilt = await runDraft({ dir, llm: sampleLlm(), offline: false, rebuild: true })
+    expect(rebuilt.live).toHaveLength(v1.entries.length)
+    const written = queues(dir, '2026-10-05')
+    const levelFile = written.find((f) => f.startsWith('review/level/'))
+    expect(levelFile).toBeDefined()
+    expect(parseCsv(readFileSync(join(dir, levelFile!), 'utf8')).some((row) => row[0] === 'bank-2')).toBe(true)
+    review(dir)
+    expect(importQueues(dir, specs, { by: 'Мария', now: '2026-10-05T12:00:00Z' }).errors).toEqual([])
+    await runDraft({ dir, llm: sampleLlm(), offline: true })
+
+    const plan = planRelease(dir, { draft: false, now: '2026-10-05T13:00:00Z' })
+    expect([plan.problems, plan.pending]).toEqual([[], []])
+    const v2Dir = join(mkdtempSync(join(tmpdir(), 'e2e-')), 'v2')
+    writeRelease(dir, v2Dir, plan)
+    expect(publishProblems(reader(v2Dir))).toEqual([])
+    const v2 = pack(v2Dir, 'corpus-v2-bg.pack')
+    expect(checkPackSuccession(v1, v2, { allowRemovedUnits: true })).toEqual([])
+    expect(checkPackSuccession(v1, v2).map((e) => e.path)).toEqual(v1.units.map(() => 'units'))
+    expect(v2.entries.find((e) => e.entry_id === 'bank-2')).toMatchObject({ level: 'B1', retired: false })
+    expect(v2.units.find((u) => u.entry_ids.includes('bank-2'))!.level).toBe('B1')
+    const fixes = JSON.parse(readFileSync(join(v2Dir, 'fixes.json'), 'utf8')) as { fixes: { word_id: string; field: string; fixed_in: number }[] }
+    expect(fixes.fixes.some((f) => f.word_id === 'c:bank-2' && f.field === 'level' && f.fixed_in === 2)).toBe(true)
+  }, 30_000)
 })

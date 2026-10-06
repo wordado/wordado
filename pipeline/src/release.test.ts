@@ -30,7 +30,85 @@ async function reviewed(): Promise<string> {
   return dir
 }
 
+const setConfig = (dir: string, change: Record<string, unknown>) => {
+  const file = join(dir, 'pipeline.json')
+  writeJson(file, { ...JSON.parse(readFileSync(file, 'utf8')), ...change })
+}
+
+/** Version 1 published, then new band boundaries and a rebuild, reviewed and ready for a release. */
+async function rebuiltAfterV1(beforeRebuild: (dir: string) => void = () => {}): Promise<{ dir: string; v1: Pack }> {
+  const dir = makeContent({ config: { levels: ['A1', 'A2', 'B1', 'B2', 'C1'] } })
+  await runDraft({ dir, llm: sampleLlm(), offline: false })
+  await recordAudio(dir)
+  approveAll(dir)
+  const o = out()
+  writeRelease(dir, o, planRelease(dir, { draft: false, now: NOW }))
+  adoptRelease(dir, o)
+  const v1 = packOf(join(dir, 'last-published'), 'corpus-v1-bg.pack')
+  setConfig(dir, { targets: { A1: 1, A2: 1, B1: 1, B2: 1, C1: 1 }, sizes: { A1: 62, A2: 2, B1: 1, B2: 1, C1: 1 } })
+  beforeRebuild(dir)
+  await runDraft({ dir, llm: sampleLlm(), offline: false, rebuild: true })
+  approveAll(dir)
+  return { dir, v1 }
+}
+
 describe('planRelease and writeRelease', () => {
+  it('refuses a rebuilt corpus whose old units are gone, unless units_rebuilt_after names the last published version', async () => {
+    const { dir, v1 } = await rebuiltAfterV1()
+    const refused = planRelease(dir, { draft: false, now: NOW })
+    expect(refused.unitsRebuilt).toBe(false)
+    expect(refused.problems).toEqual(v1.units.map((u) => `bg: units: unit ${u.unit_id} was removed`))
+    setConfig(dir, { units_rebuilt_after: 1 })
+    const plan = planRelease(dir, { draft: false, now: NOW })
+    expect(plan.unitsRebuilt).toBe(true)
+    expect([plan.problems, plan.pending]).toEqual([[], []])
+    const o = out()
+    writeRelease(dir, o, plan)
+    expect(publishProblems(reader(o))).toEqual([])
+    const v2 = packOf(o, 'corpus-v2-bg.pack')
+    const liveIds = (p: Pack) => p.entries.filter((e) => !e.retired).map((e) => e.entry_id).sort()
+    expect(liveIds(v2)).toEqual(liveIds(v1))
+    expect(v2.units.some((u) => v1.units.some((old) => old.unit_id === u.unit_id))).toBe(false)
+    expect(loadCorpus([v2]).entries.size).toBe(v1.entries.length)
+    // The setting names version 1 only: once version 2 is published, it allows nothing.
+    adoptRelease(dir, o)
+    expect(planRelease(dir, { draft: false, now: NOW }).unitsRebuilt).toBe(false)
+  })
+
+  it('carries an entry dropped before a rebuild, retired, in its old unit', async () => {
+    const { dir, v1 } = await rebuiltAfterV1((d) => {
+      const the = readDraft(d).entries.find((e) => e.entry_id === 'the-1')!
+      Decisions.read(d).append(QUEUES.translation('bg'), [{ key: 'the-1', at: NOW, verdict: 'drop', proposed: the.l1['bg']!, by: 'r' }])
+    })
+    setConfig(dir, { units_rebuilt_after: 1 })
+    const plan = planRelease(dir, { draft: false, now: NOW })
+    expect([plan.problems, plan.pending, plan.retired]).toEqual([[], [], ['the-1']])
+    const o = out()
+    writeRelease(dir, o, plan)
+    const v2 = packOf(o, 'corpus-v2-bg.pack')
+    const old = v1.entries.find((e) => e.entry_id === 'the-1')!
+    expect(v2.entries.find((e) => e.entry_id === 'the-1')).toEqual({ ...old, retired: true })
+    expect(v2.units.find((u) => u.unit_id === old.unit_id)).toMatchObject({ level: 'A1', entry_ids: ['the-1'] })
+  })
+
+  it('carries an entry dropped after a rebuild, retired, in its old unit only', async () => {
+    const { dir, v1 } = await rebuiltAfterV1()
+    const go = readDraft(dir).entries.find((e) => e.entry_id === 'go-1')!
+    Decisions.read(dir).append(QUEUES.translation('bg'), [{ key: 'go-1', at: NOW, verdict: 'drop', proposed: go.l1['bg']!, by: 'r' }])
+    // Online: the unit that loses a word is named again.
+    await runDraft({ dir, llm: sampleLlm(), offline: false })
+    approveAll(dir)
+    setConfig(dir, { units_rebuilt_after: 1 })
+    const plan = planRelease(dir, { draft: false, now: NOW })
+    expect([plan.problems, plan.pending, plan.retired]).toEqual([[], [], ['go-1']])
+    const o = out()
+    writeRelease(dir, o, plan)
+    const v2 = packOf(o, 'corpus-v2-bg.pack')
+    const old = v1.entries.find((e) => e.entry_id === 'go-1')!
+    expect(v2.entries.find((e) => e.entry_id === 'go-1')).toEqual({ ...old, retired: true })
+    expect(v2.units.filter((u) => u.entry_ids.includes('go-1')).map((u) => u.unit_id)).toEqual([old.unit_id])
+  })
+
   it('releases a fully reviewed corpus as version 1, a valid successor of the sample', async () => {
     const dir = await reviewed()
     const plan = planRelease(dir, { draft: false, now: NOW })

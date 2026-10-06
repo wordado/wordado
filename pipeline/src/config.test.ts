@@ -60,6 +60,36 @@ describe('configProblems', () => {
     ])
     expect(configProblems({ ...validConfig, accept_unreviewed: 'english' })).toEqual(['accept_unreviewed: must be a list of review queues'])
   })
+
+  it('accepts sizes, main_meanings and units_rebuilt_after, which are all optional', () => {
+    expect(
+      configProblems({
+        ...validConfig,
+        sizes: { A1: 600, A2: 1000, B1: 1500, B2: 1600, C1: 2000 },
+        main_meanings: { A1: 'all', B1: 5100 },
+        units_rebuilt_after: 5,
+      }),
+    ).toEqual([])
+    expect(configProblems({ ...validConfig, units_rebuilt_after: 0 })).toEqual([])
+  })
+
+  it('names a missing size, a main_meanings rule of the wrong kind or for a level not shipped, and a bad version', () => {
+    expect(
+      configProblems({
+        ...validConfig,
+        sizes: { A1: 600, A2: 0, B1: 1500, B2: 1600 },
+        main_meanings: { A1: 'every', B2: 'all', A2: 0 },
+        units_rebuilt_after: -1,
+      }),
+    ).toEqual([
+      'sizes.A2: must be a positive integer',
+      'sizes.C1: must be a positive integer',
+      'main_meanings.A1: must be "all" or a positive integer',
+      'main_meanings.B2: must be a level this corpus ships',
+      'main_meanings.A2: must be "all" or a positive integer',
+      'units_rebuilt_after: must be a corpus version (0 or more)',
+    ])
+  })
 })
 
 describe('themeProblems', () => {

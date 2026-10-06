@@ -39,6 +39,34 @@ describe('lemmatise', () => {
 })
 
 describe('rankLemmas', () => {
+  it('takes a word with an empty lemma list as its own headword, and still skips a contraction piece', () => {
+    const fs = [
+      { form: 'the', perMillion: 5000, rank: 1 },
+      { form: "they're", perMillion: 900, rank: 2 },
+      { form: 'they’ll', perMillion: 800, rank: 3 },
+      { form: 'london', perMillion: 400, rank: 4 },
+    ]
+    const results: LemmaResult[] = [
+      { form: 'the', kind: 'word', lemmas: [] },
+      { form: "they're", kind: 'word', lemmas: [] },
+      { form: 'they’ll', kind: 'word', lemmas: [] },
+      { form: 'london', kind: 'name', lemmas: [] },
+    ]
+    expect(rankLemmas(fs, results, [], 10)).toEqual([{ lemma: 'the', perMillion: 5000, rank: 1, pinned: false }])
+  })
+
+  it('adds the rate of an empty-list form to a lemma that other forms already name', () => {
+    const fs = [
+      { form: 'be', perMillion: 300, rank: 1 },
+      { form: 'is', perMillion: 700, rank: 2 },
+    ]
+    const results: LemmaResult[] = [
+      { form: 'be', kind: 'word', lemmas: [] },
+      { form: 'is', kind: 'word', lemmas: ['be'] },
+    ]
+    expect(rankLemmas(fs, results, [], 10)).toEqual([{ lemma: 'be', perMillion: 1000, rank: 1, pinned: false }])
+  })
+
   it('sums each lemma over its forms, splitting a form among its lemmas, and drops non-words', () => {
     const results = forms.map((f) => ({ ...LEXICON[f.form]!, lemmas: LEXICON[f.form]!.lemmas.map((l) => l.trim().toLowerCase()) }))
     expect(rankLemmas(forms, results, [], 10)).toEqual([
