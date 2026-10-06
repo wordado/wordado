@@ -75,6 +75,10 @@ export class FakeGitHub {
       this.pulls.push({ number, title: String(body['title']), head: String(body['head']), body: String(body['body']), state: 'open', merged: false })
       return json({ number, html_url: `https://github.com/${this.repo}/pull/${number}` }, 201)
     }
+    if (method === 'GET' && p === `${repo}/pulls`) {
+      const head = (url.searchParams.get('head') ?? '').split(':')[1] ?? ''
+      return json(this.pulls.filter((x) => x.head === head).map((x) => ({ number: x.number, html_url: `https://github.com/${this.repo}/pull/${x.number}` })))
+    }
     if (method === 'GET' && (m = new RegExp(`^${repo}/pulls/(\\d+)$`).exec(p))) {
       const pr = this.pulls.find((x) => x.number === Number(m![1]))
       return pr ? json({ number: pr.number, state: pr.state, merged: pr.merged }) : json({ message: 'Not Found' }, 404)

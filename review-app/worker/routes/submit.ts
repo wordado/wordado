@@ -4,7 +4,7 @@ import { apiError, jsonBody, type AppEnv, type Deps } from '../app'
 import { getAssignment, listSubmissions, setSubmissionStatus, submissionByPr, unsubmit } from '../db'
 import { githubFor, verifyWebhook } from '../github'
 import { currentSnapshot } from '../snapshotStore'
-import { submit } from '../submit'
+import { settleClaim, submit } from '../submit'
 import { NO_SNAPSHOT, ownAssignment, reviewerNames } from './reviewer'
 
 export function submitRoutes(app: Hono<AppEnv>, deps: Deps): void {
@@ -41,12 +41,15 @@ export function submitRoutes(app: Hono<AppEnv>, deps: Deps): void {
   app.get('/api/admin/submissions', async (c) => {
     const gh = githubFor(deps)
     for (const s of await listSubmissions(deps.env.DB, { status: 'open' })) {
-      if (!gh || s.pr === null) continue
+      if (!gh) continue
       try {
-        const state = await gh.prState(s.pr)
+        // A claim with no pull request recorded: complete it from GitHub, or release it when it is stale.
+        const pr = s.pr ?? (await settleClaim(deps, gh, s).then((r) => (r.state === 'completed' ? r.pr : null)))
+        if (pr === null) continue
+        const state = await gh.prState(pr)
         if (state !== 'open') await closeSubmission(deps, s.id, state === 'merged')
       } catch (err) {
-        deps.log(`refresh of pull request ${s.pr} failed: ${err instanceof Error ? err.message : String(err)}`)
+        deps.log(`refresh of submission ${s.id} failed: ${err instanceof Error ? err.message : String(err)}`)
       }
     }
     const names = await reviewerNames(deps)
