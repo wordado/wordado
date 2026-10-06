@@ -21,6 +21,7 @@ they are.
 | Question | Decision |
 |---|---|
 | Look | The learner app's: its tokens (`web/src/styles.css` `:root`, light and dark), Golos Text for the interface, Literata for the English word and example, white panels on the paper, rose for the one main action of a screen |
+| Dark mode | The review app's own dark colours: deeper navy in three clear layers (page, card, box in a card), stronger borders, a soft lift under cards, brighter accents. The learner app's dark colours, copied at first, left the nested screens flat (decided 2026-10-06 from three mockups). Light mode is the learner app's unchanged |
 | A colour of its own for the review app | No (tried in mockups, rejected): same scheme as the learner app, no accent of its own, no "REVIEW" tag |
 | Coloured decision buttons | No (tried, rejected): **Accept fix** is the one primary (rose) button; Keep, Edit, Drop are plain |
 | Review screen | Layout B: one row at a time in a centred card with a progress bar; "Now" beside "AI suggests"; the row list in a drawer |
@@ -32,7 +33,7 @@ they are.
 - **Tokens:** the learner app's colour, type-scale and spacing variables, copied into `review-app/src/app.css` with
   the same names (`--paper`, `--paper-raised`, `--ink`, `--ink-soft`, `--rule`, `--rose`, `--rose-ink`,
   `--rose-soft`, `--leaf`, `--leaf-soft`, `--leaf-ink`, `--amber`, `--amber-soft`, `--blue`, `--blue-soft`,
-  `--font-ui`, `--font-entry`, `--step-*`, `--space-*`), light and dark (`prefers-color-scheme`). The old
+  `--font-ui`, `--font-entry`, `--step-*`, `--space-*`), light (`prefers-color-scheme`); the dark values are the review app's own (§2), with three more tokens: `--paper-inset` (a box inside a card), `--paper-head` (the header) and `--lift` (a card's shadow), which in the light equal the card and no shadow. The old
   `--bg/--fg/--muted/--border/--panel/--accent` names go.
 - **Fonts:** `@fontsource-variable/golos-text` and `@fontsource-variable/literata` (already used by `web`), imported
   in `main.tsx`.
