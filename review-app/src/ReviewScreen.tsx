@@ -4,8 +4,8 @@ import { RowList } from './RowList'
 import { RowViewPanel } from './RowView'
 import { useKeys } from './useKeys'
 
-/** The review screen both modes share: the level and severity filters, the decided count, the row list, the row
- * panel and the keys. The parent owns the rows and how a decision is stored; `onDecide` resolves to a notice to show
+/** The review screen both modes share, under the app header: the level and severity filters, the decided count,
+ * the row list, the row panel and the keys. The parent owns the rows and how a decision is stored; `onDecide` resolves to a notice to show
  * (null when the decision went through, and the screen then moves on to the next undecided row). */
 export function ReviewScreen(props: {
   rows: readonly RowView[]
@@ -14,7 +14,6 @@ export function ReviewScreen(props: {
   controls?: ReactNode
   actions?: ReactNode
   notice?: string
-  who?: string
 }) {
   const { rows } = props
   const [selected, setSelected] = useState<string | null>(null)
@@ -70,27 +69,30 @@ export function ReviewScreen(props: {
   const decided = rows.filter((r) => r.decided).length
   const shownNotice = notice || props.notice || ''
   return (
-    <div className="app">
-      <header>
+    <div className="app page wide">
+      <header className="toolbar">
         {props.controls}
-        <select value={level} onChange={(e) => setLevel(e.target.value)} aria-label="Level">
-          <option value="">all levels</option>
-          {['A1', 'A2', 'B1', 'B2', 'C1'].map((l) => (
-            <option key={l} value={l}>
-              {l}
-            </option>
-          ))}
-        </select>
-        <select value={severity} onChange={(e) => setSeverity(e.target.value)} aria-label="Severity">
-          <option value="">all objections</option>
-          <option value="report">learner reports</option>
-          <option value="major">major</option>
-          <option value="minor">minor</option>
-        </select>
-        <span>
+        <span className="field">
+          <select value={level} onChange={(e) => setLevel(e.target.value)} aria-label="Level">
+            <option value="">all levels</option>
+            {['A1', 'A2', 'B1', 'B2', 'C1'].map((l) => (
+              <option key={l} value={l}>
+                {l}
+              </option>
+            ))}
+          </select>
+        </span>
+        <span className="field">
+          <select value={severity} onChange={(e) => setSeverity(e.target.value)} aria-label="Severity">
+            <option value="">all objections</option>
+            <option value="report">learner reports</option>
+            <option value="major">major</option>
+            <option value="minor">minor</option>
+          </select>
+        </span>
+        <span className="muted">
           {decided} of {rows.length} decided
         </span>
-        {props.who && <span className="muted">{props.who}</span>}
         {props.actions}
       </header>
       {shownNotice && (

@@ -21,7 +21,7 @@ export function Assignments(props: { onOpen(a: AssignmentView): void }) {
   useEffect(() => void hostedApi.assignments().then(setList, (err: unknown) => setError(err instanceof Error ? err.message : String(err))), [])
 
   return (
-    <section className="panel" aria-label="My assignments">
+    <section className="page" aria-label="My assignments">
       <h2 className="panel-title">My assignments</h2>
       {error && (
         <p role="status" className="notice">

@@ -13,7 +13,7 @@ export function Objections(props: { objections: readonly ObjectionView[]; report
       {props.objections.map((o, i) => (
         <label key={i} className={`objection ${o.severity}`}>
           <input type="checkbox" checked={props.ticked.has(i)} onChange={() => props.onTick(i)} />
-          <span className="badge">{o.reviewer} · {o.severity} · {o.category}</span>
+          <span className={`chip ${o.severity}`}>{o.reviewer} · {o.severity} · {o.category}</span>
           <span className="reason">{o.reason}</span>
           <span className="fix">
             {o.field} → <b>{o.fix === '' ? '(empty)' : o.fix}</b>

@@ -78,7 +78,7 @@ export function AssignmentReview(props: { assignment: AssignmentView }) {
           </>
         }
         actions={
-          <button onClick={() => void submitNow()} disabled={open === 0 || submitting}>
+          <button className="button primary" onClick={() => void submitNow()} disabled={open === 0 || submitting}>
             Submit {open} {open === 1 ? 'decision' : 'decisions'}
           </button>
         }

@@ -69,7 +69,7 @@ export function RowViewPanel(props: {
   useKeys(keys)
   const c = row.context
   return (
-    <article className="row" aria-label={`Row ${row.key}`}>
+    <article className="row panel" aria-label={`Row ${row.key}`}>
       {row.stale && <p className="stale-notice">This file is older than the draft: import your decisions, then run corpus queues.</p>}
       <section className="english">
         <h2>
@@ -91,8 +91,8 @@ export function RowViewPanel(props: {
       </section>
       <section className="cells" aria-label="Current row">
         {row.fields.map((f) => (
-          <label key={f} className={targeted.has(f) ? 'targeted' : ''}>
-            <span>{f}</span>
+          <label key={f} className={targeted.has(f) ? 'field targeted' : 'field'}>
+            <span className="eyebrow">{f}</span>
             {editing ? <input value={cells[f] ?? ''} onChange={(e) => setCells({ ...cells, [f]: e.target.value })} /> : <output>{row.cells[f] || '—'}</output>}
           </label>
         ))}
@@ -110,25 +110,25 @@ export function RowViewPanel(props: {
           })
         }
       />
-      <label className="note">
+      <label className="field">
         Note <input value={note} onChange={(e) => setNote(e.target.value)} />
       </label>
       <div className="actions">
-        <button onClick={accept} disabled={saving || row.objections.length === 0}>
+        <button className="button large" onClick={accept} disabled={saving || row.objections.length === 0}>
           Accept fix (1)
         </button>
-        <button onClick={keep} disabled={saving}>
+        <button className="button large" onClick={keep} disabled={saving}>
           Keep (2)
         </button>
-        <button onClick={edit} disabled={saving}>
+        <button className="button large" onClick={edit} disabled={saving}>
           {editing ? 'Save edit (3)' : 'Edit (3)'}
         </button>
         {canDrop && (
-          <button onClick={drop} disabled={saving}>
+          <button className="button large" onClick={drop} disabled={saving}>
             Drop (4)
           </button>
         )}
-        <button onClick={onSkip} disabled={saving}>
+        <button className="button large ghost" onClick={onSkip} disabled={saving}>
           Skip (S)
         </button>
       </div>

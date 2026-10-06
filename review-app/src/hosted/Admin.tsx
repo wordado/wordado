@@ -43,7 +43,7 @@ export function Admin() {
   )
 
   return (
-    <div className="admin">
+    <div className="admin page">
       {notice && (
         <p role="status" className="notice">
           {notice}

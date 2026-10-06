@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { AppHeader } from './AppHeader'
 import { api, type Action, type ImportResult, type QueueSummary, type RowView } from './api'
 import { ReviewScreen } from './ReviewScreen'
 
@@ -31,15 +32,20 @@ export function App() {
     return res.reason === 'invalid' ? res.message : 'This file changed; reloaded.'
   }, [])
 
-  if (reviewer === undefined) return <p>Loading…</p>
+  if (reviewer === undefined) return <p className="page note">Loading…</p>
   if (reviewer === null)
     return (
-      <form className="name" onSubmit={(e) => (e.preventDefault(), void api.setReviewer(name).then(setReviewer).catch(fail))}>
-        <label>
-          Your name, as decisions record it <input value={name} onChange={(e) => setName(e.target.value)} required />
-        </label>
-        <button type="submit">Start</button>
-      </form>
+      <>
+        <AppHeader />
+        <form className="name panel form" onSubmit={(e) => (e.preventDefault(), void api.setReviewer(name).then(setReviewer).catch(fail))}>
+          <label className="field">
+            Your name, as decisions record it <input value={name} onChange={(e) => setName(e.target.value)} required />
+          </label>
+          <button type="submit" className="button primary">
+            Start
+          </button>
+        </form>
+      </>
     )
   const summary = queues.find((q) => q.queue === queue)
   const importNow = async () => {
@@ -53,28 +59,36 @@ export function App() {
     }
   }
   return (
-    <ReviewScreen
-      rows={rows}
-      onDecide={onDecide}
-      onReload={load}
-      notice={notice}
-      who={reviewer}
-      controls={
-        <>
-          <select value={queue ?? ''} onChange={(e) => setQueue(e.target.value)} aria-label="Queue">
-            {queues.map((q) => (
-              <option key={q.queue} value={q.queue}>
-                {q.queue} · {q.flagged} flagged · {q.reported} reported
-              </option>
-            ))}
-          </select>
-          <label>
-            <input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} /> show unflagged
-          </label>
-          {summary && <span className="muted">{summary.open} open in all</span>}
-        </>
-      }
-      actions={<button onClick={() => void importNow()}>Import decisions</button>}
-    />
+    <>
+      <AppHeader who={reviewer} />
+      <ReviewScreen
+        rows={rows}
+        onDecide={onDecide}
+        onReload={load}
+        notice={notice}
+        controls={
+          <>
+            <span className="field">
+              <select value={queue ?? ''} onChange={(e) => setQueue(e.target.value)} aria-label="Queue">
+                {queues.map((q) => (
+                  <option key={q.queue} value={q.queue}>
+                    {q.queue} · {q.flagged} flagged · {q.reported} reported
+                  </option>
+                ))}
+              </select>
+            </span>
+            <label className="check">
+              <input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} /> show unflagged
+            </label>
+            {summary && <span className="muted">{summary.open} open in all</span>}
+          </>
+        }
+        actions={
+          <button className="button primary" onClick={() => void importNow()}>
+            Import decisions
+          </button>
+        }
+      />
+    </>
   )
 }

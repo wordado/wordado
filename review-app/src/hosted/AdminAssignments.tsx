@@ -115,7 +115,7 @@ function AssignForm(props: Props) {
   }
 
   return (
-    <form aria-label="Assign" className="field" onSubmit={submit}>
+    <form aria-label="Assign" className="form" onSubmit={submit}>
       <h3>Assign</h3>
       <label className="field">
         Reviewer
@@ -142,11 +142,11 @@ function AssignForm(props: Props) {
       <Segmented label="Rows" options={ROWS_OPTIONS} value={rows} onChange={setRows} />
       {chosen && (
         <span className="checkbox-group">
-          <label>
+          <label className="check">
             <input type="checkbox" checked={allFiles} onChange={(e) => setAllFiles(e.target.checked)} /> All files
           </label>
           {chosen.files.map((f) => (
-            <label key={f.file} title={f.file}>
+            <label key={f.file} className="check" title={f.file}>
               <input type="checkbox" disabled={f.assignedTo !== null || allFiles} checked={allFiles || files.includes(f.file)} onChange={() => toggle(f.file)} />{' '}
               {`${fileName(f.file)} · ${f.rows} rows · ${f.flagged} flagged${f.assignedTo !== null ? ` · ${f.assignedTo}` : ''}`}
             </label>
@@ -154,7 +154,7 @@ function AssignForm(props: Props) {
         </span>
       )}
       <span>
-        <button type="submit" disabled={!chosen || (!allFiles && files.length === 0)}>
+        <button type="submit" className="button primary" disabled={!chosen || (!allFiles && files.length === 0)}>
           Assign
         </button>
       </span>
@@ -229,7 +229,7 @@ function SplitForm(props: Props) {
   }
 
   return (
-    <form aria-label="Split a queue" className="field" onSubmit={propose}>
+    <form aria-label="Split a queue" className="form" onSubmit={propose}>
       <h3>Split a queue</h3>
       <label className="field">
         Queue
@@ -249,14 +249,14 @@ function SplitForm(props: Props) {
       {candidates.length > 0 && (
         <span className="checkbox-group">
           {candidates.map((r) => (
-            <label key={r.email}>
+            <label key={r.email} className="check">
               <input type="checkbox" checked={chosen.includes(r.email)} onChange={() => toggle(r.email)} /> {r.name}
             </label>
           ))}
         </span>
       )}
       <span>
-        <button type="submit" disabled={!queue || chosen.length === 0}>
+        <button type="submit" className="button" disabled={!queue || chosen.length === 0}>
           Propose
         </button>
       </span>
@@ -270,13 +270,15 @@ function SplitForm(props: Props) {
                   {p.files.map((f) => (
                     <span key={f} className="proposal-file" title={f}>
                       {fileName(f)}{' '}
-                      <select aria-label={`Reviewer for ${fileName(f)}`} value={p.reviewer} onChange={(e) => move(f, e.target.value)}>
-                        {proposal.map((o) => (
-                          <option key={o.reviewer} value={o.reviewer}>
-                            {nameOf(o.reviewer)}
-                          </option>
-                        ))}
-                      </select>
+                      <span className="field">
+                        <select aria-label={`Reviewer for ${fileName(f)}`} value={p.reviewer} onChange={(e) => move(f, e.target.value)}>
+                          {proposal.map((o) => (
+                            <option key={o.reviewer} value={o.reviewer}>
+                              {nameOf(o.reviewer)}
+                            </option>
+                          ))}
+                        </select>
+                      </span>
                     </span>
                   ))}
                 </span>
@@ -284,7 +286,7 @@ function SplitForm(props: Props) {
             ))}
           </ul>
           <span>
-            <button type="button" onClick={confirm}>
+            <button type="button" className="button primary" onClick={confirm}>
               Create these assignments
             </button>
           </span>
@@ -323,14 +325,16 @@ function AssignmentItem(props: { assignment: AssignmentView; reviewers: readonly
         <span className="note">{isClosed ? `${progressOf(a)} · closed ${dateOf(a.closedAt ?? '')}` : progressOf(a)}</span>
         {reassigning && (
           <span className="row-edit">
-            <select aria-label="Reassign to" value={to} onChange={(e) => setTo(e.target.value)}>
-              <option value="">Choose a reviewer</option>
-              {others.map((r) => (
-                <option key={r.email} value={r.email}>
-                  {r.name}
-                </option>
-              ))}
-            </select>
+            <span className="field">
+              <select aria-label="Reassign to" value={to} onChange={(e) => setTo(e.target.value)}>
+                <option value="">Choose a reviewer</option>
+                {others.map((r) => (
+                  <option key={r.email} value={r.email}>
+                    {r.name}
+                  </option>
+                ))}
+              </select>
+            </span>
             <Segmented
               label="Their decisions"
               options={[
@@ -340,16 +344,26 @@ function AssignmentItem(props: { assignment: AssignmentView; reviewers: readonly
               value={decisions}
               onChange={setDecisions}
             />
-            <button disabled={!to} onClick={reassign}>
+            <button className="button small" disabled={!to} onClick={reassign}>
               Reassign
             </button>
-            <button onClick={() => setReassigning(false)}>Cancel</button>
+            <button className="button small ghost" onClick={() => setReassigning(false)}>
+              Cancel
+            </button>
           </span>
         )}
       </span>
       <span className="row-actions">
-        {!isClosed && <button onClick={close}>Close</button>}
-        {!reassigning && <button onClick={() => setReassigning(true)}>Reassign…</button>}
+        {!isClosed && (
+          <button className="button small danger" onClick={close}>
+            Close
+          </button>
+        )}
+        {!reassigning && (
+          <button className="button small" onClick={() => setReassigning(true)}>
+            Reassign…
+          </button>
+        )}
       </span>
     </li>
   )
