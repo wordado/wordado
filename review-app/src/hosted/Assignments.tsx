@@ -3,12 +3,6 @@ import type { AssignmentView } from '../../shared/hosted'
 import { hostedApi } from '../hostedApi'
 import { assignmentLabel } from '../labels'
 
-/** What an assignment covers: "flagged rows · all files", "all rows · 3 files". */
-export function scopeOf(a: AssignmentView): string {
-  const files = a.files === '*' ? 'all files' : `${a.files.length} ${a.files.length === 1 ? 'file' : 'files'}`
-  return `${a.flaggedOnly ? 'flagged rows' : 'all rows'} · ${files}`
-}
-
 /** How far an assignment is: "741 rows · 212 decided · 60 submitted", "8 rows · none decided yet". */
 function countsOf(a: AssignmentView): string {
   const p = a.progress

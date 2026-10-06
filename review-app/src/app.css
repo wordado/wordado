@@ -511,14 +511,6 @@ button.settings-row:hover {
   justify-content: flex-end;
 }
 
-.row-edit {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-  margin-top: var(--space-2);
-}
-
 .proposal-file {
   display: flex;
   flex-wrap: wrap;
@@ -596,6 +588,12 @@ button.settings-row:hover {
   background: var(--blue-soft);
 }
 
+.tabs [role='tablist'] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
 /* A native <dialog>: a card over the page, the whole screen on a phone. */
 .dialog {
   width: min(32rem, calc(100% - 2rem));
@@ -610,6 +608,46 @@ button.settings-row:hover {
 
 .dialog::backdrop {
   background: rgb(20 28 51 / 0.45);
+}
+
+.dialog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.dialog-head h2 {
+  margin: 0;
+}
+
+/* What went wrong with what was done in the dialog: the page's notice is behind it. */
+.dialog-error {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--rose-soft);
+  border-radius: 0.75rem;
+  overflow-wrap: anywhere;
+}
+
+.dialog .form {
+  margin: 0;
+}
+
+.dialog .form > .field {
+  max-width: none;
+}
+
+.form > .settings-rows {
+  width: 100%;
+  margin: 0;
+}
+
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
 }
 
 /* The review screen (local and hosted): one row at a time in the centred column, the row list in a drawer. */
@@ -991,22 +1029,85 @@ kbd {
   margin: var(--space-3) auto 0;
 }
 
-/* The admin page: one panel per subject. */
-.admin {
-  display: grid;
-  gap: var(--space-4);
+/* The admin page: its tabs in the header, one tab's page at a time. */
+.admin > .notice {
+  margin: 0 0 var(--space-3);
 }
 
-.admin > .notice {
+.tab-panel {
+  display: grid;
+  gap: var(--space-3);
+}
+
+/* Not the dialogs: a modal one is centred by its own margin. */
+.tab-panel > :not(dialog) {
+  min-width: 0;
   margin: 0;
 }
 
-.admin h3 {
+.tab-panel > .eyebrow:not(:first-child) {
   margin-top: var(--space-2);
 }
 
-.admin details summary {
-  cursor: pointer;
+.tab-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* The Overview's four numbers. */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.625rem;
+  padding: 0;
+  list-style: none;
+}
+
+.stat {
+  padding: 0.625rem var(--space-3);
+  font-size: var(--step--1);
+  color: var(--ink-soft);
+  background: var(--paper-raised);
+  border: 1px solid var(--rule);
+  border-radius: 0.875rem;
+}
+
+.stat b {
+  display: block;
+  font-size: var(--step-2);
+  line-height: 1.25;
+  color: var(--ink);
+}
+
+/* A row: its name with its chips, a line or two about it, then the bar and what can be done with it. */
+.admin .settings-row-text {
+  gap: 0.125rem;
+}
+
+.admin .settings-row-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+}
+
+.admin .settings-row .note {
+  overflow-wrap: anywhere;
+}
+
+.admin .progress,
+.admin .row-actions,
+.row-link {
+  flex-shrink: 0;
+}
+
+/* The chip or the Assign button: one width, so the bars of the rows line up. */
+.row-state {
+  display: flex;
+  flex-shrink: 0;
+  justify-content: flex-end;
+  min-width: 5.5rem;
 }
 
 /* Phones: one column, the decisions in a bar at the bottom of the screen, edit and the row list full-screen. */
@@ -1157,6 +1258,71 @@ kbd {
 
   .row-actions {
     justify-content: flex-start;
+  }
+
+  /* The admin tabs: a strip under the wordmark that slides sideways. */
+  .app-header-who {
+    margin-left: auto;
+  }
+
+  .admin-tabs {
+    order: 3;
+    flex-basis: 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    margin-inline: calc(-1 * var(--space-3));
+    padding-inline: var(--space-3);
+    scrollbar-width: none;
+  }
+
+  .admin-tabs [role='tablist'] {
+    flex-wrap: nowrap;
+  }
+
+  .admin-tabs button {
+    flex-shrink: 0;
+    font-size: var(--step--1);
+    white-space: nowrap;
+  }
+
+  /* The strip clips what sticks out of it, so a tab's focus ring is drawn inside the tab. */
+  .admin-tabs button:focus-visible {
+    outline-offset: -2px;
+  }
+
+  .tab-actions .button {
+    flex: 1;
+    min-height: 2.75rem;
+    border-radius: 0.875rem;
+  }
+
+  .stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* An admin row: the text, the bar across, the actions under it. */
+  .admin .settings-row-text {
+    flex-basis: 100%;
+  }
+
+  .admin .progress {
+    width: 100%;
+  }
+
+  /* A language: the chip or Assign beside its name, the bar under both. */
+  .language-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+  }
+
+  .language-row .progress {
+    grid-row: 2;
+    grid-column: 1 / -1;
+  }
+
+  .row-state {
+    min-width: 0;
   }
 
   .dialog {

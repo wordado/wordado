@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { hostedApi } from '../hostedApi'
 import { HostedApp } from './HostedApp'
 
-afterEach(() => (cleanup(), vi.restoreAllMocks()))
+afterEach(() => (cleanup(), vi.restoreAllMocks(), (window.location.hash = '')))
 
 const me = { email: 'anna@example.com', name: 'Anna', role: 'reviewer' as const, languages: ['de' as const] }
 const progress = { inScope: 2, decided: 0, changed: 0, submitted: 0, merged: 0, remaining: 2 }
@@ -141,5 +141,47 @@ describe('HostedApp', () => {
     finish({ pr: 3, url: 'https://github.com/x/pull/3', count: 1, leftOut: [] })
     expect(await screen.findByRole('link', { name: /pull request 3/i })).toBeTruthy()
     expect(submit).toHaveBeenCalledTimes(1)
+  })
+
+  describe('for an admin', () => {
+    const admin = { ...me, role: 'admin' as const }
+    const mockAdmin = () => {
+      vi.spyOn(hostedApi, 'assignments').mockResolvedValue([])
+      vi.spyOn(hostedApi.admin, 'snapshot').mockResolvedValue(null)
+      vi.spyOn(hostedApi.admin, 'reviewers').mockResolvedValue([])
+      vi.spyOn(hostedApi.admin, 'assignments').mockResolvedValue([])
+      vi.spyOn(hostedApi.admin, 'submissions').mockResolvedValue([])
+    }
+
+    it('puts the admin tabs into the header, with My assignments as the way back', async () => {
+      mockAdmin()
+      render(<HostedApp me={admin} />)
+      fireEvent.click(await screen.findByRole('button', { name: 'Admin' }))
+      const header = within(screen.getByRole('banner'))
+      expect((await header.findAllByRole('tab')).length).toBe(4)
+      expect(header.queryByRole('button', { name: 'Admin' })).toBeNull()
+      fireEvent.click(header.getByRole('tab', { name: 'Reviewers' }))
+      expect(window.location.hash).toBe('#reviewers')
+      fireEvent.click(header.getByRole('button', { name: 'My assignments' }))
+      expect(await screen.findByRole('region', { name: 'My assignments' })).toBeTruthy()
+      expect(screen.queryByRole('tab')).toBeNull()
+      // the tab has gone from the address with the admin page
+      expect(window.location.hash).toBe('')
+    })
+
+    it('opens on the admin tab in the address, so a reload stays put', async () => {
+      mockAdmin()
+      window.location.hash = '#submissions'
+      render(<HostedApp me={admin} />)
+      expect((await screen.findByRole('tab', { name: 'Submissions' })).getAttribute('aria-selected')).toBe('true')
+    })
+
+    it('does not open the admin page for a reviewer, whatever the address says', async () => {
+      mockAdmin()
+      window.location.hash = '#submissions'
+      render(<HostedApp me={me} />)
+      expect(await screen.findByRole('region', { name: 'My assignments' })).toBeTruthy()
+      expect(screen.queryByRole('tab')).toBeNull()
+    })
   })
 })

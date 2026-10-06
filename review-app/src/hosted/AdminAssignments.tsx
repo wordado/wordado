@@ -1,8 +1,9 @@
 import { type FormEvent, useState } from 'react'
 import { type AssignmentView, languageOf, type ReviewerView, type SnapshotStatus, type SplitProposal } from '../../shared/hosted'
+import { Dialog } from '../Dialog'
 import { hostedApi } from '../hostedApi'
-import { type Act, dateOf, fileName } from './adminUtil'
-import { scopeOf } from './Assignments'
+import { assignmentLabel, queueLabel } from '../labels'
+import { type Act, count, dateOf, fileName, type PageNotice, share } from './adminUtil'
 
 type Queue = SnapshotStatus['queues'][number]
 
@@ -32,70 +33,103 @@ const ROWS_OPTIONS = [
   ['flagged', 'Flagged rows only'],
 ] as const
 
-function progressOf(a: AssignmentView): string {
+/** How far an assignment is: "741 rows · 212 decided · 60 submitted · 469 to go"; what is nought is left out. */
+function countsOf(a: AssignmentView): string {
   const p = a.progress
-  if (!p) return 'The review data is not available yet.'
-  return `${p.decided} decided · ${p.changed} changed · ${p.submitted} submitted · ${p.merged} merged · ${p.remaining} to go`
+  if (!p) return 'the review data is not available yet'
+  const parts = [`${p.decided} decided`, `${p.changed} changed`, `${p.submitted} submitted`, `${p.merged} merged`].filter((part) => !part.startsWith('0 '))
+  return [count(p.inScope, 'row'), ...parts, `${p.remaining} to go`].join(' · ')
 }
 
-interface Props {
+interface Props extends PageNotice {
   snapshot: SnapshotStatus | null | undefined
   reviewers: readonly ReviewerView[] | undefined
   assignments: readonly AssignmentView[] | undefined
   act: Act
+  /** the Assign dialog: open when not null, with this queue chosen ('' for none) */
+  assigning: { readonly queue: string } | null
+  onAssigning(next: { readonly queue: string } | null): void
 }
 
-/** Assignments: the assign form, the split form and the list of open and closed assignments. */
+/** The Assignments tab: Assign work and Split a queue (dialogs), then the open and the closed assignments. */
 export function AdminAssignments(props: Props) {
-  const { assignments } = props
+  const { assignments, reviewers, act, notice, assigning, onAssigning } = props
+  const [splitting, setSplitting] = useState(false)
+  const [reassigning, setReassigning] = useState<AssignmentView | null>(null)
   const open = (assignments ?? []).filter((a) => !a.closedAt)
   const closed = (assignments ?? []).filter((a) => a.closedAt)
+  const show = (what: () => void) => {
+    props.clearNotice()
+    what()
+  }
+  const item = (a: AssignmentView) => <AssignmentItem key={a.id} assignment={a} act={act} onReassign={() => show(() => setReassigning(a))} />
   return (
-    <section className="panel" aria-label="Assignments">
-      <h2 className="panel-title">Assignments</h2>
-      <AssignForm {...props} />
-      <SplitForm {...props} />
+    <>
+      <div className="tab-actions">
+        <button className="button primary" onClick={() => show(() => onAssigning({ queue: '' }))}>
+          Assign work
+        </button>
+        <button className="button" onClick={() => show(() => setSplitting(true))}>
+          Split a queue
+        </button>
+      </div>
       {assignments === undefined && <p className="note">Loading…</p>}
       {assignments !== undefined && open.length === 0 && <p className="note">No open assignments.</p>}
       {open.length > 0 && (
-        <ul className="settings-rows">
-          {open.map((a) => (
-            <AssignmentItem key={a.id} assignment={a} reviewers={props.reviewers} act={props.act} />
-          ))}
-        </ul>
+        <>
+          <p className="eyebrow">Open</p>
+          <ul className="settings-rows">{open.map(item)}</ul>
+        </>
       )}
       {closed.length > 0 && (
         <>
-          <h3>Closed</h3>
-          <ul className="settings-rows">
-            {closed.map((a) => (
-              <AssignmentItem key={a.id} assignment={a} reviewers={props.reviewers} act={props.act} />
-            ))}
-          </ul>
+          <h3 className="eyebrow">Closed</h3>
+          <ul className="settings-rows">{closed.map(item)}</ul>
         </>
       )}
-    </section>
+      <Dialog open={assigning !== null} title="Assign work" onClose={() => onAssigning(null)} error={notice}>
+        <AssignForm snapshot={props.snapshot} reviewers={reviewers} act={act} queue={assigning?.queue ?? ''} onDone={() => onAssigning(null)} />
+      </Dialog>
+      <Dialog open={splitting} title="Split a queue" onClose={() => setSplitting(false)} error={notice}>
+        <SplitForm snapshot={props.snapshot} reviewers={reviewers} act={act} onDone={() => setSplitting(false)} />
+      </Dialog>
+      <Dialog open={reassigning !== null} title="Reassign" onClose={() => setReassigning(null)} error={notice}>
+        {reassigning && <ReassignForm assignment={reassigning} reviewers={reviewers} act={act} onDone={() => setReassigning(null)} />}
+      </Dialog>
+    </>
   )
 }
 
-function AssignForm(props: Props) {
+interface FormProps {
+  snapshot: SnapshotStatus | null | undefined
+  reviewers: readonly ReviewerView[] | undefined
+  act: Act
+  /** the form did what it is for: its dialog closes */
+  onDone(): void
+}
+
+/** Assign: a reviewer, a queue in one of their languages, all rows or the flagged ones, and the files. `queue` is
+ * chosen from the start (the Overview's Assign on a language); it stays when the reviewer picked has its language. */
+function AssignForm(props: FormProps & { queue: string }) {
   const { snapshot, reviewers, act } = props
   const [reviewer, setReviewer] = useState('')
-  const [queue, setQueue] = useState('')
+  const [queue, setQueue] = useState(props.queue)
   const [rows, setRows] = useState<'all' | 'flagged'>('all')
   const [allFiles, setAllFiles] = useState(false)
   const [files, setFiles] = useState<string[]>([])
 
   const who = active(reviewers).find((r) => r.email === reviewer)
-  const queues = (snapshot?.queues ?? []).filter((q) => {
-    const l = languageOf(q.queue)
-    return who !== undefined && l !== null && who.languages.includes(l)
-  })
-  const chosen: Queue | undefined = queues.find((q) => q.queue === queue)
+  const has = (r: ReviewerView | undefined, q: string) => {
+    const l = languageOf(q)
+    return r !== undefined && l !== null && r.languages.includes(l)
+  }
+  // Without a reviewer the list holds only the queue chosen from the start, so the control can show it.
+  const queues = (snapshot?.queues ?? []).filter((q) => (who ? has(who, q.queue) : q.queue === queue))
+  const chosen: Queue | undefined = who ? queues.find((q) => q.queue === queue) : undefined
 
   const pickReviewer = (email: string) => {
     setReviewer(email)
-    setQueue('')
+    if (!has(active(reviewers).find((r) => r.email === email), queue)) setQueue('')
     setFiles([])
     setAllFiles(false)
   }
@@ -109,14 +143,11 @@ function AssignForm(props: Props) {
   const submit = (e: FormEvent) => {
     e.preventDefault()
     if (!chosen) return
-    void act(() => hostedApi.admin.assign({ reviewer, queue: chosen.queue, files: allFiles ? '*' : files, flaggedOnly: rows === 'flagged' })).then(
-      (ok) => ok && (setFiles([]), setAllFiles(false)),
-    )
+    void act(() => hostedApi.admin.assign({ reviewer, queue: chosen.queue, files: allFiles ? '*' : files, flaggedOnly: rows === 'flagged' })).then((ok) => ok && props.onDone())
   }
 
   return (
     <form aria-label="Assign" className="form" onSubmit={submit}>
-      <h3>Assign</h3>
       <label className="field">
         Reviewer
         <select value={reviewer} onChange={(e) => pickReviewer(e.target.value)}>
@@ -134,7 +165,7 @@ function AssignForm(props: Props) {
           <option value="">Choose a queue</option>
           {queues.map((q) => (
             <option key={q.queue} value={q.queue}>
-              {q.queue}
+              {queueLabel(q.queue)}
             </option>
           ))}
         </select>
@@ -153,7 +184,7 @@ function AssignForm(props: Props) {
           ))}
         </span>
       )}
-      <span>
+      <span className="form-actions">
         <button type="submit" className="button primary" disabled={!chosen || (!allFiles && files.length === 0)}>
           Assign
         </button>
@@ -162,7 +193,9 @@ function AssignForm(props: Props) {
   )
 }
 
-function SplitForm(props: Props) {
+/** Split a queue between reviewers: the server proposes who gets which files; files can be moved before the
+ * assignments are created. */
+function SplitForm(props: FormProps) {
   const { snapshot, reviewers, act } = props
   const [queue, setQueue] = useState('')
   const [rows, setRows] = useState<'all' | 'flagged'>('all')
@@ -223,14 +256,11 @@ function SplitForm(props: Props) {
 
   const confirm = () => {
     if (!proposal) return
-    void act(() => hostedApi.admin.split({ queue, flaggedOnly, reviewers: chosen, confirm: true, proposal })).then(
-      (ok) => ok && (setProposal(null), setChosen([])),
-    )
+    void act(() => hostedApi.admin.split({ queue, flaggedOnly, reviewers: chosen, confirm: true, proposal })).then((ok) => ok && props.onDone())
   }
 
   return (
     <form aria-label="Split a queue" className="form" onSubmit={propose}>
-      <h3>Split a queue</h3>
       <label className="field">
         Queue
         <select value={queue} onChange={(e) => pickQueue(e.target.value)}>
@@ -239,7 +269,7 @@ function SplitForm(props: Props) {
             .filter((x) => languageOf(x.queue) !== null)
             .map((x) => (
               <option key={x.queue} value={x.queue}>
-                {x.queue}
+                {queueLabel(x.queue)}
               </option>
             ))}
         </select>
@@ -255,7 +285,7 @@ function SplitForm(props: Props) {
           ))}
         </span>
       )}
-      <span>
+      <span className="form-actions">
         <button type="submit" className="button" disabled={!queue || chosen.length === 0}>
           Propose
         </button>
@@ -285,7 +315,7 @@ function SplitForm(props: Props) {
               </li>
             ))}
           </ul>
-          <span>
+          <span className="form-actions">
             <button type="button" className="button primary" onClick={confirm}>
               Create these assignments
             </button>
@@ -296,75 +326,83 @@ function SplitForm(props: Props) {
   )
 }
 
-/**
- * One assignment, open or closed. A closed one can still be reassigned (spec §5.1): closing, disabling its
- * reviewer or removing their language keep its unsubmitted decisions for whoever takes it over, its own
- * reviewer included.
- */
-function AssignmentItem(props: { assignment: AssignmentView; reviewers: readonly ReviewerView[] | undefined; act: Act }) {
+/** One assignment, open or closed: its plain name, who has it, how far it is. */
+function AssignmentItem(props: { assignment: AssignmentView; act: Act; onReassign(): void }) {
   const { assignment: a, act } = props
-  const isClosed = Boolean(a.closedAt)
-  const [reassigning, setReassigning] = useState(false)
-  const others = reviewersFor(props.reviewers, a.queue).filter((r) => isClosed || r.email !== a.reviewer)
-  const [to, setTo] = useState('')
-  const [decisions, setDecisions] = useState<'move' | 'discard'>('move')
-
+  const p = a.progress
   const close = () => {
     if (!window.confirm('Close this assignment? Its unsubmitted decisions are kept for a later reassignment.')) return
     void act(() => hostedApi.admin.close(a.id))
   }
-  const reassign = () => void act(() => hostedApi.admin.reassign(a.id, to, decisions)).then((ok) => ok && setReassigning(false))
-
   return (
-    <li className="settings-row">
+    <li className="settings-row assignment-row" title={a.queue}>
       <span className="settings-row-text">
-        <span className="settings-row-title">
-          {a.reviewerName} · {a.queue}
-        </span>
-        <span className="note">{scopeOf(a)}</span>
-        <span className="note">{isClosed ? `${progressOf(a)} · closed ${dateOf(a.closedAt ?? '')}` : progressOf(a)}</span>
-        {reassigning && (
-          <span className="row-edit">
-            <span className="field">
-              <select aria-label="Reassign to" value={to} onChange={(e) => setTo(e.target.value)}>
-                <option value="">Choose a reviewer</option>
-                {others.map((r) => (
-                  <option key={r.email} value={r.email}>
-                    {r.name}
-                  </option>
-                ))}
-              </select>
-            </span>
-            <Segmented
-              label="Their decisions"
-              options={[
-                ['move', 'Move their decisions'],
-                ['discard', 'Discard them'],
-              ]}
-              value={decisions}
-              onChange={setDecisions}
-            />
-            <button className="button small" disabled={!to} onClick={reassign}>
-              Reassign
-            </button>
-            <button className="button small ghost" onClick={() => setReassigning(false)}>
-              Cancel
-            </button>
-          </span>
-        )}
+        <span className="settings-row-title">{assignmentLabel(a)}</span>
+        <span className="note">{`${a.reviewerName} · ${countsOf(a)}${a.closedAt ? ` · closed ${dateOf(a.closedAt)}` : ''}`}</span>
+      </span>
+      <span className="progress" aria-hidden="true">
+        {p && <span className="submitted" style={{ width: share(p.submitted, p.inScope) }} />}
+        {p && <span className="decided" style={{ width: share(p.decided, p.inScope) }} />}
       </span>
       <span className="row-actions">
-        {!isClosed && (
+        <button className="button small" onClick={props.onReassign}>
+          Reassign…
+        </button>
+        {!a.closedAt && (
           <button className="button small danger" onClick={close}>
             Close
           </button>
         )}
-        {!reassigning && (
-          <button className="button small" onClick={() => setReassigning(true)}>
-            Reassign…
-          </button>
-        )}
       </span>
     </li>
+  )
+}
+
+/**
+ * Reassign an assignment, open or closed. A closed one can still be reassigned (spec §5.1): closing, disabling its
+ * reviewer or removing their language keep its unsubmitted decisions for whoever takes it over, its own reviewer
+ * included.
+ */
+function ReassignForm(props: { assignment: AssignmentView; reviewers: readonly ReviewerView[] | undefined; act: Act; onDone(): void }) {
+  const { assignment: a } = props
+  const others = reviewersFor(props.reviewers, a.queue).filter((r) => Boolean(a.closedAt) || r.email !== a.reviewer)
+  const [to, setTo] = useState('')
+  const [decisions, setDecisions] = useState<'move' | 'discard'>('move')
+  const reassign = (e: FormEvent) => {
+    e.preventDefault()
+    void props.act(() => hostedApi.admin.reassign(a.id, to, decisions)).then((ok) => ok && props.onDone())
+  }
+  return (
+    <form className="form" onSubmit={reassign}>
+      <p className="note">{`${assignmentLabel(a)} · ${a.reviewerName}`}</p>
+      <label className="field">
+        Reassign to
+        <select value={to} onChange={(e) => setTo(e.target.value)}>
+          <option value="">Choose a reviewer</option>
+          {others.map((r) => (
+            <option key={r.email} value={r.email}>
+              {r.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <Segmented
+        label="Their decisions"
+        options={[
+          ['move', 'Move their decisions'],
+          ['discard', 'Discard them'],
+        ]}
+        value={decisions}
+        onChange={setDecisions}
+      />
+      <span className="form-actions">
+        <button type="submit" className="button primary" disabled={!to}>
+          Reassign
+        </button>
+        <button type="button" className="button ghost" onClick={props.onDone}>
+          Cancel
+        </button>
+      </span>
+    </form>
   )
 }
