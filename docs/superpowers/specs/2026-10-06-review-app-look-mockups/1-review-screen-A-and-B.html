@@ -1,0 +1,118 @@
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=Literata:opsz,wght@7..72,500;7..72,600&display=swap');
+.wd{--paper:#f6f7fb;--raised:#fff;--ink:#1d2b53;--soft:#4b5675;--rule:#d9deea;--rose:#b8325a;--rose-soft:#fbeef2;--leaf:#2e7d5b;--leaf-soft:#e1f1e9;--amber:#9a4f0c;--amber-soft:#fbeedd;--blue:#2b5aa0;--blue-soft:#e6edf9;
+  font-family:'Golos Text',system-ui,sans-serif;color:var(--ink);background:var(--paper);border-radius:14px;border:1px solid var(--rule);overflow:hidden;font-size:14px;line-height:1.45;text-align:left}
+.wd *{box-sizing:border-box}
+.wd .top{display:flex;align-items:center;gap:12px;padding:12px 18px;background:var(--raised);border-bottom:1px solid var(--rule)}
+.wd .logo{font-weight:700;font-size:16px;letter-spacing:-.01em}.wd .logo b{color:var(--rose)}
+.wd .crumb{color:var(--soft)}.wd .sp{flex:1}
+.wd .btn{font:inherit;font-weight:600;border:1px solid var(--rule);background:var(--raised);color:var(--ink);border-radius:999px;padding:8px 16px;cursor:default}
+.wd .btn.primary{background:var(--rose);border-color:var(--rose);color:#fff}
+.wd .btn.ghost{border-color:transparent;color:var(--soft)}
+.wd kbd{font:600 11px 'Golos Text',sans-serif;border:1px solid currentColor;border-radius:5px;padding:0 5px;margin-left:8px;opacity:.65}
+.wd .chip{display:inline-block;font-size:12px;font-weight:600;border-radius:999px;padding:2px 9px;background:var(--blue-soft);color:var(--blue)}
+.wd .chip.major{background:var(--rose-soft);color:var(--rose)}.wd .chip.minor{background:var(--amber-soft);color:var(--amber)}.wd .chip.ok{background:var(--leaf-soft);color:var(--leaf)}
+.wd .panel{background:var(--raised);border:1px solid var(--rule);border-radius:18px;padding:18px}
+.wd .eyebrow{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--soft);margin:0 0 6px}
+.wd .word{font-family:'Literata',Georgia,serif;font-size:34px;font-weight:600;line-height:1.1;margin:0}
+.wd .ex{font-family:'Literata',Georgia,serif;font-size:17px;color:var(--soft);margin:8px 0 0}
+.wd .field{border:1px solid var(--rule);border-radius:12px;padding:10px 14px;background:var(--raised)}
+.wd .field .v{font-size:18px;font-weight:600;margin-top:2px}
+.wd .field.q{border-color:var(--rose);background:var(--rose-soft)}
+.wd .muted{color:var(--soft)}
+.wd .strike{text-decoration:line-through;color:var(--rose);opacity:.8}
+.wd .bar{height:6px;border-radius:99px;background:var(--rule);overflow:hidden}.wd .bar i{display:block;height:100%;background:var(--leaf)}
+/* A */
+.wd .a{display:grid;grid-template-columns:230px 1fr;gap:14px;padding:14px}
+.wd .list{background:var(--raised);border:1px solid var(--rule);border-radius:18px;overflow:hidden;align-self:start}
+.wd .list div{display:flex;align-items:center;gap:8px;padding:9px 14px;border-top:1px solid var(--rule)}
+.wd .list div:first-child{border-top:0}.wd .list .sel{background:var(--blue-soft);font-weight:600}.wd .list .done{opacity:.5}
+.wd .fields{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:16px}
+.wd .obj{margin-top:14px;border-radius:14px;background:var(--rose-soft);border:1px solid #efc7d3;padding:12px 14px}
+.wd .actions{display:flex;gap:8px;margin-top:16px;align-items:center;flex-wrap:wrap}
+/* B */
+.wd .b{padding:16px 18px;max-width:780px;margin:0 auto}
+.wd .cmp{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px}
+.wd .col{border:1px solid var(--rule);border-radius:14px;padding:14px;background:var(--raised)}
+.wd .col.fix{border-color:var(--leaf);background:var(--leaf-soft)}
+.wd .col .row{margin-top:8px}.wd .col .row b{display:block;font-size:17px}
+.wd .big{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:16px}
+.wd .big .btn{border-radius:14px;padding:12px 8px;text-align:center}
+.pick{margin:10px 0 34px}
+</style>
+
+<h2>The review screen: which layout?</h2>
+<p class="subtitle">Both use the learner app's look: its typeface (Golos Text, with Literata for the word), colours, rounded panels and pill buttons. The row is <b>bank</b>, "edge of river", where the AI says the translation is the wrong sense. Click the one you prefer.</p>
+
+<div class="wd">
+  <div class="top"><span class="logo">Word<b>ado</b> review</span><span class="crumb">translation-bg · flagged rows</span><span class="sp"></span><span class="muted">12 of 624 decided</span><span class="btn primary">Submit 12 decisions</span><span class="btn ghost">Anna ▾</span></div>
+  <div class="a">
+    <div class="list">
+      <div class="done">the-1 <span class="muted">A1</span><span class="sp"></span><span class="chip ok">kept</span></div>
+      <div class="sel">bank-2 <span class="muted">A2</span><span class="sp"></span><span class="chip major">major</span></div>
+      <div>carbon-1 <span class="muted">B2</span><span class="sp"></span><span class="chip major">major</span></div>
+      <div>entertain-3 <span class="muted">C1</span><span class="sp"></span><span class="chip major">major</span></div>
+      <div>fiber-1 <span class="muted">B2</span><span class="sp"></span><span class="chip">report</span></div>
+      <div>viewer-1 <span class="muted">B1</span><span class="sp"></span><span class="chip major">major</span></div>
+    </div>
+    <div class="panel">
+      <p class="eyebrow">noun · A2 · edge of river</p>
+      <p class="word">bank</p>
+      <p class="ex">"We sat on the bank and watched the boats."</p>
+      <div class="fields">
+        <div class="field q"><p class="eyebrow">Translation</p><div class="v">банка</div></div>
+        <div class="field"><p class="eyebrow">Alternates</p><div class="v muted">none</div></div>
+        <div class="field"><p class="eyebrow">Sense</p><div class="v">край на река</div></div>
+      </div>
+      <div class="obj">
+        <p class="eyebrow" style="color:var(--rose)">AI objection · wrong sense · major</p>
+        <div><b>банка</b> is the money sense; for a river's edge it is <b>бряг</b>.</div>
+        <div style="margin-top:6px">☑ Suggested fix: <span class="strike">банка</span> → <b>бряг</b></div>
+      </div>
+      <p class="muted" style="margin:12px 0 0">Other senses of this word: <b>bank-1</b> банка (financial institution)</p>
+      <div class="actions">
+        <span class="btn primary">Accept fix<kbd>1</kbd></span><span class="btn">Keep<kbd>2</kbd></span><span class="btn">Edit<kbd>3</kbd></span><span class="btn">Drop<kbd>4</kbd></span><span class="sp"></span><span class="btn ghost">Skip<kbd>S</kbd></span>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="options pick">
+  <div class="option" data-choice="A-list-and-card" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content"><h3>List and card</h3><p>The row list stays visible on the left, as today, so you always see where you are and can jump around. The row is one card: word, example, three field boxes with the questioned one highlighted, the objection with its fix, then the action buttons.</p></div>
+  </div>
+</div>
+
+<div class="wd">
+  <div class="top"><span class="logo">Word<b>ado</b> review</span><span class="crumb">translation-bg · flagged rows</span><span class="sp"></span><span class="btn">☰ All rows</span><span class="btn primary">Submit 12 decisions</span><span class="btn ghost">Anna ▾</span></div>
+  <div class="b">
+    <div style="display:flex;align-items:center;gap:10px"><div class="bar" style="flex:1"><i style="width:2%"></i></div><span class="muted">13 of 624</span><span class="chip major">major</span></div>
+    <div class="panel" style="margin-top:14px">
+      <p class="eyebrow">noun · A2 · edge of river</p>
+      <p class="word">bank</p>
+      <p class="ex">"We sat on the bank and watched the boats."</p>
+      <div class="cmp">
+        <div class="col"><p class="eyebrow">Now</p>
+          <div class="row"><span class="muted">Translation</span><b class="strike">банка</b></div>
+          <div class="row"><span class="muted">Alternates</span><b class="muted">none</b></div>
+          <div class="row"><span class="muted">Sense</span><b>край на река</b></div></div>
+        <div class="col fix"><p class="eyebrow" style="color:var(--leaf)">AI suggests</p>
+          <div class="row"><span class="muted">Translation</span><b>бряг</b></div>
+          <div class="row"><span class="muted">Alternates</span><b class="muted">none</b></div>
+          <div class="row"><span class="muted">Sense</span><b>край на река</b></div></div>
+      </div>
+      <p style="margin:12px 0 0"><span class="chip major">wrong sense</span> <b>банка</b> is the money sense; for a river's edge it is <b>бряг</b>.</p>
+      <p class="muted" style="margin:8px 0 0">Other senses of this word: <b>bank-1</b> банка (financial institution)</p>
+      <div class="big">
+        <span class="btn primary">Accept fix<kbd>1</kbd></span><span class="btn">Keep as it is<kbd>2</kbd></span><span class="btn">Edit<kbd>3</kbd></span><span class="btn">Drop<kbd>4</kbd></span>
+      </div>
+      <p class="muted" style="text-align:center;margin:10px 0 0">Skip <b>S</b> · previous <b>↑</b> · next <b>↓</b></p>
+    </div>
+  </div>
+</div>
+<div class="options pick">
+  <div class="option" data-choice="B-focus" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content"><h3>Focus, one row at a time</h3><p>No list on screen: one row in the middle with a progress bar, like a flashcard. "Now" and "AI suggests" sit side by side, so the difference is the first thing you see. The row list opens from a button when you want to jump. Calmer for long sessions; less overview.</p></div>
+  </div>
+</div>

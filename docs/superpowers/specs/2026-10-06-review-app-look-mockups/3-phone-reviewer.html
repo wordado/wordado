@@ -1,0 +1,78 @@
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=Literata:opsz,wght@7..72,500;7..72,600&display=swap');
+.wd{--paper:#f6f7fb;--raised:#fff;--ink:#1d2b53;--soft:#4b5675;--rule:#d9deea;--rose:#b8325a;--rose-soft:#fbeef2;--leaf:#2e7d5b;--leaf-soft:#e1f1e9;--leaf-ink:#1f6246;--blue:#2b5aa0;--blue-soft:#e6edf9;
+  font-family:'Golos Text',system-ui,sans-serif;color:var(--ink);background:var(--paper);border-radius:26px;border:6px solid #1d2b53;overflow:hidden;font-size:14px;line-height:1.4;text-align:left;width:300px;min-height:590px;display:flex;flex-direction:column}
+.wd *{box-sizing:border-box}
+.wd .top{display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--raised);border-bottom:1px solid var(--rule)}
+.wd .logo{font-weight:700;font-size:15px}.wd .logo b{color:var(--rose)}.wd .sp{flex:1}.wd .muted{color:var(--soft)}
+.wd .btn{font:inherit;font-weight:600;border:1px solid var(--rule);background:var(--raised);color:var(--ink);border-radius:14px;padding:11px 8px;text-align:center}
+.wd .btn.pill{border-radius:999px;padding:6px 12px;font-size:13px}.wd .btn.primary{background:var(--rose);border-color:var(--rose);color:#fff}
+.wd .chip{display:inline-block;font-size:11px;font-weight:600;border-radius:999px;padding:2px 8px;background:var(--rose-soft);color:var(--rose)}
+.wd .eyebrow{font-size:10.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--soft);margin:0 0 4px}
+.wd .body{padding:12px;flex:1}
+.wd .panel{background:var(--raised);border:1px solid var(--rule);border-radius:16px;padding:14px}
+.wd .word{font-family:'Literata',Georgia,serif;font-size:28px;font-weight:600;line-height:1.1;margin:0}
+.wd .ex{font-family:'Literata',Georgia,serif;font-size:15px;color:var(--soft);margin:6px 0 0}
+.wd .col{border:1px solid var(--rule);border-radius:12px;padding:10px 12px;margin-top:10px}.wd .col.fix{border-color:var(--leaf);background:var(--leaf-soft)}
+.wd .col b{display:block;font-size:16px}.wd .strike{text-decoration:line-through;text-decoration-color:var(--rose)}
+.wd .bar{height:6px;border-radius:99px;background:var(--rule);overflow:hidden;display:flex}.wd .bar i{display:block;height:100%;background:var(--leaf)}.wd .bar u{display:block;height:100%;background:var(--blue)}
+.wd .dock{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:10px 12px 14px;background:var(--raised);border-top:1px solid var(--rule)}
+.wd .rows{list-style:none;margin:0;padding:0;background:var(--raised);border:1px solid var(--rule);border-radius:16px;overflow:hidden}
+.wd .rows li{padding:12px 14px;border-top:1px solid var(--rule)}.wd .rows li:first-child{border-top:0}.wd .rows .t{font-weight:600}.wd .rows .n{color:var(--soft);font-size:12.5px;margin:2px 0 8px}
+.wd .inp{border:1px solid var(--rose);border-radius:10px;padding:8px 10px;background:var(--raised);font-weight:600;font-size:16px;margin-top:4px}
+.phones{display:flex;gap:22px;flex-wrap:wrap;justify-content:center;margin:16px 0}
+.cap{text-align:center;font-size:13px;margin-top:8px;max-width:300px}
+</style>
+
+<h2>On a phone</h2>
+<p class="subtitle">Today the review app has no phone layout: the list and the row sit side by side and get squeezed. With layout B it folds into one column. Three screens, in the colours you preferred.</p>
+
+<div class="phones">
+  <div>
+    <div class="wd">
+      <div class="top"><span class="logo">Word<b>ado</b> review</span><span class="sp"></span><span class="muted">Anna ▾</span></div>
+      <div class="body">
+        <p style="font-size:19px;font-weight:700;margin:2px 0 10px">Your assignments</p>
+        <ul class="rows">
+          <li><div class="t">German translations</div><div class="n">flagged rows · 212 of 741 decided</div><div class="bar"><u style="width:8%"></u><i style="width:29%"></i></div><div class="btn primary" style="margin-top:10px">Continue</div></li>
+          <li><div class="t">German unit titles</div><div class="n">flagged rows · 8 rows</div><div class="btn" style="margin-top:4px">Start</div></li>
+        </ul>
+      </div>
+    </div>
+    <p class="cap"><b>Assignments.</b> One card per assignment, a full-width button.</p>
+  </div>
+
+  <div>
+    <div class="wd">
+      <div class="top"><span class="logo">Word<b>ado</b></span><span class="sp"></span><span class="btn pill">☰</span><span class="btn pill primary">Submit 12</span></div>
+      <div class="body">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><div class="bar" style="flex:1"><i style="width:14%"></i></div><span class="muted" style="font-size:12.5px">13 / 624</span></div>
+        <div class="panel">
+          <p class="eyebrow">noun · A2 · edge of river</p><p class="word">bank</p><p class="ex">"We sat on the bank and watched the boats."</p>
+          <div class="col"><p class="eyebrow">Now</p><span class="muted">Translation</span><b class="strike">банка</b><span class="muted">Sense</span><b>край на река</b></div>
+          <div class="col fix"><p class="eyebrow" style="color:var(--leaf-ink)">AI suggests</p><span class="muted">Translation</span><b>бряг</b></div>
+          <p style="margin:10px 0 0"><span class="chip">wrong sense</span> money sense; a river's edge is <b>бряг</b>.</p>
+        </div>
+      </div>
+      <div class="dock"><span class="btn primary">Accept fix</span><span class="btn">Keep</span><span class="btn">Edit</span><span class="btn">Drop</span></div>
+    </div>
+    <p class="cap"><b>Reviewing.</b> "Now" above "AI suggests"; the four buttons stay at the bottom, in reach of the thumb. Swipe left or right for the next or previous row.</p>
+  </div>
+
+  <div>
+    <div class="wd">
+      <div class="top"><span class="logo">Word<b>ado</b></span><span class="sp"></span><span class="btn pill">Cancel</span></div>
+      <div class="body">
+        <div class="panel">
+          <p class="eyebrow">noun · A2 · edge of river</p><p class="word">bank</p>
+          <p class="eyebrow" style="margin-top:12px">Translation</p><div class="inp">бряг</div>
+          <p class="eyebrow" style="margin-top:10px">Alternates</p><div class="inp" style="border-color:var(--rule);color:var(--soft);font-weight:400">крайбрежие</div>
+          <p class="eyebrow" style="margin-top:10px">Sense</p><div class="inp" style="border-color:var(--rule)">край на река</div>
+          <p class="eyebrow" style="margin-top:10px">Note for the coordinator</p><div class="inp" style="border-color:var(--rule);color:var(--soft);font-weight:400;font-size:14px">optional</div>
+        </div>
+      </div>
+      <div class="dock" style="grid-template-columns:1fr"><span class="btn primary">Save</span></div>
+    </div>
+    <p class="cap"><b>Editing.</b> Fields one under another, large enough to type Cyrillic or umlauts comfortably.</p>
+  </div>
+</div>
