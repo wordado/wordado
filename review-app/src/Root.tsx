@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { App } from './App'
+import { AppHeader } from './AppHeader'
 import { HostedApp } from './hosted/HostedApp'
 import { hostedApi, type MeResult } from './hostedApi'
 
@@ -11,24 +12,35 @@ export function Root() {
 
   if (error)
     return (
-      <section className="panel centered">
-        <p role="alert">{error}</p>
-      </section>
+      <>
+        <AppHeader />
+        <section className="panel centered">
+          <p role="alert">{error}</p>
+        </section>
+      </>
     )
-  if (me === undefined) return <p>Loading…</p>
+  if (me === undefined) return <p className="page note">Loading…</p>
   if (me.kind === 'local') return <App />
   if (me.kind === 'me') return <HostedApp me={me.me} />
   if (me.kind === 'denied')
     return (
-      <section className="panel centered">
-        <p>{me.message}</p>
-        <p className="note">Ask the coordinator for an invitation.</p>
-      </section>
+      <>
+        <AppHeader />
+        <section className="panel centered">
+          <p>{me.message}</p>
+          <p className="note">Ask the coordinator for an invitation.</p>
+        </section>
+      </>
     )
   return (
-    <section className="panel centered">
-      <p>Your sign-in expired.</p>
-      <a href="/">Sign in again</a>
-    </section>
+    <>
+      <AppHeader />
+      <section className="panel centered">
+        <p>Your sign-in expired.</p>
+        <a className="button primary" href="/">
+          Sign in again
+        </a>
+      </section>
+    </>
   )
 }

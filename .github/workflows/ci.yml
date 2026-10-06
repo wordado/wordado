@@ -75,6 +75,14 @@ jobs:
         run: pnpm --filter @wordado/review-app e2e
       - name: The hosted review app, end to end
         run: pnpm --filter @wordado/review-app e2e:hosted
+      # What the page looked like when a review-app browser test failed (the trace and the page snapshot).
+      - name: Keep the review app's traces of a failure
+        if: ${{ failure() && hashFiles('review-app/test-results/**') != '' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: review-app-e2e
+          path: review-app/test-results/
+          retention-days: 7
       - run: pnpm --filter @wordado/server smoke
 
   e2e:

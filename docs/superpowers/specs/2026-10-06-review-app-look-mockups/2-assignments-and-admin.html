@@ -1,0 +1,99 @@
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=Literata:opsz,wght@7..72,500;7..72,600&display=swap');
+.wd{--paper:#f6f7fb;--raised:#fff;--ink:#1d2b53;--soft:#4b5675;--rule:#d9deea;--rose:#b8325a;--rose-soft:#fbeef2;--leaf:#2e7d5b;--leaf-soft:#e1f1e9;--amber:#9a4f0c;--amber-soft:#fbeedd;--blue:#2b5aa0;--blue-soft:#e6edf9;
+  font-family:'Golos Text',system-ui,sans-serif;color:var(--ink);background:var(--paper);border-radius:14px;border:1px solid var(--rule);overflow:hidden;font-size:14px;line-height:1.45;text-align:left}
+.wd *{box-sizing:border-box}
+.wd .top{display:flex;align-items:center;gap:12px;padding:12px 18px;background:var(--raised);border-bottom:1px solid var(--rule)}
+.wd .logo{font-weight:700;font-size:16px}.wd .logo b{color:var(--rose)}
+.wd .sp{flex:1}.wd .muted{color:var(--soft)}
+.wd .tabs{display:flex;gap:4px}.wd .tabs span{padding:6px 12px;border-radius:999px;font-weight:600;color:var(--soft)}.wd .tabs .on{background:var(--blue-soft);color:var(--blue)}
+.wd .btn{font:inherit;font-weight:600;border:1px solid var(--rule);background:var(--raised);color:var(--ink);border-radius:999px;padding:7px 14px;cursor:default;white-space:nowrap}
+.wd .btn.primary{background:var(--rose);border-color:var(--rose);color:#fff}.wd .btn.ghost{border-color:transparent;color:var(--soft)}
+.wd .btn.sm{padding:4px 11px;font-size:13px}
+.wd .chip{display:inline-block;font-size:12px;font-weight:600;border-radius:999px;padding:2px 9px;background:var(--blue-soft);color:var(--blue)}
+.wd .chip.ok{background:var(--leaf-soft);color:var(--leaf)}.wd .chip.warn{background:var(--amber-soft);color:var(--amber)}.wd .chip.off{background:#eceef4;color:var(--soft)}
+.wd .eyebrow{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--soft);margin:0 0 8px}
+.wd .panel{background:var(--raised);border:1px solid var(--rule);border-radius:18px;padding:18px}
+.wd .rows{list-style:none;margin:0;padding:0;background:var(--raised);border:1px solid var(--rule);border-radius:18px;overflow:hidden}
+.wd .rows li{display:flex;align-items:center;gap:12px;padding:12px 16px;border-top:1px solid var(--rule)}.wd .rows li:first-child{border-top:0}
+.wd .rows .t{font-weight:600}.wd .rows .n{color:var(--soft);font-size:13px}
+.wd .bar{height:6px;border-radius:99px;background:var(--rule);overflow:hidden;width:150px;display:flex}.wd .bar i{display:block;height:100%;background:var(--leaf)}.wd .bar u{display:block;height:100%;background:var(--blue)}
+.wd .page{padding:18px;max-width:760px;margin:0 auto}
+.wd h4{font-size:20px;margin:0 0 4px}
+.wd .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:16px}
+.wd .stat{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.wd .stat div{background:var(--paper);border-radius:12px;padding:10px 12px}.wd .stat b{display:block;font-size:22px}
+.wd .inp{border:1px solid var(--rule);border-radius:10px;padding:8px 10px;background:var(--raised);color:var(--soft)}
+.wd .seg{display:inline-flex;border:1px solid var(--rule);border-radius:999px;overflow:hidden}.wd .seg span{padding:6px 12px;font-weight:600;color:var(--soft)}.wd .seg .on{background:var(--ink);color:#fff}
+.wd .form{display:grid;gap:10px}.wd .form label{font-weight:600;font-size:13px;display:grid;gap:4px}
+.pick{margin:10px 0 30px}
+</style>
+
+<h2>My assignments, and the admin page</h2>
+<p class="subtitle">In the earlier colours you preferred: the learner app's scheme, rose for the main action. First the reviewer's start page, then two ways to lay out Admin.</p>
+
+<div class="wd">
+  <div class="top"><span class="logo">Word<b>ado</b> review</span><span class="sp"></span><span class="btn ghost">Anna ▾</span></div>
+  <div class="page">
+    <h4>Your assignments</h4>
+    <p class="muted" style="margin:0 0 14px">Pick up where you stopped. Your decisions are saved as you go; Submit sends them to the coordinator.</p>
+    <ul class="rows">
+      <li><div style="flex:1"><div class="t">German translations · flagged rows</div><div class="n">741 rows · 212 decided · 60 submitted</div></div><div class="bar"><u style="width:8%"></u><i style="width:29%"></i></div><span class="btn primary">Continue</span></li>
+      <li><div style="flex:1"><div class="t">German unit titles · flagged rows</div><div class="n">8 rows · none decided yet</div></div><div class="bar"></div><span class="btn">Start</span></li>
+      <li><div style="flex:1"><div class="t">German translations · files 1–12</div><div class="n">2,400 rows · all rows, not only flagged</div></div><div class="bar"></div><span class="btn">Start</span></li>
+    </ul>
+    <p class="muted" style="margin:14px 2px 0">New here? <b>How reviewing works</b> · keys: 1 accept, 2 keep, 3 edit, 4 drop, S skip</p>
+  </div>
+</div>
+<p class="subtitle" style="margin:8px 0 28px">Plain names ("German translations") instead of <code>translation-de</code>, a progress bar per assignment, and one clear button.</p>
+
+<div class="wd">
+  <div class="top"><span class="logo">Word<b>ado</b> review</span><span class="tabs"><span>My assignments</span><span class="on">Overview</span><span>Reviewers</span><span>Assignments</span><span>Submissions</span></span><span class="sp"></span><span class="btn ghost">Coordinator ▾</span></div>
+  <div class="page" style="max-width:none">
+    <div class="stat"><div><b>1,972</b>rows to decide</div><div><b>418</b>decided, not submitted</div><div><b>3</b>pull requests open</div><div><b>4</b>active reviewers</div></div>
+    <p class="eyebrow" style="margin-top:18px">By language</p>
+    <ul class="rows">
+      <li><div style="flex:1"><div class="t">Bulgarian</div><div class="n">624 translations · 1 title · Coordinator</div></div><div class="bar"><u style="width:10%"></u><i style="width:34%"></i></div><span class="chip ok">on track</span></li>
+      <li><div style="flex:1"><div class="t">German</div><div class="n">741 translations · 8 titles · Anna, Hans</div></div><div class="bar"><u style="width:8%"></u><i style="width:20%"></i></div><span class="chip ok">on track</span></li>
+      <li><div style="flex:1"><div class="t">Spanish</div><div class="n">564 translations · 13 titles · nobody assigned</div></div><div class="bar"></div><span class="btn sm primary">Assign</span></li>
+      <li><div style="flex:1"><div class="t">English levels</div><div class="n">21 rows · Coordinator</div></div><div class="bar"><i style="width:100%"></i></div><span class="chip ok">done</span></li>
+    </ul>
+    <p class="muted" style="margin:12px 2px 0">Review data built today 14:03 from commit 925ba86</p>
+  </div>
+</div>
+<div class="options pick">
+  <div class="option" data-choice="admin-tabs" onclick="toggleSelect(this)"><div class="letter">A</div><div class="content"><h3>Admin as tabs, with an Overview</h3><p>Overview · Reviewers · Assignments · Submissions as tabs in the header. Overview answers "how far are we?" per language at a glance; each tab is one full-width page.</p></div></div>
+</div>
+
+<div class="wd">
+  <div class="top"><span class="logo">Word<b>ado</b> review</span><span class="sp"></span><span class="btn">My assignments</span><span class="btn ghost">Coordinator ▾</span></div>
+  <div class="grid">
+    <div class="panel"><p class="eyebrow">Reviewers</p>
+      <ul class="rows" style="border-radius:14px">
+        <li><div style="flex:1"><div class="t">Anna Schmidt</div><div class="n">German · invited 2 Oct</div></div><span class="btn sm">Edit</span><span class="btn sm">Disable</span></li>
+        <li><div style="flex:1"><div class="t">Hans Weber</div><div class="n">German, Bulgarian · invite not sent</div></div><span class="btn sm">Resend</span><span class="btn sm">Disable</span></li>
+        <li><div style="flex:1"><div class="t">Carmen Ruiz</div><div class="n">Spanish</div></div><span class="chip off">disabled</span><span class="btn sm">Enable</span></li>
+      </ul>
+      <div style="margin-top:12px"><span class="btn primary">Invite a reviewer</span></div>
+    </div>
+    <div class="panel"><p class="eyebrow">Assignments</p>
+      <ul class="rows" style="border-radius:14px">
+        <li><div style="flex:1"><div class="t">German translations · flagged</div><div class="n">Anna · 212 of 741</div></div><span class="btn sm">Reassign</span><span class="btn sm">Close</span></li>
+        <li><div style="flex:1"><div class="t">German titles · flagged</div><div class="n">Hans · 0 of 8</div></div><span class="btn sm">Reassign</span><span class="btn sm">Close</span></li>
+      </ul>
+      <div style="margin-top:12px;display:flex;gap:8px"><span class="btn primary">Assign work</span><span class="btn">Split a queue</span></div>
+    </div>
+    <div class="panel"><p class="eyebrow">Submissions</p>
+      <ul class="rows" style="border-radius:14px">
+        <li><div style="flex:1"><div class="t">Anna · German translations</div><div class="n">60 decisions · pull request 31</div></div><span class="chip warn">open</span></li>
+        <li><div style="flex:1"><div class="t">Coordinator · Bulgarian titles</div><div class="n">5 decisions · pull request 23</div></div><span class="chip ok">merged</span></li>
+      </ul>
+    </div>
+    <div class="panel"><p class="eyebrow">Review data</p>
+      <p style="margin:0">Built today 14:03 from commit 925ba86</p>
+      <p class="muted" style="margin:6px 0 0">7 queues · 22,727 rows · 1,971 flagged</p>
+    </div>
+  </div>
+</div>
+<div class="options pick">
+  <div class="option" data-choice="admin-board" onclick="toggleSelect(this)"><div class="letter">B</div><div class="content"><h3>Admin as one board</h3><p>Everything on one page in four panels, using the full width. Forms (invite, assign, split) open in a dialog from their button, so the page stays short. Nothing to click through, but no per-language overview.</p></div></div>
+</div>

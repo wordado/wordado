@@ -1,0 +1,61 @@
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&display=swap');
+.wd{--paper:#f6f7fb;--raised:#fff;--ink:#1d2b53;--soft:#4b5675;--rule:#d9deea;--rose:#b8325a;--rose-soft:#fbeef2;--leaf:#2e7d5b;--leaf-soft:#e1f1e9;--amber:#9a4f0c;--amber-soft:#fbeedd;--blue:#2b5aa0;--blue-soft:#e6edf9;
+  font-family:'Golos Text',system-ui,sans-serif;color:var(--ink);background:var(--paper);border-radius:26px;border:6px solid #1d2b53;overflow:hidden;font-size:14px;line-height:1.4;text-align:left;width:300px;min-height:590px;display:flex;flex-direction:column}
+.wd *{box-sizing:border-box}
+.wd .top{display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--raised)}
+.wd .logo{font-weight:700;font-size:15px}.wd .logo b{color:var(--rose)}.wd .sp{flex:1}.wd .muted{color:var(--soft)}
+.wd .tabs{display:flex;gap:4px;padding:0 8px 8px;background:var(--raised);border-bottom:1px solid var(--rule);overflow:hidden;white-space:nowrap}
+.wd .tabs span{padding:6px 11px;border-radius:999px;font-weight:600;color:var(--soft);font-size:13px}.wd .tabs .on{background:var(--blue-soft);color:var(--blue)}
+.wd .btn{font:inherit;font-weight:600;border:1px solid var(--rule);background:var(--raised);color:var(--ink);border-radius:999px;padding:6px 12px;font-size:13px;white-space:nowrap}
+.wd .btn.primary{background:var(--rose);border-color:var(--rose);color:#fff}.wd .btn.wide{display:block;text-align:center;border-radius:14px;padding:11px}
+.wd .chip{display:inline-block;font-size:11px;font-weight:600;border-radius:999px;padding:2px 8px;background:var(--leaf-soft);color:var(--leaf)}.wd .chip.warn{background:var(--amber-soft);color:var(--amber)}
+.wd .eyebrow{font-size:10.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--soft);margin:14px 2px 6px}
+.wd .body{padding:12px;flex:1}
+.wd .stat{display:grid;grid-template-columns:1fr 1fr;gap:8px}.wd .stat div{background:var(--raised);border:1px solid var(--rule);border-radius:14px;padding:10px 12px;color:var(--soft);font-size:12.5px}.wd .stat b{display:block;font-size:22px;color:var(--ink)}
+.wd .rows{list-style:none;margin:0;padding:0;background:var(--raised);border:1px solid var(--rule);border-radius:16px;overflow:hidden}
+.wd .rows li{padding:11px 14px;border-top:1px solid var(--rule)}.wd .rows li:first-child{border-top:0}.wd .rows .t{font-weight:600;display:flex;align-items:center;gap:8px}.wd .rows .n{color:var(--soft);font-size:12.5px;margin:2px 0 7px}
+.wd .bar{height:6px;border-radius:99px;background:var(--rule);overflow:hidden;display:flex}.wd .bar i{display:block;height:100%;background:var(--leaf)}.wd .bar u{display:block;height:100%;background:var(--blue)}
+.wd .acts{display:flex;gap:6px;margin-top:8px}
+.phones{display:flex;gap:22px;flex-wrap:wrap;justify-content:center;margin:16px 0}
+.cap{text-align:center;font-size:13px;margin-top:8px;max-width:300px}
+</style>
+
+<h2>Admin (option A) on a phone</h2>
+<p class="subtitle">The tabs become a strip you can slide sideways; each tab is one column of cards. Forms open as a full-screen page.</p>
+
+<div class="phones">
+  <div>
+    <div class="wd">
+      <div class="top"><span class="logo">Word<b>ado</b> review</span><span class="sp"></span><span class="muted">Coordinator ▾</span></div>
+      <div class="tabs"><span class="on">Overview</span><span>Reviewers</span><span>Assignments</span><span>Submis…</span></div>
+      <div class="body">
+        <div class="stat"><div><b>1,972</b>rows to decide</div><div><b>418</b>decided, not sent</div><div><b>3</b>pull requests open</div><div><b>4</b>active reviewers</div></div>
+        <p class="eyebrow">By language</p>
+        <ul class="rows">
+          <li><div class="t">German <span class="sp"></span><span class="chip">on track</span></div><div class="n">741 translations · 8 titles · Anna, Hans</div><div class="bar"><u style="width:8%"></u><i style="width:20%"></i></div></li>
+          <li><div class="t">Spanish <span class="sp"></span><span class="btn primary">Assign</span></div><div class="n">564 translations · 13 titles · nobody assigned</div><div class="bar"></div></li>
+          <li><div class="t">Bulgarian <span class="sp"></span><span class="chip">on track</span></div><div class="n">624 translations · Coordinator</div><div class="bar"><u style="width:10%"></u><i style="width:34%"></i></div></li>
+        </ul>
+      </div>
+    </div>
+    <p class="cap"><b>Overview.</b> The four numbers two by two, then one card per language.</p>
+  </div>
+
+  <div>
+    <div class="wd">
+      <div class="top"><span class="logo">Word<b>ado</b> review</span><span class="sp"></span><span class="muted">Coordinator ▾</span></div>
+      <div class="tabs"><span>Overview</span><span class="on">Reviewers</span><span>Assignments</span><span>Submis…</span></div>
+      <div class="body">
+        <span class="btn primary wide">Invite a reviewer</span>
+        <p class="eyebrow">3 reviewers</p>
+        <ul class="rows">
+          <li><div class="t">Anna Schmidt</div><div class="n">German · invited 2 Oct</div><div class="acts"><span class="btn">Edit</span><span class="btn">Disable</span></div></li>
+          <li><div class="t">Hans Weber <span class="sp"></span><span class="chip warn">invite not sent</span></div><div class="n">German, Bulgarian</div><div class="acts"><span class="btn">Resend</span><span class="btn">Edit</span><span class="btn">Disable</span></div></li>
+          <li><div class="t">Carmen Ruiz</div><div class="n">Spanish · disabled</div><div class="acts"><span class="btn">Enable</span></div></li>
+        </ul>
+      </div>
+    </div>
+    <p class="cap"><b>Reviewers.</b> The main action on top; each person a card with their actions under it.</p>
+  </div>
+</div>
