@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RowView } from '../server/types'
 import { RowCard } from './RowCard'
-import { bank, bankClean, bankThree } from './testRows'
+import { bank, bankClean, bankThree, bankTwoFields, objection } from './testRows'
 
 afterEach(cleanup)
 
@@ -81,19 +81,73 @@ describe('RowCard', () => {
   it('accepts exactly the ticked fixes when one field has two objections and another has one', () => {
     const { onDecide } = show(bankThree)
     const suggested = () => within(screen.getByRole('region', { name: 'AI suggests' }))
-    // a tick only where a field has more than one objection
+    // the row has several objections, so each has a tick; the first on each field starts ticked
     const ticks = screen.getAllByRole('checkbox') as HTMLInputElement[]
-    expect(ticks.map((t) => t.checked)).toEqual([true, false])
+    expect(ticks.map((t) => t.checked)).toEqual([true, false, true])
     expect(suggested().getByText('бряг')).toBeTruthy()
     expect(suggested().getByText('бряг на река')).toBeTruthy()
     fireEvent.keyDown(window, { key: '1' })
     expect(onDecide).toHaveBeenLastCalledWith('accept', { translation: 'бряг', alternates: '', sense: 'бряг на река' }, '')
     fireEvent.click(ticks[1]!)
-    expect(ticks.map((t) => t.checked)).toEqual([false, true])
+    expect(ticks.map((t) => t.checked)).toEqual([false, true, true])
     expect(suggested().getByText('крайбрежие')).toBeTruthy()
     expect(suggested().queryByText('бряг')).toBeNull()
     fireEvent.click(button('Accept fix'))
     expect(onDecide).toHaveBeenLastCalledWith('accept', { translation: 'крайбрежие', alternates: '', sense: 'бряг на река' }, '')
+  })
+
+  it('with one objection on each of two fields, ticks both, names their fields, and applies only what stays ticked', () => {
+    const { onDecide } = show(bankTwoFields)
+    const now = () => within(screen.getByRole('region', { name: 'Now' }))
+    const suggested = () => within(screen.getByRole('region', { name: 'AI suggests' }))
+    const ticks = screen.getAllByRole('checkbox') as HTMLInputElement[]
+    expect(ticks.map((t) => t.checked)).toEqual([true, true])
+    const lines = ticks.map((t) => t.closest('label')!.textContent)
+    expect(lines[0]).toContain('Translation → бряг')
+    expect(lines[1]).toContain('Sense → бряг на река')
+    expect(now().getByText('край на река').classList.contains('struck')).toBe(true)
+    fireEvent.click(ticks[1]!)
+    expect(ticks.map((t) => t.checked)).toEqual([true, false])
+    expect(suggested().getByText('бряг')).toBeTruthy()
+    expect(suggested().getByText('край на река')).toBeTruthy()
+    expect(suggested().queryByText('бряг на река')).toBeNull()
+    expect(now().getByText('край на река').classList.contains('struck')).toBe(false)
+    expect(now().getByText('банка').classList.contains('struck')).toBe(true)
+    const only = { translation: 'бряг', alternates: '', sense: 'край на река' }
+    fireEvent.click(button('Accept fix'))
+    expect(onDecide).toHaveBeenLastCalledWith('accept', only, '')
+    fireEvent.keyDown(window, { key: '1' })
+    expect(onDecide).toHaveBeenCalledTimes(2)
+    expect(onDecide).toHaveBeenLastCalledWith('accept', only, '')
+    // and it can be ticked again
+    fireEvent.click(ticks[1]!)
+    fireEvent.keyDown(window, { key: '1' })
+    expect(onDecide).toHaveBeenLastCalledWith('accept', { ...only, sense: 'бряг на река' }, '')
+  })
+
+  it('has no tick for a row with a single objection', () => {
+    show(bank)
+    expect(screen.queryByRole('checkbox')).toBeNull()
+    expect(screen.queryByText(/Translation →/)).toBeNull()
+  })
+
+  it('disables the ticks while editing', () => {
+    show(bankTwoFields)
+    fireEvent.click(button('Edit'))
+    const ticks = screen.getAllByRole('checkbox') as HTMLInputElement[]
+    expect(ticks.map((t) => t.disabled)).toEqual([true, true])
+    fireEvent.click(button('Cancel'))
+    expect((screen.getAllByRole('checkbox') as HTMLInputElement[]).map((t) => t.disabled)).toEqual([false, false])
+  })
+
+  it('shows a fix that empties a field as "none", in the line and under AI suggests', () => {
+    show({ ...bank, cells: { ...bank.cells, alternates: 'бряг' }, objections: [objection(), objection({ field: 'alternates', category: 'alternate-wrong', severity: 'minor', reason: 'not an alternate', fix: '' })] })
+    const line = (screen.getAllByRole('checkbox')[1] as HTMLInputElement).closest('label')!
+    const fix = within(line).getByText('none')
+    expect(fix.classList.contains('none')).toBe(true)
+    expect(line.textContent).toContain('Alternates → none')
+    const cell = within(screen.getByRole('region', { name: 'AI suggests' })).getByText('none')
+    expect(cell.classList.contains('none')).toBe(true)
   })
 
   it('says who objected only when more than one reviewer did', () => {

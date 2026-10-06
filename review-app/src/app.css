@@ -710,7 +710,9 @@ kbd {
   font-weight: 700;
 }
 
-.compare-col .none {
+.compare-col .none,
+.objection .fix .none {
+  font-weight: 500;
   color: var(--ink-soft);
 }
 
@@ -759,6 +761,10 @@ kbd {
 .objection.choice {
   align-items: center;
   cursor: pointer;
+}
+
+.objection.choice:has(input:disabled) {
+  cursor: default;
 }
 
 .objection .reason {

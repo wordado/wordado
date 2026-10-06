@@ -95,7 +95,7 @@ export function RowCard(props: {
         ) : (
           <Compare row={row} ticked={ticked} />
         )}
-        <Objections objections={row.objections} reports={row.reports} ticked={ticked} onTick={(i) => setTicked((t) => toggleTick(row.objections, t, i))} />
+        <Objections objections={row.objections} reports={row.reports} ticked={ticked} disabled={editing} onTick={(i) => setTicked((t) => toggleTick(row.objections, t, i))} />
         {row.otherSenses.length > 0 && (
           <div className="other-senses">
             {row.otherSenses.map((s) => (

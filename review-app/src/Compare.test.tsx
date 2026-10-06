@@ -1,7 +1,7 @@
 import { cleanup, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { Compare } from './Compare'
-import { bank, bankClean, bankThree } from './testRows'
+import { bank, bankClean, bankThree, bankTwoFields } from './testRows'
 
 afterEach(cleanup)
 
@@ -44,6 +44,22 @@ describe('Compare', () => {
     expect(now().getByText('банка').classList.contains('struck')).toBe(true)
     expect(now().getByText('край на река').classList.contains('struck')).toBe(false)
     expect(suggested().getByText('край на река')).toBeTruthy()
+  })
+
+  it('with one objection on each of two fields and one unticked, suggests only the ticked fix', () => {
+    render(<Compare row={bankTwoFields} ticked={new Set([0])} />)
+    expect(suggested().getByText('бряг').tagName).toBe('B')
+    expect(suggested().getByText('край на река').tagName).not.toBe('B')
+    expect(suggested().queryByText('бряг на река')).toBeNull()
+    expect(now().getByText('банка').classList.contains('struck')).toBe(true)
+    expect(now().getByText('край на река').classList.contains('struck')).toBe(false)
+  })
+
+  it('shows a fix that empties a field as a muted "none"', () => {
+    render(<Compare row={{ ...bank, objections: [{ ...bank.objections[0]!, fix: '' }] }} ticked={new Set([0])} />)
+    const none = suggested().getAllByText('none')
+    expect(none.length).toBe(2)
+    for (const n of none) expect(n.classList.contains('none')).toBe(true)
   })
 
   it('has no AI suggests box for a row without objections', () => {

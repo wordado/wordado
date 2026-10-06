@@ -24,4 +24,7 @@ export const bankThree: RowView = {
   ],
 }
 
+/** One objection on the translation and one on the sense. */
+export const bankTwoFields: RowView = { ...bank, objections: [bankThree.objections[0]!, bankThree.objections[2]!] }
+
 export const bankClean: RowView = { ...bank, ai: 'passed', severity: null, objections: [] }

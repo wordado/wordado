@@ -33,7 +33,7 @@ export function Compare(props: { row: RowView; ticked: ReadonlySet<number> }) {
               return (
                 <div key={f}>
                   <dt>{fieldLabel(f)}</dt>
-                  <dd>{changed(f) ? <b>{value}</b> : <span className={suggested[f] ? undefined : 'none'}>{value}</span>}</dd>
+                  <dd>{changed(f) ? <b className={suggested[f] ? undefined : 'none'}>{value}</b> : <span className={suggested[f] ? undefined : 'none'}>{value}</span>}</dd>
                 </div>
               )
             })}
