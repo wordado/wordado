@@ -58,7 +58,18 @@ test('@phone a reviewer decides a row with the bottom buttons, swipes and opens 
   await expect(article).toHaveAttribute('aria-label', first!)
 
   // Editing fills the screen; a swipe that starts on its input does nothing.
+  // DIAGNOSTIC (temporary): what the page receives around the Edit tap on the CI runner.
+  await page.evaluate(() => {
+    const w = window as unknown as { __ev: string[] }
+    w.__ev = []
+    const t0 = performance.now()
+    for (const n of ['pointerdown', 'pointerup', 'pointercancel', 'touchstart', 'touchend', 'touchcancel', 'mousedown', 'mouseup', 'click', 'keydown', 'popstate', 'hashchange'])
+      window.addEventListener(n, (e) => w.__ev.push(`${Math.round(performance.now() - t0)} ${n} ${(e.target as Element)?.textContent?.slice(0, 14) ?? ''} ${(e as KeyboardEvent).key ?? ''}`), true)
+    new MutationObserver(() => w.__ev.push(`${Math.round(performance.now() - t0)} DOM editing=${document.querySelector('.row-card.editing') !== null} article=${document.querySelector('article')?.getAttribute('aria-label')}`)).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['class'] })
+  })
   await page.getByRole('button', { name: /Edit/ }).tap()
+  await page.waitForTimeout(1500)
+  console.log('DIAG coarse=' + (await page.evaluate(() => matchMedia('(pointer: coarse)').matches)) + ' events=' + JSON.stringify(await page.evaluate(() => (window as unknown as { __ev: string[] }).__ev)))
   const input = article.getByRole('textbox').first()
   await expect(input).toBeVisible()
   expect(await article.boundingBox()).toEqual({ x: 0, y: 0, width: 390, height: 844 })
