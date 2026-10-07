@@ -855,6 +855,11 @@ button.settings-row:hover {
   display: none;
 }
 
+/* My work, on the admin pages: at the right end, where Admin is on the reviewer's (the tabs hide the spacer). */
+.header-switch {
+  margin-left: auto;
+}
+
 .header-actions {
   display: flex;
   flex-wrap: wrap;
@@ -1506,7 +1511,8 @@ kbd {
   }
 
   /* While reviewing, the screen's actions are what keeps to the right; the account follows them. */
-  .app-header:has(.header-actions) .account {
+  .app-header:has(.header-actions) .account,
+  .app-header:has(.header-switch) .account {
     margin-left: 0;
   }
 

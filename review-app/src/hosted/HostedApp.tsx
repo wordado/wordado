@@ -11,7 +11,7 @@ const SIGN_OUT = '/cdn-cgi/access/logout'
 type View = { kind: 'list' } | { kind: 'review'; assignment: AssignmentView } | { kind: 'admin' }
 
 /** The hosted review app for a signed-in reviewer: their assignments, one assignment's review, and (for an admin) the admin page, which
- * puts its tabs and the way back into the header. */
+ * puts its tabs into the header; Admin and My work, in one place on the right, switch between the two. */
 export function HostedApp(props: { me: Me }) {
   const { me } = props
   // An admin tab in the address (#reviewers) is the admin page: a reload stays where it was.
@@ -36,10 +36,16 @@ export function HostedApp(props: { me: Me }) {
             Admin
           </button>
         )}
+        {view.kind === 'admin' && (
+          // Where Admin was: the one place that switches between the admin pages and the reviewer's own work.
+          <button className="button header-nav header-switch" onClick={leaveAdmin}>
+            My work
+          </button>
+        )}
       </AppHeader>
       {view.kind === 'list' && <Assignments onOpen={(assignment) => setView({ kind: 'review', assignment })} />}
       {view.kind === 'review' && <AssignmentReview key={view.assignment.id} assignment={view.assignment} onBack={() => setView({ kind: 'list' })} />}
-      {view.kind === 'admin' && <Admin onBack={leaveAdmin} />}
+      {view.kind === 'admin' && <Admin />}
     </div>
   )
 }

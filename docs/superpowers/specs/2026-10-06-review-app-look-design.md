@@ -122,8 +122,9 @@ on the card and can be decided again until submitted.
 
 ## 5. Admin
 
-Tabs in the header: **Overview**, **Reviewers**, **Assignments**, **Submissions**, plus **My assignments** (back
-to the reviewer view). The tab is kept in the URL hash (`#overview`, `#reviewers`, …) so a reload stays put.
+Tabs in the header: **Overview**, **Reviewers**, **Assignments**, **Submissions**. The way back to the reviewer
+view is **My work**, a button on the right where **Admin** is on the reviewer's pages, so one place switches
+between the two (amended 2026-10-07; it was *My assignments*, in front of the tabs). The tab is kept in the URL hash (`#overview`, `#reviewers`, …) so a reload stays put.
 
 - **Overview:** four numbers (rows to decide, decided and not submitted, pull requests open, active reviewers;
   "rows to decide" sums the flagged and the reported rows of every file, so a row that is both counts twice: the

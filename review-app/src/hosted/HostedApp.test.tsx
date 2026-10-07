@@ -197,7 +197,7 @@ describe('HostedApp', () => {
       vi.spyOn(hostedApi.admin, 'submissions').mockResolvedValue([])
     }
 
-    it('puts the admin tabs into the header, with My assignments as the way back', async () => {
+    it('puts the admin tabs into the header, with My work where Admin was as the way back', async () => {
       mockAdmin()
       render(<HostedApp me={admin} />)
       fireEvent.click(await screen.findByRole('button', { name: 'Admin' }))
@@ -206,9 +206,16 @@ describe('HostedApp', () => {
       expect(header.queryByRole('button', { name: 'Admin' })).toBeNull()
       fireEvent.click(header.getByRole('tab', { name: 'Reviewers' }))
       expect(window.location.hash).toBe('#reviewers')
-      fireEvent.click(header.getByRole('button', { name: 'My assignments' }))
+      // the way back is not one of the tabs, nor beside them: it follows them, where Admin was
+      const back = header.getByRole('button', { name: 'My work' })
+      const strip = screen.getByRole('navigation', { name: 'Admin' })
+      expect(strip.contains(back)).toBe(false)
+      expect(within(strip).queryAllByRole('button').every((b) => b.getAttribute('role') === 'tab')).toBe(true)
+      expect(strip.compareDocumentPosition(back) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      fireEvent.click(back)
       expect(await screen.findByRole('region', { name: 'Your assignments' })).toBeTruthy()
       expect(screen.queryByRole('tab')).toBeNull()
+      expect(within(screen.getByRole('banner')).getByRole('button', { name: 'Admin' })).toBeTruthy()
       // the tab has gone from the address with the admin page
       expect(window.location.hash).toBe('')
     })
