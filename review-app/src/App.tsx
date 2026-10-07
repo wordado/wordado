@@ -80,7 +80,7 @@ export function App() {
   }
   return (
     <>
-      <AppHeader who={reviewer} />
+      <AppHeader account={{ name: reviewer }} />
       <ReviewScreen
         rows={rows}
         loading={loading}
@@ -108,7 +108,10 @@ export function App() {
         }
         actions={
           <button className="button primary" onClick={() => void importNow()}>
-            Import decisions
+            {/* one piece, so the button's gap does not come between the words; a phone shows "Import" */}
+            <span>
+              Import<span className="wide-label"> decisions</span>
+            </span>
           </button>
         }
       />

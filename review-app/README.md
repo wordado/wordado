@@ -159,7 +159,8 @@ that Cloudflare Access sends in a separate email when they ask for it; they land
 per assignment with its progress and **Start** or **Continue**. Deciding a row uses the same screen and keys as
 the local app (see "Each session" above). The app works on a phone: the decisions are a bar at the bottom of the
 screen, a swipe to the left goes to the next row and one to the right to the previous, and the row list has the
-way back to the assignments. Each **Submit** opens a new pull request in
+way back to the assignments. A reviewer signs out from the account menu: the round button with their initials at
+the right end of the header, then **Sign out**. Each **Submit** opens a new pull request in
 the content repository and emails every active admin a link to it. When that pull request is opened, the
 content repository's `review-import.yml` runs `corpus import` on its branch and pushes the result onto the same
 pull request as an extra commit, so merging it lands both the decisions and the import.

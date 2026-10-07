@@ -33,7 +33,16 @@ describe('HostedApp', () => {
     expect(await screen.findByRole('article', { name: 'Row bank-2' })).toBeTruthy()
     // the header says what is being reviewed, in plain words
     expect(within(screen.getByRole('banner')).getByText('German translations · flagged rows')).toBeTruthy()
-    expect(within(screen.getByRole('banner')).getByText('Anna')).toBeTruthy()
+    // who is signed in: the account button, whose menu has the name, the email and Sign out through Access
+    const header = within(screen.getByRole('banner'))
+    expect(header.queryByText('Anna')).toBeNull()
+    const account = header.getByRole('button', { name: 'Account: Anna' })
+    expect(account.textContent).toBe('A')
+    fireEvent.click(account)
+    const menu = within(header.getByRole('group', { name: 'Account' }))
+    expect(menu.getByText('Anna')).toBeTruthy()
+    expect(menu.getByText('anna@example.com')).toBeTruthy()
+    expect(menu.getByRole('link', { name: 'Sign out' }).getAttribute('href')).toBe('/cdn-cgi/access/logout')
   })
 
   it('says it is loading while the rows are on their way, not that nothing is left', async () => {

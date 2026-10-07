@@ -48,6 +48,8 @@ they are.
   component for the local and the hosted mode.
   *Revised 2026-10-07:* the wordmark, the icon and the header's width (a centred column of 60rem, which
   `.page.wide` now has too) are in [2026-10-07-wordmark-and-header-design.md](2026-10-07-wordmark-and-header-design.md).
+  *Revised again 2026-10-07:* "review" stands under the name, and the signed-in name is a round button with the
+  person's initials that opens the account menu (name, email, **Sign out**); see §1 and §4 there.
 - **Focus rings** as in the learner app (`2px solid var(--rose)`, offset 2px). Every control keeps a visible label
   or `aria-label`.
 

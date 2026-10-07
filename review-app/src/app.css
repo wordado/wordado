@@ -22,6 +22,8 @@
   --paper-inset: #ffffff;
   --paper-head: #ffffff;
   --lift: none;
+  /* The shadow of what hangs over the page (the account panel). */
+  --shadow-pop: 0 0.5rem 1.5rem rgb(20 28 51 / 0.18);
 
   --font-ui: 'Golos Text Variable', system-ui, sans-serif;
   --font-entry: 'Literata Variable', Georgia, serif;
@@ -65,6 +67,7 @@
     --blue: #9bbcff;
     --blue-soft: #1b2c55;
     --lift: 0 0.5rem 1.5rem rgb(0 0 0 / 0.3);
+    --shadow-pop: 0 0.5rem 1.5rem rgb(0 0 0 / 0.45);
   }
 }
 
@@ -145,23 +148,35 @@ p {
   padding: var(--space-2) var(--space-4);
 }
 
-/* The wordmark, as in the learner app: the icon, "Word" in ink and "ado" in rose, in the serif. "review" follows
-   as a smaller word. One word ("Wordado review") to a screen reader. */
+/* The wordmark, as in the learner app: the icon, "Word" in ink and "ado" in rose, in the serif. "review" stands
+   under the name as a smaller word, from the same left edge; the two lines are as tall as the icon. One phrase
+   ("Wordado review") to a screen reader. */
 .wordmark {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: var(--space-2);
-  font: 600 var(--step-1) / 1.75rem var(--font-entry);
-  letter-spacing: -0.01em;
   color: var(--ink);
   white-space: nowrap;
 }
 
 .wordmark img {
   display: block;
-  align-self: center;
   width: 1.75rem;
   height: 1.75rem;
+}
+
+/* The two lines together are the icon's height (1rem + 0.75rem); each is moved a hair away from the other, which
+   still leaves the letters between the icon's top and bottom. */
+.wordmark-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.wordmark-name {
+  position: relative;
+  top: -0.0625rem;
+  font: 600 var(--step-1) / 1rem var(--font-entry);
+  letter-spacing: -0.01em;
 }
 
 .wordmark-ado {
@@ -169,8 +184,9 @@ p {
 }
 
 .wordmark-tail {
-  font: 500 var(--step--1) / 1.75rem var(--font-ui);
-  letter-spacing: 0;
+  position: relative;
+  top: 0.0625rem;
+  font: 500 0.72rem / 0.75rem var(--font-ui);
   color: var(--ink-soft);
 }
 
@@ -195,9 +211,91 @@ p {
   gap: var(--space-2) var(--space-3);
 }
 
-.app-header-who {
-  color: var(--ink-soft);
+/* The account: a round button with the initials; its panel hangs under it, its right edge on the button's. */
+.account {
+  position: relative;
+  display: flex;
+}
+
+.account-button {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  font: 600 var(--step--1) / 1 var(--font-ui);
+  color: var(--ink);
+  background: var(--paper-inset);
+  border: 1px solid var(--rule);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.account-button:hover,
+.account-button[aria-expanded='true'] {
+  border-color: var(--ink-soft);
+}
+
+.account-menu {
+  position: absolute;
+  top: calc(100% + var(--space-2));
+  right: 0;
+  z-index: 20;
+  width: max-content;
+  min-width: 13rem;
+  max-width: min(20rem, calc(100vw - 2 * var(--space-3)));
+  padding: var(--space-2);
+  font-size: var(--step--1);
+  color: var(--ink);
+  background: var(--paper-raised);
+  border: 1px solid var(--rule);
+  border-radius: 0.875rem;
+  box-shadow: var(--shadow-pop);
+}
+
+.account-who {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-2) var(--space-3);
+  overflow-wrap: anywhere;
+}
+
+.account-who strong {
+  font-size: var(--step-0);
   font-weight: 600;
+}
+
+.account-email,
+.account-note {
+  color: var(--ink-soft);
+}
+
+.account-menu hr {
+  margin: var(--space-1) 0;
+  border: 0;
+  border-top: 1px solid var(--rule);
+}
+
+.account-note {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+}
+
+.account-action {
+  display: flex;
+  align-items: center;
+  min-height: 2.5rem;
+  padding: var(--space-2) var(--space-3);
+  font-weight: 600;
+  color: var(--ink);
+  text-decoration: none;
+  border-radius: var(--radius);
+}
+
+.account-action:hover {
+  background: var(--paper);
 }
 
 /* Pages: a centred column */
@@ -1250,10 +1348,15 @@ kbd {
     flex: 1;
   }
 
-  /* While reviewing only the wordmark, the row list and the screen's action are left: what is reviewed and the
-     way back are in the row list. */
-  .app-header:has(.header-actions) :is(.crumb, .header-nav, .app-header-who, .wordmark-tail) {
+  /* While reviewing only the icon and the name, the row list, the screen's action and the account are left: what
+     is reviewed and the way back are in the row list. */
+  .app-header:has(.header-actions) :is(.crumb, .header-nav, .wordmark-tail) {
     display: none;
+  }
+
+  /* The name alone: on the icon's middle. */
+  .app-header:has(.header-actions) .wordmark-name {
+    top: 0;
   }
 
   /* The local mode's queue picker: the whole line, "show unflagged" and the count under it. */
@@ -1392,9 +1495,14 @@ kbd {
     justify-content: flex-start;
   }
 
-  /* The admin tabs: a strip under the wordmark that slides sideways. */
-  .app-header-who {
+  /* The admin tabs: a strip under the wordmark that slides sideways; the account stays at the right end. */
+  .account {
     margin-left: auto;
+  }
+
+  /* While reviewing, the screen's actions are what keeps to the right; the account follows them. */
+  .app-header:has(.header-actions) .account {
+    margin-left: 0;
   }
 
   .admin-tabs {
