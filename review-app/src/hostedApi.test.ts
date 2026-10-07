@@ -12,6 +12,8 @@ describe('hostedApi.me', () => {
     expect(await hostedApi.me()).toEqual({ kind: 'signedOut' })
     respond(403, { message: 'no invitation' })
     expect(await hostedApi.me()).toEqual({ kind: 'denied', message: 'no invitation' })
+    respond(403, { message: 'no invitation', email: 'stranger@example.com' })
+    expect(await hostedApi.me()).toEqual({ kind: 'denied', message: 'no invitation', email: 'stranger@example.com' })
     respond(200, { email: 'a@example.com', name: 'A', role: 'reviewer', languages: ['de'] })
     expect(await hostedApi.me()).toMatchObject({ kind: 'me', me: { name: 'A' } })
   })

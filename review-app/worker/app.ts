@@ -70,7 +70,8 @@ export function createApp(deps: Deps): Hono<AppEnv> {
     if (!me && adminEmail !== '' && who.email === adminEmail) {
       me = await insertReviewerIfAbsent(deps.env.DB, { email: who.email, name: 'Coordinator', languages: ['bg', 'de', 'es', 'en'], role: 'admin', invitedAt: deps.now().toISOString(), inviteSentAt: null, disabledAt: null })
     }
-    if (!me || me.disabledAt) return apiError(c, 403, 'This address has no invitation. Ask the coordinator for one.')
+    // The address goes back to its own holder, so the page can say which one has no invitation.
+    if (!me || me.disabledAt) return c.json({ message: 'This address has no invitation. Ask the coordinator for one.', email: who.email }, 403)
     c.set('me', me)
     await next()
   })

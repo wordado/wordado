@@ -4,6 +4,9 @@ import { AppHeader } from './AppHeader'
 import { HostedApp } from './hosted/HostedApp'
 import { hostedApi, type MeResult } from './hostedApi'
 
+/** Cloudflare Access's sign-out: the only way to a new sign-in with another address. */
+const SIGN_OUT = '/cdn-cgi/access/logout'
+
 /** Picks the mode: the local server has no /api/me (404), the hosted Worker answers with the signed-in reviewer. */
 export function Root() {
   const [me, setMe] = useState<MeResult | undefined>(undefined)
@@ -27,8 +30,16 @@ export function Root() {
       <>
         <AppHeader />
         <section className="panel centered">
+          {me.email && (
+            <p>
+              You are signed in as <strong>{me.email}</strong>.
+            </p>
+          )}
           <p>{me.message}</p>
-          <p className="note">Ask the coordinator for an invitation.</p>
+          <p className="note">If you were invited at another address, sign in with that one.</p>
+          <a className="button primary" href={SIGN_OUT}>
+            Sign in with another address
+          </a>
         </section>
       </>
     )
