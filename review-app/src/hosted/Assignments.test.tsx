@@ -61,6 +61,19 @@ describe('Assignments', () => {
     expect((row.querySelector('.progress > .decided') as HTMLElement).style.width).toBe('25%')
   })
 
+  it('shows a finished assignment as done: merged count, a full green bar, nothing to open', async () => {
+    const onOpen = await show([assignment({ queue: 'level', progress: progress({ inScope: 0, decided: 0, submitted: 0, merged: 155, remaining: 0 }) })])
+    const row = (await screen.findByText('155 merged · nothing left to decide')).closest('li')!
+    expect(row.className).toContain('done')
+    expect((row.querySelector('.progress > .done') as HTMLElement).style.width).toBe('100%')
+    expect(row.querySelector('.progress > .decided')).toBeNull()
+    const done = within(row).getByRole<HTMLButtonElement>('button', { name: 'Done' })
+    expect(done.disabled).toBe(true)
+    fireEvent.click(done)
+    expect(onOpen).not.toHaveBeenCalled()
+    expect(screen.queryByText(/none decided yet/)).toBeNull()
+  })
+
   it('says so when nothing is assigned', async () => {
     await show([])
     expect(await screen.findByText('Nothing is assigned to you yet.')).toBeTruthy()

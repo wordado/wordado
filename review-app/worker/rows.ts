@@ -3,7 +3,15 @@ import type { HostedRow, Progress } from '../shared/hosted'
 import type { AssignmentRow, DecisionRow, SubmissionRow } from './db'
 import type { Snapshot } from './snapshotStore'
 
-export const rank = (r: RowView) => (r.reports !== '' ? 0 : r.severity === 'major' ? 1 : r.severity === 'minor' ? 2 : r.ai === 'unreviewed' ? 3 : 4)
+export const rank = (r: RowView) => (r.reports !== '' ? 0 : r.severity === 'major' ? 1 : r.severity === 'minor' ? 2 : r.ai === 'unreviewed' || r.stale ? 3 : 4)
+
+/**
+ * What a flagged-only assignment holds: the rows the AI review flags, the rows learners reported, and the stale
+ * rows, as the local app lists them (server/model.ts). A stale row's sheet froze a proposal a newer draft has since
+ * changed, so no AI verdict can match it again: left out, it would wait in the files unseen, and `corpus status`
+ * would count it as flagged while the app showed nothing to decide (level queue, 2026-10-07).
+ */
+const inFlaggedScope = (r: RowView) => r.ai === 'flagged' || r.reports !== '' || r.stale
 
 export function scopeFiles(snap: Snapshot, a: AssignmentRow): string[] {
   const inSnapshot = (snap.queue(a.queue)?.files ?? []).map((f) => f.file)
@@ -11,7 +19,7 @@ export function scopeFiles(snap: Snapshot, a: AssignmentRow): string[] {
 }
 
 /**
- * The assignment's rows (spec §6): flagged-only → flagged or reported, worst first; otherwise every row in file order.
+ * The assignment's rows (spec §6): flagged-only → flagged, reported or stale, worst first; otherwise every row in file order.
  * Null when a file the snapshot lists is missing from R2: the data is unavailable, not empty, so nobody may read
  * its rows as gone and discard decisions on them.
  */
@@ -24,7 +32,7 @@ export async function assignmentRows(snap: Snapshot, a: AssignmentRow): Promise<
   }
   const keys = new Set(all.map((r) => r.key))
   if (!a.flaggedOnly) return { rows: all, keys }
-  return { rows: all.filter((r) => r.ai === 'flagged' || r.reports !== '').sort((x, y) => rank(x) - rank(y)), keys }
+  return { rows: all.filter(inFlaggedScope).sort((x, y) => rank(x) - rank(y)), keys }
 }
 
 export function withDecisions(rows: readonly RowView[], decisions: readonly DecisionRow[]): HostedRow[] {
