@@ -7,7 +7,7 @@ import { useKeys } from './useKeys'
 
 /** The review screen both modes share: one row at a time in a centred column, the row list with the level and
  * severity filters in a drawer (All rows, key L), and its own part of the app header (what is reviewed, the
- * parent's controls and actions). The parent owns the rows and how a decision is stored; `onDecide` resolves to a
+ * parent's actions); the parent's controls are a toolbar above the card. The parent owns the rows and how a decision is stored; `onDecide` resolves to a
  * notice to show (null when the decision went through, and the screen then moves on to the next undecided row). */
 export function ReviewScreen(props: {
   rows: readonly RowView[]
@@ -19,6 +19,7 @@ export function ReviewScreen(props: {
   onReload(): Promise<void>
   /** what is being reviewed, for the header */
   title?: string
+  /** what chooses the rows (the local mode's queue picker and "show unflagged"): a slim toolbar above the card */
   controls?: ReactNode
   /** the screen's main action (Submit, Import decisions): in the header, and in the done state instead */
   actions?: ReactNode
@@ -101,7 +102,6 @@ export function ReviewScreen(props: {
     <>
       <HeaderSlot>
         {props.title && <span className="crumb">{props.title}</span>}
-        {props.controls && <span className="header-controls">{props.controls}</span>}
         <span className="header-actions">
           <button className="button list-button" onClick={openList} disabled={editing}>
             <span aria-hidden="true">☰</span> <span className="wide-label">All rows</span>
@@ -110,6 +110,11 @@ export function ReviewScreen(props: {
         </span>
       </HeaderSlot>
       <main className="review page">
+        {props.controls && (
+          <div className="review-toolbar" role="group" aria-label="Queue and rows shown">
+            {props.controls}
+          </div>
+        )}
         {shownNotice && (
           <p role="status" className="notice">
             {shownNotice}

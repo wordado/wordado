@@ -102,7 +102,9 @@ One row at a time, in a centred column (max 48rem):
 5. **All rows** (header button, key `L`): a drawer from the left (a full-screen sheet on a phone) with the level and
    severity filters and the row list (key, level, chip, the decision when decided); choosing a row closes it. On a
    phone the header has no room for what is reviewed and for **Back to my assignments**: both are in the row list.
-   The local mode's queue picker and *show unflagged* live in the header as today. While a row is being edited the
+   The local mode's queue picker, *show unflagged* and the count of open rows are a slim toolbar at the top of the
+   review column, above the card (*revised 2026-10-07:* they were in the header, which the 60rem column has no room
+   for; see `2026-10-07-wordmark-and-header-design.md` §3). While a row is being edited the
    row list is off (the button is disabled, `L` does nothing): choosing another row would drop the edit. When the
    drawer or a dialog closes, the focus goes back to what opened it.
 6. **Header actions:** hosted: **Submit n decisions** (primary when n > 0) and the name; local: **Import

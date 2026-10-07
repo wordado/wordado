@@ -150,16 +150,39 @@ describe('App', () => {
     expect(await screen.findByText('Nothing left to decide here.')).toBeTruthy()
   })
 
-  it('keeps the queue picker and show unflagged in the header', async () => {
-    mockTwoRows()
+  it('keeps the queue picker and show unflagged in a toolbar above the card, working; the header has the mark, All rows, Import and the name', async () => {
+    vi.spyOn(api, 'reviewer').mockResolvedValue('Tester')
+    vi.spyOn(api, 'queues').mockResolvedValue([
+      { queue: 'translation-bg', open: 2, flagged: 2, reported: 0, decided: 0 },
+      { queue: 'title-bg', open: 5, flagged: 1, reported: 0, decided: 0 },
+    ])
+    const rows = vi.spyOn(api, 'rows').mockResolvedValue([a1, b1])
     render(<App />)
     await waitFor(() => expect(screen.getByRole('article', { name: 'Row a-1' })).toBeTruthy())
     const header = within(screen.getByRole('banner'))
-    expect(header.getByLabelText('Queue')).toBeTruthy()
-    expect(header.getByLabelText(/show unflagged/)).toBeTruthy()
+    expect(header.queryByLabelText('Queue')).toBeNull()
+    expect(header.queryByLabelText(/show unflagged/)).toBeNull()
+    expect(header.queryByText(/open in all/)).toBeNull()
     expect(header.getByRole('button', { name: 'All rows' })).toBeTruthy()
     expect(header.getByRole('button', { name: 'Import decisions' })).toBeTruthy()
     expect(header.getByText('Tester')).toBeTruthy()
+    expect(screen.getByRole('banner').textContent).toContain('Wordado review')
+
+    // The toolbar is in the page, before the card.
+    const toolbar = screen.getByRole('group', { name: 'Queue and rows shown' })
+    expect(screen.getByRole('main').contains(toolbar)).toBe(true)
+    expect(toolbar.compareDocumentPosition(screen.getByRole('article', { name: 'Row a-1' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    const queue = within(toolbar).getByLabelText<HTMLSelectElement>('Queue')
+    const unflagged = within(toolbar).getByLabelText<HTMLInputElement>(/show unflagged/)
+    expect(queue.value).toBe('translation-bg')
+    expect(within(toolbar).getByText('2 open in all')).toBeTruthy()
+    expect(rows).toHaveBeenLastCalledWith('translation-bg', false)
+
+    fireEvent.click(unflagged)
+    await waitFor(() => expect(rows).toHaveBeenLastCalledWith('translation-bg', true))
+    fireEvent.change(queue, { target: { value: 'title-bg' } })
+    await waitFor(() => expect(rows).toHaveBeenLastCalledWith('title-bg', true))
+    expect(within(toolbar).getByText('5 open in all')).toBeTruthy()
   })
 
   it('skips to the next undecided row without deciding', async () => {

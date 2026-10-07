@@ -759,22 +759,33 @@ button.settings-row:hover {
   margin-left: auto;
 }
 
-.header-controls {
+/* What chooses the rows (the local mode's queue picker and "show unflagged"): a slim row above the card. */
+.review-toolbar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2) var(--space-3);
   min-width: 0;
+  margin-bottom: 0.875rem;
+  font-size: var(--step--1);
+}
+
+.review-toolbar .check {
+  font-size: inherit;
+}
+
+.review-toolbar > .muted {
+  margin-left: auto;
 }
 
 .crumb {
   color: var(--ink-soft);
 }
 
-.app-header .field select {
+.review-toolbar .field select {
   width: auto;
   max-width: 100%;
-  min-height: 2.5rem;
+  min-height: 2.25rem;
 }
 
 kbd {
@@ -1240,23 +1251,23 @@ kbd {
   }
 
   /* While reviewing only the wordmark, the row list and the screen's action are left: what is reviewed and the
-     way back are in the row list. The local mode's queue picker takes a line of its own below. */
+     way back are in the row list. */
   .app-header:has(.header-actions) :is(.crumb, .header-nav, .app-header-who, .wordmark-tail) {
     display: none;
   }
 
-  .header-controls {
-    order: 3;
-    flex-basis: 100%;
+  /* The local mode's queue picker: the whole line, "show unflagged" and the count under it. */
+  .review-toolbar {
+    font-size: var(--step-0);
   }
 
-  /* The local mode's queue picker: the whole line. */
-  .header-controls > .field {
+  .review-toolbar > .field {
     flex: 1 1 100%;
   }
 
-  .header-controls > .field select {
+  .review-toolbar > .field select {
     width: 100%;
+    min-height: 2.75rem;
   }
 
   .header-actions {

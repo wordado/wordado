@@ -43,3 +43,7 @@ Wordado's.
 - Below 40rem nothing changes: the header fills the screen.
 - The review screen's header carries the most. From 60rem up it is one line; between 40rem and 60rem it wraps. To
   fit, the way back shows as "Back" in the header; the button's name stays "Back to my assignments".
+- The local mode's header holds only the mark, **All rows**, **Import decisions** and the name. Its queue picker,
+  *show unflagged* and "n open in all" are a slim toolbar at the top of the review column (48rem), above the
+  card's progress line, on a phone too (the picker takes the whole line there). The header had no room for them
+  in 60rem.
