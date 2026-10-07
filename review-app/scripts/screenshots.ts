@@ -216,7 +216,7 @@ async function openDialog(page: Page, button: string | RegExp, dialog: string | 
 /** Opens the account menu from the round button in the header. */
 async function openAccount(page: Page): Promise<void> {
   await page.getByRole('button', { name: /^Account: / }).click()
-  await page.getByRole('menu', { name: 'Account' }).waitFor()
+  await page.getByRole('group', { name: 'Account' }).waitFor()
 }
 
 /** Assign work with Hans and the Bulgarian translations chosen: the files and who holds them show. */

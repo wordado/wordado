@@ -50,10 +50,10 @@ describe('AppHeader', () => {
     expect(column?.lastElementChild?.contains(account)).toBe(true)
     expect(column?.textContent).not.toContain('Ana Reviewer')
     fireEvent.click(account)
-    const menu = within(within(column as HTMLElement).getByRole('menu', { name: 'Account' }))
+    const menu = within(within(column as HTMLElement).getByRole('group', { name: 'Account' }))
     expect(menu.getByText('Ana Reviewer')).toBeTruthy()
     expect(menu.getByText('ana@example.com')).toBeTruthy()
-    expect(menu.getByRole('menuitem', { name: 'Sign out' }).getAttribute('href')).toBe('/cdn-cgi/access/logout')
+    expect(menu.getByRole('link', { name: 'Sign out' }).getAttribute('href')).toBe('/cdn-cgi/access/logout')
   })
 
   it('has no account button when nobody is known yet', () => {

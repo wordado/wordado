@@ -58,24 +58,32 @@ Wordado's.
 Added 2026-10-07. Where the header showed the signed-in name as text, it shows a round button with the person's
 initials (`AccountMenu`), on every screen and on a phone too, at the right end of the header.
 
-- **Initials** (`initials(name)`): the first letter of the first word and of the last word, upper-cased; one word
-  gives one letter. Words are split on whitespace (a hyphen is part of a word); a word's letter is its first
-  Unicode letter, so quotes and brackets are skipped; a name without a letter gives "?". "Anna Schmidt" → "AS",
+- **Initials** (`initials(name)`): the first letter of the first word and of the last word, upper-cased, never
+  more than two; one word gives one letter. Words are split on whitespace (a hyphen is part of a word); a word's
+  letter is its first Unicode letter with its combining marks, so quotes and brackets are skipped; a letter that
+  upper-cases to two ("ß") gives the first; a name without a letter gives "?". "Anna Schmidt" → "AS",
   "Мария Петрова" → "МП", "'Quoted' Name" → "QN".
 - **The button:** a 2.25rem circle, `var(--paper-inset)` with a `var(--rule)` border, the initials in `var(--ink)`,
-  weight 600, the focus ring of the other buttons. Its name is "Account: <full name>"; it has
-  `aria-haspopup="menu"` and `aria-expanded`.
-- **The menu** hangs under the button, its right edge on the button's, never wider than the screen: the full name
+  weight 600, the focus ring of the other buttons. Its name is "Account: <full name>".
+- **A disclosure, not a menu:** the button has `aria-expanded` and, while open, `aria-controls`; it has no
+  `aria-haspopup`. What it opens is a group named "Account" (`role="group"`), and Sign out in it is an ordinary
+  link. Nothing promises a menu's arrow keys, and the local mode's panel, which has no action, is still valid.
+  ("The account menu" stays its name in running text.)
+- **The panel** hangs under the button, its right edge on the button's, never wider than the screen: the full name
   (bold), the email under it (muted), a rule, then the actions.
   - Hosted: **Sign out**, a plain link to `/cdn-cgi/access/logout`, Cloudflare Access's sign-out on the protected
     host: the browser leaves the app.
-  - Local: no actions and no email. The menu shows the name and "Running on this computer."
-- **Behaviour:** a click, Enter or Space opens and closes it; the down arrow opens it and goes to the first
-  action. Escape and a press outside close it and give the focus back to the button (a press on another control
+  - Local: no actions and no email. The panel shows the name and "Running on this computer."
+- **Behaviour:** a click, Enter or Space opens and closes it; Tab goes from the button to Sign out, which follows
+  it in the page; the arrow keys do nothing. Escape and a press outside close it and give the focus back to the button (a press on another control
   leaves the focus there). It closes when the focus goes elsewhere, so the row list or a dialog opening closes it.
-  While it is open the review keys (1–4, S, L, the arrows) do nothing: the menu marks itself `data-menu-open`,
+  While it is open the review keys (1–4, S, L, the arrows) do nothing: it marks itself `data-menu-open`,
   which `useKeys` looks for beside an open dialog.
+- Its shadow is the token `--shadow-pop` (light and dark), for what hangs over the page.
 - **On a phone** the review header stays one line at 390px: icon and name, the row list, **Submit n**, the circle.
+  That line is **3.5rem** (56px) high, as it was before the circle: the header's 2.5rem buttons and its padding set
+  it. 3.25rem is the bar's least height, which the screens without a button in the header have (the assignments
+  list; the admin page's first line).
   For the local mode's header to do the same, **Import decisions** shows as "Import" there; the button's name
   stays "Import decisions".
 - `AppHeader` takes `account?: { name; email?; signOutHref? }` in place of `who`. The hosted mode fills it from

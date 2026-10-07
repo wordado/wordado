@@ -63,7 +63,7 @@ test('@phone a reviewer decides a row with the bottom buttons, swipes and opens 
   expect(Math.max(...tops) - Math.min(...tops)).toBeLessThan(1)
   // The account menu stays inside the screen; a tap outside closes it.
   await account.tap()
-  const menu = page.getByRole('menu', { name: 'Account' })
+  const menu = page.getByRole('group', { name: 'Account' })
   await expect(menu.getByText('phone@example.com')).toBeVisible()
   const menuBox = (await menu.boundingBox())!
   expect(menuBox.x).toBeGreaterThanOrEqual(0)
@@ -164,10 +164,13 @@ test('a reviewer decides rows with the keys and submits a pull request', async (
   await expect(account).toHaveText('R')
   await expect(page.getByRole('banner').getByText('Rita')).toHaveCount(0)
   await account.click()
-  const menu = page.getByRole('menu', { name: 'Account' })
+  const menu = page.getByRole('group', { name: 'Account' })
   await expect(menu.getByText('Rita', { exact: true })).toBeVisible()
   await expect(menu.getByText('reviewer@example.com')).toBeVisible()
-  await expect(menu.getByRole('menuitem', { name: 'Sign out' })).toHaveAttribute('href', '/cdn-cgi/access/logout')
+  const signOut = menu.getByRole('link', { name: 'Sign out' })
+  await expect(signOut).toHaveAttribute('href', '/cdn-cgi/access/logout')
+  await expect(account).toHaveAttribute('aria-expanded', 'true')
+  await expect(page.getByRole('menu')).toHaveCount(0)
   // It hangs under the button, their right edges together.
   const [buttonBox, menuBox] = [(await account.boundingBox())!, (await menu.boundingBox())!]
   expect(menuBox.y).toBeGreaterThanOrEqual(buttonBox.y + buttonBox.height)
@@ -178,6 +181,14 @@ test('a reviewer decides rows with the keys and submits a pull request', async (
   await expect(menu).toBeHidden()
   await expect(account).toBeFocused()
   await expect(page.getByRole('article')).toHaveAttribute('aria-label', first!)
+  // From the keyboard: Enter opens it, Tab goes to Sign out, Tab again leaves it and it closes.
+  await page.keyboard.press('Enter')
+  await expect(menu).toBeVisible()
+  await page.keyboard.press('Tab')
+  await expect(signOut).toBeFocused()
+  await page.keyboard.press('Tab')
+  await expect(menu).toBeHidden()
+  await expect(account).not.toBeFocused()
   // A click outside closes it too.
   await account.click()
   await page.locator('.progress-line').click()

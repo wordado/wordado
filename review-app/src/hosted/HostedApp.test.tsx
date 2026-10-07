@@ -39,10 +39,10 @@ describe('HostedApp', () => {
     const account = header.getByRole('button', { name: 'Account: Anna' })
     expect(account.textContent).toBe('A')
     fireEvent.click(account)
-    const menu = within(header.getByRole('menu', { name: 'Account' }))
+    const menu = within(header.getByRole('group', { name: 'Account' }))
     expect(menu.getByText('Anna')).toBeTruthy()
     expect(menu.getByText('anna@example.com')).toBeTruthy()
-    expect(menu.getByRole('menuitem', { name: 'Sign out' }).getAttribute('href')).toBe('/cdn-cgi/access/logout')
+    expect(menu.getByRole('link', { name: 'Sign out' }).getAttribute('href')).toBe('/cdn-cgi/access/logout')
   })
 
   it('says it is loading while the rows are on their way, not that nothing is left', async () => {

@@ -19,8 +19,21 @@ describe('initials', () => {
     ['  Petra  ', 'P'],
     ['Anna (she) 2', 'AS'],
     ['42', '?'],
+    ['🙂 🎉', '?'],
+    // an astral letter is one letter, kept whole
+    ['𐐨lma 𐐺ee', '𐐀𐐒'],
+    ['𝒜da', '𝒜'],
+    // a letter that upper-cases to two gives one
+    ['ßeta Ägidius', 'SÄ'],
+    ['ßeta', 'S'],
+    // a decomposed letter keeps its accent
+    ['e\u0301mile zola', 'E\u0301Z'],
+    ['a'.repeat(500), 'A'],
+    [`${'ab '.repeat(166)}z`, 'AZ'],
   ])('%j gives %s', (name, expected) => {
     expect(initials(name)).toBe(expected)
+    // never more than two letters (a letter's combining marks aside)
+    expect([...initials(name).replace(/\p{M}/gu, '')].length).toBeLessThanOrEqual(2)
   })
 })
 
@@ -31,8 +44,11 @@ describe('AccountMenu', () => {
   it('is a round button with the initials, named after the person, closed at first', () => {
     render(<AccountMenu account={hosted} />)
     expect(button().textContent).toBe('AS')
-    expect(button().getAttribute('aria-haspopup')).toBe('menu')
+    // a disclosure, not a menu: it says whether it is open and, when it is, what it opened
+    expect(button().hasAttribute('aria-haspopup')).toBe(false)
     expect(button().getAttribute('aria-expanded')).toBe('false')
+    expect(button().hasAttribute('aria-controls')).toBe(false)
+    expect(screen.queryByRole('group')).toBeNull()
     expect(screen.queryByRole('menu')).toBeNull()
     expect(screen.queryByText('anna@example.com')).toBeNull()
   })
@@ -41,43 +57,74 @@ describe('AccountMenu', () => {
     render(<AccountMenu account={hosted} />)
     fireEvent.click(button())
     expect(button().getAttribute('aria-expanded')).toBe('true')
-    const menu = within(screen.getByRole('menu', { name: 'Account' }))
+    const popup = screen.getByRole('group', { name: 'Account' })
+    expect(button().getAttribute('aria-controls')).toBe(popup.id)
+    expect(screen.queryByRole('menu')).toBeNull()
+    const menu = within(popup)
     expect(menu.getByText('Anna Schmidt')).toBeTruthy()
     expect(menu.getByText('anna@example.com')).toBeTruthy()
-    const out = menu.getByRole('menuitem', { name: 'Sign out' })
+    const out = menu.getByRole('link', { name: 'Sign out' })
     expect(out.tagName).toBe('A')
+    expect(out.hasAttribute('role')).toBe(false)
     expect(out.getAttribute('href')).toBe('/cdn-cgi/access/logout')
     expect(menu.queryByText('Running on this computer.')).toBeNull()
     fireEvent.click(button())
-    expect(screen.queryByRole('menu')).toBeNull()
+    expect(screen.queryByRole('group')).toBeNull()
     expect(button().getAttribute('aria-expanded')).toBe('false')
   })
 
   it('has nothing to sign out of in the local mode: the name and where it runs', () => {
     render(<AccountMenu account={{ name: 'Anna Schmidt' }} />)
     fireEvent.click(button())
-    const menu = within(screen.getByRole('menu', { name: 'Account' }))
+    const menu = within(screen.getByRole('group', { name: 'Account' }))
     expect(menu.getByText('Anna Schmidt')).toBeTruthy()
     expect(menu.getByText('Running on this computer.')).toBeTruthy()
-    expect(menu.queryByRole('menuitem')).toBeNull()
     expect(menu.queryByRole('link')).toBeNull()
+    expect(menu.queryByRole('button')).toBeNull()
   })
 
   it('closes on Escape, wherever the focus is in it, and the focus is back on the button', () => {
     render(<AccountMenu account={hosted} />)
     fireEvent.click(button())
-    const out = screen.getByRole('menuitem', { name: 'Sign out' })
+    const out = screen.getByRole('link', { name: 'Sign out' })
     out.focus()
     fireEvent.keyDown(out, { key: 'Escape' })
-    expect(screen.queryByRole('menu')).toBeNull()
+    expect(screen.queryByRole('group')).toBeNull()
     expect(document.activeElement).toBe(button())
   })
 
-  it('goes to the first action on the down arrow', () => {
+  it('has Sign out as the next stop after the button for Tab; the arrow keys do nothing (it is no menu)', () => {
     render(<AccountMenu account={hosted} />)
     button().focus()
     fireEvent.keyDown(button(), { key: 'ArrowDown' })
-    expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Sign out' }))
+    expect(screen.queryByRole('group')).toBeNull()
+    fireEvent.click(button())
+    const out = screen.getByRole('link', { name: 'Sign out' })
+    expect(document.activeElement).toBe(button())
+    // the next thing in the page that takes the focus, after the button, is the link
+    const stops = [...document.querySelectorAll<HTMLElement>('a[href], button, input, select, textarea, [tabindex]')].filter((el) => el.tabIndex >= 0)
+    expect(stops[stops.indexOf(button()) + 1]).toBe(out)
+    fireEvent.keyDown(out, { key: 'ArrowUp' })
+    expect(screen.getByRole('group', { name: 'Account' })).toBeTruthy()
+  })
+
+  it('leaves nothing to run after it is gone: a press outside, then the header goes', () => {
+    vi.useFakeTimers()
+    try {
+      const { unmount } = render(
+        <>
+          <AccountMenu account={hosted} />
+          <p>the page</p>
+        </>,
+      )
+      fireEvent.click(button())
+      fireEvent.pointerDown(screen.getByText('the page'))
+      expect(vi.getTimerCount()).toBe(1)
+      unmount()
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('closes on a press outside it, and the focus is back on the button; a press inside leaves it open', async () => {
@@ -89,10 +136,10 @@ describe('AccountMenu', () => {
     )
     fireEvent.click(button())
     fireEvent.pointerDown(screen.getByText('anna@example.com'))
-    expect(screen.getByRole('menu')).toBeTruthy()
-    screen.getByRole('menuitem', { name: 'Sign out' }).focus()
+    expect(screen.getByRole('group', { name: 'Account' })).toBeTruthy()
+    screen.getByRole('link', { name: 'Sign out' }).focus()
     fireEvent.pointerDown(screen.getByText('the page'))
-    expect(screen.queryByRole('menu')).toBeNull()
+    expect(screen.queryByRole('group')).toBeNull()
     await waitFor(() => expect(document.activeElement).toBe(button()))
   })
 
@@ -106,13 +153,13 @@ describe('AccountMenu', () => {
     fireEvent.click(button())
     const other = screen.getByRole('button', { name: 'All rows' })
     act(() => other.focus())
-    expect(screen.queryByRole('menu')).toBeNull()
+    expect(screen.queryByRole('group')).toBeNull()
     // a press on the other control closed it too: the focus is not taken back from there
     fireEvent.click(button())
     fireEvent.pointerDown(other)
     act(() => other.focus())
     await new Promise((r) => setTimeout(r, 10))
-    expect(screen.queryByRole('menu')).toBeNull()
+    expect(screen.queryByRole('group')).toBeNull()
     expect(document.activeElement).toBe(other)
   })
 

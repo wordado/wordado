@@ -172,10 +172,10 @@ describe('App', () => {
     const account = header.getByRole('button', { name: 'Account: Tester' })
     expect(account.textContent).toBe('T')
     fireEvent.click(account)
-    const menu = within(header.getByRole('menu', { name: 'Account' }))
+    const menu = within(header.getByRole('group', { name: 'Account' }))
     expect(menu.getByText('Tester')).toBeTruthy()
     expect(menu.getByText('Running on this computer.')).toBeTruthy()
-    expect(menu.queryByRole('menuitem')).toBeNull()
+    expect(menu.queryByRole('link')).toBeNull()
     fireEvent.click(account)
     expect(screen.getByRole('banner').textContent).toContain('Wordado review')
 

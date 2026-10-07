@@ -10,10 +10,11 @@ test('a reviewer accepts a fix, keeps a row and imports', async ({ page }) => {
   const first = await page.getByRole('article').getAttribute('aria-label')
   // The account menu has the name and nothing to sign out of.
   await page.getByRole('button', { name: 'Account: Tester' }).click()
-  const menu = page.getByRole('menu', { name: 'Account' })
+  const menu = page.getByRole('group', { name: 'Account' })
   await expect(menu.getByText('Tester')).toBeVisible()
   await expect(menu.getByText('Running on this computer.')).toBeVisible()
-  await expect(menu.getByRole('menuitem')).toHaveCount(0)
+  await expect(menu.getByRole('link')).toHaveCount(0)
+  await expect(page.getByRole('menu')).toHaveCount(0)
   await page.keyboard.press('Escape')
   await expect(menu).toBeHidden()
   await page.getByRole('button', { name: 'All rows' }).click()
