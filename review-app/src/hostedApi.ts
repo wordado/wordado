@@ -30,7 +30,7 @@ const get = async <T,>(path: string): Promise<T> => checked(await fetch(path)) a
 const send = async <T,>(method: string, path: string, body: unknown): Promise<T> =>
   checked(await fetch(path, { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })) as Promise<T>
 
-export type MeResult = { kind: 'local' } | { kind: 'me'; me: Me } | { kind: 'denied'; message: string } | { kind: 'signedOut' }
+export type MeResult = { kind: 'local' } | { kind: 'me'; me: Me } | { kind: 'denied'; message: string; email?: string } | { kind: 'signedOut' }
 
 /** The hosted (Worker) API. `me` also tells the hosted app from the local one: the local server has no /api/me. */
 export const hostedApi = {
@@ -39,7 +39,10 @@ export const hostedApi = {
     const body: unknown = await res.json().catch(() => null)
     if (res.status === 404) return { kind: 'local' }
     if (res.status === 401) return { kind: 'signedOut' }
-    if (res.status === 403) return { kind: 'denied', message: (body as { message?: string } | null)?.message ?? 'No invitation.' }
+    if (res.status === 403) {
+      const denied = body as { message?: string; email?: string } | null
+      return { kind: 'denied', message: denied?.message ?? 'No invitation.', ...(denied?.email ? { email: denied.email } : {}) }
+    }
     if (!res.ok) throw new Error(`request failed (${res.status})`)
     return { kind: 'me', me: body as Me }
   },

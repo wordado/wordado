@@ -25,7 +25,9 @@ describe('GET /api/me', () => {
     expect((await me(null)).status).toBe(401)
   })
   it('is 403 for an email nobody invited', async () => {
-    expect((await me('stranger@example.com')).status).toBe(403)
+    const res = await me('Stranger@example.com')
+    expect(res.status).toBe(403)
+    expect(await res.json()).toMatchObject({ email: 'stranger@example.com' })
   })
   it('creates the first admin from ADMIN_EMAIL', async () => {
     const res = await me('ADMIN@example.com')
