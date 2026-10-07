@@ -3,7 +3,8 @@ import { type AssignmentView, languageOf, type ReviewerView, type SnapshotStatus
 import { Dialog } from '../Dialog'
 import { hostedApi } from '../hostedApi'
 import { assignmentLabel, queueLabel } from '../labels'
-import { type Act, count, dateOf, fileName, type PageNotice, share } from './adminUtil'
+import { type Act, count, dateOf, fileName, type PageNotice } from './adminUtil'
+import { doneLabel, isDone, ProgressBar } from './Assignments'
 
 type Queue = SnapshotStatus['queues'][number]
 
@@ -37,6 +38,7 @@ const ROWS_OPTIONS = [
 function countsOf(a: AssignmentView): string {
   const p = a.progress
   if (!p) return 'the review data is not available yet'
+  if (isDone(p)) return doneLabel(p)
   const parts = [`${p.decided} decided`, `${p.changed} changed`, `${p.submitted} submitted`, `${p.merged} merged`].filter((part) => !part.startsWith('0 '))
   return [count(p.inScope, 'row'), ...parts, `${p.remaining} to go`].join(' · ')
 }
@@ -340,10 +342,7 @@ function AssignmentItem(props: { assignment: AssignmentView; act: Act; onReassig
         <span className="settings-row-title">{assignmentLabel(a)}</span>
         <span className="note">{`${a.reviewerName} · ${countsOf(a)}${a.closedAt ? ` · closed ${dateOf(a.closedAt)}` : ''}`}</span>
       </span>
-      <span className="progress" aria-hidden="true">
-        {p && <span className="submitted" style={{ width: share(p.submitted, p.inScope) }} />}
-        {p && <span className="decided" style={{ width: share(p.decided, p.inScope) }} />}
-      </span>
+      <ProgressBar progress={p} />
       <span className="row-actions">
         <button className="button small" onClick={props.onReassign}>
           Reassign…

@@ -745,6 +745,11 @@ button.settings-row:hover {
   background: var(--leaf);
 }
 
+/* Nothing left to decide: one full green bar, so a finished assignment does not look like one never started. */
+.progress > .done {
+  background: var(--leaf);
+}
+
 .tabs {
   display: flex;
   flex-wrap: wrap;
