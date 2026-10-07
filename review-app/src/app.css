@@ -128,25 +128,63 @@ p {
 /* The header both modes share */
 
 .app-header {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2) var(--space-3);
-  min-height: 3.75rem;
-  padding: var(--space-2) 1.125rem;
   background: var(--paper-head);
   border-bottom: 1px solid var(--rule);
 }
 
+/* The bar spans the window; what is in it keeps to the column of the widest page (.page.wide), as the learner
+   app's masthead does. */
+.app-header-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  max-width: 60rem;
+  min-height: 3.75rem;
+  margin-inline: auto;
+  padding: var(--space-2) var(--space-4);
+}
+
+/* The wordmark, as in the learner app: the icon, "Word" in ink and "ado" in rose, in the serif. "review" follows
+   as a smaller word. One word ("Wordado review") to a screen reader. */
 .wordmark {
-  font-size: 1.125rem;
-  font-weight: 700;
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  font: 600 var(--step-1) / 1.75rem var(--font-entry);
   letter-spacing: -0.01em;
+  color: var(--ink);
   white-space: nowrap;
 }
 
-.wordmark b {
+.wordmark img {
+  display: block;
+  align-self: center;
+  width: 1.75rem;
+  height: 1.75rem;
+}
+
+.wordmark-ado {
   color: var(--rose);
+}
+
+.wordmark-tail {
+  font: 500 var(--step--1) / 1.75rem var(--font-ui);
+  letter-spacing: 0;
+  color: var(--ink-soft);
+}
+
+/* Where two colours cannot be used, one. */
+@media (forced-colors: active) {
+  .wordmark-ado {
+    color: inherit;
+  }
+}
+
+@media print {
+  .wordmark-ado {
+    color: inherit;
+  }
 }
 
 .app-header-content {
@@ -172,7 +210,7 @@ p {
 }
 
 .page.wide {
-  max-width: 72rem;
+  max-width: 60rem;
 }
 
 .page-title {
@@ -721,22 +759,33 @@ button.settings-row:hover {
   margin-left: auto;
 }
 
-.header-controls {
+/* What chooses the rows (the local mode's queue picker and "show unflagged"): a slim row above the card. */
+.review-toolbar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2) var(--space-3);
   min-width: 0;
+  margin-bottom: 0.875rem;
+  font-size: var(--step--1);
+}
+
+.review-toolbar .check {
+  font-size: inherit;
+}
+
+.review-toolbar > .muted {
+  margin-left: auto;
 }
 
 .crumb {
   color: var(--ink-soft);
 }
 
-.app-header .field select {
+.review-toolbar .field select {
   width: auto;
   max-width: 100%;
-  min-height: 2.5rem;
+  min-height: 2.25rem;
 }
 
 kbd {
@@ -1188,7 +1237,7 @@ kbd {
   }
 
   /* The header: everything in it is one wrapping row. */
-  .app-header {
+  .app-header-inner {
     min-height: 3.25rem;
     padding: var(--space-2) var(--space-3);
   }
@@ -1202,23 +1251,23 @@ kbd {
   }
 
   /* While reviewing only the wordmark, the row list and the screen's action are left: what is reviewed and the
-     way back are in the row list. The local mode's queue picker takes a line of its own below. */
+     way back are in the row list. */
   .app-header:has(.header-actions) :is(.crumb, .header-nav, .app-header-who, .wordmark-tail) {
     display: none;
   }
 
-  .header-controls {
-    order: 3;
-    flex-basis: 100%;
+  /* The local mode's queue picker: the whole line, "show unflagged" and the count under it. */
+  .review-toolbar {
+    font-size: var(--step-0);
   }
 
-  /* The local mode's queue picker: the whole line. */
-  .header-controls > .field {
+  .review-toolbar > .field {
     flex: 1 1 100%;
   }
 
-  .header-controls > .field select {
+  .review-toolbar > .field select {
     width: 100%;
+    min-height: 2.75rem;
   }
 
   .header-actions {

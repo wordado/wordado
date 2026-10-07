@@ -12,7 +12,8 @@
     "e2e:hosted": "playwright test -c playwright.hosted.config.ts",
     "deploy:check": "vite build && wrangler deploy --dry-run --env production --outdir dist-worker",
     "typecheck": "tsc -p tsconfig.json",
-    "screenshots": "pnpm build && tsx scripts/screenshots.ts"
+    "screenshots": "pnpm build && tsx scripts/screenshots.ts",
+    "icons": "tsx scripts/icons.ts"
   },
   "dependencies": {
     "@fontsource-variable/golos-text": "^5.3.0",

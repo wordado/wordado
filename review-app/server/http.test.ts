@@ -69,6 +69,16 @@ describe('the review server', () => {
     expect(await traversal2.text()).toBe('<html>index</html>')
   })
 
+  it('serves the icons with their types', async () => {
+    const staticDir = mkdtempSync(join(tmpdir(), 'static-'))
+    writeFileSync(join(staticDir, 'index.html'), '<html>index</html>')
+    writeFileSync(join(staticDir, 'icon.svg'), '<svg xmlns="http://www.w3.org/2000/svg"/>')
+    writeFileSync(join(staticDir, 'apple-touch-icon.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47]))
+    const s = await start(staticDir)
+    expect((await fetch(`${s.base}/icon.svg`)).headers.get('content-type')).toBe('image/svg+xml')
+    expect((await fetch(`${s.base}/apple-touch-icon.png`)).headers.get('content-type')).toBe('image/png')
+  })
+
   it('falls back to index.html for malformed percent-encoding instead of a 500', async () => {
     const staticDir = mkdtempSync(join(tmpdir(), 'static-'))
     writeFileSync(join(staticDir, 'index.html'), '<html>index</html>')

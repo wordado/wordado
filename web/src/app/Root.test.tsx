@@ -50,6 +50,14 @@ async function renderRoot(options: { free?: boolean; backend?: Backend; fresh?: 
 /** A switcher that installs the sample, as the setup's Language step needs. */
 const samplePacks = () => new PackSwitcher({ fetchManifest: async () => sampleManifest, fetcher: () => sampleFetcher })
 
+/** The masthead's wordmark: one word for a screen reader, "ado" in a part of its own for its colour. */
+function expectWordmark(): void {
+  const mark = screen.getByRole('banner').querySelector('.wordmark')
+  expect(mark?.textContent).toBe('Wordado')
+  expect(mark?.querySelector('.wordmark-ado')?.textContent).toBe('ado')
+  expect(mark?.querySelector('img')?.getAttribute('alt')).toBe('')
+}
+
 describe('Root', () => {
   it('opens on today, in the demo', async () => {
     await renderRoot()
@@ -129,7 +137,7 @@ describe('Root', () => {
     expect(screen.queryByText(/You are trying Wordado/)).toBeNull()
     // The masthead's first row stays: the wordmark, the interface language and the account.
     // The wordmark is plain text while the setup shows: home would only show the setup again (review, fix 1).
-    expect(screen.getByText('Wordado', { selector: '.wordmark' })).toBeTruthy()
+    expectWordmark()
     expect(screen.queryByRole('link', { name: 'Wordado' })).toBeNull()
     expect(screen.getByRole('button', { name: 'Interface language: English (EN)' })).toBeTruthy()
   })
@@ -179,7 +187,7 @@ describe('Root', () => {
     await renderRoot({ fresh: true })
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Set up Wordado')
     expect(screen.getByRole('banner')).toBeTruthy()
-    expect(screen.getByText('Wordado', { selector: '.wordmark' })).toBeTruthy()
+    expectWordmark()
     expect(screen.getByRole('button', { name: 'Interface language: English (EN)' })).toBeTruthy()
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue' })))
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Start studying' })))
