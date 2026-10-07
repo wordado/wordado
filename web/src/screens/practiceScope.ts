@@ -1,5 +1,5 @@
 import { useClientSnapshot, type PracticeScope } from '@wordado/client-data'
-import { corpusWordId, offeredThemes, themeEntries, type LocalizedText } from '@wordado/core'
+import { corpusWordId, offeredThemes, practisable, themeEntries, type Corpus, type LocalizedText, type PracticeContext, type WordId } from '@wordado/core'
 import { useMemo } from 'react'
 import type { MessageKey } from '../i18n/i18n'
 import type { Route } from '../router'
@@ -45,7 +45,7 @@ export function usePracticeScope(params: ScopeParams): PracticeScopeView | null 
         scope: { kind: 'unit', id: unitId },
         params: { unit: unitId },
         title: unit.title,
-        // The path's own count: live words of the unit with a review state.
+        // The path's own count, by the same rule as `practisable`: live words of the unit with a review state.
         started: progress?.units.get(unitId)?.introduced ?? 0,
         label: 'practice.unit',
         start: 'path.practiseUnit',
@@ -60,7 +60,7 @@ export function usePracticeScope(params: ScopeParams): PracticeScopeView | null 
       scope: { kind: 'theme', id: theme.themeId },
       params: { theme: theme.themeId },
       title: theme.name,
-      started: themeStarted(themeEntries(corpus, theme.themeId).map((e) => e.entryId), states, flags),
+      started: themePractisable(corpus, theme.themeId, { states, flags }),
       label: 'practice.theme',
       start: 'themes.practise',
       needWords: 'practice.needWordsTheme',
@@ -70,12 +70,14 @@ export function usePracticeScope(params: ScopeParams): PracticeScopeView | null 
   }, [corpus, path, progress, states, flags, unitId, themeId])
 }
 
-type Snapshot = ReturnType<typeof useClientSnapshot>
+/** How many of these words practice may use (started, not set aside, not retired): something can be practised once this is above zero. */
+export function practisableCount(wordIds: Iterable<WordId>, ctx: PracticeContext): number {
+  let count = 0
+  for (const wordId of wordIds) if (practisable(wordId, ctx)) count += 1
+  return count
+}
 
-/** How many of a theme's entries are started and not set aside: a theme can be practised once this is above zero. */
-export function themeStarted(entryIds: readonly string[], states: Snapshot['states'], flags: Snapshot['flags']): number {
-  return entryIds.filter((entryId) => {
-    const wordId = corpusWordId(entryId)
-    return states.has(wordId) && !flags.has(wordId)
-  }).length
+/** The same count for one theme. */
+export function themePractisable(corpus: Corpus, themeId: string, ctx: Omit<PracticeContext, 'retired'>): number {
+  return practisableCount(themeEntries(corpus, themeId).map((e) => corpusWordId(e.entryId)), { ...ctx, retired: corpus.retired })
 }

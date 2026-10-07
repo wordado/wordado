@@ -2,6 +2,7 @@ import type { Corpus } from './corpus'
 import { pickDistractors } from './distractors'
 import { masteryTier } from './mastery'
 import { chooseMode } from './modeSelection'
+import { isLive } from './path'
 import { practiceWeight, weightedOrder } from './practiceWeight'
 import { shuffle, type Rng } from './rng'
 import type { ReviewState } from './scheduler'
@@ -79,9 +80,24 @@ export function buildItem(wordId: WordId, ctx: ItemContext): StudyItem | null {
   return { mode, wordId, entry, direction, options, answerIndex: options.indexOf(entry) }
 }
 
-export interface PracticeInput {
+/** What decides whether practice may use a word. */
+export interface PracticeContext {
   readonly states: ReadonlyMap<WordId, ReviewState>
   readonly flags: ReadonlyMap<WordId, WordFlag>
+  /** Words a later pack retired (spec §5.1): `Corpus.retired`. */
+  readonly retired: ReadonlySet<WordId>
+}
+
+/**
+ * Whether practice may use a word (spec §7.4): started, and live — neither set aside nor retired. The one rule
+ * behind every practice pool and every "can this be practised" check; a unit's `UnitProgress.introduced` counts
+ * the same words.
+ */
+export function practisable(wordId: WordId, ctx: PracticeContext): boolean {
+  return ctx.states.has(wordId) && isLive(wordId, ctx)
+}
+
+export interface PracticeInput extends PracticeContext {
   /** Words the schedule serves now; practising them would only duplicate the session, so they are used only when nothing else is left. */
   readonly exclude: ReadonlySet<WordId>
   /** Practising one unit: its words, and the run keeps to them. Absent for practice over everything. */
@@ -91,7 +107,7 @@ export interface PracticeInput {
 }
 
 /**
- * Words for extra practice (spec §7.4): introduced, not flagged, not in
+ * Words for extra practice (spec §7.4): introduced, not flagged, not retired, not in
  * today's session — unless that leaves nothing, when the session's words are
  * used after all: practice never touches the schedule, and a repeat is better
  * than a run with nothing in it. The draw leans towards weaker words
@@ -99,7 +115,7 @@ export interface PracticeInput {
  */
 export function practiceWords(input: PracticeInput): WordId[] {
   const { within, states } = input
-  const started = [...states.keys()].filter((id) => !input.flags.has(id) && (!within || within.has(id)))
+  const started = [...states.keys()].filter((id) => practisable(id, input) && (!within || within.has(id)))
   const outside = started.filter((id) => !input.exclude.has(id))
   const candidates = outside.length > 0 ? outside : started
   return weightedOrder(candidates, (id) => practiceWeight(states.get(id)!), input.rng).slice(0, Math.max(0, input.count))
@@ -114,6 +130,6 @@ export function matchingCandidates(
 ): CorpusEntry[] {
   return [...corpus.entries.values()].filter((e) => {
     const wordId = corpusWordId(e.entryId)
-    return !e.retired && states.has(wordId) && !flags.has(wordId) && (!within || within.has(wordId))
+    return !e.retired && practisable(wordId, { states, flags, retired: corpus.retired }) && (!within || within.has(wordId))
   })
 }

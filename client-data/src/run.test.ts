@@ -213,6 +213,28 @@ describe('StudyRun', () => {
     expect((await StudyRun.start(client, env, options({ kind: 'practice', scope: { kind: 'theme', id: 'nowhere' } }))).snapshot.remaining).toBe(PRACTICE_RUN_SIZE)
   })
 
+  it('never queues a retired word, in practice over everything or kept to a unit or theme', async () => {
+    const env = testEnv()
+    const client = await openSampleClient(env)
+    const theme = themeEntries(client.snapshot.corpus!, 'daily-life')
+    const only = corpusWordId(theme[0]!.entryId)
+    await client.answer({ wordId: only, mode: 'flashcard', direction: 'en_to_l1', grade: Grade.Good, latencyMs: 2_000, practice: false })
+    env.advance(3_600_000)
+    await client.startSession()
+    // The one started word is retired by a later pack (spec §5.1); its review state stays.
+    const snapshot = client.snapshot
+    const corpus = snapshot.corpus!
+    const entries = new Map(corpus.entries)
+    entries.set(theme[0]!.entryId, { ...theme[0]!, retired: true })
+    vi.spyOn(client, 'snapshot', 'get').mockReturnValue({ ...snapshot, corpus: { ...corpus, entries, retired: new Set([only]) } })
+    vi.spyOn(client, 'startSession').mockResolvedValue([])
+    const unit = corpus.units.find((u) => u.wordIds.includes(only))!
+    for (const scope of [undefined, { kind: 'theme', id: 'daily-life' } as const, { kind: 'unit', id: unit.unitId } as const]) {
+      const run = await StudyRun.start(client, env, options({ kind: 'practice', ...(scope && { scope }) }))
+      expect(run.snapshot).toMatchObject({ phase: 'done', remaining: 0, item: null })
+    }
+  })
+
   it('offers listening only through availableModes: never without audio', async () => {
     const env = testEnv()
     const client = await openSampleClient(env)

@@ -35,6 +35,9 @@ export const LEVEL_STATUS: Readonly<Record<LevelStatus, MessageKey>> = {
   open: 'path.levelOpen',
 }
 
+/** What the current unit says about today's session: Start studying, that nothing is left, or nothing yet. */
+type UnitToday = 'unknown' | 'nothing' | 'something'
+
 /** Toggles one key in a set held in state. */
 const toggled = (set: ReadonlySet<string>, key: string): ReadonlySet<string> => {
   const next = new Set(set)
@@ -67,8 +70,9 @@ export function Path() {
     return { level, units, statuses, skipped: progress.levels[level]?.kind === 'skipped' }
   })
   const studied = levelToOpen(levels)
-  // As on Today: with nothing due and the day's new words taken, a session would end at once.
-  const nothingToday = !plan || todayCounts(plan).nothing
+  // As on Today: with nothing due and the day's new words taken, a session would end at once. Until the plan is
+  // known the path says nothing about today, as Today itself shows nothing.
+  const today: UnitToday = !plan ? 'unknown' : todayCounts(plan).nothing ? 'nothing' : 'something'
 
   return (
     <section className="path" aria-labelledby="path-title">
@@ -90,7 +94,7 @@ export function Path() {
             status={statuses[i]!}
             progress={progress.units.get(units[i]!.unitId)}
             line={next === undefined ? null : statuses[next] !== 'locked'}
-            nothingToday={nothingToday}
+            today={today}
             wordsOpen={openUnits.has(units[i]!.unitId)}
             onWordsToggle={() => setOpenUnits((prev) => toggled(prev, units[i]!.unitId))}
           />
@@ -181,8 +185,7 @@ function UnitItem(props: {
   readonly progress: UnitProgress | undefined
   /** The line to the next unit shown: null for the last, true once that unit is reachable. */
   readonly line: boolean | null
-  /** Today's session is empty: the current unit says so where Start studying would be. */
-  readonly nothingToday: boolean
+  readonly today: UnitToday
   readonly wordsOpen: boolean
   onWordsToggle(): void
 }) {
@@ -236,16 +239,14 @@ function UnitItem(props: {
             <p className="note">{t('path.introduced', { introduced: progress.introduced, live: progress.live })}</p>
           </div>
         )}
-        {(status === 'current' || canPractise) && (
+        {((status === 'current' && props.today !== 'unknown') || canPractise) && (
           <div className="unit-actions">
-            {status === 'current' &&
-              (props.nothingToday ? (
-                <p className="unit-today">{t('home.allDone')}</p>
-              ) : (
-                <Link className="button primary study-main" to={{ name: 'study', mode: null }}>
-                  {t('home.start')}
-                </Link>
-              ))}
+            {status === 'current' && props.today === 'nothing' && <p className="unit-today">{t('home.allDone')}</p>}
+            {status === 'current' && props.today === 'something' && (
+              <Link className="button primary study-main" to={{ name: 'study', mode: null }}>
+                {t('home.start')}
+              </Link>
+            )}
             {canPractise && (
               <Link className="button study-main unit-practise" to={{ name: 'practice', unit: unit.unitId }} aria-label={t('path.practiseUnitNamed', { title })}>
                 {t('path.practiseUnit')}

@@ -44,6 +44,19 @@ describe('Path', () => {
     expect(within(current).getByRole('link', { name: 'Practise this unit: People and greetings' })).toBeTruthy()
   })
 
+  it('says nothing about today until the plan is known: neither Start studying nor that the day is done', async () => {
+    const ctx = await setup()
+    await answerNew(ctx.client, ctx.env, 5)
+    ctx.client.store.set({ ...ctx.client.snapshot, plan: null })
+    renderWith(<Path />, ctx)
+    const current = unit('People and greetings')
+    expect(within(current).getByText('Current')).toBeTruthy()
+    expect(within(current).queryByRole('link', { name: 'Start studying' })).toBeNull()
+    expect(within(current).queryByText('Nothing left for today.')).toBeNull()
+    // Practice does not wait for the plan.
+    expect(within(current).getByRole('link', { name: 'Practise this unit: People and greetings' })).toBeTruthy()
+  })
+
   it('offers to practise a unit once one of its words is started, below Start studying on the current unit', async () => {
     const ctx = await setup()
     renderWith(<Path />, ctx)

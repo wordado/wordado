@@ -130,10 +130,10 @@ export class StudyRun {
     await client.startSession()
     const run = new StudyRun(client, env, options)
     if (options.kind === 'practice') {
-      const { states, flags, plan } = client.snapshot
+      const { states, flags, plan, corpus } = client.snapshot
       const exclude = new Set<WordId>([...(plan?.reviews ?? []), ...(plan?.newWords ?? [])])
       const within = scopeWords(client, options.scope)
-      run.practiceQueue = practiceWords({ states, flags, exclude, ...(within && { within }), count: PRACTICE_RUN_SIZE, rng: env.rng })
+      run.practiceQueue = practiceWords({ states, flags, retired: corpus?.retired ?? new Set(), exclude, ...(within && { within }), count: PRACTICE_RUN_SIZE, rng: env.rng })
     }
     run.advance()
     return run

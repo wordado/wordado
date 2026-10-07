@@ -53,6 +53,20 @@ describe('Themes', () => {
     expect(screen.queryByRole('link', { name: /^Practise this theme/ })).toBeNull()
   })
 
+  it('does not offer practice on a theme whose only started word has been retired', async () => {
+    const ctx = await setup()
+    const entry = themeEntries(ctx.client.snapshot.corpus!, 'daily-life')[0]!
+    const wordId = corpusWordId(entry.entryId)
+    await ctx.client.answer({ wordId, mode: 'flashcard', direction: 'en_to_l1', grade: Grade.Good, latencyMs: 2_000, practice: false })
+    renderWith(<Themes />, ctx)
+    expect(screen.getByRole('link', { name: 'Practise this theme: Daily life' })).toBeTruthy()
+    // A later pack retires the word (spec §5.1); its review state stays.
+    const snapshot = ctx.client.snapshot
+    const entries = new Map(snapshot.corpus!.entries).set(entry.entryId, { ...entry, retired: true })
+    act(() => ctx.client.store.set({ ...snapshot, corpus: { ...snapshot.corpus!, entries, retired: new Set([wordId]) } }))
+    expect(screen.queryByRole('link', { name: /^Practise this theme/ })).toBeNull()
+  })
+
   it('offers practice on the theme being studied too', async () => {
     const ctx = await setup()
     await ctx.client.updateSettings({ activeTheme: 'daily-life' })

@@ -3,7 +3,7 @@ import { corpusWordId, levelIndex, offeredThemes, themeEntries, type Theme } fro
 import { localized, useT } from '../i18n/i18n'
 import { Link } from '../router'
 import { ThemeIcon } from '../themes/icons'
-import { themeStarted } from './practiceScope'
+import { themePractisable } from './practiceScope'
 
 /** Theme collections (spec §8.9): choosing one puts its words first; nothing else changes. */
 export function Themes() {
@@ -49,7 +49,7 @@ function ThemeCard(props: { readonly theme: Theme; readonly active: boolean; onC
   const aboveLevel = entries.some((e) => levelIndex(e.level) > levelIndex(settings.declaredLevel))
   const name = localized(theme.name, locale, corpus!.l1)
   // Practice draws on started words that are not set aside (spec §7.4); the bar above counts every started word.
-  const canPractise = themeStarted(entries.map((e) => e.entryId), states, flags) > 0
+  const canPractise = themePractisable(corpus!, theme.themeId, { states, flags }) > 0
   const startedText = t('themes.started', { started, count: entries.length })
   return (
     <li className={active ? 'panel theme-card is-active' : 'panel theme-card'}>

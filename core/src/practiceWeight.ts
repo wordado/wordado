@@ -45,7 +45,11 @@ export function practiceWeight(state: ReviewState): number {
  */
 export function weightedOrder<T>(items: readonly T[], weight: (item: T) => number, rng: Rng): T[] {
   return items
-    .map((item) => ({ item, key: rng() ** (1 / Math.max(weight(item), Number.EPSILON)) }))
+    .map((item) => {
+      const w = weight(item)
+      // A weight that is not a positive number counts as the smallest: the item comes last, but is never lost.
+      return { item, key: rng() ** (1 / (Number.isFinite(w) && w > 0 ? w : Number.EPSILON)) }
+    })
     .sort((a, b) => b.key - a.key)
     .map((keyed) => keyed.item)
 }

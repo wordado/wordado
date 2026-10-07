@@ -133,26 +133,26 @@ describe('practiceWords', () => {
 
   it('draws introduced words that are neither flagged nor excluded, at most `count`', () => {
     const flags = new Map<WordId, WordFlag>([[id(bread), 'known']])
-    const words = practiceWords({ states, flags, exclude: new Set([id(cheese)]), count: 10, rng: seededRng(1) })
+    const words = practiceWords({ states, flags, retired: new Set(), exclude: new Set([id(cheese)]), count: 10, rng: seededRng(1) })
     expect(new Set(words)).toEqual(new Set([id(apple), id(milk), id(water)]))
-    expect(practiceWords({ states, flags: new Map(), exclude: new Set(), count: 2, rng: seededRng(1) })).toHaveLength(2)
+    expect(practiceWords({ states, flags: new Map(), retired: new Set(), exclude: new Set(), count: 2, rng: seededRng(1) })).toHaveLength(2)
   })
 
   it('is empty before any word is introduced', () => {
-    expect(practiceWords({ states: new Map(), flags: new Map(), exclude: new Set(), count: 10, rng: seededRng(1) })).toEqual([])
+    expect(practiceWords({ states: new Map(), flags: new Map(), retired: new Set(), exclude: new Set(), count: 10, rng: seededRng(1) })).toEqual([])
   })
 
   it('uses the words today’s session serves when leaving them out would leave nothing: a repeat beats a dead end', () => {
     const flags = new Map<WordId, WordFlag>([[id(bread), 'known']])
     const all = new Set(states.keys())
-    const words = practiceWords({ states, flags, exclude: all, count: 10, rng: seededRng(1) })
+    const words = practiceWords({ states, flags, retired: new Set(), exclude: all, count: 10, rng: seededRng(1) })
     expect(new Set(words)).toEqual(new Set([id(apple), id(cheese), id(milk), id(water)]))
     // One word outside the session is enough for the usual rule.
     const butMilk = new Set([...all].filter((w) => w !== id(milk)))
-    expect(practiceWords({ states, flags, exclude: butMilk, count: 10, rng: seededRng(1) })).toEqual([id(milk)])
+    expect(practiceWords({ states, flags, retired: new Set(), exclude: butMilk, count: 10, rng: seededRng(1) })).toEqual([id(milk)])
     // The same within a unit or a theme: its own words only, never a flagged one.
     const within = new Set([id(apple), id(bread)])
-    expect(practiceWords({ states, flags, exclude: all, within, count: 10, rng: seededRng(1) })).toEqual([id(apple)])
+    expect(practiceWords({ states, flags, retired: new Set(), exclude: all, within, count: 10, rng: seededRng(1) })).toEqual([id(apple)])
   })
 
   it('leans towards weaker words without shutting the strong ones out, never repeats a word, and differs between rounds', () => {
@@ -165,7 +165,7 @@ describe('practiceWords', () => {
     const rounds = new Set<string>()
     const ROUNDS = 4_000
     for (let i = 0; i < ROUNDS; i += 1) {
-      const words = practiceWords({ states: pool, flags: new Map(), exclude: new Set(), count: 3, rng })
+      const words = practiceWords({ states: pool, flags: new Map(), retired: new Set(), exclude: new Set(), count: 3, rng })
       expect(words).toHaveLength(3)
       expect(new Set(words).size).toBe(3)
       rounds.add(words.join())
@@ -180,10 +180,21 @@ describe('practiceWords', () => {
     expect(rounds.size).toBeGreaterThan(100)
   })
 
+  it('never draws a retired word, even when it is the only started one', () => {
+    const retired = new Set([id(apple)])
+    const words = practiceWords({ states, flags: new Map(), retired, exclude: new Set(), count: 10, rng: seededRng(1) })
+    expect(words).toHaveLength(4)
+    expect(words).not.toContain(id(apple))
+    const within = new Set([id(apple)])
+    expect(practiceWords({ states, flags: new Map(), retired, exclude: new Set(), within, count: 10, rng: seededRng(1) })).toEqual([])
+    // Not through the empty-pool rule either.
+    expect(practiceWords({ states, flags: new Map(), retired, exclude: new Set(states.keys()), within, count: 10, rng: seededRng(1) })).toEqual([])
+  })
+
   it('keeps to the given words when practising one unit, under the same rules', () => {
     const flags = new Map<WordId, WordFlag>([[id(bread), 'known']])
     const within = new Set([id(apple), id(bread), id(cheese), id(milk)])
-    const words = practiceWords({ states, flags, exclude: new Set([id(cheese)]), within, count: 10, rng: seededRng(1) })
+    const words = practiceWords({ states, flags, retired: new Set(), exclude: new Set([id(cheese)]), within, count: 10, rng: seededRng(1) })
     expect(new Set(words)).toEqual(new Set([id(apple), id(milk)]))
   })
 })

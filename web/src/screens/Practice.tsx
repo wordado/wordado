@@ -4,7 +4,7 @@ import { useId } from 'react'
 import { localized, useT, type MessageKey } from '../i18n/i18n'
 import { MODE_LABEL } from '../labels'
 import { Link, type Route } from '../router'
-import { usePracticeScope, type ScopeParams } from './practiceScope'
+import { practisableCount, usePracticeScope, type ScopeParams } from './practiceScope'
 
 /** The ways to practise one kind at a time, each with a line on what it is. */
 const ONE_WAY: readonly { route(scope: ScopeParams): Route; readonly label: MessageKey; readonly hint: MessageKey; readonly icon: LucideIcon }[] = [
@@ -20,10 +20,11 @@ const ONE_WAY: readonly { route(scope: ScopeParams): Route; readonly label: Mess
  */
 export function Practice(props: ScopeParams) {
   const { t, locale } = useT()
-  const { states, corpus } = useClientSnapshot()
+  const { states, flags, corpus } = useClientSnapshot()
   const scope = usePracticeScope(props)
   const params = scope?.params ?? {}
-  const none = scope ? scope.started === 0 : states.size === 0
+  // Words practice may use, in the scope or over everything: with none, no way to practise is offered.
+  const none = (scope ? scope.started : practisableCount(states.keys(), { states, flags, retired: corpus?.retired ?? new Set() })) === 0
   return (
     <section className="practice" aria-labelledby="practice-title">
       {scope && (

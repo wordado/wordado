@@ -89,7 +89,17 @@ describe('weightedOrder', () => {
     expect(orders.size).toBeGreaterThan(15)
   })
 
-  it('treats a weight of zero or less as the smallest weight rather than dropping the item', () => {
-    expect([...weightedOrder(['x', 'y'], () => 0, seededRng(1))].sort()).toEqual(['x', 'y'])
+  it('treats a weight that is zero, negative or not a number as the smallest weight rather than dropping the item', () => {
+    for (const bad of [0, -3, Number.NaN, Number.POSITIVE_INFINITY]) {
+      const rng = seededRng(1)
+      let first = 0
+      for (let i = 0; i < 200; i += 1) {
+        const order = weightedOrder(['x', 'y'], (item) => (item === 'x' ? bad : 1), rng)
+        expect([...order].sort()).toEqual(['x', 'y'])
+        if (order[0] === 'x') first += 1
+      }
+      // The item with the bad weight is still ordered, and all but never first.
+      expect(first).toBeLessThan(3)
+    }
   })
 })

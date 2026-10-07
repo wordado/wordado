@@ -115,4 +115,13 @@ describe('Practice', () => {
     expect(screen.getByText('Nothing to practise yet. Study a few new words first.')).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Back to themes' })).toBeTruthy()
   })
+
+  it('counts only words practice can use: with every started word set aside there is nothing to practise', async () => {
+    const ctx = await setup()
+    await answerNew(ctx.client, ctx.env, 2)
+    for (const wordId of ctx.client.snapshot.states.keys()) await ctx.client.setFlag(wordId, 'known')
+    renderWith(<Practice />, ctx)
+    expect(screen.getByText('Nothing to practise yet. Study a few new words first.')).toBeTruthy()
+    expect(screen.queryByRole('link', { name: 'Matching' })).toBeNull()
+  })
 })
