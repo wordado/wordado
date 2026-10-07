@@ -43,8 +43,11 @@ they are.
   `.off` grey), `.note`, `.field` (label above control; inputs and selects styled, 1rem text so phones do not zoom),
   `.segmented`, `.settings-rows`/`.settings-row`, `.progress` (a bar with a leaf part for decided and a blue part
   for submitted), `.tabs`, `.dialog` (native `<dialog>`, full-screen below 40rem), `.notice`.
-- **Header (`AppHeader`):** "Word**ado** review" (the "ado" in rose), then what the screen passes in (breadcrumb,
-  tabs, actions), then the signed-in name. One component for the local and the hosted mode.
+- **Header (`AppHeader`):** the wordmark (the review app's icon, "Word**ado**" with the "ado" in rose, in the
+  serif, then "review"), then what the screen passes in (breadcrumb, tabs, actions), then the signed-in name. One
+  component for the local and the hosted mode.
+  *Revised 2026-10-07:* the wordmark, the icon and the header's width (a centred column of 60rem, which
+  `.page.wide` now has too) are in [2026-10-07-wordmark-and-header-design.md](2026-10-07-wordmark-and-header-design.md).
 - **Focus rings** as in the learner app (`2px solid var(--rose)`, offset 2px). Every control keeps a visible label
   or `aria-label`.
 
