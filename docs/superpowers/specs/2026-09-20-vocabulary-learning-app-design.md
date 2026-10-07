@@ -647,11 +647,14 @@ seen. `core` composes each session as follows.
    the schedule, the daily session, which words are introduced, nor the
    learner's chosen collection.
 
-   *Which words practice picks.* Started words that are not set aside. A
-   practice run leaves out the words today's session serves — practising them
-   would only repeat the session — unless that leaves nothing, in which case it
-   uses them: practice never touches the schedule, and a repeat is better than
-   a run with nothing in it. Matching needs five such words. Every pick — a
+   *Which words practice picks.* Started words that are neither set aside nor
+   retired. A practice run leaves out the words today's session serves —
+   practising them would only repeat the session. Those words come back only
+   when the scope would otherwise have nothing at all: practice never touches
+   the schedule, and a repeat is better than a run with nothing in it. They
+   are not used to fill a run up, so a run can be shorter than ten when only a
+   few of a scope's words are outside today's session; that is intended.
+   Matching needs five such words. Every pick — a
    run's words and a matching board — is a weighted random draw without
    replacement that **leans towards weaker words**: a mature word that was
    never forgotten and was last rated good or easy has weight 1, and a word
