@@ -26,6 +26,10 @@ describe('HostedApp', () => {
     vi.spyOn(hostedApi, 'rows').mockResolvedValue({ rows: [row('bank-2')], discarded: [] })
     render(<HostedApp me={me} />)
     await openAssignment()
+    // The header shows "Back" alone; the button's name is the whole of it.
+    const back = within(screen.getByRole('banner')).getByRole('button', { name: 'Back to my assignments' })
+    expect(back.firstChild?.textContent).toBe('Back')
+    expect(back.querySelector('.visually-hidden')?.textContent).toBe(' to my assignments')
     expect(await screen.findByRole('article', { name: 'Row bank-2' })).toBeTruthy()
     // the header says what is being reviewed, in plain words
     expect(within(screen.getByRole('banner')).getByText('German translations · flagged rows')).toBeTruthy()

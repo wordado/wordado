@@ -23,8 +23,9 @@ export function HostedApp(props: { me: Me }) {
       <AppHeader who={me.name}>
         <span className="spacer" />
         {view.kind === 'review' && (
+          // The header has room for the first word only; the button keeps its whole name.
           <button className="button header-nav" onClick={() => setView({ kind: 'list' })}>
-            Back to my assignments
+            Back<span className="visually-hidden"> to my assignments</span>
           </button>
         )}
         {me.role === 'admin' && view.kind !== 'admin' && (
