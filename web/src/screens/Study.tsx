@@ -6,15 +6,17 @@ import { errorMessageKey } from '../errors'
 import { useT } from '../i18n/i18n'
 import { Link } from '../router'
 import { RunView } from '../study/RunView'
+import { usePracticeUnit } from './practiceUnit'
 
-/** A session or a practice run (spec §7.4), in one mode or mixed. */
-export function Study(props: { readonly kind: RunKind; readonly mode: Mode | null }) {
+/** A session or a practice run (spec §7.4), in one mode or mixed; practice may keep to one unit of the path (`unit`). */
+export function Study(props: { readonly kind: RunKind; readonly mode: Mode | null; readonly unit?: string | undefined }) {
   const { t } = useT()
   const client = useClient()
   const { env, audio } = useApp()
   const [run, setRun] = useState<StudyRun | null>(null)
   const [error, setError] = useState<string | null>(null)
   const { kind, mode } = props
+  const unitId = usePracticeUnit(kind === 'practice' ? props.unit : undefined)?.unitId
 
   useEffect(() => {
     let live = true
@@ -23,6 +25,7 @@ export function Study(props: { readonly kind: RunKind; readonly mode: Mode | nul
     void StudyRun.start(client, env, {
       kind,
       mode,
+      ...(unitId !== undefined && { unitId }),
       cachedClips: () => audio.cachedClips(),
       online: () => audio.streamable(),
     }).then(
@@ -36,7 +39,7 @@ export function Study(props: { readonly kind: RunKind; readonly mode: Mode | nul
     return () => {
       live = false
     }
-  }, [client, env, audio, kind, mode])
+  }, [client, env, audio, kind, mode, unitId])
 
   // Focus mode hides the navigation, so a run that cannot start offers the way back itself.
   if (error !== null)
@@ -49,5 +52,5 @@ export function Study(props: { readonly kind: RunKind; readonly mode: Mode | nul
       </section>
     )
   if (!run) return <p role="status">{t('study.loading')}</p>
-  return <RunView key={`${kind}:${mode ?? 'mixed'}`} run={run} kind={kind} />
+  return <RunView key={`${kind}:${mode ?? 'mixed'}:${unitId ?? ''}`} run={run} kind={kind} unit={unitId} />
 }

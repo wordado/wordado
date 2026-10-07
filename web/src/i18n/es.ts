@@ -346,6 +346,8 @@ export const es: Messages = {
   'practice.flashcardHint': 'Mira la palabra y luego valora cuánto la sabías',
   'practice.choiceHint': 'Elige la respuesta correcta entre cuatro',
   'practice.back': 'Volver a la práctica',
+  'practice.unit': 'Unidad: {title}',
+  'practice.toPath': 'Volver a la ruta',
   'matching.progressLabel': 'Parejas encontradas',
   'matching.title': 'Emparejar',
   'matching.instructions': 'Elige una palabra en inglés y luego su traducción.',
@@ -373,6 +375,8 @@ export const es: Messages = {
   'path.levelOpen': 'Disponible',
   'path.unitsComplete': { one: '{count} unidad completada', other: '{count} unidades completadas' },
   'path.showAll': 'Mostrar las {count} unidades',
+  'path.practiseUnit': 'Practicar esta unidad',
+  'path.practiseUnitNamed': 'Practicar esta unidad: {title}',
 
   'flag.known': 'Conocida',
   'flag.suspended': 'Ahora no',

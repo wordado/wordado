@@ -328,6 +328,8 @@ export const bg: Messages = {
   'practice.flashcardHint': 'Вижте думата и се оценете сами',
   'practice.choiceHint': 'Изберете верния отговор от четири',
   'practice.back': 'Обратно към упражненията',
+  'practice.unit': 'Урок: {title}',
+  'practice.toPath': 'Обратно към пътя',
   'matching.progressLabel': 'Свързани двойки',
   'matching.title': 'Свързване',
   'matching.instructions': 'Изберете английска дума, после превода ѝ.',
@@ -355,6 +357,8 @@ export const bg: Messages = {
   'path.levelOpen': 'Отворено',
   'path.unitsComplete': { one: '{count} завършен урок', other: '{count} завършени урока' },
   'path.showAll': 'Покажи всички {count} урока',
+  'path.practiseUnit': 'Упражнете този урок',
+  'path.practiseUnitNamed': 'Упражнете този урок: {title}',
 
   'flag.known': 'Известна',
   'flag.suspended': 'Не сега',

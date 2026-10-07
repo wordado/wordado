@@ -34,11 +34,11 @@ function Screen(props: { readonly route: Route }) {
     case 'study':
       return <Study kind="session" mode={route.mode} />
     case 'practice':
-      return <Practice />
+      return <Practice unit={route.unit} />
     case 'practice-words':
-      return <Study kind="practice" mode={route.mode} />
+      return <Study kind="practice" mode={route.mode} unit={route.unit} />
     case 'matching':
-      return <Matching />
+      return <Matching unit={route.unit} />
     case 'path':
       return <Path />
     case 'themes':

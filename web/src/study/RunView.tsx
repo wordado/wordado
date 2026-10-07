@@ -16,7 +16,7 @@ import { ReportDialog } from './ReportDialog'
 const GRADES: readonly Grade[] = [Grade.Again, Grade.Hard, Grade.Good, Grade.Easy]
 
 /** Renders a StudyRun and forwards the learner's input to it (spec §8.1, §11.1). */
-export function RunView(props: { readonly run: StudyRun; readonly kind: RunKind }) {
+export function RunView(props: { readonly run: StudyRun; readonly kind: RunKind; /** The unit a practice run keeps to, if any. */ readonly unit?: string | undefined }) {
   const { run } = props
   const { t } = useT()
   const snapshot = useStore(run.store)
@@ -64,7 +64,7 @@ export function RunView(props: { readonly run: StudyRun; readonly kind: RunKind 
     else run.resume()
   }, [reporting, run])
 
-  if (snapshot.phase === 'done') return <Done snapshot={snapshot} kind={props.kind} />
+  if (snapshot.phase === 'done') return <Done snapshot={snapshot} kind={props.kind} unit={props.unit} />
   if (!item) return null
 
   const total = snapshot.answered + snapshot.remaining
@@ -363,7 +363,7 @@ function Choice(props: { readonly run: StudyRun; readonly snapshot: RunSnapshot;
   )
 }
 
-function Done(props: { readonly snapshot: RunSnapshot; readonly kind: RunKind }) {
+function Done(props: { readonly snapshot: RunSnapshot; readonly kind: RunKind; readonly unit: string | undefined }) {
   const { t, locale } = useT()
   const { afterRun } = useApp()
   const { corpus } = useClientSnapshot()
@@ -407,10 +407,17 @@ function Done(props: { readonly snapshot: RunSnapshot; readonly kind: RunKind })
       ))}
       {snapshot.setAside > 0 && <p className="done-line done-note">{t('done.setAside', { count: snapshot.setAside })}</p>}
       <div className="done-actions">
-        <Link className="button primary study-main" to={{ name: 'home' }}>
-          {t('done.home')}
-        </Link>
-        <Link className="button study-main" to={{ name: 'practice' }}>
+        {/* A unit's practice began on the path, so that is the way back; its "Practise more" stays with the unit. */}
+        {props.unit === undefined ? (
+          <Link className="button primary study-main" to={{ name: 'home' }}>
+            {t('done.home')}
+          </Link>
+        ) : (
+          <Link className="button primary study-main" to={{ name: 'path' }}>
+            {t('practice.toPath')}
+          </Link>
+        )}
+        <Link className="button study-main" to={{ name: 'practice', unit: props.unit }}>
           {t('done.practiceMore')}
         </Link>
       </div>

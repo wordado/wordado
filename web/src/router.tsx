@@ -8,9 +8,9 @@ export type SettingsSection = (typeof SETTINGS_SECTIONS)[number]
 export type Route =
   | { readonly name: 'home' }
   | { readonly name: 'study'; readonly mode: Mode | null }
-  | { readonly name: 'practice' }
-  | { readonly name: 'practice-words'; readonly mode: Mode | null }
-  | { readonly name: 'matching' }
+  | { readonly name: 'practice'; readonly unit?: string | undefined }
+  | { readonly name: 'practice-words'; readonly mode: Mode | null; readonly unit?: string | undefined }
+  | { readonly name: 'matching'; readonly unit?: string | undefined }
   | { readonly name: 'path' }
   | { readonly name: 'themes' }
   | { readonly name: 'progress' }
@@ -27,17 +27,23 @@ function modeParam(search: string): Mode | null {
   return RUN_MODES.find((m) => m === mode) ?? null
 }
 
+/** The unit a practice route keeps to (`?unit=<unitId>`); the screens check it against the path. */
+function unitParam(search: string): { readonly unit?: string } {
+  const unit = new URLSearchParams(search).get('unit')
+  return unit ? { unit } : {}
+}
+
 export function parseRoute(pathname: string, search: string): Route {
   const path = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname
   switch (path) {
     case '/study':
       return { name: 'study', mode: modeParam(search) }
     case '/practice':
-      return { name: 'practice' }
+      return { name: 'practice', ...unitParam(search) }
     case '/practice/words':
-      return { name: 'practice-words', mode: modeParam(search) }
+      return { name: 'practice-words', mode: modeParam(search), ...unitParam(search) }
     case '/practice/matching':
-      return { name: 'matching' }
+      return { name: 'matching', ...unitParam(search) }
     case '/path':
       return { name: 'path' }
     case '/themes':
@@ -59,20 +65,27 @@ export function parseRoute(pathname: string, search: string): Route {
   }
 }
 
-const withMode = (path: string, mode: Mode | null) => (mode === null ? path : `${path}?mode=${mode}`)
+/** A path with its query: the unit first, then the mode, each only when there is one. */
+function withQuery(path: string, query: { readonly unit?: string | undefined; readonly mode?: Mode | null }): string {
+  const params = new URLSearchParams()
+  if (query.unit) params.set('unit', query.unit)
+  if (query.mode) params.set('mode', query.mode)
+  const search = params.toString()
+  return search === '' ? path : `${path}?${search}`
+}
 
 export function routeHref(route: Route): string {
   switch (route.name) {
     case 'home':
       return '/'
     case 'study':
-      return withMode('/study', route.mode)
+      return withQuery('/study', route)
     case 'practice':
-      return '/practice'
+      return withQuery('/practice', route)
     case 'practice-words':
-      return withMode('/practice/words', route.mode)
+      return withQuery('/practice/words', route)
     case 'matching':
-      return '/practice/matching'
+      return withQuery('/practice/matching', route)
     case 'placement':
       return '/settings/placement'
     case 'native-language':

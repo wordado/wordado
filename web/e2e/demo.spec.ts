@@ -82,6 +82,29 @@ test('plays a matching board once five words are known', async ({ page }) => {
   await expect(page.getByRole('status')).toHaveText('✓ All pairs matched.')
 })
 
+test('practises one unit from the path, finishes, and comes back to the path', async ({ page }) => {
+  await page.goto('/')
+  await finishSetup(page)
+  await studyNew(page, 5)
+  await page.goto('/path')
+  await page.getByRole('link', { name: 'Practise this unit: People and greetings' }).click()
+  await expect(heading(page)).toHaveText('Practice')
+  await expect(page.getByText('Unit: People and greetings')).toBeVisible()
+  await page.getByRole('link', { name: 'Flashcards' }).click()
+  await expect(page).toHaveURL(/\/practice\/words\?unit=[^&]+&mode=flashcard$/)
+  // The unit's five started words, and no more.
+  await expect(page.getByRole('progressbar', { name: 'Session progress' })).toHaveAttribute('aria-valuemax', '5')
+  for (let i = 0; i < 10 && !(await page.locator('.done').isVisible()); i += 1) await answer(page)
+  await expect(heading(page)).toHaveText('Practice complete')
+  await expect(page.getByText('You answered 5 words.')).toBeVisible()
+  await page.getByRole('link', { name: 'Practise more' }).click()
+  await expect(page.getByText('Unit: People and greetings')).toBeVisible()
+  await page.getByRole('link', { name: 'Back to the path' }).click()
+  await expect(heading(page)).toHaveText('Your path')
+  // Five of the day's ten new words are still to come, so the path still offers the session.
+  await expect(page.getByRole('link', { name: 'Start studying' })).toBeVisible()
+})
+
 test('Settings › About links to the privacy policy on the website, in the interface language', async ({ page }) => {
   await page.goto('/')
   await finishSetup(page)

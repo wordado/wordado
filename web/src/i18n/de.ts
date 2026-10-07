@@ -348,6 +348,8 @@ export const de: Messages = {
   'practice.flashcardHint': 'Sieh dir das Wort an und bewerte dich selbst',
   'practice.choiceHint': 'Wähl die richtige Antwort aus vier Möglichkeiten',
   'practice.back': 'Zurück zur Übung',
+  'practice.unit': 'Einheit: {title}',
+  'practice.toPath': 'Zurück zum Lernpfad',
   'matching.progressLabel': 'Zugeordnete Paare',
   'matching.title': 'Zuordnen',
   'matching.instructions': 'Wähl ein englisches Wort, dann seine Übersetzung.',
@@ -375,6 +377,8 @@ export const de: Messages = {
   'path.levelOpen': 'Offen',
   'path.unitsComplete': { one: '{count} Einheit abgeschlossen', other: '{count} Einheiten abgeschlossen' },
   'path.showAll': 'Alle {count} Einheiten zeigen',
+  'path.practiseUnit': 'Diese Einheit üben',
+  'path.practiseUnitNamed': 'Diese Einheit üben: {title}',
 
   'flag.known': 'Bekannt',
   'flag.suspended': 'Nicht jetzt',

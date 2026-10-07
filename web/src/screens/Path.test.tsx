@@ -31,6 +31,59 @@ describe('Path', () => {
     expect(within(unit('Food and drink')).queryByRole('link', { name: 'Start studying' })).toBeNull()
   })
 
+  it('offers Start studying only while today’s session has something in it, as Today does', async () => {
+    const ctx = await setup()
+    renderWith(<Path />, ctx)
+    const current = unit('People and greetings')
+    expect(within(current).getByRole('link', { name: 'Start studying' })).toBeTruthy()
+    expect(within(current).queryByText('Nothing left for today.')).toBeNull()
+    // The day's ten new words are taken and nothing is due: the session would end at once.
+    await act(() => answerNew(ctx.client, ctx.env, 10))
+    expect(screen.queryByRole('link', { name: 'Start studying' })).toBeNull()
+    expect(within(current).getByText('Nothing left for today.')).toBeTruthy()
+    expect(within(current).getByRole('link', { name: 'Practise this unit: People and greetings' })).toBeTruthy()
+  })
+
+  it('offers to practise a unit once one of its words is started, below Start studying on the current unit', async () => {
+    const ctx = await setup()
+    renderWith(<Path />, ctx)
+    expect(screen.queryByRole('link', { name: /^Practise this unit/ })).toBeNull()
+    await act(() => answerNew(ctx.client, ctx.env, 5))
+    const [first] = ctx.client.snapshot.corpus!.units
+    const links = within(unit('People and greetings')).getAllByRole('link')
+    expect(links.map((a) => a.textContent)).toEqual(['Start studying', 'Practise this unit'])
+    // Named with its unit, so several on one page differ.
+    expect(links[1]!.getAttribute('aria-label')).toBe('Practise this unit: People and greetings')
+    expect(links[1]!.getAttribute('href')).toBe(`/practice?unit=${first!.unitId}`)
+    expect(links[1]!.classList.contains('primary')).toBe(false)
+    expect(screen.getAllByRole('link', { name: /^Practise this unit/ })).toHaveLength(1)
+  })
+
+  it('offers practice on every open unit with started words, and never on a locked one', async () => {
+    const ctx = await setup()
+    await ctx.client.updateSettings({ newWordLimit: 30 })
+    await answerNew(ctx.client, ctx.env, 25)
+    // A word of the locked third unit, started some other way (a theme pulls words forward, spec §8.9).
+    const third = ctx.client.snapshot.corpus!.units[2]!
+    await ctx.client.answer({ wordId: third.wordIds[0]!, mode: 'flashcard', direction: 'en_to_l1', grade: Grade.Good, latencyMs: 2_000, practice: false })
+    renderWith(<Path />, ctx)
+    expect(within(unit('Home and every day')).getByText('Locked')).toBeTruthy()
+    expect(screen.getAllByRole('link', { name: /^Practise this unit/ }).map((a) => a.getAttribute('aria-label'))).toEqual([
+      'Practise this unit: People and greetings',
+      'Practise this unit: Food and drink',
+    ])
+  })
+
+  it('does not offer practice on a unit whose only started words are set aside, as practice leaves them out', async () => {
+    const ctx = await setup()
+    await answerNew(ctx.client, ctx.env, 1)
+    const started = [...ctx.client.snapshot.states.keys()][0]!
+    renderWith(<Path />, ctx)
+    expect(screen.getByRole('link', { name: 'Practise this unit: People and greetings' })).toBeTruthy()
+    await act(() => ctx.client.setFlag(started, 'known'))
+    expect(screen.queryByRole('link', { name: /^Practise this unit/ })).toBeNull()
+  })
+
   it('moves the current unit on once every word of the first is introduced', async () => {
     const ctx = await setup()
     await ctx.client.updateSettings({ newWordLimit: 30 })

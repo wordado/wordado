@@ -333,6 +333,8 @@ export const en = {
   'practice.flashcardHint': 'See the word, then rate yourself',
   'practice.choiceHint': 'Pick the right answer from four',
   'practice.back': 'Back to practice',
+  'practice.unit': 'Unit: {title}',
+  'practice.toPath': 'Back to the path',
   'matching.progressLabel': 'Pairs matched',
   'matching.title': 'Matching',
   'matching.instructions': 'Pick an English word, then its translation.',
@@ -360,6 +362,8 @@ export const en = {
   'path.levelOpen': 'Open',
   'path.unitsComplete': { one: '{count} unit complete', other: '{count} units complete' },
   'path.showAll': 'Show all {count} units',
+  'path.practiseUnit': 'Practise this unit',
+  'path.practiseUnitNamed': 'Practise this unit: {title}',
 
   'flag.known': 'Known',
   'flag.suspended': 'Not now',
