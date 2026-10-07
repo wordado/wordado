@@ -213,6 +213,12 @@ async function openDialog(page: Page, button: string | RegExp, dialog: string | 
   await page.getByRole('dialog', { name: dialog }).waitFor()
 }
 
+/** Opens the account menu from the round button in the header. */
+async function openAccount(page: Page): Promise<void> {
+  await page.getByRole('button', { name: /^Account: / }).click()
+  await page.getByRole('menu', { name: 'Account' }).waitFor()
+}
+
 /** Assign work with Hans and the Bulgarian translations chosen: the files and who holds them show. */
 async function assignDialog(page: Page): Promise<void> {
   await openDialog(page, 'Assign work', 'Assign work')
@@ -228,6 +234,7 @@ const SHOTS_BEFORE: readonly Shot[] = [
   { name: 'hosted-review-long', who: 'reviewer', api: [rows(LONG)], steps: openAssignment },
   { name: 'hosted-review-title', who: 'reviewer', api: [rows(TITLE)], steps: openAssignment },
   { name: 'hosted-review-level', who: 'phone', steps: openAssignment },
+  { name: 'hosted-review-account-menu', who: 'reviewer', api: [rows(SEVERAL)], steps: async (page) => (await openAssignment(page), await openAccount(page)) },
   {
     name: 'hosted-review-editing',
     who: 'reviewer',
@@ -279,6 +286,7 @@ const SHOTS_DONE: readonly Shot[] = [{ name: 'hosted-review-done', who: 'reviewe
 
 const SHOTS_ADMIN: readonly Shot[] = [
   { name: 'hosted-admin-overview', who: 'admin', path: '/#overview', steps: async (page) => void (await page.getByText('rows to decide').waitFor()) },
+  { name: 'hosted-admin-account-menu', who: 'admin', path: '/#overview', steps: async (page) => (await page.getByText('rows to decide').waitFor(), await openAccount(page)) },
   { name: 'hosted-admin-overview-unassigned', who: 'admin', path: '/#overview', api: [SPANISH], steps: async (page) => void (await page.getByRole('button', { name: 'Assign Spanish' }).waitFor()) },
   { name: 'hosted-admin-reviewers', who: 'admin', path: '/#reviewers', steps: async (page) => void (await page.getByText('reviewer@example.com', { exact: true }).waitFor()) },
   { name: 'hosted-admin-assignments', who: 'admin', path: '/#assignments', steps: async (page) => void (await page.getByRole('button', { name: 'Reassign…' }).first().waitFor()) },
@@ -333,6 +341,7 @@ const SHOTS_LOCAL: readonly Shot[] = [
   { name: 'local-review', steps: async (page) => void (await article(page).waitFor()) },
   { name: 'local-review-objection', steps: async (page) => (await article(page).waitFor(), await chooseRow(page, /bank-/)) },
   { name: 'local-review-objections', api: [rows(SEVERAL)], steps: async (page) => void (await article(page).waitFor()) },
+  { name: 'local-review-account-menu', api: [rows(SEVERAL)], steps: async (page) => (await article(page).waitFor(), await openAccount(page)) },
   { name: 'local-review-title', api: [rows(TITLE)], steps: async (page) => void (await article(page).waitFor()) },
   {
     name: 'local-review-imported',

@@ -5,6 +5,9 @@ import { Admin, adminTabOf } from './Admin'
 import { AssignmentReview } from './AssignmentReview'
 import { Assignments } from './Assignments'
 
+/** Cloudflare Access's sign-out on the protected host. */
+const SIGN_OUT = '/cdn-cgi/access/logout'
+
 type View = { kind: 'list' } | { kind: 'review'; assignment: AssignmentView } | { kind: 'admin' }
 
 /** The hosted review app for a signed-in reviewer: their assignments, one assignment's review, and (for an admin) the admin page, which
@@ -20,7 +23,7 @@ export function HostedApp(props: { me: Me }) {
   }
   return (
     <div className="hosted">
-      <AppHeader who={me.name}>
+      <AppHeader account={{ name: me.name, email: me.email, signOutHref: SIGN_OUT }}>
         <span className="spacer" />
         {view.kind === 'review' && (
           // The header has room for the first word only; the button keeps its whole name.

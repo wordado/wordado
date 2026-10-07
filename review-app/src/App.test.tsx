@@ -150,7 +150,7 @@ describe('App', () => {
     expect(await screen.findByText('Nothing left to decide here.')).toBeTruthy()
   })
 
-  it('keeps the queue picker and show unflagged in a toolbar above the card, working; the header has the mark, All rows, Import and the name', async () => {
+  it('keeps the queue picker and show unflagged in a toolbar above the card, working; the header has the mark, All rows, Import and the account', async () => {
     vi.spyOn(api, 'reviewer').mockResolvedValue('Tester')
     vi.spyOn(api, 'queues').mockResolvedValue([
       { queue: 'translation-bg', open: 2, flagged: 2, reported: 0, decided: 0 },
@@ -164,8 +164,19 @@ describe('App', () => {
     expect(header.queryByLabelText(/show unflagged/)).toBeNull()
     expect(header.queryByText(/open in all/)).toBeNull()
     expect(header.getByRole('button', { name: 'All rows' })).toBeTruthy()
-    expect(header.getByRole('button', { name: 'Import decisions' })).toBeTruthy()
-    expect(header.getByText('Tester')).toBeTruthy()
+    // "decisions" is the part a phone's header leaves out; the button's name is the whole of it
+    const importButton = header.getByRole('button', { name: 'Import decisions' })
+    expect(importButton.querySelector('.wide-label')?.textContent).toBe(' decisions')
+    // the name is the account button's; its menu has nothing to sign out of
+    expect(header.queryByText('Tester')).toBeNull()
+    const account = header.getByRole('button', { name: 'Account: Tester' })
+    expect(account.textContent).toBe('T')
+    fireEvent.click(account)
+    const menu = within(header.getByRole('menu', { name: 'Account' }))
+    expect(menu.getByText('Tester')).toBeTruthy()
+    expect(menu.getByText('Running on this computer.')).toBeTruthy()
+    expect(menu.queryByRole('menuitem')).toBeNull()
+    fireEvent.click(account)
     expect(screen.getByRole('banner').textContent).toContain('Wordado review')
 
     // The toolbar is in the page, before the card.

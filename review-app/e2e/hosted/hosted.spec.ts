@@ -53,9 +53,24 @@ test('@phone a reviewer decides a row with the bottom buttons, swipes and opens 
   const total = Number(/of (\d+)/.exec(await place.innerText())![1])
   expect(total).toBeGreaterThan(1)
   await expectFits(page)
-  // The header keeps the row list and Submit; what is reviewed and the name have gone into the row list.
-  await expect(page.getByRole('banner').getByText('Petra')).toBeHidden()
+  // The header keeps the row list, Submit and the account, on one line; what is reviewed has gone into the row list.
+  const banner = page.getByRole('banner')
+  await expect(banner.getByText('English levels · all rows')).toBeHidden()
   await expect(page.getByRole('button', { name: /Submit 0 decisions/ })).toBeVisible()
+  const account = banner.getByRole('button', { name: 'Account: Petra' })
+  await expect(account).toHaveText('P')
+  const tops = await Promise.all([banner.getByRole('button', { name: 'All rows' }), page.getByRole('button', { name: /Submit 0 decisions/ }), account].map(async (b) => { const box = (await b.boundingBox())!; return box.y + box.height / 2 }))
+  expect(Math.max(...tops) - Math.min(...tops)).toBeLessThan(1)
+  // The account menu stays inside the screen; a tap outside closes it.
+  await account.tap()
+  const menu = page.getByRole('menu', { name: 'Account' })
+  await expect(menu.getByText('phone@example.com')).toBeVisible()
+  const menuBox = (await menu.boundingBox())!
+  expect(menuBox.x).toBeGreaterThanOrEqual(0)
+  expect(menuBox.x + menuBox.width).toBeLessThanOrEqual(390)
+  await expectFits(page)
+  await page.locator('.wordmark').tap()
+  await expect(menu).toBeHidden()
 
   // A swipe to the left goes to the next row, one to the right comes back.
   const first = await article.getAttribute('aria-label')
@@ -144,6 +159,30 @@ test('a reviewer decides rows with the keys and submits a pull request', async (
   await page.getByTitle('translation-bg').getByRole('button', { name: 'Start' }).click()
   await expect(page.getByText('1 of 3', { exact: true })).toBeVisible()
   const first = await page.getByRole('article').getAttribute('aria-label')
+  // The account: a round button with the initial; its menu has the name, the email and Sign out through Access.
+  const account = page.getByRole('banner').getByRole('button', { name: 'Account: Rita' })
+  await expect(account).toHaveText('R')
+  await expect(page.getByRole('banner').getByText('Rita')).toHaveCount(0)
+  await account.click()
+  const menu = page.getByRole('menu', { name: 'Account' })
+  await expect(menu.getByText('Rita', { exact: true })).toBeVisible()
+  await expect(menu.getByText('reviewer@example.com')).toBeVisible()
+  await expect(menu.getByRole('menuitem', { name: 'Sign out' })).toHaveAttribute('href', '/cdn-cgi/access/logout')
+  // It hangs under the button, their right edges together.
+  const [buttonBox, menuBox] = [(await account.boundingBox())!, (await menu.boundingBox())!]
+  expect(menuBox.y).toBeGreaterThanOrEqual(buttonBox.y + buttonBox.height)
+  expect(Math.abs(menuBox.x + menuBox.width - (buttonBox.x + buttonBox.width))).toBeLessThan(1)
+  // The review keys are off while it is open; Escape closes it and the focus is on the button again.
+  await page.keyboard.press('2')
+  await page.keyboard.press('Escape')
+  await expect(menu).toBeHidden()
+  await expect(account).toBeFocused()
+  await expect(page.getByRole('article')).toHaveAttribute('aria-label', first!)
+  // A click outside closes it too.
+  await account.click()
+  await page.locator('.progress-line').click()
+  await expect(menu).toBeHidden()
+  await expect(account).toBeFocused()
   await page.keyboard.press('2')
   // The keys are off while a decision saves: wait for the next row to take them.
   await expect(page.getByRole('article')).not.toHaveAttribute('aria-label', first!)
