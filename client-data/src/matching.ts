@@ -1,7 +1,7 @@
-import { buildMatchingBoard, corpusWordId, gradeAnswer, matchingCandidates, MATCHING_PAIRS, shuffle, type CorpusEntry } from '@wordado/core'
+import { buildMatchingBoard, corpusWordId, gradeAnswer, matchingCandidates, MATCHING_PAIRS, practiceWeight, shuffle, type CorpusEntry } from '@wordado/core'
 import type { Client } from './client'
 import { createStore, type Store } from './store'
-import { unitWords, type RunEnv } from './run'
+import { scopeWords, type PracticeScope, type RunEnv } from './run'
 
 export type MatchingSide = 'left' | 'right'
 
@@ -52,11 +52,18 @@ export class MatchingRun {
     })
   }
 
-  /** A board of MATCHING_PAIRS introduced words, or null until the learner has that many; of one unit, when `unitId` names it. */
-  static start(client: Client, env: RunEnv, unitId?: string): MatchingRun | null {
+  /**
+   * A board of MATCHING_PAIRS introduced words, or null until the learner has that many; of one unit or theme, when
+   * `scope` names it. Like every practice it leans towards weaker words (spec §7.4).
+   */
+  static start(client: Client, env: RunEnv, scope?: PracticeScope): MatchingRun | null {
     const { corpus, states, flags } = client.snapshot
     if (!corpus) return null
-    const board = buildMatchingBoard(matchingCandidates(corpus, states, flags, unitWords(client, unitId)), MATCHING_PAIRS, env.rng)
+    const weight = (entry: CorpusEntry) => {
+      const state = states.get(corpusWordId(entry.entryId))
+      return state ? practiceWeight(state) : 1
+    }
+    const board = buildMatchingBoard(matchingCandidates(corpus, states, flags, scopeWords(client, scope)), MATCHING_PAIRS, env.rng, weight)
     return board ? new MatchingRun(client, env, board) : null
   }
 

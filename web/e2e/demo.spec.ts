@@ -105,6 +105,33 @@ test('practises one unit from the path, finishes, and comes back to the path', a
   await expect(page.getByRole('link', { name: 'Start studying' })).toBeVisible()
 })
 
+test('practises one theme from Themes, and comes back with the study theme as it was', async ({ page }) => {
+  await page.goto('/')
+  await finishSetup(page)
+  // Five of the theme's words, brought forward by studying the theme for a while; then back to the path.
+  await page.goto('/themes')
+  await page.getByRole('button', { name: 'Study this theme: Daily life' }).click()
+  await expect(page.getByText('Studying now')).toBeVisible()
+  await studyNew(page, 5)
+  await page.goto('/themes')
+  await page.getByRole('button', { name: 'Back to the path' }).click()
+  await page.getByRole('link', { name: 'Practise this theme: Daily life' }).click()
+  await expect(heading(page)).toHaveText('Practice')
+  await expect(page.getByText('Theme: Daily life')).toBeVisible()
+  await page.getByRole('link', { name: 'Flashcards' }).click()
+  await expect(page).toHaveURL(/\/practice\/words\?theme=daily-life&mode=flashcard$/)
+  await expect(page.getByRole('progressbar', { name: 'Session progress' })).toHaveAttribute('aria-valuemax', '5')
+  for (let i = 0; i < 10 && !(await page.locator('.done').isVisible()); i += 1) await answer(page)
+  await expect(heading(page)).toHaveText('Practice complete')
+  await page.getByRole('link', { name: 'Practise more' }).click()
+  await expect(page.getByText('Theme: Daily life')).toBeVisible()
+  await page.getByRole('link', { name: 'Back to themes' }).click()
+  await expect(heading(page)).toHaveText('Themes')
+  // Practising a theme does not choose it.
+  await expect(page.getByRole('button', { name: 'Study this theme: Daily life' })).toBeVisible()
+  await expect(page.getByText('Studying now')).toHaveCount(0)
+})
+
 test('Settings › About links to the privacy policy on the website, in the interface language', async ({ page }) => {
   await page.goto('/')
   await finishSetup(page)
@@ -158,6 +185,11 @@ test('meets WCAG 2.2 A and AA on the study screens (spec §11.1)', async ({ page
     await expect(heading(page)).toBeVisible()
     await expectAccessible(page)
   }
+  // Practice kept to one unit, as the path opens it.
+  await page.goto('/path')
+  await page.getByRole('link', { name: 'Practise this unit: People and greetings' }).click()
+  await expect(page.getByText('Unit: People and greetings')).toBeVisible()
+  await expectAccessible(page, { dark: true })
 
   await page.emulateMedia({ colorScheme: 'dark' })
   await page.goto('/study?mode=multiple_choice')

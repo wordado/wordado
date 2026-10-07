@@ -1,4 +1,5 @@
 import { cleanup, screen } from '@testing-library/react'
+import { corpusWordId, themeEntries } from '@wordado/core'
 import { afterEach, describe, expect, it } from 'vitest'
 import { answerNew, renderWith, setup } from '../test/fixtures'
 import { Practice } from './Practice'
@@ -71,5 +72,47 @@ describe('Practice', () => {
     expect(screen.getByText('Nothing to practise yet. Study a few new words first.')).toBeTruthy()
     expect(screen.queryByRole('link', { name: 'Matching' })).toBeNull()
     expect(screen.getByRole('link', { name: 'Back to the path' }).getAttribute('href')).toBe('/path')
+  })
+
+  it('practises one theme: names it, carries it in every way to practise, and leads back to the themes', async () => {
+    const ctx = await setup()
+    await ctx.client.updateSettings({ activeTheme: 'daily-life' })
+    await answerNew(ctx.client, ctx.env, 5)
+    await ctx.client.updateSettings({ activeTheme: null })
+    renderWith(<Practice theme="daily-life" />, ctx)
+    expect(screen.getByText('Theme: Daily life')).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Practise this theme' }).getAttribute('href')).toBe('/practice/words?theme=daily-life')
+    expect(screen.getByRole('link', { name: 'Flashcards' }).getAttribute('href')).toBe('/practice/words?theme=daily-life&mode=flashcard')
+    expect(screen.getByRole('link', { name: 'Matching' }).getAttribute('href')).toBe('/practice/matching?theme=daily-life')
+    expect(screen.getByRole('link', { name: 'Back to themes' }).getAttribute('href')).toBe('/themes')
+    expect(ctx.client.snapshot.settings.activeTheme).toBeNull()
+    cleanup()
+    renderWith(<Practice theme="daily-life" />, { ...ctx, locale: 'bg' })
+    expect(screen.getByText('Тема: Всекидневие')).toBeTruthy()
+  })
+
+  it('falls back to practice over everything for an unknown theme, and lets a unit win over a theme', async () => {
+    const ctx = await setup()
+    await answerNew(ctx.client, ctx.env, 5)
+    renderWith(<Practice theme="nowhere" />, ctx)
+    expect(screen.queryByText(/^Theme:/)).toBeNull()
+    expect(screen.getByRole('link', { name: 'Matching' }).getAttribute('href')).toBe('/practice/matching')
+    cleanup()
+    const first = ctx.client.snapshot.corpus!.units[0]!
+    renderWith(<Practice unit={first.unitId} theme="daily-life" />, ctx)
+    expect(screen.getByText('Unit: People and greetings')).toBeTruthy()
+    expect(screen.queryByText(/^Theme:/)).toBeNull()
+    expect(screen.getByRole('link', { name: 'Matching' }).getAttribute('href')).toBe(`/practice/matching?unit=${first.unitId}`)
+  })
+
+  it('says there is nothing to practise in a theme with no started word', async () => {
+    const ctx = await setup()
+    await answerNew(ctx.client, ctx.env, 5)
+    const theme = new Set(themeEntries(ctx.client.snapshot.corpus!, 'daily-life').map((e) => corpusWordId(e.entryId)))
+    expect([...ctx.client.snapshot.states.keys()].some((wordId) => theme.has(wordId))).toBe(false)
+    renderWith(<Practice theme="daily-life" />, ctx)
+    expect(screen.getByText('Theme: Daily life')).toBeTruthy()
+    expect(screen.getByText('Nothing to practise yet. Study a few new words first.')).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Back to themes' })).toBeTruthy()
   })
 })

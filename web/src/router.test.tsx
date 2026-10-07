@@ -18,6 +18,9 @@ const ROUTES: Route[] = [
   { name: 'practice-words', mode: null, unit: 'a1-02' },
   { name: 'practice-words', mode: 'flashcard', unit: 'a1-02' },
   { name: 'matching', unit: 'a1-02' },
+  { name: 'practice', theme: 'daily-life' },
+  { name: 'practice-words', mode: 'flashcard', theme: 'daily-life' },
+  { name: 'matching', theme: 'daily-life' },
   { name: 'path' },
   { name: 'themes' },
   { name: 'progress' },
@@ -48,6 +51,17 @@ describe('routes', () => {
     expect(parseRoute('/practice', '?unit=')).toEqual({ name: 'practice' })
     expect('unit' in parseRoute('/practice/matching', '')).toBe(false)
     expect(parseRoute('/study', '?unit=a1-02')).toEqual({ name: 'study', mode: null })
+  })
+
+  it('carries the theme being practised the same way, and lets a unit win over it', () => {
+    expect(routeHref({ name: 'practice', theme: 'daily-life' })).toBe('/practice?theme=daily-life')
+    expect(routeHref({ name: 'practice-words', mode: 'multiple_choice', theme: 'daily-life' })).toBe('/practice/words?theme=daily-life&mode=multiple_choice')
+    expect(routeHref({ name: 'matching', theme: 'daily-life' })).toBe('/practice/matching?theme=daily-life')
+    expect(parseRoute('/practice/words', '?mode=flashcard&theme=daily-life')).toEqual({ name: 'practice-words', mode: 'flashcard', theme: 'daily-life' })
+    expect(parseRoute('/practice', '?theme=daily-life&unit=a1-02')).toEqual({ name: 'practice', unit: 'a1-02' })
+    expect('theme' in parseRoute('/practice', '?theme=daily-life&unit=a1-02')).toBe(false)
+    expect(parseRoute('/practice', '?theme=')).toEqual({ name: 'practice' })
+    expect(parseRoute('/study', '?theme=daily-life')).toEqual({ name: 'study', mode: null })
   })
 
   it('routes the sign-in screen', () => {

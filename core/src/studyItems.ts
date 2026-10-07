@@ -2,6 +2,7 @@ import type { Corpus } from './corpus'
 import { pickDistractors } from './distractors'
 import { masteryTier } from './mastery'
 import { chooseMode } from './modeSelection'
+import { practiceWeight, weightedOrder } from './practiceWeight'
 import { shuffle, type Rng } from './rng'
 import type { ReviewState } from './scheduler'
 import type { CorpusEntry, Direction, Mode, WordFlag } from './types'
@@ -81,7 +82,7 @@ export function buildItem(wordId: WordId, ctx: ItemContext): StudyItem | null {
 export interface PracticeInput {
   readonly states: ReadonlyMap<WordId, ReviewState>
   readonly flags: ReadonlyMap<WordId, WordFlag>
-  /** Words the schedule serves now; practising them would only duplicate the session. */
+  /** Words the schedule serves now; practising them would only duplicate the session, so they are used only when nothing else is left. */
   readonly exclude: ReadonlySet<WordId>
   /** Practising one unit: its words, and the run keeps to them. Absent for practice over everything. */
   readonly within?: ReadonlySet<WordId>
@@ -89,11 +90,19 @@ export interface PracticeInput {
   readonly rng: Rng
 }
 
-/** Words for extra practice (spec §7.4): introduced, not flagged, not in today's session. */
+/**
+ * Words for extra practice (spec §7.4): introduced, not flagged, not in
+ * today's session — unless that leaves nothing, when the session's words are
+ * used after all: practice never touches the schedule, and a repeat is better
+ * than a run with nothing in it. The draw leans towards weaker words
+ * (`practiceWeight`) and never repeats one.
+ */
 export function practiceWords(input: PracticeInput): WordId[] {
-  const { within } = input
-  const candidates = [...input.states.keys()].filter((id) => !input.flags.has(id) && !input.exclude.has(id) && (!within || within.has(id)))
-  return shuffle(candidates, input.rng).slice(0, Math.max(0, input.count))
+  const { within, states } = input
+  const started = [...states.keys()].filter((id) => !input.flags.has(id) && (!within || within.has(id)))
+  const outside = started.filter((id) => !input.exclude.has(id))
+  const candidates = outside.length > 0 ? outside : started
+  return weightedOrder(candidates, (id) => practiceWeight(states.get(id)!), input.rng).slice(0, Math.max(0, input.count))
 }
 
 /** What a matching board may use (spec §8.1): introduced, live corpus words; those of `within` when practising one unit. */

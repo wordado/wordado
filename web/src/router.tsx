@@ -8,9 +8,9 @@ export type SettingsSection = (typeof SETTINGS_SECTIONS)[number]
 export type Route =
   | { readonly name: 'home' }
   | { readonly name: 'study'; readonly mode: Mode | null }
-  | { readonly name: 'practice'; readonly unit?: string | undefined }
-  | { readonly name: 'practice-words'; readonly mode: Mode | null; readonly unit?: string | undefined }
-  | { readonly name: 'matching'; readonly unit?: string | undefined }
+  | { readonly name: 'practice'; readonly unit?: string | undefined; readonly theme?: string | undefined }
+  | { readonly name: 'practice-words'; readonly mode: Mode | null; readonly unit?: string | undefined; readonly theme?: string | undefined }
+  | { readonly name: 'matching'; readonly unit?: string | undefined; readonly theme?: string | undefined }
   | { readonly name: 'path' }
   | { readonly name: 'themes' }
   | { readonly name: 'progress' }
@@ -27,10 +27,16 @@ function modeParam(search: string): Mode | null {
   return RUN_MODES.find((m) => m === mode) ?? null
 }
 
-/** The unit a practice route keeps to (`?unit=<unitId>`); the screens check it against the path. */
-function unitParam(search: string): { readonly unit?: string } {
-  const unit = new URLSearchParams(search).get('unit')
-  return unit ? { unit } : {}
+/**
+ * What a practice route keeps to: one unit (`?unit=<unitId>`) or one theme (`?theme=<themeId>`), the unit when both
+ * are given. The screens check it against the path and the themes on offer.
+ */
+function scopeParam(search: string): { readonly unit?: string; readonly theme?: string } {
+  const params = new URLSearchParams(search)
+  const unit = params.get('unit')
+  if (unit) return { unit }
+  const theme = params.get('theme')
+  return theme ? { theme } : {}
 }
 
 export function parseRoute(pathname: string, search: string): Route {
@@ -39,11 +45,11 @@ export function parseRoute(pathname: string, search: string): Route {
     case '/study':
       return { name: 'study', mode: modeParam(search) }
     case '/practice':
-      return { name: 'practice', ...unitParam(search) }
+      return { name: 'practice', ...scopeParam(search) }
     case '/practice/words':
-      return { name: 'practice-words', mode: modeParam(search), ...unitParam(search) }
+      return { name: 'practice-words', mode: modeParam(search), ...scopeParam(search) }
     case '/practice/matching':
-      return { name: 'matching', ...unitParam(search) }
+      return { name: 'matching', ...scopeParam(search) }
     case '/path':
       return { name: 'path' }
     case '/themes':
@@ -65,10 +71,11 @@ export function parseRoute(pathname: string, search: string): Route {
   }
 }
 
-/** A path with its query: the unit first, then the mode, each only when there is one. */
-function withQuery(path: string, query: { readonly unit?: string | undefined; readonly mode?: Mode | null }): string {
+/** A path with its query: the unit or the theme first, then the mode, each only when there is one. */
+function withQuery(path: string, query: { readonly unit?: string | undefined; readonly theme?: string | undefined; readonly mode?: Mode | null }): string {
   const params = new URLSearchParams()
   if (query.unit) params.set('unit', query.unit)
+  else if (query.theme) params.set('theme', query.theme)
   if (query.mode) params.set('mode', query.mode)
   const search = params.toString()
   return search === '' ? path : `${path}?${search}`

@@ -1,7 +1,9 @@
 import { useClient, useClientSnapshot } from '@wordado/client-data'
 import { corpusWordId, levelIndex, offeredThemes, themeEntries, type Theme } from '@wordado/core'
 import { localized, useT } from '../i18n/i18n'
+import { Link } from '../router'
 import { ThemeIcon } from '../themes/icons'
+import { themeStarted } from './practiceScope'
 
 /** Theme collections (spec §8.9): choosing one puts its words first; nothing else changes. */
 export function Themes() {
@@ -40,12 +42,14 @@ export function Themes() {
 
 function ThemeCard(props: { readonly theme: Theme; readonly active: boolean; onChoose(themeId: string | null): void }) {
   const { t, locale } = useT()
-  const { corpus, settings, states } = useClientSnapshot()
+  const { corpus, settings, states, flags } = useClientSnapshot()
   const { theme, active } = props
   const entries = themeEntries(corpus!, theme.themeId)
   const started = entries.filter((e) => states.has(corpusWordId(e.entryId))).length
   const aboveLevel = entries.some((e) => levelIndex(e.level) > levelIndex(settings.declaredLevel))
   const name = localized(theme.name, locale, corpus!.l1)
+  // Practice draws on started words that are not set aside (spec §7.4); the bar above counts every started word.
+  const canPractise = themeStarted(entries.map((e) => e.entryId), states, flags) > 0
   const startedText = t('themes.started', { started, count: entries.length })
   return (
     <li className={active ? 'panel theme-card is-active' : 'panel theme-card'}>
@@ -85,6 +89,11 @@ function ThemeCard(props: { readonly theme: Theme; readonly active: boolean; onC
           <span className="label-long">{t('themes.choose')}</span>
           <span className="label-short">{t('themes.chooseShort')}</span>
         </button>
+      )}
+      {canPractise && (
+        <Link className="button theme-practise" to={{ name: 'practice', theme: theme.themeId }} aria-label={t('themes.practiseNamed', { name })}>
+          {t('themes.practise')}
+        </Link>
       )}
     </li>
   )

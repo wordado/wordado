@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, screen } from '@testing-library/react'
 import { ITEM_SETTLE_MS } from '@wordado/client-data'
-import { Grade } from '@wordado/core'
+import { DAY_MS, Grade, themeEntries } from '@wordado/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { answerNew, renderWith, setup } from '../test/fixtures'
 import { Study } from './Study'
@@ -47,6 +47,38 @@ describe('Study', () => {
       ['Back to the path', '/path', true],
       ['Practise more', `/practice?unit=${second.unitId}`, false],
     ])
+  })
+
+  it('practises one theme from that theme’s started words, and ends with the way back to the themes', async () => {
+    const ctx = await setup()
+    await ctx.client.updateSettings({ activeTheme: 'daily-life' })
+    await answerNew(ctx.client, ctx.env, 3)
+    await ctx.client.updateSettings({ activeTheme: null })
+    await answerNew(ctx.client, ctx.env, 7)
+    ctx.env.advance(3_600_000)
+    const states = ctx.client.snapshot.states
+    renderWith(<Study kind="practice" mode="flashcard" theme="daily-life" />, ctx)
+    expect((await screen.findByRole('progressbar', { name: 'Session progress' })).getAttribute('aria-valuemax')).toBe('3')
+    const headwords = themeEntries(ctx.client.snapshot.corpus!, 'daily-life').map((e) => e.headword)
+    expect(headwords).toContain(document.querySelector('.card [lang="en"]')!.textContent)
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Stop for now' })))
+    const links = [...document.querySelectorAll('.done-actions a')].map((a) => [a.textContent, a.getAttribute('href'), a.classList.contains('primary')])
+    expect(links).toEqual([
+      ['Back to themes', '/themes', true],
+      ['Practise more', '/practice?theme=daily-life', false],
+    ])
+    expect(ctx.client.snapshot.states).toEqual(states)
+    expect(ctx.client.snapshot.settings.activeTheme).toBeNull()
+  })
+
+  it('never starts a practice run empty: with every started word due today, it practises them', async () => {
+    const ctx = await setup()
+    await answerNew(ctx.client, ctx.env, 6)
+    ctx.env.advance(30 * DAY_MS)
+    const first = ctx.client.snapshot.corpus!.units[0]!
+    renderWith(<Study kind="practice" mode="flashcard" unit={first.unitId} />, ctx)
+    expect((await screen.findByRole('progressbar', { name: 'Session progress' })).getAttribute('aria-valuemax')).toBe('6')
+    expect(screen.queryByText('Nothing to study right now.')).toBeNull()
   })
 
   it('practises over everything for a locked unit, and ends as practice always has', async () => {

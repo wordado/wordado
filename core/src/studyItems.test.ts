@@ -142,6 +142,44 @@ describe('practiceWords', () => {
     expect(practiceWords({ states: new Map(), flags: new Map(), exclude: new Set(), count: 10, rng: seededRng(1) })).toEqual([])
   })
 
+  it('uses the words today’s session serves when leaving them out would leave nothing: a repeat beats a dead end', () => {
+    const flags = new Map<WordId, WordFlag>([[id(bread), 'known']])
+    const all = new Set(states.keys())
+    const words = practiceWords({ states, flags, exclude: all, count: 10, rng: seededRng(1) })
+    expect(new Set(words)).toEqual(new Set([id(apple), id(cheese), id(milk), id(water)]))
+    // One word outside the session is enough for the usual rule.
+    const butMilk = new Set([...all].filter((w) => w !== id(milk)))
+    expect(practiceWords({ states, flags, exclude: butMilk, count: 10, rng: seededRng(1) })).toEqual([id(milk)])
+    // The same within a unit or a theme: its own words only, never a flagged one.
+    const within = new Set([id(apple), id(bread)])
+    expect(practiceWords({ states, flags, exclude: all, within, count: 10, rng: seededRng(1) })).toEqual([id(apple)])
+  })
+
+  it('leans towards weaker words without shutting the strong ones out, never repeats a word, and differs between rounds', () => {
+    // One word forgotten twice and last rated again, nine mature ones never forgotten.
+    const weak: ReviewState = { ...state(id(apple), 1), lapses: 2, lastGrade: Grade.Again }
+    const strong = [bread, cheese, milk, water, their, there, ...Array.from({ length: 3 }, (_, i) => entry(`extra${i}`, `допълнителна${i}`))]
+    const pool = new Map<WordId, ReviewState>([[id(apple), weak], ...strong.map((e) => [id(e), state(id(e), 60)] as const)])
+    const rng = seededRng(11)
+    const picked = new Map<WordId, number>()
+    const rounds = new Set<string>()
+    const ROUNDS = 4_000
+    for (let i = 0; i < ROUNDS; i += 1) {
+      const words = practiceWords({ states: pool, flags: new Map(), exclude: new Set(), count: 3, rng })
+      expect(words).toHaveLength(3)
+      expect(new Set(words).size).toBe(3)
+      rounds.add(words.join())
+      for (const w of words) picked.set(w, (picked.get(w) ?? 0) + 1)
+    }
+    const weakShare = picked.get(id(apple))! / ROUNDS
+    const strongShares = strong.map((e) => picked.get(id(e))! / ROUNDS)
+    // Measured with this seed: the weak word is in 76% of the runs of three, each strong one in 24% to 27%.
+    expect(weakShare).toBeGreaterThan(0.7)
+    expect(Math.max(...strongShares)).toBeLessThan(0.3)
+    expect(Math.min(...strongShares)).toBeGreaterThan(0.2)
+    expect(rounds.size).toBeGreaterThan(100)
+  })
+
   it('keeps to the given words when practising one unit, under the same rules', () => {
     const flags = new Map<WordId, WordFlag>([[id(bread), 'known']])
     const within = new Set([id(apple), id(bread), id(cheese), id(milk)])

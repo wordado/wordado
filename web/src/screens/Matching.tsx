@@ -7,35 +7,41 @@ import { languageName, localized, useT } from '../i18n/i18n'
 import { Link } from '../router'
 import { Translation } from '../study/Headword'
 import { useStore } from '../useStore'
-import { usePracticeUnit } from './practiceUnit'
+import { usePracticeScope, type ScopeParams } from './practiceScope'
 
-/** The practice-only matching game (spec §8.1). A new board each round; of one unit's words when the path's practice asks (`unit`). */
-export function Matching(props: { readonly unit?: string | undefined }) {
+/** The practice-only matching game (spec §8.1). A new board each round; of one unit's or one theme's words when its practice asks (`unit`, `theme`). */
+export function Matching(props: ScopeParams) {
   const { t, locale } = useT()
   const client = useClient()
   const { env } = useApp()
   const { corpus } = useClientSnapshot()
-  const unit = usePracticeUnit(props.unit)
-  const unitId = unit?.unitId
+  const scope = usePracticeScope(props)
+  const params = scope?.params ?? {}
+  const scopeKind = scope?.scope.kind
+  const scopeId = scope?.scope.id
   const [round, setRound] = useState(0)
-  // `round` is a dependency on purpose: "Play again" deals a new board.
-  const run = useMemo(() => MatchingRun.start(client, env, unitId), [client, env, unitId, round])
+  // `round` is a dependency on purpose: "Play again" deals a new board. The scope goes in by its parts, so a
+  // board is not dealt again while it is being played (every answer renews the snapshot the scope is read from).
+  const run = useMemo(
+    () => MatchingRun.start(client, env, scopeKind !== undefined && scopeId !== undefined ? { kind: scopeKind, id: scopeId } : undefined),
+    [client, env, scopeKind, scopeId, round],
+  )
   if (!run) {
     return (
       <section aria-labelledby="matching-title">
         <h1 id="matching-title">{t('matching.title')}</h1>
-        {unit && <p className="practice-unit">{t('practice.unit', { title: localized(unit.title, locale, corpus?.l1 ?? '') })}</p>}
-        <p>{t('practice.needWords')}</p>
-        <Link className="button" to={{ name: 'practice', unit: unitId }}>
+        {scope && <p className="practice-scope">{t(scope.label, { title: localized(scope.title, locale, corpus?.l1 ?? '') })}</p>}
+        <p>{t(scope?.needWords ?? 'practice.needWords')}</p>
+        <Link className="button" to={{ name: 'practice', ...params }}>
           {t('practice.back')}
         </Link>
       </section>
     )
   }
-  return <Board key={round} run={run} unit={unitId} onAgain={() => setRound((r) => r + 1)} />
+  return <Board key={round} run={run} scope={params} onAgain={() => setRound((r) => r + 1)} />
 }
 
-function Board(props: { readonly run: MatchingRun; readonly unit: string | undefined; readonly onAgain: () => void }) {
+function Board(props: { readonly run: MatchingRun; readonly scope: ScopeParams; readonly onAgain: () => void }) {
   const { t, locale } = useT()
   const { corpus } = useClientSnapshot()
   const { afterRun } = useApp()
@@ -105,7 +111,7 @@ function Board(props: { readonly run: MatchingRun; readonly unit: string | undef
   return (
     <section className="matching" aria-labelledby="matching-title">
       <div className="study-bar">
-        <Link className="study-close" to={{ name: 'practice', unit: props.unit }} aria-label={t('practice.back')}>
+        <Link className="study-close" to={{ name: 'practice', ...props.scope }} aria-label={t('practice.back')}>
           <X aria-hidden="true" size={20} strokeWidth={2} />
         </Link>
         <div
@@ -161,7 +167,7 @@ function Board(props: { readonly run: MatchingRun; readonly unit: string | undef
           <button type="button" className="button primary study-main" ref={againRef} onClick={props.onAgain}>
             {t('matching.again')}
           </button>
-          <Link className="button study-main" to={{ name: 'practice', unit: props.unit }}>
+          <Link className="button study-main" to={{ name: 'practice', ...props.scope }}>
             {t('practice.back')}
           </Link>
         </div>

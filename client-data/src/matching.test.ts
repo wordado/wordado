@@ -1,4 +1,4 @@
-import { corpusWordId, Grade, MATCHING_PAIRS } from '@wordado/core'
+import { corpusWordId, Grade, MATCHING_PAIRS, themeEntries } from '@wordado/core'
 import { describe, expect, it, vi } from 'vitest'
 import { MatchingRun } from './matching'
 import { openSampleClient } from './testing/sample'
@@ -28,12 +28,43 @@ describe('MatchingRun', () => {
     }
     // Twenty words of the first unit are started, and four of the second.
     const [first, second] = client.snapshot.corpus!.units
-    expect(MatchingRun.start(client, env, second!.unitId)).toBeNull()
-    const run = MatchingRun.start(client, env, first!.unitId)!
+    expect(MatchingRun.start(client, env, { kind: 'unit', id: second!.unitId })).toBeNull()
+    const run = MatchingRun.start(client, env, { kind: 'unit', id: first!.unitId })!
     expect(run.snapshot.left).toHaveLength(MATCHING_PAIRS)
     expect(run.snapshot.left.every((e) => first!.wordIds.includes(corpusWordId(e.entryId)))).toBe(true)
     await client.answer({ wordId: client.snapshot.plan!.newWords[0]!, mode: 'flashcard', direction: 'en_to_l1', grade: Grade.Good, latencyMs: 2000, practice: false })
-    expect(MatchingRun.start(client, env, second!.unitId)!.snapshot.left.every((e) => second!.wordIds.includes(corpusWordId(e.entryId)))).toBe(true)
+    expect(MatchingRun.start(client, env, { kind: 'unit', id: second!.unitId })!.snapshot.left.every((e) => second!.wordIds.includes(corpusWordId(e.entryId)))).toBe(true)
+  })
+
+  it('deals a theme’s board from that theme’s started words only', async () => {
+    const { env, client } = await clientWithWords(10)
+    const theme = themeEntries(client.snapshot.corpus!, 'daily-life').map((e) => corpusWordId(e.entryId))
+    const scope = { kind: 'theme', id: 'daily-life' } as const
+    const startedOf = () => theme.filter((wordId) => client.snapshot.states.has(wordId))
+    // Words of the theme not yet started, as a chosen theme would bring them forward (spec §8.9): up to four in all, then a fifth.
+    const fresh = theme.filter((wordId) => !client.snapshot.states.has(wordId))
+    const introduce = (wordId: (typeof theme)[number]) => client.answer({ wordId, mode: 'flashcard', direction: 'en_to_l1', grade: Grade.Good, latencyMs: 2000, practice: false })
+    expect(startedOf().length).toBeLessThan(MATCHING_PAIRS)
+    while (startedOf().length < MATCHING_PAIRS - 1) await introduce(fresh.shift()!)
+    expect(MatchingRun.start(client, env, scope)).toBeNull()
+    await introduce(fresh.shift()!)
+    expect(new Set(MatchingRun.start(client, env, scope)!.snapshot.left.map((e) => corpusWordId(e.entryId)))).toEqual(new Set(startedOf()))
+  })
+
+  it('deals weaker words more readily, and the strong ones still', async () => {
+    const { env, client } = await clientWithWords(9)
+    // One more word, forgotten at once: the weakest of the ten.
+    const weak = client.snapshot.plan!.newWords[0]!
+    await client.answer({ wordId: weak, mode: 'flashcard', direction: 'en_to_l1', grade: Grade.Again, latencyMs: 2000, practice: false })
+    const dealt = new Map<string, number>()
+    const ROUNDS = 400
+    for (let i = 0; i < ROUNDS; i += 1) {
+      for (const e of MatchingRun.start(client, env)!.snapshot.left) dealt.set(corpusWordId(e.entryId), (dealt.get(corpusWordId(e.entryId)) ?? 0) + 1)
+    }
+    const others = [...dealt].filter(([wordId]) => wordId !== weak).map(([, count]) => count)
+    expect(others).toHaveLength(9)
+    expect(dealt.get(weak)!).toBeGreaterThan(Math.max(...others))
+    expect(Math.min(...others)).toBeGreaterThan(ROUNDS / 4)
   })
 
   it('matches pairs from either side, records each as practice, and grades a missed pair Again', async () => {

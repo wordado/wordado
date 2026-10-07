@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, screen } from '@testing-library/react'
-import { corpusWordId, themeEntries } from '@wordado/core'
+import { corpusWordId, Grade, themeEntries } from '@wordado/core'
 import { afterEach, describe, expect, it } from 'vitest'
 import { answerNew, renderWith, setup } from '../test/fixtures'
 import { Themes } from './Themes'
@@ -34,6 +34,33 @@ describe('Themes', () => {
     expect(screen.getByText('Studying now')).toBeTruthy()
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Back to the path' })))
     expect(ctx.client.snapshot.settings.activeTheme).toBeNull()
+  })
+
+  it('offers to practise a theme once one of its words is started and not set aside, without choosing the theme', async () => {
+    const ctx = await setup()
+    renderWith(<Themes />, ctx)
+    expect(screen.queryByRole('link', { name: /^Practise this theme/ })).toBeNull()
+    const first = corpusWordId(themeEntries(ctx.client.snapshot.corpus!, 'daily-life')[0]!.entryId)
+    await act(() => ctx.client.answer({ wordId: first, mode: 'flashcard', direction: 'en_to_l1', grade: Grade.Good, latencyMs: 2_000, practice: false }))
+    const link = screen.getByRole('link', { name: 'Practise this theme: Daily life' })
+    expect(link.textContent).toBe('Practise this theme')
+    expect(link.getAttribute('href')).toBe('/practice?theme=daily-life')
+    // A link, not a choice: the study theme is the learner's to set with the button beside it.
+    fireEvent.click(link)
+    expect(ctx.client.snapshot.settings.activeTheme).toBeNull()
+    expect(screen.getByRole('button', { name: 'Study this theme: Daily life' })).toBeTruthy()
+    await act(() => ctx.client.setFlag(first, 'suspended'))
+    expect(screen.queryByRole('link', { name: /^Practise this theme/ })).toBeNull()
+  })
+
+  it('offers practice on the theme being studied too', async () => {
+    const ctx = await setup()
+    await ctx.client.updateSettings({ activeTheme: 'daily-life' })
+    await answerNew(ctx.client, ctx.env, 3)
+    renderWith(<Themes />, ctx)
+    expect(screen.getByText('Studying now')).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Practise this theme: Daily life' }).getAttribute('href')).toBe('/practice?theme=daily-life')
+    expect(ctx.client.snapshot.settings.activeTheme).toBe('daily-life')
   })
 
   it('names themes from the pack in Bulgarian', async () => {

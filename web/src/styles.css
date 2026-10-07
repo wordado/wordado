@@ -1783,6 +1783,11 @@ dialog.report textarea {
   font-weight: 600;
 }
 
+/* Practise this theme: a row of its own under the card on a phone, under the main action in the grid. */
+.theme-practise {
+  grid-column: 1 / -1;
+}
+
 .theme-choose .label-long {
   display: none;
 }
@@ -2052,8 +2057,8 @@ dialog.report textarea {
   margin: var(--space-2) 0 0;
 }
 
-/* The unit being practised, under the heading. */
-.practice-unit {
+/* The unit or theme being practised, under the heading. */
+.practice-scope {
   margin: var(--space-1) 0 0;
   font: 600 var(--step-1) / 1.3 var(--font-entry);
 }
