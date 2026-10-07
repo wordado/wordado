@@ -22,9 +22,8 @@ export function adminTabOf(hash: string): Tab | null {
 }
 
 /** The admin page: Overview, Reviewers, Assignments and Submissions as tabs in the header, one shown at a time. The
- * tab is kept in the address (`#reviewers`), so a reload stays put. `onBack` is the way to the reviewer's own
- * assignments, drawn beside the tabs. */
-export function Admin(props: { onBack?: () => void }) {
+ * tab is kept in the address (`#reviewers`), so a reload stays put. */
+export function Admin() {
   const [snapshot, setSnapshot] = useState<SnapshotStatus | null | undefined>(undefined)
   const [reviewers, setReviewers] = useState<ReviewerView[] | undefined>(undefined)
   const [assignments, setAssignments] = useState<AssignmentView[] | undefined>(undefined)
@@ -97,7 +96,7 @@ export function Admin(props: { onBack?: () => void }) {
   return (
     <div className="admin page wide">
       <HeaderSlot>
-        <AdminTabs tab={tab} onGo={go} {...(props.onBack ? { onBack: props.onBack } : {})} />
+        <AdminTabs tab={tab} onGo={go} />
       </HeaderSlot>
       {notice && (
         <p role="status" className="notice">
@@ -116,9 +115,9 @@ export function Admin(props: { onBack?: () => void }) {
   )
 }
 
-/** The tabs, for the header: the way back to the reviewer's assignments, then the four admin pages as a tablist.
+/** The tabs, for the header: the four admin pages as a tablist.
  * On a phone they are a strip that slides sideways; the chosen tab is slid into view. */
-function AdminTabs(props: { tab: Tab; onGo(tab: Tab): void; onBack?: () => void }) {
+function AdminTabs(props: { tab: Tab; onGo(tab: Tab): void }) {
   const { tab } = props
   const strip = useRef<HTMLElement>(null)
 
@@ -144,11 +143,6 @@ function AdminTabs(props: { tab: Tab; onGo(tab: Tab): void; onBack?: () => void 
 
   return (
     <nav ref={strip} className="tabs admin-tabs" aria-label="Admin">
-      {props.onBack && (
-        <button type="button" onClick={props.onBack}>
-          My assignments
-        </button>
-      )}
       <div role="tablist" aria-label="Admin pages">
         {TABS.map(([id, label]) => (
           <button key={id} type="button" role="tab" id={`admin-tab-${id}`} aria-selected={tab === id} aria-controls="admin-panel" tabIndex={tab === id ? 0 : -1} onClick={() => props.onGo(id)} onKeyDown={onKey}>
