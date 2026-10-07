@@ -68,6 +68,16 @@ function Screen(props: { readonly route: Route }) {
 /** Routes that run a study session: the shell steps aside so the card has the screen (focus mode). */
 const FOCUS: ReadonlySet<Route['name']> = new Set(['study', 'practice-words', 'matching', 'placement'])
 
+/** The wordmark: the icon, then "Word" in ink and "ado" in rose. The name is not translated; it reads as one word. */
+const WORDMARK = (
+  <>
+    <img src="/icon.svg" alt="" width="36" height="36" />
+    <span className="wordmark-name">
+      Word<span className="wordmark-ado">ado</span>
+    </span>
+  </>
+)
+
 /**
  * The shell: the masthead's first row (the icon and wordmark, the language,
  * the account), the navigation (a second row, or the tab bar on a phone),
@@ -125,14 +135,11 @@ export function App(props: { readonly resumed: boolean; readonly setup: boolean;
           <div className="masthead-top">
             {/* Inert while the setup shows: home would only show it again. From Sign in it leads back to the setup. */}
             {inSetup ? (
-              <span className="wordmark">
-                <img src="/icon.svg" alt="" width="36" height="36" />
-                {t('app.name')}
-              </span>
+              <span className="wordmark">{WORDMARK}</span>
             ) : (
-              <Link className="wordmark" to={{ name: 'home' }}>
-                <img src="/icon.svg" alt="" width="36" height="36" />
-                {t('app.name')}
+              // Named in one word: the two parts of the visible name are never read as two.
+              <Link className="wordmark" to={{ name: 'home' }} aria-label={t('app.name')}>
+                {WORDMARK}
               </Link>
             )}
             <div className="masthead-actions">

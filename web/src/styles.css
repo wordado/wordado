@@ -191,6 +191,23 @@ p {
   height: 2.25rem;
 }
 
+/* "Word" in ink, "ado" in rose: one word to a screen reader. Where two colours cannot be used, one. */
+.wordmark-ado {
+  color: var(--rose);
+}
+
+@media (forced-colors: active) {
+  .wordmark-ado {
+    color: inherit;
+  }
+}
+
+@media print {
+  .wordmark-ado {
+    color: inherit;
+  }
+}
+
 /* The icon's navy square would melt into the dark paper; a hairline keeps its shape. */
 @media (prefers-color-scheme: dark) {
   .wordmark img {
