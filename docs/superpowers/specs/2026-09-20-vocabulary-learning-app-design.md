@@ -640,12 +640,26 @@ seen. `core` composes each session as follows.
    replay**, and never count as a successful review for any progress rule — so
    grinding cannot distort the schedule. A learner-chosen single-mode session
    is not practice: it serves due words, in that mode, and counts normally.
-   Practice can also be **kept to one unit**, opened from that unit on the
-   path (§7.2): the same ways to practise, drawing only on that unit's started
-   words under the same rules as any practice (not set aside; a practice run
-   also leaves out the words today's session serves; matching needs five). It
-   is practice in every respect above, and changes neither the schedule, the
-   daily session, nor which words are introduced.
+   Practice can also be **kept to one unit or one theme**, opened from that
+   unit on the path (§7.2) or that theme on the themes screen (§8.9): the same
+   ways to practise, drawing only on its started words under the same rules as
+   any practice. It is practice in every respect above, and changes neither
+   the schedule, the daily session, which words are introduced, nor the
+   learner's chosen collection.
+
+   *Which words practice picks.* Started words that are not set aside. A
+   practice run leaves out the words today's session serves — practising them
+   would only repeat the session — unless that leaves nothing, in which case it
+   uses them: practice never touches the schedule, and a repeat is better than
+   a run with nothing in it. Matching needs five such words. Every pick — a
+   run's words and a matching board — is a weighted random draw without
+   replacement that **leans towards weaker words**: a mature word that was
+   never forgotten and was last rated good or easy has weight 1, and a word
+   gains weight for having been forgotten before (lapses), for short-lived
+   memory (learning or young, by stability), and for a last scheduled rating
+   of again or hard, up to a cap of 5. It is a lean, not a sort: every word can
+   still come up. The weights are tuning (§15) and read only what the review
+   state already holds.
 
 **Known and suspended words.** A learner can flag any word *known* ("I don't
 need this") or *suspended* ("not now"). Either removes it from the new-word
@@ -1088,6 +1102,12 @@ new is that the tags become learner-facing, which has three consequences.
   can appear as the corpus grows.
 
 Themes are part of studying and fall under the free-tier principle (§8.8).
+
+*Practising a theme.* Every theme with at least one started word that is not
+set aside offers practice kept to that theme (§7.4). It is separate from
+choosing the theme: it does not change the active collection, and it draws
+only on started words, so a theme's words above the learner's level are
+practised only once they have been started.
 
 **Exam collections — Phase 3.** *IELTS, TOEFL, academic.* These wait because
 they need B2–C1 entries, which arrive in Phase 2, and separate curation.
@@ -1809,6 +1829,10 @@ owner.
   word offers practice of that unit.
 - **Practice (§7.4):** practice can be kept to one unit's started words. It
   stays practice: outside the schedule, at reduced XP.
+- **Practice (§7.4, §8.9), same day:** practice can also be kept to one theme,
+  from the themes screen; every practice pick leans towards weaker words; and
+  a practice run uses the words today's session serves when nothing else is
+  left, so it never starts empty.
 
 ### Approval status
 
