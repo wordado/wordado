@@ -7,7 +7,7 @@ import { listQueues, listRows } from './model'
 import { readReviewer, writeReviewer } from './settings'
 import type { DecisionRequest } from './types'
 
-const TYPES: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.woff2': 'font/woff2' }
+const TYPES: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2' }
 const STATUS = { changed: 409, gone: 410, invalid: 400 } as const
 
 /** Thrown by body() for a request the client got wrong (bad JSON); the route catch-all answers 400 for this, 500 for anything else. */

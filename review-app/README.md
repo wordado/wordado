@@ -147,6 +147,11 @@ writes a picture of every screen of both modes (desktop and phone, light and dar
 `review-app/.e2e/screenshots/`, for a pull request description or for a look at the whole app after a change to its
 styles. The pictures are not committed. It ends by naming any screen where something is wider than the screen.
 
+    pnpm --filter @wordado/review-app icons
+
+draws `public/apple-touch-icon.png` again from `public/icon.svg` (the review app's own icon), after a change to
+the SVG. The PNG is committed.
+
 ### How a reviewer works
 
 A reviewer gets an invite email from the app, and signs in at `https://review.wordado.com` with a one-time code
