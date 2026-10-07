@@ -20,6 +20,22 @@ describe('MatchingRun', () => {
     expect(MatchingRun.start(client, env)).toBeNull()
   })
 
+  it('needs five introduced words of the unit when practising one unit, and deals only that unit’s words', async () => {
+    const { env, client } = await clientWithWords(10)
+    await client.updateSettings({ newWordLimit: 30 })
+    for (const wordId of client.snapshot.plan!.newWords.slice(0, 14)) {
+      await client.answer({ wordId, mode: 'flashcard', direction: 'en_to_l1', grade: Grade.Good, latencyMs: 2000, practice: false })
+    }
+    // Twenty words of the first unit are started, and four of the second.
+    const [first, second] = client.snapshot.corpus!.units
+    expect(MatchingRun.start(client, env, second!.unitId)).toBeNull()
+    const run = MatchingRun.start(client, env, first!.unitId)!
+    expect(run.snapshot.left).toHaveLength(MATCHING_PAIRS)
+    expect(run.snapshot.left.every((e) => first!.wordIds.includes(corpusWordId(e.entryId)))).toBe(true)
+    await client.answer({ wordId: client.snapshot.plan!.newWords[0]!, mode: 'flashcard', direction: 'en_to_l1', grade: Grade.Good, latencyMs: 2000, practice: false })
+    expect(MatchingRun.start(client, env, second!.unitId)!.snapshot.left.every((e) => second!.wordIds.includes(corpusWordId(e.entryId)))).toBe(true)
+  })
+
   it('matches pairs from either side, records each as practice, and grades a missed pair Again', async () => {
     const { env, client } = await clientWithWords(MATCHING_PAIRS)
     const states = client.snapshot.states

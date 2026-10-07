@@ -83,24 +83,28 @@ export interface PracticeInput {
   readonly flags: ReadonlyMap<WordId, WordFlag>
   /** Words the schedule serves now; practising them would only duplicate the session. */
   readonly exclude: ReadonlySet<WordId>
+  /** Practising one unit: its words, and the run keeps to them. Absent for practice over everything. */
+  readonly within?: ReadonlySet<WordId>
   readonly count: number
   readonly rng: Rng
 }
 
 /** Words for extra practice (spec §7.4): introduced, not flagged, not in today's session. */
 export function practiceWords(input: PracticeInput): WordId[] {
-  const candidates = [...input.states.keys()].filter((id) => !input.flags.has(id) && !input.exclude.has(id))
+  const { within } = input
+  const candidates = [...input.states.keys()].filter((id) => !input.flags.has(id) && !input.exclude.has(id) && (!within || within.has(id)))
   return shuffle(candidates, input.rng).slice(0, Math.max(0, input.count))
 }
 
-/** What a matching board may use (spec §8.1): introduced, live corpus words. */
+/** What a matching board may use (spec §8.1): introduced, live corpus words; those of `within` when practising one unit. */
 export function matchingCandidates(
   corpus: Corpus,
   states: ReadonlyMap<WordId, ReviewState>,
   flags: ReadonlyMap<WordId, WordFlag>,
+  within?: ReadonlySet<WordId>,
 ): CorpusEntry[] {
   return [...corpus.entries.values()].filter((e) => {
     const wordId = corpusWordId(e.entryId)
-    return !e.retired && states.has(wordId) && !flags.has(wordId)
+    return !e.retired && states.has(wordId) && !flags.has(wordId) && (!within || within.has(wordId))
   })
 }

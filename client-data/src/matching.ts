@@ -1,7 +1,7 @@
 import { buildMatchingBoard, corpusWordId, gradeAnswer, matchingCandidates, MATCHING_PAIRS, shuffle, type CorpusEntry } from '@wordado/core'
 import type { Client } from './client'
 import { createStore, type Store } from './store'
-import type { RunEnv } from './run'
+import { unitWords, type RunEnv } from './run'
 
 export type MatchingSide = 'left' | 'right'
 
@@ -52,11 +52,11 @@ export class MatchingRun {
     })
   }
 
-  /** A board of MATCHING_PAIRS introduced words, or null until the learner has that many. */
-  static start(client: Client, env: RunEnv): MatchingRun | null {
+  /** A board of MATCHING_PAIRS introduced words, or null until the learner has that many; of one unit, when `unitId` names it. */
+  static start(client: Client, env: RunEnv, unitId?: string): MatchingRun | null {
     const { corpus, states, flags } = client.snapshot
     if (!corpus) return null
-    const board = buildMatchingBoard(matchingCandidates(corpus, states, flags), MATCHING_PAIRS, env.rng)
+    const board = buildMatchingBoard(matchingCandidates(corpus, states, flags, unitWords(client, unitId)), MATCHING_PAIRS, env.rng)
     return board ? new MatchingRun(client, env, board) : null
   }
 

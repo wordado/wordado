@@ -24,6 +24,8 @@ export interface RunOptions {
   readonly kind: RunKind
   /** A single-mode run by the learner's choice; null for the mixed default (spec §7.4). */
   readonly mode: Mode | null
+  /** Practice of one unit (spec §7.4): the run keeps to that unit's words. Ignored by a session, and when no such unit exists. */
+  readonly unitId?: string
   /** Asked per item, so a clip cached mid-run counts (spec §9.3). */
   cachedClips(): ReadonlySet<string>
   online(): boolean
@@ -70,6 +72,12 @@ const INITIAL: RunSnapshot = {
   error: null,
 }
 
+/** The words of the unit being practised; undefined for practice over everything, and for a unit the corpus does not hold. */
+export function unitWords(client: Client, unitId: string | undefined): ReadonlySet<WordId> | undefined {
+  const unit = unitId === undefined ? undefined : client.snapshot.corpus?.units.find((u) => u.unitId === unitId)
+  return unit && new Set(unit.wordIds)
+}
+
 const messageOf = (err: unknown): string => (err instanceof Error ? err.message : String(err))
 
 /**
@@ -77,7 +85,8 @@ const messageOf = (err: unknown): string => (err instanceof Error ? err.message 
  * word from the live plan after every answer — reviews first, then new words —
  * so a word answered Again returns once it is due again, and the run ends when
  * nothing is due now. A practice run draws PRACTICE_RUN_SIZE introduced words
- * that today's session does not serve, and records them as practice.
+ * that today's session does not serve — of one unit, when `unitId` names it —
+ * and records them as practice.
  */
 export class StudyRun {
   readonly store: Store<RunSnapshot> = createStore(INITIAL)
@@ -109,7 +118,8 @@ export class StudyRun {
     if (options.kind === 'practice') {
       const { states, flags, plan } = client.snapshot
       const exclude = new Set<WordId>([...(plan?.reviews ?? []), ...(plan?.newWords ?? [])])
-      run.practiceQueue = practiceWords({ states, flags, exclude, count: PRACTICE_RUN_SIZE, rng: env.rng })
+      const within = unitWords(client, options.unitId)
+      run.practiceQueue = practiceWords({ states, flags, exclude, ...(within && { within }), count: PRACTICE_RUN_SIZE, rng: env.rng })
     }
     run.advance()
     return run

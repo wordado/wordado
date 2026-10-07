@@ -1,4 +1,4 @@
-import { Grade, RELEARN_DELAY_MS, type Mode } from '@wordado/core'
+import { Grade, RELEARN_DELAY_MS, type Mode, type WordId } from '@wordado/core'
 import { describe, expect, it, vi } from 'vitest'
 import { ITEM_SETTLE_MS, PRACTICE_RUN_SIZE, StudyRun, type RunOptions } from './run'
 import { openSampleClient } from './testing/sample'
@@ -127,6 +127,36 @@ describe('StudyRun', () => {
     await playThrough(run, env, Grade.Again)
     expect(run.snapshot).toMatchObject({ phase: 'done', answered: PRACTICE_RUN_SIZE })
     expect(client.snapshot.states).toEqual(states)
+  })
+
+  it('draws a unit’s practice only from that unit’s started words, and leaves the schedule alone', async () => {
+    const env = testEnv()
+    const client = await openSampleClient(env)
+    await client.updateSettings({ newWordLimit: 30 })
+    // The first unit's twenty words and five of the second's.
+    for (const wordId of client.snapshot.plan!.newWords.slice(0, 25)) {
+      await client.answer({ wordId, mode: 'flashcard', direction: 'en_to_l1', grade: Grade.Good, latencyMs: 2_000, practice: false })
+    }
+    // An hour on: introduced today, not due, so practice may serve them.
+    env.advance(3_600_000)
+    const [first, second, third] = client.snapshot.corpus!.units
+    const states = client.snapshot.states
+    const seen: WordId[] = []
+    const run = await StudyRun.start(client, env, options({ kind: 'practice', mode: 'flashcard', unitId: second!.unitId }))
+    expect(run.snapshot.remaining).toBe(5)
+    for (let guard = 0; guard < 20 && run.snapshot.item; guard += 1) {
+      seen.push(run.snapshot.item.wordId)
+      env.advance(ITEM_SETTLE_MS)
+      run.reveal()
+      env.advance(ITEM_SETTLE_MS)
+      await run.rate(Grade.Again)
+    }
+    expect(seen).toHaveLength(5)
+    expect(seen.every((wordId) => second!.wordIds.includes(wordId) && states.has(wordId))).toBe(true)
+    expect(client.snapshot.states).toEqual(states)
+    // A larger unit still gives a run of the usual size; a unit with nothing started gives none.
+    expect((await StudyRun.start(client, env, options({ kind: 'practice', unitId: first!.unitId }))).snapshot.remaining).toBe(PRACTICE_RUN_SIZE)
+    expect((await StudyRun.start(client, env, options({ kind: 'practice', unitId: third!.unitId }))).snapshot.phase).toBe('done')
   })
 
   it('offers listening only through availableModes: never without audio', async () => {

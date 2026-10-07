@@ -141,6 +141,13 @@ describe('practiceWords', () => {
   it('is empty before any word is introduced', () => {
     expect(practiceWords({ states: new Map(), flags: new Map(), exclude: new Set(), count: 10, rng: seededRng(1) })).toEqual([])
   })
+
+  it('keeps to the given words when practising one unit, under the same rules', () => {
+    const flags = new Map<WordId, WordFlag>([[id(bread), 'known']])
+    const within = new Set([id(apple), id(bread), id(cheese), id(milk)])
+    const words = practiceWords({ states, flags, exclude: new Set([id(cheese)]), within, count: 10, rng: seededRng(1) })
+    expect(new Set(words)).toEqual(new Set([id(apple), id(milk)]))
+  })
 })
 
 describe('matchingCandidates', () => {
@@ -148,5 +155,10 @@ describe('matchingCandidates', () => {
     const states = new Map([apple, bread, old, cheese].map((e) => [id(e), state(id(e), 1)]))
     const flags = new Map<WordId, WordFlag>([[id(cheese), 'suspended']])
     expect(matchingCandidates(corpus(), states, flags)).toEqual([apple, bread])
+  })
+
+  it('keeps to the given words when practising one unit', () => {
+    const states = new Map([apple, bread, old, cheese].map((e) => [id(e), state(id(e), 1)]))
+    expect(matchingCandidates(corpus(), states, new Map(), new Set([id(bread), id(old), id(milk)]))).toEqual([bread])
   })
 })
