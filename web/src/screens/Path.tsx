@@ -6,6 +6,7 @@ import { localized, useT, type MessageKey } from '../i18n/i18n'
 import { Link } from '../router'
 import { FlagControls } from '../study/FlagControls'
 import { levelStatus, levelToOpen, unitsAtFirst, type LevelStatus, type UnitStatus } from './pathFolding'
+import { todayCounts } from './today'
 
 function statusOf(unit: Unit, progress: UnitProgress | undefined, path: PathView): UnitStatus {
   if (!path.unlocked.has(unit.unitId)) return 'locked'
@@ -34,6 +35,9 @@ export const LEVEL_STATUS: Readonly<Record<LevelStatus, MessageKey>> = {
   open: 'path.levelOpen',
 }
 
+/** What the current unit says about today's session: Start studying, that nothing is left, or nothing yet. */
+type UnitToday = 'unknown' | 'nothing' | 'something'
+
 /** Toggles one key in a set held in state. */
 const toggled = (set: ReadonlySet<string>, key: string): ReadonlySet<string> => {
   const next = new Set(set)
@@ -50,7 +54,7 @@ const toggled = (set: ReadonlySet<string>, key: string): ReadonlySet<string> => 
  */
 export function Path() {
   const { t } = useT()
-  const { corpus, progress, path } = useClientSnapshot()
+  const { corpus, progress, path, plan } = useClientSnapshot()
   // Levels the learner opened or folded, over the default (only the level being studied is open).
   const [levelChoice, setLevelChoice] = useState<ReadonlyMap<string, boolean>>(new Map())
   const [doneOpen, setDoneOpen] = useState<ReadonlySet<string>>(new Set())
@@ -66,6 +70,9 @@ export function Path() {
     return { level, units, statuses, skipped: progress.levels[level]?.kind === 'skipped' }
   })
   const studied = levelToOpen(levels)
+  // As on Today: with nothing due and the day's new words taken, a session would end at once. Until the plan is
+  // known the path says nothing about today, as Today itself shows nothing.
+  const today: UnitToday = !plan ? 'unknown' : todayCounts(plan).nothing ? 'nothing' : 'something'
 
   return (
     <section className="path" aria-labelledby="path-title">
@@ -87,6 +94,7 @@ export function Path() {
             status={statuses[i]!}
             progress={progress.units.get(units[i]!.unitId)}
             line={next === undefined ? null : statuses[next] !== 'locked'}
+            today={today}
             wordsOpen={openUnits.has(units[i]!.unitId)}
             onWordsToggle={() => setOpenUnits((prev) => toggled(prev, units[i]!.unitId))}
           />
@@ -177,6 +185,7 @@ function UnitItem(props: {
   readonly progress: UnitProgress | undefined
   /** The line to the next unit shown: null for the last, true once that unit is reachable. */
   readonly line: boolean | null
+  readonly today: UnitToday
   readonly wordsOpen: boolean
   onWordsToggle(): void
 }) {
@@ -185,6 +194,9 @@ function UnitItem(props: {
   const { corpus } = useClientSnapshot()
   const { unit, status, progress } = props
   const Icon = ICON[status]
+  const title = localized(unit.title, locale, corpus?.l1 ?? '')
+  // Practice draws on started words that are not set aside (spec §7.4), which is what `introduced` counts.
+  const canPractise = status !== 'locked' && (progress?.introduced ?? 0) > 0
   let words: ReactNode = null
   if (props.wordsOpen) {
     words = (
@@ -214,7 +226,7 @@ function UnitItem(props: {
       </div>
       <div className="unit-card">
         <div className="unit-head">
-          <h3>{localized(unit.title, locale, corpus?.l1 ?? '')}</h3>
+          <h3>{title}</h3>
           <p className="unit-status">{t(UNIT_STATUS[status])}</p>
         </div>
         {status !== 'locked' && progress && (
@@ -227,10 +239,20 @@ function UnitItem(props: {
             <p className="note">{t('path.introduced', { introduced: progress.introduced, live: progress.live })}</p>
           </div>
         )}
-        {status === 'current' && (
-          <Link className="button primary study-main" to={{ name: 'study', mode: null }}>
-            {t('home.start')}
-          </Link>
+        {((status === 'current' && props.today !== 'unknown') || canPractise) && (
+          <div className="unit-actions">
+            {status === 'current' && props.today === 'nothing' && <p className="unit-today">{t('home.allDone')}</p>}
+            {status === 'current' && props.today === 'something' && (
+              <Link className="button primary study-main" to={{ name: 'study', mode: null }}>
+                {t('home.start')}
+              </Link>
+            )}
+            {canPractise && (
+              <Link className="button study-main unit-practise" to={{ name: 'practice', unit: unit.unitId }} aria-label={t('path.practiseUnitNamed', { title })}>
+                {t('path.practiseUnit')}
+              </Link>
+            )}
+          </div>
         )}
         <details className="unit-words" open={props.wordsOpen} onToggle={(e) => e.currentTarget.open !== props.wordsOpen && props.onWordsToggle()}>
           <summary>

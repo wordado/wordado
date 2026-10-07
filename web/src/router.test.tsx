@@ -14,6 +14,13 @@ const ROUTES: Route[] = [
   { name: 'practice-words', mode: null },
   { name: 'practice-words', mode: 'multiple_choice' },
   { name: 'matching' },
+  { name: 'practice', unit: 'a1-02' },
+  { name: 'practice-words', mode: null, unit: 'a1-02' },
+  { name: 'practice-words', mode: 'flashcard', unit: 'a1-02' },
+  { name: 'matching', unit: 'a1-02' },
+  { name: 'practice', theme: 'daily-life' },
+  { name: 'practice-words', mode: 'flashcard', theme: 'daily-life' },
+  { name: 'matching', theme: 'daily-life' },
   { name: 'path' },
   { name: 'themes' },
   { name: 'progress' },
@@ -31,6 +38,30 @@ describe('routes', () => {
     expect(parseRoute('/nowhere', '')).toEqual({ name: 'home' })
     expect(parseRoute('/study', '?mode=matching')).toEqual({ name: 'study', mode: null })
     expect(parseRoute('/study/', '')).toEqual({ name: 'study', mode: null })
+  })
+
+  it('carries the unit being practised in the query, before the mode', () => {
+    expect(routeHref({ name: 'practice', unit: 'a1-02' })).toBe('/practice?unit=a1-02')
+    expect(routeHref({ name: 'practice-words', mode: 'multiple_choice', unit: 'a1-02' })).toBe('/practice/words?unit=a1-02&mode=multiple_choice')
+    expect(routeHref({ name: 'matching', unit: 'a1-02' })).toBe('/practice/matching?unit=a1-02')
+    expect(routeHref({ name: 'practice', unit: 'a b&c' })).toBe('/practice?unit=a+b%26c')
+    expect(parseRoute('/practice', '?unit=a+b%26c')).toEqual({ name: 'practice', unit: 'a b&c' })
+    expect(parseRoute('/practice/words', '?mode=flashcard&unit=a1-02')).toEqual({ name: 'practice-words', mode: 'flashcard', unit: 'a1-02' })
+    // No unit, or an empty one, is practice over everything; a session has no unit.
+    expect(parseRoute('/practice', '?unit=')).toEqual({ name: 'practice' })
+    expect('unit' in parseRoute('/practice/matching', '')).toBe(false)
+    expect(parseRoute('/study', '?unit=a1-02')).toEqual({ name: 'study', mode: null })
+  })
+
+  it('carries the theme being practised the same way, and lets a unit win over it', () => {
+    expect(routeHref({ name: 'practice', theme: 'daily-life' })).toBe('/practice?theme=daily-life')
+    expect(routeHref({ name: 'practice-words', mode: 'multiple_choice', theme: 'daily-life' })).toBe('/practice/words?theme=daily-life&mode=multiple_choice')
+    expect(routeHref({ name: 'matching', theme: 'daily-life' })).toBe('/practice/matching?theme=daily-life')
+    expect(parseRoute('/practice/words', '?mode=flashcard&theme=daily-life')).toEqual({ name: 'practice-words', mode: 'flashcard', theme: 'daily-life' })
+    expect(parseRoute('/practice', '?theme=daily-life&unit=a1-02')).toEqual({ name: 'practice', unit: 'a1-02' })
+    expect('theme' in parseRoute('/practice', '?theme=daily-life&unit=a1-02')).toBe(false)
+    expect(parseRoute('/practice', '?theme=')).toEqual({ name: 'practice' })
+    expect(parseRoute('/study', '?theme=daily-life')).toEqual({ name: 'study', mode: null })
   })
 
   it('routes the sign-in screen', () => {

@@ -583,6 +583,14 @@ is due.** A study session draws from everything the learner has ever unlocked,
 scheduled by FSRS — not from the current unit. The unit path exists to give the
 learner a visible map and a sense of place, not to constrain daily review.
 
+**What the path offers.** The current unit carries the way into the daily
+session, shown only while that session has something in it — a review due or a
+new word left of the day's quota, the same rule as the home screen. When it has
+nothing, the unit says so in its place. Every unlocked unit with at least one
+started word that is not set aside also offers **practice of that unit**
+(§7.4), so a learner can go back over an open unit at any time. A locked unit
+offers neither.
+
 ### 7.3 Grading inputs
 
 Every game mode reports a grade plus response latency. A correct-but-slow
@@ -632,6 +640,29 @@ seen. `core` composes each session as follows.
    replay**, and never count as a successful review for any progress rule — so
    grinding cannot distort the schedule. A learner-chosen single-mode session
    is not practice: it serves due words, in that mode, and counts normally.
+   Practice can also be **kept to one unit or one theme**, opened from that
+   unit on the path (§7.2) or that theme on the themes screen (§8.9): the same
+   ways to practise, drawing only on its started words under the same rules as
+   any practice. It is practice in every respect above, and changes neither
+   the schedule, the daily session, which words are introduced, nor the
+   learner's chosen collection.
+
+   *Which words practice picks.* Started words that are neither set aside nor
+   retired. A practice run leaves out the words today's session serves —
+   practising them would only repeat the session. Those words come back only
+   when the scope would otherwise have nothing at all: practice never touches
+   the schedule, and a repeat is better than a run with nothing in it. They
+   are not used to fill a run up, so a run can be shorter than ten when only a
+   few of a scope's words are outside today's session; that is intended.
+   Matching needs five such words. Every pick — a
+   run's words and a matching board — is a weighted random draw without
+   replacement that **leans towards weaker words**: a mature word that was
+   never forgotten and was last rated good or easy has weight 1, and a word
+   gains weight for having been forgotten before (lapses), for short-lived
+   memory (learning or young, by stability), and for a last scheduled rating
+   of again or hard, up to a cap of 5. It is a lean, not a sort: every word can
+   still come up. The weights are tuning (§15) and read only what the review
+   state already holds.
 
 **Known and suspended words.** A learner can flag any word *known* ("I don't
 need this") or *suspended* ("not now"). Either removes it from the new-word
@@ -1074,6 +1105,24 @@ new is that the tags become learner-facing, which has three consequences.
   can appear as the corpus grows.
 
 Themes are part of studying and fall under the free-tier principle (§8.8).
+
+*The themes screen* shows the themes in three groups, each under its own
+heading, so that a learner sees at a glance which theme is chosen, which can
+be practised, and that choosing another replaces the choice. **Studying now**
+holds the chosen theme, with the way back to path order, or one line saying
+that no theme is chosen and new words follow the path. **Studied** holds every
+other theme with a started word: practice first, and a quieter *Study this
+next*. **Not started** holds the rest, shown more quietly, with *Study this
+next* alone. A group with no themes is left out; within a group the themes
+keep the pack's order. Choosing a theme moves its card to the first group and
+the one before it to the group its own state gives it; focus follows the card
+and the change is announced.
+
+*Practising a theme.* Every theme with at least one started word that is not
+set aside offers practice kept to that theme (§7.4). It is separate from
+choosing the theme: it does not change the active collection, and it draws
+only on started words, so a theme's words above the learner's level are
+practised only once they have been started.
 
 **Exam collections — Phase 3.** *IELTS, TOEFL, academic.* These wait because
 they need B2–C1 entries, which arrive in Phase 2, and separate curation.
@@ -1787,6 +1836,21 @@ owner.
 - **Reporting (§8.10):** during the beta one report reopens a field, and the
   app says its translations were checked by AI.
 - **Risk R2** updated to match.
+
+**2026-10-07 — practice of one unit.** Decided by the product owner.
+
+- **Path (§7.2):** the current unit offers the daily session only while it has
+  something in it, and says so otherwise; every unlocked unit with a started
+  word offers practice of that unit.
+- **Practice (§7.4):** practice can be kept to one unit's started words. It
+  stays practice: outside the schedule, at reduced XP.
+- **Practice (§7.4, §8.9), same day:** practice can also be kept to one theme,
+  from the themes screen; every practice pick leans towards weaker words; and
+  a practice run uses the words today's session serves when nothing else is
+  left, so it never starts empty.
+- **Themes (§8.9), same day:** the themes screen sorts the themes into
+  studying now, studied and not started, and "Study this next" replaces
+  "Study this theme".
 
 ### Approval status
 

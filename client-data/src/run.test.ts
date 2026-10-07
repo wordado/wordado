@@ -1,4 +1,4 @@
-import { Grade, RELEARN_DELAY_MS, type Mode } from '@wordado/core'
+import { corpusWordId, DAY_MS, Grade, RELEARN_DELAY_MS, themeEntries, type Mode, type WordId } from '@wordado/core'
 import { describe, expect, it, vi } from 'vitest'
 import { ITEM_SETTLE_MS, PRACTICE_RUN_SIZE, StudyRun, type RunOptions } from './run'
 import { openSampleClient } from './testing/sample'
@@ -127,6 +127,112 @@ describe('StudyRun', () => {
     await playThrough(run, env, Grade.Again)
     expect(run.snapshot).toMatchObject({ phase: 'done', answered: PRACTICE_RUN_SIZE })
     expect(client.snapshot.states).toEqual(states)
+  })
+
+  it('draws a unit’s practice only from that unit’s started words, and leaves the schedule alone', async () => {
+    const env = testEnv()
+    const client = await openSampleClient(env)
+    await client.updateSettings({ newWordLimit: 30 })
+    // The first unit's twenty words and five of the second's.
+    for (const wordId of client.snapshot.plan!.newWords.slice(0, 25)) {
+      await client.answer({ wordId, mode: 'flashcard', direction: 'en_to_l1', grade: Grade.Good, latencyMs: 2_000, practice: false })
+    }
+    // An hour on: introduced today, not due, so practice may serve them.
+    env.advance(3_600_000)
+    const [first, second, third] = client.snapshot.corpus!.units
+    const states = client.snapshot.states
+    const seen: WordId[] = []
+    const run = await StudyRun.start(client, env, options({ kind: 'practice', mode: 'flashcard', scope: { kind: 'unit', id: second!.unitId } }))
+    expect(run.snapshot.remaining).toBe(5)
+    for (let guard = 0; guard < 20 && run.snapshot.item; guard += 1) {
+      seen.push(run.snapshot.item.wordId)
+      env.advance(ITEM_SETTLE_MS)
+      run.reveal()
+      env.advance(ITEM_SETTLE_MS)
+      await run.rate(Grade.Again)
+    }
+    expect(seen).toHaveLength(5)
+    expect(seen.every((wordId) => second!.wordIds.includes(wordId) && states.has(wordId))).toBe(true)
+    expect(client.snapshot.states).toEqual(states)
+    // A larger unit still gives a run of the usual size; a unit with nothing started gives none.
+    expect((await StudyRun.start(client, env, options({ kind: 'practice', scope: { kind: 'unit', id: first!.unitId } }))).snapshot.remaining).toBe(PRACTICE_RUN_SIZE)
+    expect((await StudyRun.start(client, env, options({ kind: 'practice', scope: { kind: 'unit', id: third!.unitId } }))).snapshot.phase).toBe('done')
+  })
+
+  it('never starts empty while the scope has started words: when all are due today, practice uses them and leaves the schedule alone', async () => {
+    const env = testEnv()
+    const client = await openSampleClient(env)
+    for (const wordId of client.snapshot.plan!.newWords.slice(0, 6)) {
+      await client.answer({ wordId, mode: 'flashcard', direction: 'en_to_l1', grade: Grade.Good, latencyMs: 2_000, practice: false })
+    }
+    // A month on, every started word is due: all six are in today's plan.
+    env.advance(30 * DAY_MS)
+    await client.startSession()
+    const due = new Set(client.snapshot.plan!.reviews)
+    expect(due.size).toBe(6)
+    const states = client.snapshot.states
+    const first = client.snapshot.corpus!.units[0]!
+    for (const scope of [undefined, { kind: 'unit', id: first.unitId } as const]) {
+      const run = await StudyRun.start(client, env, options({ kind: 'practice', mode: 'flashcard', ...(scope && { scope }) }))
+      expect(run.snapshot.remaining).toBe(6)
+      expect(due.has(run.snapshot.item!.wordId)).toBe(true)
+      await playThrough(run, env, Grade.Again)
+      expect(run.snapshot).toMatchObject({ phase: 'done', answered: 6 })
+    }
+    expect(client.snapshot.states).toEqual(states)
+    expect(client.snapshot.plan!.reviews).toHaveLength(6)
+  })
+
+  it('draws a theme’s practice only from that theme’s started words, without choosing the theme', async () => {
+    const env = testEnv()
+    const client = await openSampleClient(env)
+    const theme = themeEntries(client.snapshot.corpus!, 'daily-life').map((e) => corpusWordId(e.entryId))
+    // Ten words of the path and six of the theme, as a chosen theme would have brought forward (spec §8.9).
+    for (const wordId of [...client.snapshot.plan!.newWords, ...theme.slice(-6)]) {
+      await client.answer({ wordId, mode: 'flashcard', direction: 'en_to_l1', grade: Grade.Good, latencyMs: 2_000, practice: false })
+    }
+    env.advance(3_600_000)
+    const states = client.snapshot.states
+    const started = theme.filter((wordId) => states.has(wordId))
+    expect(started.length).toBeGreaterThanOrEqual(6)
+    expect(started.length).toBeLessThan(states.size)
+    const run = await StudyRun.start(client, env, options({ kind: 'practice', mode: 'flashcard', scope: { kind: 'theme', id: 'daily-life' } }))
+    expect(run.snapshot.remaining).toBe(Math.min(started.length, PRACTICE_RUN_SIZE))
+    const seen: WordId[] = []
+    for (let guard = 0; guard < 20 && run.snapshot.item; guard += 1) {
+      seen.push(run.snapshot.item.wordId)
+      env.advance(ITEM_SETTLE_MS)
+      run.reveal()
+      env.advance(ITEM_SETTLE_MS)
+      await run.rate(Grade.Good)
+    }
+    expect(seen.every((wordId) => started.includes(wordId))).toBe(true)
+    expect(client.snapshot.states).toEqual(states)
+    expect(client.snapshot.settings.activeTheme).toBeNull()
+    // A theme the corpus does not hold is practice over everything.
+    expect((await StudyRun.start(client, env, options({ kind: 'practice', scope: { kind: 'theme', id: 'nowhere' } }))).snapshot.remaining).toBe(PRACTICE_RUN_SIZE)
+  })
+
+  it('never queues a retired word, in practice over everything or kept to a unit or theme', async () => {
+    const env = testEnv()
+    const client = await openSampleClient(env)
+    const theme = themeEntries(client.snapshot.corpus!, 'daily-life')
+    const only = corpusWordId(theme[0]!.entryId)
+    await client.answer({ wordId: only, mode: 'flashcard', direction: 'en_to_l1', grade: Grade.Good, latencyMs: 2_000, practice: false })
+    env.advance(3_600_000)
+    await client.startSession()
+    // The one started word is retired by a later pack (spec §5.1); its review state stays.
+    const snapshot = client.snapshot
+    const corpus = snapshot.corpus!
+    const entries = new Map(corpus.entries)
+    entries.set(theme[0]!.entryId, { ...theme[0]!, retired: true })
+    vi.spyOn(client, 'snapshot', 'get').mockReturnValue({ ...snapshot, corpus: { ...corpus, entries, retired: new Set([only]) } })
+    vi.spyOn(client, 'startSession').mockResolvedValue([])
+    const unit = corpus.units.find((u) => u.wordIds.includes(only))!
+    for (const scope of [undefined, { kind: 'theme', id: 'daily-life' } as const, { kind: 'unit', id: unit.unitId } as const]) {
+      const run = await StudyRun.start(client, env, options({ kind: 'practice', ...(scope && { scope }) }))
+      expect(run.snapshot).toMatchObject({ phase: 'done', remaining: 0, item: null })
+    }
   })
 
   it('offers listening only through availableModes: never without audio', async () => {

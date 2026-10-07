@@ -1,3 +1,4 @@
+import { weightedOrder } from './practiceWeight'
 import { shuffle, type Rng } from './rng'
 import type { CorpusEntry } from './types'
 import { corpusWordId, type WordId } from './wordId'
@@ -72,14 +73,17 @@ export function pickDistractors(
 /**
  * Chooses `size` entries for a matching board on which no two pairs share a
  * headword or a translation. Null when the candidates cannot fill a board.
+ * With `weight`, heavier entries are dealt more readily (practice leans
+ * towards weaker words, spec §7.4); the rule against clashes is the same.
  */
 export function buildMatchingBoard(
   candidates: readonly CorpusEntry[],
   size: number,
   rng: Rng,
+  weight?: (entry: CorpusEntry) => number,
 ): CorpusEntry[] | null {
   const board: CorpusEntry[] = []
-  for (const entry of shuffle(candidates, rng)) {
+  for (const entry of weight ? weightedOrder(candidates, weight, rng) : shuffle(candidates, rng)) {
     if (board.length >= size) break
     if (!entry.retired && !board.some((other) => clash(entry, other, false))) board.push(entry)
   }

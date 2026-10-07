@@ -1,4 +1,4 @@
-import { buildItem, gradeAnswer, practiceWords, type Grade, type Mode, type StudyItem, type WordFlag, type WordId } from '@wordado/core'
+import { buildItem, corpusWordId, gradeAnswer, practiceWords, themeEntries, type Grade, type Mode, type StudyItem, type WordFlag, type WordId } from '@wordado/core'
 import type { Client } from './client'
 import type { ClientEnv } from './env'
 import { createStore, type Store } from './store'
@@ -24,6 +24,8 @@ export interface RunOptions {
   readonly kind: RunKind
   /** A single-mode run by the learner's choice; null for the mixed default (spec §7.4). */
   readonly mode: Mode | null
+  /** Practice of one unit or theme (spec §7.4): the run keeps to its words. Ignored by a session, and when the corpus holds no such unit or theme. */
+  readonly scope?: PracticeScope
   /** Asked per item, so a clip cached mid-run counts (spec §9.3). */
   cachedClips(): ReadonlySet<string>
   online(): boolean
@@ -70,6 +72,25 @@ const INITIAL: RunSnapshot = {
   error: null,
 }
 
+/** What practice keeps to when it is not over everything (spec §7.4): one unit of the path, or one theme. */
+export interface PracticeScope {
+  readonly kind: 'unit' | 'theme'
+  /** The unit's or the theme's ID. */
+  readonly id: string
+}
+
+/** The words of the unit or theme being practised; undefined for practice over everything, and for one the corpus does not hold. */
+export function scopeWords(client: Client, scope: PracticeScope | undefined): ReadonlySet<WordId> | undefined {
+  const { corpus } = client.snapshot
+  if (!scope || !corpus) return undefined
+  if (scope.kind === 'unit') {
+    const unit = corpus.units.find((u) => u.unitId === scope.id)
+    return unit && new Set(unit.wordIds)
+  }
+  if (!corpus.themes.some((t) => t.themeId === scope.id)) return undefined
+  return new Set(themeEntries(corpus, scope.id).map((e) => corpusWordId(e.entryId)))
+}
+
 const messageOf = (err: unknown): string => (err instanceof Error ? err.message : String(err))
 
 /**
@@ -77,7 +98,9 @@ const messageOf = (err: unknown): string => (err instanceof Error ? err.message 
  * word from the live plan after every answer — reviews first, then new words —
  * so a word answered Again returns once it is due again, and the run ends when
  * nothing is due now. A practice run draws PRACTICE_RUN_SIZE introduced words
- * that today's session does not serve, and records them as practice.
+ * (of one unit or theme, when `scope` names it), leaning towards the weaker
+ * ones, and records them as practice. It leaves out the words today's session
+ * serves unless nothing else is left.
  */
 export class StudyRun {
   readonly store: Store<RunSnapshot> = createStore(INITIAL)
@@ -107,9 +130,10 @@ export class StudyRun {
     await client.startSession()
     const run = new StudyRun(client, env, options)
     if (options.kind === 'practice') {
-      const { states, flags, plan } = client.snapshot
+      const { states, flags, plan, corpus } = client.snapshot
       const exclude = new Set<WordId>([...(plan?.reviews ?? []), ...(plan?.newWords ?? [])])
-      run.practiceQueue = practiceWords({ states, flags, exclude, count: PRACTICE_RUN_SIZE, rng: env.rng })
+      const within = scopeWords(client, options.scope)
+      run.practiceQueue = practiceWords({ states, flags, retired: corpus?.retired ?? new Set(), exclude, ...(within && { within }), count: PRACTICE_RUN_SIZE, rng: env.rng })
     }
     run.advance()
     return run

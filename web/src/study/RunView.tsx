@@ -8,6 +8,7 @@ import { ClipSuperseded } from '../content/audio'
 import { localized, useT } from '../i18n/i18n'
 import { GRADE_LABEL } from '../labels'
 import { Link } from '../router'
+import type { PracticeScopeView } from '../screens/practiceScope'
 import { useStore } from '../useStore'
 import { Headword, Translation } from './Headword'
 import { keyAction } from './keys'
@@ -16,7 +17,7 @@ import { ReportDialog } from './ReportDialog'
 const GRADES: readonly Grade[] = [Grade.Again, Grade.Hard, Grade.Good, Grade.Easy]
 
 /** Renders a StudyRun and forwards the learner's input to it (spec §8.1, §11.1). */
-export function RunView(props: { readonly run: StudyRun; readonly kind: RunKind }) {
+export function RunView(props: { readonly run: StudyRun; readonly kind: RunKind; /** The unit or theme a practice run keeps to, if any. */ readonly scope?: PracticeScopeView | null }) {
   const { run } = props
   const { t } = useT()
   const snapshot = useStore(run.store)
@@ -64,7 +65,7 @@ export function RunView(props: { readonly run: StudyRun; readonly kind: RunKind 
     else run.resume()
   }, [reporting, run])
 
-  if (snapshot.phase === 'done') return <Done snapshot={snapshot} kind={props.kind} />
+  if (snapshot.phase === 'done') return <Done snapshot={snapshot} kind={props.kind} scope={props.scope ?? null} />
   if (!item) return null
 
   const total = snapshot.answered + snapshot.remaining
@@ -363,7 +364,7 @@ function Choice(props: { readonly run: StudyRun; readonly snapshot: RunSnapshot;
   )
 }
 
-function Done(props: { readonly snapshot: RunSnapshot; readonly kind: RunKind }) {
+function Done(props: { readonly snapshot: RunSnapshot; readonly kind: RunKind; readonly scope: PracticeScopeView | null }) {
   const { t, locale } = useT()
   const { afterRun } = useApp()
   const { corpus } = useClientSnapshot()
@@ -407,10 +408,17 @@ function Done(props: { readonly snapshot: RunSnapshot; readonly kind: RunKind })
       ))}
       {snapshot.setAside > 0 && <p className="done-line done-note">{t('done.setAside', { count: snapshot.setAside })}</p>}
       <div className="done-actions">
-        <Link className="button primary study-main" to={{ name: 'home' }}>
-          {t('done.home')}
-        </Link>
-        <Link className="button study-main" to={{ name: 'practice' }}>
+        {/* A unit's or a theme's practice began on the path or the themes, so that is the way back; its "Practise more" stays in the scope. */}
+        {props.scope ? (
+          <Link className="button primary study-main" to={props.scope.back}>
+            {t(props.scope.backLabel)}
+          </Link>
+        ) : (
+          <Link className="button primary study-main" to={{ name: 'home' }}>
+            {t('done.home')}
+          </Link>
+        )}
+        <Link className="button study-main" to={{ name: 'practice', ...props.scope?.params }}>
           {t('done.practiceMore')}
         </Link>
       </div>

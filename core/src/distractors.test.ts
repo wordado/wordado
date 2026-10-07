@@ -170,6 +170,21 @@ describe('buildMatchingBoard', () => {
     expect(board).toHaveLength(5)
   })
 
+  it('leans towards heavier entries when given weights, and still deals the light ones', () => {
+    const pool = Array.from({ length: 12 }, (_, i) => entry(`word${i}`, [`дума${i}`]))
+    const heavy = pool[0]!
+    const rng = seededRng(9)
+    const dealt = new Map<string, number>()
+    const ROUNDS = 3_000
+    for (let i = 0; i < ROUNDS; i += 1) {
+      for (const e of buildMatchingBoard(pool, 5, rng, (e) => (e === heavy ? 5 : 1))!) dealt.set(e.entryId, (dealt.get(e.entryId) ?? 0) + 1)
+    }
+    const light = pool.slice(1).map((e) => dealt.get(e.entryId)! / ROUNDS)
+    expect(dealt.get(heavy.entryId)! / ROUNDS).toBeGreaterThan(0.8)
+    expect(Math.max(...light)).toBeLessThan(0.45)
+    expect(Math.min(...light)).toBeGreaterThan(0.3)
+  })
+
   it('returns null when it cannot', () => {
     expect(buildMatchingBoard([big, large, small], 3, seededRng(5))).toBeNull()
   })
