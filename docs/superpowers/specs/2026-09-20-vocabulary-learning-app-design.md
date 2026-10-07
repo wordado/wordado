@@ -1106,6 +1106,18 @@ new is that the tags become learner-facing, which has three consequences.
 
 Themes are part of studying and fall under the free-tier principle (§8.8).
 
+*The themes screen* shows the themes in three groups, each under its own
+heading, so that a learner sees at a glance which theme is chosen, which can
+be practised, and that choosing another replaces the choice. **Studying now**
+holds the chosen theme, with the way back to path order, or one line saying
+that no theme is chosen and new words follow the path. **Studied** holds every
+other theme with a started word: practice first, and a quieter *Study this
+next*. **Not started** holds the rest, shown more quietly, with *Study this
+next* alone. A group with no themes is left out; within a group the themes
+keep the pack's order. Choosing a theme moves its card to the first group and
+the one before it to the group its own state gives it; focus follows the card
+and the change is announced.
+
 *Practising a theme.* Every theme with at least one started word that is not
 set aside offers practice kept to that theme (§7.4). It is separate from
 choosing the theme: it does not change the active collection, and it draws
@@ -1836,6 +1848,9 @@ owner.
   from the themes screen; every practice pick leans towards weaker words; and
   a practice run uses the words today's session serves when nothing else is
   left, so it never starts empty.
+- **Themes (§8.9), same day:** the themes screen sorts the themes into
+  studying now, studied and not started, and "Study this next" replaces
+  "Study this theme".
 
 ### Approval status
 
