@@ -269,7 +269,7 @@ test('an admin invites a reviewer and assigns files; an overlap is refused', asy
   await page.reload()
   await expect(page.getByRole('tab', { name: 'Assignments' })).toHaveAttribute('aria-selected', 'true')
   await expect(page.getByText('Bulgarian translations · flagged rows')).toBeVisible()
-  await page.getByRole('button', { name: 'My assignments' }).click()
+  await page.getByRole('button', { name: 'My work' }).click()
   await expect(page.getByRole('heading', { name: 'Your assignments' })).toBeVisible()
   await expect(page).not.toHaveURL(/#/)
 })

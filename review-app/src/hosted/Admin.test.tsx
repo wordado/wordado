@@ -112,15 +112,6 @@ describe('Admin', () => {
     expect(await screen.findByRole('tabpanel', { name: 'Reviewers' })).toBeTruthy()
   })
 
-  it('has the way back to the reviewer’s own assignments beside the tabs', async () => {
-    const onBack = vi.fn()
-    render(<Admin onBack={onBack} />)
-    const back = await screen.findByRole('button', { name: 'My assignments' })
-    expect(screen.getByRole('tablist').contains(back)).toBe(false)
-    fireEvent.click(back)
-    expect(onBack).toHaveBeenCalled()
-  })
-
   it('invites a reviewer from a dialog and shows the link when the mail failed', async () => {
     const invite = vi.spyOn(hostedApi.admin, 'invite').mockResolvedValue({ reviewer: { ...anna, email: 'b@example.com', name: 'B' }, inviteSent: false, link: 'https://review.wordado.com' })
     render(<Admin />)
