@@ -583,6 +583,14 @@ is due.** A study session draws from everything the learner has ever unlocked,
 scheduled by FSRS — not from the current unit. The unit path exists to give the
 learner a visible map and a sense of place, not to constrain daily review.
 
+**What the path offers.** The current unit carries the way into the daily
+session, shown only while that session has something in it — a review due or a
+new word left of the day's quota, the same rule as the home screen. When it has
+nothing, the unit says so in its place. Every unlocked unit with at least one
+started word that is not set aside also offers **practice of that unit**
+(§7.4), so a learner can go back over an open unit at any time. A locked unit
+offers neither.
+
 ### 7.3 Grading inputs
 
 Every game mode reports a grade plus response latency. A correct-but-slow
@@ -632,6 +640,12 @@ seen. `core` composes each session as follows.
    replay**, and never count as a successful review for any progress rule — so
    grinding cannot distort the schedule. A learner-chosen single-mode session
    is not practice: it serves due words, in that mode, and counts normally.
+   Practice can also be **kept to one unit**, opened from that unit on the
+   path (§7.2): the same ways to practise, drawing only on that unit's started
+   words under the same rules as any practice (not set aside; a practice run
+   also leaves out the words today's session serves; matching needs five). It
+   is practice in every respect above, and changes neither the schedule, the
+   daily session, nor which words are introduced.
 
 **Known and suspended words.** A learner can flag any word *known* ("I don't
 need this") or *suspended* ("not now"). Either removes it from the new-word
@@ -1787,6 +1801,14 @@ owner.
 - **Reporting (§8.10):** during the beta one report reopens a field, and the
   app says its translations were checked by AI.
 - **Risk R2** updated to match.
+
+**2026-10-07 — practice of one unit.** Decided by the product owner.
+
+- **Path (§7.2):** the current unit offers the daily session only while it has
+  something in it, and says so otherwise; every unlocked unit with a started
+  word offers practice of that unit.
+- **Practice (§7.4):** practice can be kept to one unit's started words. It
+  stays practice: outside the schedule, at reduced XP.
 
 ### Approval status
 
