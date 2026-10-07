@@ -2,7 +2,7 @@ import { render, type RenderResult } from '@testing-library/react'
 import { ClientProvider, createStore, type Client } from '@wordado/client-data'
 import { openSampleClient } from '@wordado/client-data/src/testing/sample'
 import { testEnv, type TestEnv } from '@wordado/client-data/src/testing/testEnv'
-import { Grade, type AudioClip } from '@wordado/core'
+import { corpusWordId, Grade, type AudioClip } from '@wordado/core'
 import type { ReactElement } from 'react'
 import type { Api } from '../account/api'
 import type { AccountActions, AccountState } from '../account/controller'
@@ -180,6 +180,35 @@ export function renderWith(ui: ReactElement, ctx: RenderContext): RenderResult {
       </ClientProvider>
     </I18nProvider>,
   )
+}
+
+/**
+ * Gives the client's corpus two more themes, as its screens see it: the sample has one (Daily life), and a
+ * screen that sorts themes needs several. "First words" tags the first thirty words of the path, "Later words"
+ * the last thirty. The client's own corpus is untouched, so the session plan does not follow these themes.
+ */
+export function withMoreThemes(client: Client): void {
+  const get = client.store.get
+  const seen = new WeakMap<object, ReturnType<typeof get>>()
+  client.store.get = () => {
+    const snapshot = get()
+    const { corpus } = snapshot
+    if (!corpus) return snapshot
+    let widened = seen.get(snapshot)
+    if (!widened) {
+      const order = corpus.units.flatMap((unit) => unit.wordIds)
+      const first = new Set(order.slice(0, 30))
+      const entries = new Map([...corpus.entries].map(([entryId, entry]) => [entryId, { ...entry, themes: [...entry.themes, first.has(corpusWordId(entryId)) ? 'first-words' : 'later-words'] }]))
+      const themes = [
+        ...corpus.themes,
+        { themeId: 'first-words', name: { en: 'First words', l1: 'Първи думи' }, description: { en: 'Where the path begins.', l1: 'Където започва пътят.' } },
+        { themeId: 'later-words', name: { en: 'Later words', l1: 'По-късни думи' }, description: { en: 'Further along the path.', l1: 'По-нататък по пътя.' } },
+      ]
+      widened = { ...snapshot, corpus: { ...corpus, entries, themes } }
+      seen.set(snapshot, widened)
+    }
+    return widened
+  }
 }
 
 /** Introduces the next `count` new words of the plan, a few seconds apart. */

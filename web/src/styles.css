@@ -1661,7 +1661,7 @@ dialog.report textarea {
   }
 }
 
-/* Themes: a row per theme on a phone, a grid of cards from 48rem */
+/* Themes: three groups (studying now, studied, not started); a row per theme on a phone, a grid of cards from 48rem */
 
 .app > main > .themes-page {
   display: flex;
@@ -1676,6 +1676,15 @@ dialog.report textarea {
 
 .themes-head .lede {
   margin: var(--space-2) 0 0;
+}
+
+.theme-group h2 {
+  margin: 0 0 var(--space-2) var(--space-1);
+  font: 600 var(--step-0) / 1.3 var(--font-ui);
+}
+
+.theme-none-chosen {
+  margin: 0 0 0 var(--space-1);
 }
 
 .theme-grid {
@@ -1697,12 +1706,25 @@ dialog.report textarea {
   padding: var(--space-4);
 }
 
-.theme-card.is-active {
+.theme-card.is-active,
+.theme-card.is-studied {
   grid-template-areas:
     'icon text text'
     '. progress progress'
-    'action action action';
+    'actions actions actions';
+}
+
+.theme-card.is-active {
   border: 1.5px solid var(--rose);
+}
+
+/* Not started: quieter than the themes the learner has touched. */
+.theme-card.is-new {
+  background: transparent;
+}
+
+.is-new .theme-icon {
+  color: var(--ink-soft);
 }
 
 .theme-icon {
@@ -1728,7 +1750,7 @@ dialog.report textarea {
   gap: 0.125rem;
 }
 
-.theme-text h2 {
+.theme-text h3 {
   margin: 0;
   font: 600 var(--step-1) / 1.2 var(--font-entry);
 }
@@ -1775,21 +1797,35 @@ dialog.report textarea {
   grid-area: action;
 }
 
-.is-active .theme-action {
-  width: 100%;
+/* The actions of a chosen or a studied theme: a row of their own under the card. */
+.theme-actions {
+  display: flex;
+  flex-direction: column;
+  grid-area: actions;
+  gap: var(--space-2);
 }
 
-.theme-choose {
+.theme-next,
+.theme-practise {
   font-weight: 600;
 }
 
-/* Practise this theme: a row of its own under the card on a phone, under the main action in the grid. */
-.theme-practise {
-  grid-column: 1 / -1;
+/* "Study this next" beside "Practise this theme": the quieter of the two. */
+.theme-next.is-quiet {
+  font-weight: 500;
+  color: var(--ink-soft);
+  background: transparent;
+  border-color: transparent;
+  text-decoration: underline;
 }
 
-.theme-choose .label-long {
+.theme-next .label-long {
   display: none;
+}
+
+/* The title takes focus when its card moves to another group; the move itself is announced. */
+.theme-text h3:focus {
+  outline: none;
 }
 
 @media (min-width: 48rem) {
@@ -1799,7 +1835,8 @@ dialog.report textarea {
   }
 
   .theme-card,
-  .theme-card.is-active {
+  .theme-card.is-active,
+  .theme-card.is-studied {
     display: flex;
     flex-direction: column;
     align-items: stretch;
@@ -1813,22 +1850,17 @@ dialog.report textarea {
     border-radius: 0.875rem;
   }
 
-  .theme-action {
+  .theme-action,
+  .theme-actions {
     width: 100%;
     margin-top: auto;
   }
 
-  .theme-choose {
-    color: var(--paper);
-    background: var(--ink);
-    border-color: var(--ink);
-  }
-
-  .theme-choose .label-long {
+  .theme-next .label-long {
     display: inline;
   }
 
-  .theme-choose .label-short {
+  .theme-next .label-short {
     display: none;
   }
 }
