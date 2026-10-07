@@ -6,7 +6,8 @@ import { buildSnapshot } from './snapshot'
 const argv = process.argv.slice(2)
 const commitAt = argv.indexOf('--commit')
 const commitArg = commitAt >= 0 ? argv[commitAt + 1] : undefined
-const [contentArg, outArg] = argv.filter((a, i) => !a.startsWith('--') && i !== commitAt + 1)
+// Without --commit, commitAt is -1 and "commitAt + 1" would wrongly drop the first positional argument.
+const [contentArg, outArg] = argv.filter((a, i) => !a.startsWith('--') && (commitAt < 0 || i !== commitAt + 1))
 if (!contentArg || !outArg || !existsSync(join(resolve(contentArg), 'pipeline.json'))) {
   console.error('usage: pnpm --filter @wordado/review-app snapshot <content-dir> <out-dir> [--commit <sha>]')
   process.exit(2)
