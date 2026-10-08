@@ -48,6 +48,8 @@ describe('checkDocumentWrite', () => {
     ['an unknown flag field', write('word_flag', 'c:hello-1', { flag: 'known', note: 'x' })],
     ['a word to learn that is not a word', write('word_learn', 'hello', { at: 1 })],
     ['a word to learn chosen at no time', write('word_learn', 'c:hello-1', { at: 'now' })],
+    ['a word to learn with no time of choosing', write('word_learn', 'c:hello-1', {})],
+    ['a mark restored with no time of choosing', write('word_learn', 'c:hello-1', {}, false)],
     ['a word to learn chosen at an unsafe time', write('word_learn', 'c:hello-1', { at: 2 ** 53 })],
     ['an unknown field on a word to learn', write('word_learn', 'c:hello-1', { at: 1, flag: 'known' })],
     ['unlocks under a key', write('unit_unlock', 'x', { units: ['a1-01'] })],

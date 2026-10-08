@@ -217,6 +217,11 @@ describe('words the learner chose to learn (spec §7.4)', () => {
     expect(composeSession(input({ newWordLimit: 5, newWordsDoneToday: 5, personalNew, pathNew })).newWords).toEqual([])
   })
 
+  it('serves a chosen word once when the path would serve it too (its level is no longer skipped)', () => {
+    const plan = composeSession(input({ newWordLimit: 3, personalNew: learnQueue(new Map([[w(2), 5]]), new Map()), pathNew: [w(1), w(2), w(3)] }))
+    expect(plan.newWords).toEqual([w(2), w(1), w(3)])
+  })
+
   it('does not serve a chosen word that is set aside or already started, and waits with the rest while new words are paused', () => {
     const personalNew = [...marks.keys()]
     const flags = new Map<WordId, WordFlag>([[w(7), 'suspended']])

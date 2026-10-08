@@ -42,7 +42,7 @@ const unknownFields = (fields: Readonly<Record<string, unknown>>, allowed: reado
     .filter((key) => !allowed.includes(key))
     .map((key) => `unknown field ${key}`)
 
-function checkFields(type: string, key: string, fields: Readonly<Record<string, unknown>>): string[] {
+function checkFields(type: string, key: string, fields: Readonly<Record<string, unknown>>, deleted: boolean | undefined): string[] {
   switch (type) {
     case DOCUMENT_TYPES.settings: {
       const result = validateSettingsPatch({ ...fields })
@@ -60,11 +60,12 @@ function checkFields(type: string, key: string, fields: Readonly<Record<string, 
       ]
     }
     case DOCUMENT_TYPES.wordLearn: {
-      // `at` is the client's time of choosing: it orders the learner's own choices, nothing else.
+      // `at` is the client's time of choosing: it orders the learner's own choices, nothing else. Every write
+      // carries it but the one that takes the mark back: the type is new, so there is no older shape to accept.
       const at = fields['at']
       return [
         ...(isWordId(key) ? [] : ['a word to learn must be keyed by a word ID']),
-        ...(at === undefined || isCount(at) ? [] : ['at must be a time']),
+        ...(isCount(at) || (at === undefined && deleted === true) ? [] : ['at must be a time']),
         ...unknownFields(fields, ['at']),
       ]
     }
@@ -120,7 +121,7 @@ export function checkDocumentWrite(write: DocumentWrite): DocumentWriteCheck {
     return { ok: false, reason: 'server_owned', errors: [`${write.type} is written by the server only`] }
   }
   const fields = write.patch.fields as Readonly<Record<string, unknown>>
-  const errors = checkFields(write.type, write.key, fields)
+  const errors = checkFields(write.type, write.key, fields, write.patch.deleted)
   if (write.key.length > MAX_KEY_LENGTH) errors.push(`the key is longer than ${MAX_KEY_LENGTH} characters`)
   if (JSON.stringify(fields).length > MAX_DOCUMENT_BYTES) errors.push(`the fields are larger than ${MAX_DOCUMENT_BYTES} characters`)
   return errors.length === 0 ? { ok: true } : { ok: false, reason: 'invalid', errors }
