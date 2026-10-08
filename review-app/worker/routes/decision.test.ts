@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import type { RowsResponse } from '../../shared/hosted'
 import { createApp } from '../app'
 import type { Env } from '../bindings'
-import { insertAssignment, insertReviewer, insertSubmission, markSubmitted } from '../db'
+import { insertAssignment, insertReviewer, insertSubmission, listDecisions, markSubmitted, upsertDecision } from '../db'
 import { resetSnapshotCache } from '../snapshotStore'
 import { testKeys } from '../test/jwt'
 import { resetDb, startPlatform, testDeps } from '../test/platform'
@@ -97,6 +97,22 @@ describe('POST /api/decision', () => {
     const res = await post('POST', { ...req, action: 'drop' })
     expect(res.status).toBe(409)
     expect(await res.json()).toMatchObject({ reason: 'changed', message: expect.stringMatching(/submitted/) })
+  })
+
+  it('takes a new decision on a row that changed after its decision was merged', async () => {
+    await upsertDecision(env.DB, { assignment: id, queue: row.queue, file: 'review/translation-bg/old.csv', key: row.key, rowHash: 'the-old-proposal', action: 'keep', cells: {}, note: '', decidedAt: 't', submission: null })
+    const sub = await insertSubmission(env.DB, { assignment: id, branch: 'b', pr: 1, url: null, count: 1, leftOut: 0, status: 'merged', createdAt: 't' })
+    await markSubmitted(env.DB, id, [row.key], sub)
+    const res = await post('POST', { assignment: id, queue: row.queue, file: row.file, key: row.key, rowHash: row.rowHash, action: 'drop' })
+    expect(res.status).toBe(200)
+    expect((await listDecisions(env.DB, id)).filter((d) => d.key === row.key)).toMatchObject([{ rowHash: row.rowHash, file: row.file, action: 'drop', submission: null }])
+  })
+
+  it('is 409 for a row that changed while its decision waits in an open pull request', async () => {
+    await upsertDecision(env.DB, { assignment: id, queue: row.queue, file: row.file, key: row.key, rowHash: 'the-old-proposal', action: 'keep', cells: {}, note: '', decidedAt: 't', submission: null })
+    const sub = await insertSubmission(env.DB, { assignment: id, branch: 'b', pr: 1, url: null, count: 1, leftOut: 0, status: 'open', createdAt: 't' })
+    await markSubmitted(env.DB, id, [row.key], sub)
+    expect((await post('POST', { assignment: id, queue: row.queue, file: row.file, key: row.key, rowHash: row.rowHash, action: 'drop' })).status).toBe(409)
   })
 })
 

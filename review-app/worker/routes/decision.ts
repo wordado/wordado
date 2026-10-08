@@ -30,10 +30,14 @@ export function decisionRoutes(app: Hono<AppEnv>, deps: Deps): void {
     const row = file.rows.find((r) => r.key === req.key)
     if (!row) return c.json(fail('gone', `${req.key} is no longer in ${req.file}`), 410)
     if (row.rowHash !== req.rowHash) return c.json(fail('changed', `${req.key} changed since it was loaded`), 409)
-    // A decision in an open or merged submission is final; only a closed (unmerged) one could be decided again.
-    const closed = new Set((await listSubmissions(deps.env.DB, { assignment: a.id, status: 'closed' })).map((s) => s.id))
+    // A decision in an open or merged submission is final for the row it was made on; one in a closed (unmerged)
+    // submission can be decided again. So can a merged one once the row has changed: a newer draft proposes
+    // something else, the merged decision does not settle it, and the row waits in a fresh sheet (level queue, 2026-10-08).
+    const status = new Map((await listSubmissions(deps.env.DB, { assignment: a.id })).map((s) => [s.id, s.status]))
     const existing = (await listDecisions(deps.env.DB, a.id)).find((d) => d.key === req.key)
-    if (existing?.submission != null && !closed.has(existing.submission)) return c.json(fail('changed', `${req.key} is already submitted`), 409)
+    const of = existing?.submission != null ? status.get(existing.submission) : 'closed'
+    const settled = of === 'open' || (of === 'merged' && existing!.rowHash === row.rowHash)
+    if (settled) return c.json(fail('changed', `${req.key} is already submitted`), 409)
     await upsertDecision(deps.env.DB, {
       assignment: a.id, queue: a.queue, file: req.file, key: req.key, rowHash: req.rowHash, action: req.action,
       cells, note: req.note ?? '', decidedAt: deps.now().toISOString(), submission: null,
