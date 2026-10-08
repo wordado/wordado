@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { applyGrade, localDay, RELEARN_DELAY_MS, RETENTION_TARGETS, type ReviewState } from './scheduler'
-import { composeSession, MAX_NEW_WORD_LIMIT, type SessionInput } from './session'
+import { composeSession, learnQueue, MAX_NEW_WORD_LIMIT, type SessionInput } from './session'
 import { Grade, type WordFlag } from './types'
 import { corpusWordId, type WordId } from './wordId'
 
@@ -187,6 +187,43 @@ describe('composeSession: new words', () => {
       }),
     )
     expect(plan.newWords).toEqual([w(3), w(4)])
+  })
+})
+
+describe('words the learner chose to learn (spec §7.4)', () => {
+  const marks = new Map<WordId, number>([
+    [w(7), 300],
+    [w(5), 100],
+    [w(9), 200],
+    [w(6), 200],
+  ])
+
+  it('queues them in the order chosen, with a stable order for two chosen at the same instant', () => {
+    expect(learnQueue(marks, new Map())).toEqual([w(5), w(6), w(9), w(7)])
+  })
+
+  it('ignores a mark once its word is started: the mark is spent', () => {
+    expect(learnQueue(marks, new Map([seen(5, 0), seen(9, 3)]))).toEqual([w(6), w(7)])
+    expect(learnQueue(new Map(), new Map([seen(5, 0)]))).toEqual([])
+  })
+
+  it('serves them first, before an active collection and the path, within what is left of the daily limit', () => {
+    const personalNew = learnQueue(marks, new Map())
+    const pathNew = [w(1), w(2), w(3)]
+    expect(composeSession(input({ newWordLimit: 6, personalNew, pathNew })).newWords).toEqual([w(5), w(6), w(9), w(7), w(1), w(2)])
+    expect(composeSession(input({ newWordLimit: 6, personalNew, collectionNew: [w(20), w(21), w(22)], pathNew })).newWords).toEqual([w(5), w(6), w(9), w(7), w(20), w(21)])
+    // The limit holds for them too: three today, the fourth tomorrow.
+    expect(composeSession(input({ newWordLimit: 5, newWordsDoneToday: 2, personalNew, pathNew })).newWords).toEqual([w(5), w(6), w(9)])
+    expect(composeSession(input({ newWordLimit: 5, newWordsDoneToday: 5, personalNew, pathNew })).newWords).toEqual([])
+  })
+
+  it('does not serve a chosen word that is set aside or already started, and waits with the rest while new words are paused', () => {
+    const personalNew = [...marks.keys()]
+    const flags = new Map<WordId, WordFlag>([[w(7), 'suspended']])
+    const plan = composeSession(input({ states: new Map([seen(5, 0)]), flags, personalNew, pathNew: [w(1)] }))
+    expect(plan.newWords).toEqual([w(9), w(6), w(1)])
+    const backlog = new Map(Array.from({ length: 3 }, (_, i) => seen(30 + i, 20)))
+    expect(composeSession(input({ states: backlog, reviewCap: 2, personalNew, pathNew: [w(1)] }))).toMatchObject({ newWords: [], newWordsPaused: true })
   })
 })
 

@@ -7,6 +7,8 @@ import { isWordId } from './wordId'
 export const DOCUMENT_TYPES = {
   settings: 'settings',
   wordFlag: 'word_flag',
+  /** A word the learner chose to learn (spec §7.4): one document per word, apart from its flag. */
+  wordLearn: 'word_learn',
   unitUnlock: 'unit_unlock',
   wordAlias: 'word_alias',
   entitlement: 'entitlement',
@@ -55,6 +57,15 @@ function checkFields(type: string, key: string, fields: Readonly<Record<string, 
         ...(isWordId(key) ? [] : ['a flag key must be a word ID']),
         ...(flag === undefined || flag === 'known' || flag === 'suspended' ? [] : ['flag must be known or suspended']),
         ...unknownFields(fields, ['flag']),
+      ]
+    }
+    case DOCUMENT_TYPES.wordLearn: {
+      // `at` is the client's time of choosing: it orders the learner's own choices, nothing else.
+      const at = fields['at']
+      return [
+        ...(isWordId(key) ? [] : ['a word to learn must be keyed by a word ID']),
+        ...(at === undefined || isCount(at) ? [] : ['at must be a time']),
+        ...unknownFields(fields, ['at']),
       ]
     }
     case DOCUMENT_TYPES.unitUnlock: {
