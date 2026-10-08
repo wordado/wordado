@@ -43,6 +43,7 @@ export function testDeps(env: Env, overrides: Partial<Deps> = {}): Deps {
     fetch: async (input) => new Response(`no fake for ${input}`, { status: 599 }),
     now: () => new Date('2026-10-05T12:00:00Z'),
     log: () => undefined,
+    sleep: async () => undefined,
     ...overrides,
   }
 }

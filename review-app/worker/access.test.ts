@@ -42,6 +42,7 @@ describe('accessKeys in production', () => {
       fetch: async () => new Response(team.jwks, { status: 200 }),
       now: () => new Date(),
       log: (line) => logs.push(line),
+      sleep: async () => undefined,
     }
     const keys = accessKeys(deps)
     const o = { aud: 'aud-test', issuer: 'https://team.example.com', keys, now: new Date() }
@@ -91,6 +92,7 @@ describe('accessKeys key rotation', () => {
       },
       now: () => new Date(clock),
       log: () => undefined,
+      sleep: async () => undefined,
     }
     const verify = (token: string) => verifyAccessJwt(token, { aud: 'aud-test', issuer: `https://${domain}`, keys: accessKeys(deps), now: new Date(clock) })
     const claims = { email: 'a@example.com', aud: ['aud-test'], iss: `https://${domain}`, exp: Math.floor(clock / 1000) + 3600 }
@@ -135,7 +137,7 @@ describe('accessKeys key rotation', () => {
     const k = await testKeys()
     const domain = 'down.example.com'
     const e = { APP_ORIGIN: 'https://review.wordado.com', ACCESS_TEAM_DOMAIN: domain, ACCESS_AUD: 'aud-test' } as unknown as Env
-    const deps: Deps = { env: e, fetch: async () => new Response('down', { status: 502 }), now: () => new Date(), log: () => undefined }
+    const deps: Deps = { env: e, fetch: async () => new Response('down', { status: 502 }), now: () => new Date(), log: () => undefined, sleep: async () => undefined }
     expect(await verifyAccessJwt(await k.token('a@example.com', e), { aud: 'aud-test', issuer: `https://${domain}`, keys: accessKeys(deps), now: new Date() })).toBeNull()
   })
 })
@@ -145,7 +147,7 @@ describe('accessKeys ACCESS_JWKS origins', () => {
     const secret = await testKeys()
     const logs: string[] = []
     const e = { APP_ORIGIN: origin, ACCESS_TEAM_DOMAIN: `jwks-${origin.length}.example.com`, ACCESS_AUD: 'aud-test', ACCESS_JWKS: secret.jwks } as unknown as Env
-    const deps: Deps = { env: e, fetch: async () => new Response(JSON.stringify({ keys: [] }), { status: 200 }), now: () => new Date(), log: (l) => logs.push(l) }
+    const deps: Deps = { env: e, fetch: async () => new Response(JSON.stringify({ keys: [] }), { status: 200 }), now: () => new Date(), log: (l) => logs.push(l), sleep: async () => undefined }
     const who = await verifyAccessJwt(await secret.token('a@example.com', e), { aud: 'aud-test', issuer: `https://${e.ACCESS_TEAM_DOMAIN}`, keys: accessKeys(deps), now: new Date() })
     return who
   }

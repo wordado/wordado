@@ -23,6 +23,11 @@ let fake: FakeGitHub
 let deps: Deps
 let mails: { to: string[] }[] = []
 let failGitHub = false
+let logs: string[] = []
+let sleeps: number[] = []
+/** Answers for the next calls that open a pull request, in place of the fake's; 'after' lets the fake open it first. */
+let pullAnswers: { res: () => Response; after?: boolean }[] = []
+let pullCalls = 0
 
 function walk(dir: string): string[] {
   return readdirSync(dir).flatMap((n) => (statSync(join(dir, n)).isDirectory() ? walk(join(dir, n)) : [join(dir, n)]))
@@ -46,10 +51,22 @@ beforeEach(async () => {
   fake = new FakeGitHub(files)
   mails = []
   failGitHub = false
+  logs = []
+  sleeps = []
+  pullAnswers = []
+  pullCalls = 0
   deps = testDeps(env, {
+    log: (line) => logs.push(line),
+    sleep: async (ms) => void sleeps.push(ms),
     fetch: async (input, init) => {
       if (input.startsWith('https://api.github.test/')) {
         if (failGitHub) return new Response('{"message":"down"}', { status: 500 })
+        if (init?.method === 'POST' && input.endsWith('/pulls')) {
+          pullCalls += 1
+          const answer = pullAnswers.shift()
+          if (answer?.after) await fake.fetch(input.replace('https://api.github.test', 'https://x'), init)
+          if (answer) return answer.res()
+        }
         return fake.fetch(input.replace('https://api.github.test', 'https://x'), init)
       }
       if (input.startsWith('https://api.resend.com/')) {
@@ -205,6 +222,154 @@ describe('one submit at a time (the claim)', () => {
     const list = (await (await as('admin@example.com', 'GET', '/api/admin/submissions')).json()) as SubmissionView[]
     expect(list).toHaveLength(0)
     expect((await listDecisions(env.DB, id)).every((d) => d.submission === null)).toBe(true)
+  })
+})
+
+describe('when GitHub does not open the pull request', () => {
+  const BRANCH = 'review/translation-bg-ivan-20261005-1'
+  const refused = (status: number, body: unknown, headers: Record<string, string> = {}) => ({ res: () => new Response(JSON.stringify(body), { status, headers }) })
+  const submitNow = () => as('ivan@example.com', 'POST', '/api/submit', { assignment: id })
+  const reviewBranches = () => [...fake.branches.keys()].filter((b) => b.startsWith('review/'))
+  const messageOf = async (res: Response) => ((await res.json()) as { message: string }).message
+
+  it('tries once more after a 502: one pull request, one submission, the decisions marked', async () => {
+    await decideFirst(2)
+    pullAnswers = [refused(502, { message: 'Server Error' })]
+    const res = await submitNow()
+    expect(res.status).toBe(200)
+    expect(await res.json()).toMatchObject({ pr: 1, count: 2 })
+    expect(sleeps).toEqual([2000])
+    expect(pullCalls).toBe(2)
+    expect(fake.pulls).toHaveLength(1)
+    expect(await listSubmissions(env.DB)).toMatchObject([{ branch: BRANCH, pr: 1 }])
+    expect((await listDecisions(env.DB, id)).every((d) => d.submission !== null)).toBe(true)
+  })
+
+  it('uses the pull request a failed call opened after all, instead of asking again', async () => {
+    await decideFirst(1)
+    pullAnswers = [{ ...refused(502, { message: 'Server Error' }), after: true }]
+    expect(await (await submitNow()).json()).toMatchObject({ pr: 1 })
+    expect(pullCalls).toBe(1)
+    expect(fake.pulls).toHaveLength(1)
+  })
+
+  it('completes with the pull request found for the branch after a 422', async () => {
+    await decideFirst(1)
+    pullAnswers = [{ ...refused(422, { message: 'Validation Failed', errors: [{ message: `A pull request already exists for wordado:${BRANCH}.` }] }), after: true }]
+    const res = await submitNow()
+    expect(res.status).toBe(200)
+    expect(await res.json()).toMatchObject({ pr: 1, url: 'https://github.com/wordado/wordado-content/pull/1' })
+    expect(sleeps).toEqual([])
+    expect(await listSubmissions(env.DB)).toMatchObject([{ branch: BRANCH, pr: 1 }])
+  })
+
+  it('does not retry a 422 with no pull request, or a 403 that is not a rate limit; it says what GitHub said', async () => {
+    await decideFirst(1)
+    pullAnswers = [refused(422, { message: 'Validation Failed', errors: [{ code: 'custom', message: 'No commits between main and the branch' }] })]
+    const res = await submitNow()
+    expect(res.status).toBe(502)
+    expect(await messageOf(res)).toBe('GitHub did not accept the pull request (422: Validation Failed: No commits between main and the branch). Your decisions are saved; try Submit again.')
+    pullAnswers = [refused(403, { message: 'Resource not accessible by integration' })]
+    expect((await submitNow()).status).toBe(502)
+    expect(pullCalls).toBe(2)
+    expect(sleeps).toEqual([])
+    expect(await listSubmissions(env.DB)).toHaveLength(0)
+  })
+
+  it('waits as long as a rate limit asks when that is short, and does not retry when it is long', async () => {
+    await decideFirst(1)
+    pullAnswers = [refused(403, { message: 'You have exceeded a secondary rate limit.' }, { 'retry-after': '60' })]
+    expect((await submitNow()).status).toBe(502)
+    expect(sleeps).toEqual([])
+    pullAnswers = [refused(403, { message: 'You have exceeded a secondary rate limit.' }, { 'retry-after': '3' })]
+    expect((await submitNow()).status).toBe(200)
+    expect(sleeps).toEqual([3000])
+    expect(fake.pulls).toHaveLength(1)
+  })
+
+  it('tries once more when GitHub could not be reached, and says so without the error’s text when it fails again', async () => {
+    await decideFirst(1)
+    const unreachable = { res: (): Response => { throw new TypeError('connect ECONNRESET 10.0.0.1') } }
+    pullAnswers = [unreachable, unreachable]
+    const res = await submitNow()
+    expect(res.status).toBe(502)
+    expect(await messageOf(res)).toBe('Could not reach GitHub. Your decisions are saved; try Submit again.')
+    pullAnswers = [unreachable]
+    expect((await submitNow()).status).toBe(200)
+    expect(sleeps).toEqual([2000, 2000])
+  })
+
+  it('after two failures releases the claim, keeps the decisions pending, tells the reviewer GitHub’s detail and logs it', async () => {
+    await decideFirst(2)
+    pullAnswers = [refused(502, { message: 'Server Error' }), refused(502, { message: 'Server Error' })]
+    const res = await submitNow()
+    expect(res.status).toBe(502)
+    expect(await messageOf(res)).toBe('GitHub did not accept the pull request (502: Server Error). Your decisions are saved; try Submit again.')
+    expect(pullCalls).toBe(2)
+    expect(fake.pulls).toHaveLength(0)
+    expect(await listSubmissions(env.DB)).toHaveLength(0)
+    expect((await listDecisions(env.DB, id)).every((d) => d.submission === null)).toBe(true)
+    expect(logs).toContain(`submit of assignment ${id} failed at pull request: branch ${BRANCH}, status 502, Server Error`)
+    expect(logs.join('\n')).not.toMatch(/inst-token|Bearer/)
+  })
+
+  describe('the branch a failed submit left behind', () => {
+    /** A submit whose commit is written and whose pull request is refused: the branch stays, the claim is released. */
+    async function failedSubmit(n = 1): Promise<void> {
+      await decideFirst(n)
+      pullAnswers = [refused(422, { message: 'Validation Failed' })]
+      expect((await submitNow()).status).toBe(502)
+      expect(fake.pulls).toHaveLength(0)
+    }
+
+    it('is used again when it holds exactly this submit: no second branch, no new commit', async () => {
+      await failedSubmit(2)
+      const commits = fake.commits.size
+      const res = await submitNow()
+      expect(res.status).toBe(200)
+      expect(fake.pulls).toMatchObject([{ number: 1, head: BRANCH }])
+      expect(reviewBranches()).toEqual([BRANCH])
+      expect(fake.commits.size).toBe(commits)
+      expect(await listSubmissions(env.DB)).toMatchObject([{ branch: BRANCH, pr: 1, count: 2 }])
+    })
+
+    it('is named by the submission when it is not the first free number', async () => {
+      fake.branches.set(BRANCH, 'sha-main')
+      await failedSubmit()
+      const res = await submitNow()
+      expect(res.status).toBe(200)
+      expect(fake.pulls).toMatchObject([{ head: 'review/translation-bg-ivan-20261005-2' }])
+      expect(reviewBranches()).toHaveLength(2)
+      expect(await listSubmissions(env.DB)).toMatchObject([{ branch: 'review/translation-bg-ivan-20261005-2', pr: 1 }])
+    })
+
+    it('is left alone when the decisions changed since', async () => {
+      await failedSubmit()
+      const left = fake.branches.get(BRANCH)
+      await decideFirst(2)
+      expect((await submitNow()).status).toBe(200)
+      expect(fake.pulls).toMatchObject([{ head: 'review/translation-bg-ivan-20261005-2' }])
+      expect(fake.branches.get(BRANCH)).toBe(left)
+    })
+
+    it('is left alone when main moved since', async () => {
+      await failedSubmit()
+      const left = fake.branches.get(BRANCH)
+      fake.pushToMain('review/unrelated.txt', 'x')
+      expect((await submitNow()).status).toBe(200)
+      expect(fake.pulls).toMatchObject([{ head: 'review/translation-bg-ivan-20261005-2' }])
+      expect(fake.commits.get(fake.branches.get('review/translation-bg-ivan-20261005-2')!)!.parents).toEqual([fake.mainSha])
+      expect(fake.branches.get(BRANCH)).toBe(left)
+    })
+
+    it('is left alone when a pull request was opened from it, even a closed one', async () => {
+      await failedSubmit()
+      fake.pulls.push({ number: 1, title: 't', head: BRANCH, body: '', state: 'closed', merged: false })
+      const res = await submitNow()
+      expect(res.status).toBe(200)
+      expect(await res.json()).toMatchObject({ pr: 2 })
+      expect(fake.pulls.at(-1)).toMatchObject({ number: 2, head: 'review/translation-bg-ivan-20261005-2' })
+    })
   })
 })
 

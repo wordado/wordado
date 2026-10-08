@@ -2,6 +2,9 @@
 
 Date: 2026-10-05. Status: draft for the product owner's review.
 Builds on: `2026-10-04-ai-review-and-review-app-design.md` (the local review app, §5; "Remote reviewers later", §8).
+Revised 2026-10-08: §7.2 and §11, after a Submit failed three times at the pull request on 2026-10-07 with nothing
+to say why: the error carries GitHub's own explanation, opening the pull request is tried once more, and a branch
+left by a failed submit is used again when it holds the same commit.
 Revised 2026-10-06: §7.2 gains the submission claim (one submit at a time; no duplicate pull request after a
 failure that follows the pull request).
 Revised 2026-10-05 after the implementation's final review: §7.2 defers listing branches left without a pull
@@ -201,10 +204,26 @@ columns), the verdict (`drop` or `ok`) and the note (an empty note keeps the exi
    per file and the reviewer's notes. Record the submission and mark the decisions with it.
 6. Email the admins (§8).
 
-If any GitHub call fails before the pull request exists, nothing is recorded: the decisions stay unsubmitted, the
-reviewer sees *could not reach GitHub, try again*, and a later Submit uses a new branch name (`<n>` + 1). A branch
-left behind without a pull request is harmless. Listing such branches on the admin page for deletion is deferred
-(not built in the first version); until then they are deleted by hand in wordado-content.
+If any GitHub call fails before the pull request exists, nothing is recorded: the decisions stay unsubmitted and
+the reviewer is told what GitHub said, e.g. *GitHub did not accept the pull request (422: Validation Failed: …).
+Your decisions are saved; try Submit again.* (another call: *GitHub refused the submit (<call>, <status>:
+<detail>)…*; GitHub not reached: *Could not reach GitHub. Your decisions are saved; try Submit again.*). The detail
+is GitHub's own `message` and its `errors[]` messages or codes from the response body, at most 300 characters,
+and nothing of the request. The Worker logs the same with the call that failed, the branch and the status.
+
+**One more try at the pull request.** When opening the pull request fails with a 5xx, a 429, a 403 that is a rate
+limit (its message says *rate limit* or *abuse*, or it has `retry-after`), or because GitHub was not reached,
+Submit waits 2 seconds (or GitHub's `retry-after`, when that is at most 5 seconds; a longer one means no retry)
+and tries once more. Before that second try, and after any such failure or a 422, it looks for a pull request
+already opened from the branch (the failed call may have opened it) and uses it instead of failing.
+
+**A branch left behind.** A submit that fails after its commit leaves its branch without a pull request. Before
+committing, Submit looks at the branches `review/<queue>-<reviewer-slug>-<yyyymmdd>-<n>` of today: one whose head
+commit has exactly the tree, the parent (`main`'s current commit) and the message this submit would write, and
+from which no pull request was ever opened, is used as it is, with no new commit, and the submission names it.
+Any other is not touched (never updated, never deleted), and the submit writes a new branch (`<n>` + 1) as before.
+A branch left behind without a pull request is harmless. Listing such branches on the admin page for deletion is
+deferred (not built in the first version); until then they are deleted by hand in wordado-content.
 
 **One submit at a time (the claim).** Before any write to GitHub, Submit records the submission with no pull
 request number and marks its decisions with it; a unique index allows one such claim per assignment, so a second
@@ -280,7 +299,7 @@ the link to copy), and a submission is still recorded.
 | Row changed in a new snapshot after they decided it | *Changed since you decided it*, with the new proposal; the old decision is kept but not submitted until they decide again |
 | Row gone (imported, dropped by a new draft) | the row disappears; an unsubmitted decision on it is discarded with a notice |
 | No snapshot yet / R2 unreadable | *The review data is not available yet*; admin sees the snapshot status |
-| GitHub unreachable at Submit | *Could not reach GitHub, try again*; nothing submitted |
+| GitHub unreachable at Submit, or it refuses a call | after one more try at the pull request (§7.2): *Could not reach GitHub…* or *GitHub did not accept the pull request (<status>: <GitHub's message>). Your decisions are saved; try Submit again.*; nothing submitted |
 | Not invited / disabled | a plain page: ask the coordinator for an invite |
 | Access token missing or invalid | 401 (Access's own sign-in page normally comes first) |
 

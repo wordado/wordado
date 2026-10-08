@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { b64url } from './b64'
-import { appJwt, GitHub, verifyWebhook } from './github'
+import { appJwt, GitHub, GitHubError, resetGitHubTokens, verifyWebhook } from './github'
 import { FakeGitHub, testAppKey } from './test/fakeGitHub'
 
 const now = new Date('2026-10-05T12:00:00Z')
@@ -42,6 +42,52 @@ describe('GitHub', () => {
     fake.pulls[0]!.state = 'closed'
     fake.pulls[0]!.merged = true
     expect(await gh.prState(1)).toBe('merged')
+  })
+
+  it('writes the same tree for the same content, and lists the branches of a name with their commits', async () => {
+    const fake = new FakeGitHub({ 'review/a.csv': 'old' })
+    const gh = await make(fake)
+    const head = await gh.headSha()
+    const files = [{ path: 'review/a.csv', content: 'new' }]
+    const tree = await gh.writeTree(head, files)
+    expect(await gh.writeTree(head, files)).toBe(tree)
+    expect(await gh.writeTree(head, [{ path: 'review/a.csv', content: 'other' }])).not.toBe(tree)
+    await gh.commitFiles({ parent: head, branch: 'review/x-1', message: 'm', author: { name: 'A', email: 'review@wordado.com' }, files, tree })
+    fake.branches.set('review/xy-1', head)
+    const found = await gh.branches('review/x-')
+    expect(found.map((b) => b.name)).toEqual(['review/x-1'])
+    expect(await gh.commitOf(found[0]!.sha)).toEqual({ tree, parents: [head], message: 'm' })
+  })
+
+  describe('a failed call', () => {
+    const failing = async (res: () => Response | Promise<Response>) => {
+      resetGitHubTokens()
+      const fake = new FakeGitHub({})
+      return new GitHub({ api: 'https://api.github.test', appId: '1', installationId: '2', privateKeyPem: (await testAppKey()).pem, repo: fake.repo }, async (i, init) => (i.endsWith('/pulls') ? res() : fake.fetch(i.replace('https://api.github.test', 'https://x'), init)), () => now)
+    }
+    const caught = async (gh: GitHub) => gh.openPr({ title: 't', head: 'b', body: '' }).then(() => { throw new Error('did not fail') }, (err: unknown) => err as GitHubError)
+
+    it('carries the status and GitHub’s message, with the errors’ messages and codes', async () => {
+      const gh = await failing(() => new Response(JSON.stringify({ message: 'Validation Failed', errors: [{ resource: 'PullRequest', code: 'custom', message: 'No commits between main and b' }, { code: 'invalid' }], documentation_url: 'https://docs.github.com/rest' }), { status: 422 }))
+      const err = await caught(gh)
+      expect(err).toBeInstanceOf(GitHubError)
+      expect(err).toMatchObject({ what: 'pull request', status: 422, detail: 'Validation Failed: No commits between main and b; invalid', retryAfter: null })
+      expect(err.message).toBe('GitHub pull request: 422 (Validation Failed: No commits between main and b; invalid)')
+    })
+    it('caps a long message, and never names the token', async () => {
+      const err = await caught(await failing(() => new Response(JSON.stringify({ message: 'x'.repeat(2000) }), { status: 403, headers: { 'retry-after': '3' } })))
+      expect(err.detail.length).toBeLessThanOrEqual(300)
+      expect(err.retryAfter).toBe(3)
+      expect(err.message).not.toContain('inst-token')
+    })
+    it('falls back to the text of a body that is not JSON, and to nothing for a page', async () => {
+      expect((await caught(await failing(() => new Response('  upstream\n  timed out ', { status: 504 })))).detail).toBe('upstream timed out')
+      expect((await caught(await failing(() => new Response('<!DOCTYPE html><html><body>Unicorn</body></html>', { status: 502 })))).detail).toBe('')
+    })
+    it('is status 0 when GitHub could not be reached', async () => {
+      const err = await caught(await failing(() => { throw new TypeError('fetch failed') }))
+      expect(err).toMatchObject({ what: 'pull request', status: 0, detail: 'fetch failed' })
+    })
   })
 })
 

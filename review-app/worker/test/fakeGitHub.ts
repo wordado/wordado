@@ -49,13 +49,19 @@ export class FakeGitHub {
     }
     if (method === 'GET' && (m = new RegExp(`^${repo}/git/commits/(.+)$`).exec(p))) {
       const c = this.commits.get(m[1]!)
-      return c ? json({ sha: m[1], tree: { sha: c.tree } }) : json({ message: 'Not Found' }, 404)
+      return c ? json({ sha: m[1], tree: { sha: c.tree }, parents: c.parents.map((sha) => ({ sha })), message: c.message }) : json({ message: 'Not Found' }, 404)
+    }
+    if (method === 'GET' && (m = new RegExp(`^${repo}/git/matching-refs/heads/(.+)$`).exec(p))) {
+      const prefix = decodeURIComponent(m[1]!)
+      return json([...this.branches].filter(([name]) => name.startsWith(prefix)).map(([name, sha]) => ({ ref: `refs/heads/${name}`, object: { sha } })))
     }
     if (method === 'POST' && p === `${repo}/git/trees`) {
       const base = [...this.commits.values()].find((c) => c.tree === body['base_tree'])
       const files = new Map(base?.files ?? [])
       for (const e of body['tree'] as { path: string; content: string }[]) files.set(e.path, e.content)
-      const sha = `tree-${++this.n}`
+      // Like git, the same content is the same tree.
+      const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify([...files].sort(([a], [b]) => (a < b ? -1 : 1)))))
+      const sha = `tree-${[...new Uint8Array(digest)].slice(0, 8).map((b) => b.toString(16).padStart(2, '0')).join('')}`
       this.trees.set(sha, files)
       return json({ sha }, 201)
     }
