@@ -110,6 +110,68 @@ describe('document writes (spec §9.2)', () => {
     expect(back.documents[0]).toMatchObject({ version: 4, deleted: false, fields: { flag: 'known' } })
   })
 
+  it('stores a word the learner chose to learn beside its flag, takes it back as a tombstone, and restores it (spec §7.4)', async () => {
+    const h = harness()
+    const s = await h.signIn()
+    // An account from before the mark existed: a flag and settings are already there.
+    await push(h, s, [write('word_flag', 'c:hello-1', { flag: 'suspended' }), write('settings', '', { newWordLimit: 5 })])
+    const chosen = await push(h, s, [write('word_learn', 'c:hello-1', { at: 1_790_000_000_000 }), write('word_learn', 'c:bread-1', { at: 1_790_000_000_500 })])
+    expect(chosen.rejected).toEqual([])
+    expect(chosen.documents).toEqual([
+      { type: 'word_learn', key: 'c:hello-1', class: 'versioned', version: 4, fields: { at: 1_790_000_000_000 }, fieldVersions: { at: 4 }, deleted: false, staleAfter: null },
+      { type: 'word_learn', key: 'c:bread-1', class: 'versioned', version: 5, fields: { at: 1_790_000_000_500 }, fieldVersions: { at: 5 }, deleted: false, staleAfter: null },
+    ])
+    const gone = await push(h, s, [write('word_learn', 'c:hello-1', {}, 4, true)])
+    expect(gone.documents[0]).toMatchObject({ version: 6, deleted: true, fields: { at: 1_790_000_000_000 } })
+    const back = await push(h, s, [write('word_learn', 'c:hello-1', { at: 1_790_000_009_000 }, 6, false)])
+    expect(back.documents[0]).toMatchObject({ version: 7, deleted: false, fields: { at: 1_790_000_009_000 } })
+    // The flag and the settings are as they were, and a pull returns all of it.
+    const pulled = (await s.post('/v1/sync/pull', { protocolVersion: SYNC_PROTOCOL_VERSION, deviceId: 'dev-b', documentsSince: 0 })).body
+    const byType = (type: string) => pulled.documents.filter((d: { type: string }) => d.type === type).map((d: { key: string; fields: unknown; deleted: boolean }) => [d.key, d.fields, d.deleted])
+    expect(byType('word_flag')).toEqual([['c:hello-1', { flag: 'suspended' }, false]])
+    expect(byType('settings')).toEqual([['', { newWordLimit: 5 }, false]])
+    expect(byType('word_learn')).toEqual([
+      ['c:bread-1', { at: 1_790_000_000_500 }, false],
+      ['c:hello-1', { at: 1_790_000_009_000 }, false],
+    ])
+  })
+
+  it('takes the same mark twice as one document: a resent write is merged, not doubled', async () => {
+    const h = harness()
+    const s = await h.signIn()
+    const mark = write('word_learn', 'c:hello-1', { at: 1_790_000_000_000 })
+    const first = await push(h, s, [mark])
+    const again = await push(h, s, [mark], 'dev-b')
+    expect(first.documents[0]).toMatchObject({ version: 2, fields: { at: 1_790_000_000_000 }, deleted: false })
+    expect(again.documents[0]).toMatchObject({ version: 3, fields: { at: 1_790_000_000_000 }, deleted: false })
+    expect(again.rejected).toEqual([])
+    const rows = await h.deps.db.query<{ key: string }>(`select key from document where user_id = $1 and type = 'word_learn'`, [s.userId])
+    expect(rows).toEqual([{ key: 'c:hello-1' }])
+  })
+
+  it('refuses a malformed mark and stores the rest of the page', async () => {
+    const h = harness()
+    const s = await h.signIn()
+    const reply = await push(h, s, [
+      write('word_learn', 'hello', { at: 1 }),
+      write('word_learn', 'c:hello-1', { at: 'now' }),
+      write('word_learn', 'c:hello-1', { at: 1, flag: 'known' }),
+      // A mark must say when it was made; only taking one back may go without.
+      write('word_learn', 'c:milk-1', {}),
+      write('word_learn', 'c:milk-1', {}, 0, false),
+      write('word_learn', 'c:bread-1', { at: 1 }),
+    ])
+    expect(reply.rejected).toEqual([
+      { type: 'word_learn', key: 'hello', reason: 'invalid' },
+      { type: 'word_learn', key: 'c:hello-1', reason: 'invalid' },
+      { type: 'word_learn', key: 'c:hello-1', reason: 'invalid' },
+      { type: 'word_learn', key: 'c:milk-1', reason: 'invalid' },
+      { type: 'word_learn', key: 'c:milk-1', reason: 'invalid' },
+    ])
+    expect(reply.documents.map((d: { key: string; version: number }) => [d.key, d.version])).toEqual([['c:bread-1', 2]])
+    expect(await counter(h, s)).toBe(2)
+  })
+
   it('keeps a content report in its own table, with its reporter (spec §8.10)', async () => {
     const h = harness()
     const s = await h.signIn()

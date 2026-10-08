@@ -1,5 +1,5 @@
 import { useClient, useClientSnapshot, type PathView } from '@wordado/client-data'
-import type { Unit, UnitProgress } from '@wordado/core'
+import { unitPractisable, type Unit, type UnitProgress } from '@wordado/core'
 import { Check, ChevronDown, CircleDashed, Lock, Play, Star, type LucideIcon } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { localized, useT, type MessageKey } from '../i18n/i18n'
@@ -92,6 +92,7 @@ export function Path() {
             key={units[i]!.unitId}
             unit={units[i]!}
             status={statuses[i]!}
+            skipped={skipped}
             progress={progress.units.get(units[i]!.unitId)}
             line={next === undefined ? null : statuses[next] !== 'locked'}
             today={today}
@@ -182,6 +183,8 @@ function DoneFold(props: { readonly count: number; readonly open: boolean; reado
 function UnitItem(props: {
   readonly unit: Unit
   readonly status: UnitStatus
+  /** A unit of a level the learner skipped: none of its words is started, and all of them can be practised. */
+  readonly skipped: boolean
   readonly progress: UnitProgress | undefined
   /** The line to the next unit shown: null for the last, true once that unit is reachable. */
   readonly line: boolean | null
@@ -195,8 +198,8 @@ function UnitItem(props: {
   const { unit, status, progress } = props
   const Icon = ICON[status]
   const title = localized(unit.title, locale, corpus?.l1 ?? '')
-  // Practice draws on started words that are not set aside (spec §7.4), which is what `introduced` counts.
-  const canPractise = status !== 'locked' && (progress?.introduced ?? 0) > 0
+  // Practice draws on started words that are not set aside, and on every live word of a skipped level's unit (spec §7.4).
+  const canPractise = status !== 'locked' && progress !== undefined && unitPractisable(progress, props.skipped) > 0
   let words: ReactNode = null
   if (props.wordsOpen) {
     words = (
@@ -209,7 +212,7 @@ function UnitItem(props: {
               <span lang="en" className="word-head">
                 {entry.headword}
               </span>
-              <FlagControls wordId={wordId} headword={entry.headword} menu />
+              <FlagControls wordId={wordId} headword={entry.headword} menu learn={props.skipped} />
             </li>
           )
         })}

@@ -199,8 +199,9 @@ export class SyncEngine {
           if (sent) await confirmPushedDocument(tx, doc, sent.patch)
         }
         for (const r of response.rejected) await dropPendingPatch(tx, r.type, r.key)
-        // A rejected write leaves optimistic fields behind and bumps no server version,
-        // so the cursor is reset: the next pull returns every document and overwrites them.
+        // A rejected write to a document the server holds leaves optimistic fields behind and bumps no server
+        // version, so the cursor is reset: the next pull returns every document and overwrites them. (One the
+        // server never held is gone already: `dropPendingPatch`.)
         if (response.rejected.length > 0) await setMeta(tx, 'documents_since', '0')
       })
       this.set({ pendingEvents: Math.max(0, events.length - (page + 1) * SYNC_PAGE_SIZE) })

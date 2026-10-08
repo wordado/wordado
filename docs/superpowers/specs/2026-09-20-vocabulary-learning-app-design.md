@@ -498,6 +498,8 @@ else.
   cleared simply becomes a new device.
 - `word_flag` — versioned document per (user, `word_id`): *known* or
   *suspended*; see §7.4.
+- `word_learn` — versioned document per (user, `word_id`): a word the
+  learner chose to learn, with the time of choosing; see §7.4.
 - `unit_unlock` — grow-only set of (user, unit). Mastery and completion are
   derived from `review_state`, never stored.
 - `word_alias` — user-word-to-corpus-entry merges; see §6.1.
@@ -591,6 +593,13 @@ started word that is not set aside also offers **practice of that unit**
 (§7.4), so a learner can go back over an open unit at any time. A locked unit
 offers neither.
 
+A unit of a skipped level — one below the declared level — offers practice of
+that unit too, whenever it has a live word that is not set aside, although none
+of its words was ever started: the learner placed above it and may still want
+to go over it. Such practice uses all the unit's words and starts none of them
+(§7.4); the level stays "skipped — placed above". It never offers the daily
+session, which does not serve its words.
+
 ### 7.3 Grading inputs
 
 Every game mode reports a grade plus response latency. A correct-but-slow
@@ -621,12 +630,14 @@ seen. `core` composes each session as follows.
 
 1. **Due reviews first**, lowest predicted retrievability first.
 2. **Then new words**, up to the learner's **daily new-word limit** (default
-   10, configurable 0–30). New words come from personal words first (from
-   Phase 2; the step is empty before then), then the learner's chosen
-   collection if they have one (§8.9), then the current unit (§7.2). While a
-   collection is active it takes the whole quota and the path waits — that is
-   the learner's choice, and the path resumes when the collection is exhausted
-   or cleared. With a limit of 0 the learner only reviews.
+   10, configurable 0–30). New words come from personal words first — the
+   words the learner **chose to learn** (below), in the order chosen, and from
+   Phase 2 the personal dictionary's — then the learner's chosen collection if
+   they have one (§8.9), then the current unit (§7.2). While a collection is
+   active it takes what the personal words leave of the quota and the path
+   waits — that is the learner's choice, and the path resumes when the
+   collection is exhausted or cleared. With a limit of 0 the learner only
+   reviews.
 3. **Backlog protection.** Reviews shown per day are capped (default 100). When
    the backlog exceeds the cap — typically after an absence — new words pause
    until it clears, and the home screen shows the day's capped figure with the
@@ -647,6 +658,17 @@ seen. `core` composes each session as follows.
    the schedule, the daily session, which words are introduced, nor the
    learner's chosen collection.
 
+   *A unit of a skipped level* (§7.2) is the one exception to "started words":
+   its practice draws on **all** the unit's words that are neither set aside
+   nor retired, started or not, because a skipped level's words are never
+   introduced and there would be nothing to practise. Nothing is started by
+   it: an answer to a never-started word is an ordinary practice event, so it
+   creates no review state, does not introduce the word, and leaves the daily
+   session, the unlocks, the level's skipped status and every progress figure
+   as they were. The practice screen says the words are from a level the
+   learner skipped. Everywhere else — practice over everything, a theme, a
+   unit at or above the declared level — only started words are used.
+
    *Which words practice picks.* Started words that are neither set aside nor
    retired. A practice run leaves out the words today's session serves —
    practising them would only repeat the session. Those words come back only
@@ -660,7 +682,8 @@ seen. `core` composes each session as follows.
    never forgotten and was last rated good or easy has weight 1, and a word
    gains weight for having been forgotten before (lapses), for short-lived
    memory (learning or young, by stability), and for a last scheduled rating
-   of again or hard, up to a cap of 5. It is a lean, not a sort: every word can
+   of again or hard, up to a cap of 5. A word with no review state (a skipped
+   level's unit) has weight 1. It is a lean, not a sort: every word can
    still come up. The weights are tuning (§15) and read only what the review
    state already holds.
 
@@ -669,6 +692,38 @@ need this") or *suspended* ("not now"). Either removes it from the new-word
 queue and from review; neither deletes its review state, and both can be
 undone. A known word is shown as known-by-declaration and never counted as
 mature. Flags are versioned documents (§9.2).
+
+**Words chosen to learn.** While practising a word that was never started (a
+unit of a skipped level, above), the learner can choose **Learn this word**:
+once the answer is on screen the card offers it, named with the word. The
+word then enters normal learning: the daily session serves it as a new word,
+ahead of the collection and the path and within the daily new-word limit, so
+the home screen counts it among the day's new words exactly as it will be
+served. From its first scheduled review it is a word like any other. It does
+not un-skip its level: the level stays "skipped — placed above", and only
+that word is started.
+
+The same control then reads "Will be learned" and takes the choice back, until
+the word is started. Once the word has review state the mark is spent and is
+ignored; it is not deleted. A chosen word is not flagged: it stays servable
+and practisable. Setting a chosen word aside (known or suspended) takes its
+mark away with it, so bringing the word back later does not put it at the
+front of the new words; a mark that still meets a flag (made on another
+device) is simply not served while the flag stands. The run's end says how
+many of the words it showed are marked to learn, whenever they were marked.
+The path's word list labels a chosen word "To learn" and can take the mark
+back; in a unit of a skipped level it can also mark a word that was never
+started, so the learner can pick words without playing a round.
+
+Each mark is a `word_learn` versioned document keyed by the word (§6.2, §9.2),
+apart from the word's flag, holding the time it was chosen, which orders the
+learner's own choices and nothing else; taking it back is a tombstone, the
+one write that may go without the time. It is
+written on the device at once, so it works offline, and syncs like a flag, so
+it survives a reinstall and reaches the learner's other devices. A build that
+does not know the type keeps the documents it is sent and ignores them. A
+server that does not know it refuses the write, and the mark is then removed
+from the device (§9.2) rather than left showing on that device alone.
 
 ### 7.5 One memory state, several skills
 
@@ -1280,6 +1335,12 @@ includes the `base_version` it was editing.
   on both sides, the write that reaches the server later wins. Ordering by
   server arrival rather than by `updated_at` means a device with a fast clock
   cannot win every conflict.
+- **A refused write is undone on the device.** The client drops the pending
+  patch. For a document the server holds, the next pull — of every document —
+  restores the server's fields. For one the server has never held (the device
+  has no server version of it), there is nothing a pull would overwrite, so
+  the device removes its copy outright; `unit_unlock` is the exception and
+  stays, being grow-only and rebuilt by the path's rules.
 - **Deletes are tombstones**, retained indefinitely (they are tiny). A
   tombstoned user word's review events stay in the log but derive no state;
   undeleting restores it.
@@ -1289,6 +1350,11 @@ includes the `base_version` it was editing.
   never rewritten, so they regroup under the user word again.
 - `unit_unlock` is a grow-only set: merge is union, and nothing can re-lock a
   unit.
+- `word_learn` (§7.4) is one document per word, merged like any other: marks
+  made on two devices are both kept, and for one word the later arrival wins.
+  The type was added without a protocol or schema change — the server checks
+  it with the same shared rules as every type, and stores it in the same
+  table.
 
 **Server-owned documents.** A second document class for state the client must
 be able to read offline but must never write: the `entitlement` (§8.8) is the
@@ -1851,6 +1917,21 @@ owner.
 - **Themes (§8.9), same day:** the themes screen sorts the themes into
   studying now, studied and not started, and "Study this next" replaces
   "Study this theme".
+
+**2026-10-08 — practice of a skipped level's unit.** Decided by the product
+owner.
+
+- **Path, practice (§7.2, §7.4):** a unit of a level below the declared one
+  offers practice of that unit, drawn from all its live words that are not set
+  aside, started or not. Nothing is started by it, and the level stays skipped.
+
+- **Learn this word (§6.2, §7.4, §9.2), same day:** a never-started word
+  met in such practice can be chosen to learn. The daily session then serves
+  it first among the new words, within the daily limit; the level stays
+  skipped. The choice is a `word_learn` document per word, synced like a flag.
+  Setting a word aside clears its mark; the path's word list marks and
+  unmarks; and a refused write of a document the server never held is removed
+  from the device (§9.2).
 
 ### Approval status
 

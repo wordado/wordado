@@ -6,6 +6,7 @@ import {
   dueDay,
   entryClips,
   isLive,
+  learnQueue,
   levelCompletion,
   localDay,
   masteryTier,
@@ -43,6 +44,8 @@ export interface StudyContext {
   readonly flags: ReadonlyMap<WordId, WordFlag>
   /** The persisted grow-only unlock set. */
   readonly unlocked: ReadonlySet<string>
+  /** Words the learner chose to learn, each with the time it was chosen (spec §7.4). */
+  readonly toLearn: ReadonlyMap<WordId, number>
   readonly now: number
   readonly tzOffsetMin: number
 }
@@ -63,6 +66,15 @@ export function pathContext(ctx: StudyContext): PathContext {
   }
 }
 
+/**
+ * The words the learner chose to learn that are still to be started, in the order chosen (spec §7.4): the planner's
+ * personal source. A word the corpus no longer holds, or retired, is left out; a word set aside stays listed and is
+ * simply not served.
+ */
+export function toLearnWords(ctx: Pick<StudyContext, 'corpus' | 'learner' | 'toLearn'>): WordId[] {
+  return learnQueue(ctx.toLearn, ctx.learner.states).filter((wordId) => entryOf(ctx.corpus, wordId) !== null && !ctx.corpus.retired.has(wordId))
+}
+
 /** The session, from the same inputs the home screen shows (spec §7.4). */
 export function sessionPlan(ctx: StudyContext): SessionPlan {
   const day = today(ctx)
@@ -78,7 +90,7 @@ export function sessionPlan(ctx: StudyContext): SessionPlan {
     reviewCap: ctx.settings.reviewCap,
     reviewsDoneToday: counts.reviewsDone,
     newWordsDoneToday: counts.newWordsDone,
-    personalNew: [],
+    personalNew: toLearnWords(ctx),
     collectionNew: theme === null ? null : themeEntries(ctx.corpus, theme).map((e) => corpusWordId(e.entryId)),
     pathNew: pathNewWords(pathContext(ctx), MAX_NEW_WORD_LIMIT),
   })

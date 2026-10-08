@@ -22,7 +22,7 @@ import {
 } from '@wordado/core'
 import { Database } from './database'
 import { pendingDocumentWrites } from './documents'
-import { addContentReport, addUnlocks, patchSettings, readAliases, readEntitlement, readFlags, readReports, readSettings, readUnlocks, setFlag, type ContentReportInput } from './documentTypes'
+import { addContentReport, addUnlocks, patchSettings, readAliases, readEntitlement, readFlags, readReports, readSettings, readToLearn, readUnlocks, setFlag, setToLearn, type ContentReportInput } from './documentTypes'
 import type { SqlDriver } from './driver'
 import type { ClientEnv } from './env'
 import { appendAnswer, loadLearner, pendingDayComplete, provisionalXp, recordDayComplete, unpushedEvents, type AnswerInput, type Learner } from './learner'
@@ -30,7 +30,7 @@ import { ensureDevice, getUserId, setUserId } from './meta'
 import { activateStagedPacks, activePackVersion, installedPacks, installPacks, loadActiveCorpus, type InstallReport, type PackFetcher } from './packs'
 import { migrate } from './schema'
 import { createStore, type Store } from './store'
-import { availableModes, dayCompleteInput, entryOf, levelClips, newUnlocks, pathView, progressView, sessionPlan, today, upcomingClips, type PathView, type ProgressView, type StudyContext } from './study'
+import { availableModes, dayCompleteInput, entryOf, levelClips, newUnlocks, pathView, progressView, sessionPlan, today, toLearnWords, upcomingClips, type PathView, type ProgressView, type StudyContext } from './study'
 import { INITIAL_SYNC_STATUS, readPulledXp, SyncEngine, type PulledXp, type SyncOutcome, type SyncStatus, type SyncTransport } from './sync'
 
 export interface ClientOptions {
@@ -63,6 +63,11 @@ export interface ClientSnapshot {
   readonly states: ReadonlyMap<WordId, ReviewState>
   readonly settings: Settings
   readonly flags: ReadonlyMap<WordId, WordFlag>
+  /**
+   * Words the learner chose to learn that are not started yet, in the order chosen (spec §7.4): the daily session
+   * serves them first. Empty before a pack is active.
+   */
+  readonly toLearn: readonly WordId[]
   readonly unlocked: ReadonlySet<string>
   readonly plan: SessionPlan | null
   readonly progress: ProgressView | null
@@ -102,6 +107,7 @@ export class Client {
   private packVersion: number | null = null
   private settings!: Settings
   private flags: Map<WordId, WordFlag> = new Map()
+  private toLearn: Map<WordId, number> = new Map()
   private unlocked: Set<string> = new Set()
   private entitlement: Entitlement | null = null
   private userId: string | null = null
@@ -156,6 +162,7 @@ export class Client {
   private async reloadDocuments(): Promise<void> {
     this.settings = await readSettings(this.db.driver)
     this.flags = await readFlags(this.db.driver)
+    this.toLearn = await readToLearn(this.db.driver)
     this.unlocked = await readUnlocks(this.db.driver)
     this.entitlement = await readEntitlement(this.db.driver)
     this.learner.aliases = await readAliases(this.db.driver)
@@ -170,6 +177,7 @@ export class Client {
       settings: this.settings,
       flags: this.flags,
       unlocked: this.unlocked,
+      toLearn: this.toLearn,
       now: this.env.now(),
       tzOffsetMin: this.env.tzOffsetMin(),
     }
@@ -190,6 +198,7 @@ export class Client {
       states: this.learner.states,
       settings: this.settings,
       flags: this.flags,
+      toLearn: ctx ? toLearnWords(ctx) : [],
       unlocked: this.unlocked,
       plan,
       progress: ctx && plan ? progressView(ctx, plan) : null,
@@ -345,8 +354,27 @@ export class Client {
 
   setFlag(wordId: WordId, flag: WordFlag | null): Promise<void> {
     return this.guarded(async () => {
-      await this.db.transaction((tx) => setFlag(tx, wordId, flag))
+      await this.db.transaction(async (tx) => {
+        await setFlag(tx, wordId, flag)
+        // Set aside, the word is no longer one to learn: the mark goes with it, so bringing the word back later
+        // does not put it at the front of the new words (spec §7.4).
+        if (flag !== null && this.toLearn.has(wordId)) await setToLearn(tx, wordId, null)
+      })
       this.flags = await readFlags(this.db.driver)
+      this.toLearn = await readToLearn(this.db.driver)
+      this.refresh()
+    })
+  }
+
+  /**
+   * "Learn this word" (spec §7.4): marks a word the learner has not started, or takes the mark back. The daily
+   * session then serves it as a new word, first in line and within the day's limit. Saved on the device at once
+   * and synced like a flag; a mark on a word that is started is spent and ignored.
+   */
+  setToLearn(wordId: WordId, on: boolean): Promise<void> {
+    return this.guarded(async () => {
+      await this.db.transaction((tx) => setToLearn(tx, wordId, on ? this.env.now() : null))
+      this.toLearn = await readToLearn(this.db.driver)
       this.refresh()
     })
   }

@@ -49,6 +49,40 @@ describe('Study', () => {
     ])
   })
 
+  it('practises a unit of a skipped level from words never started, starts none, and ends as a unit’s practice does', async () => {
+    const ctx = await setup()
+    await ctx.client.updateSettings({ declaredLevel: 'A2' })
+    const second = ctx.client.snapshot.corpus!.units[1]!
+    const before = ctx.client.snapshot
+    renderWith(<Study kind="practice" mode="flashcard" unit={second.unitId} />, ctx)
+    expect((await screen.findByRole('progressbar', { name: 'Session progress' })).getAttribute('aria-valuemax')).toBe('10')
+    const headwords = second.wordIds.map((wordId) => ctx.client.entry(wordId)!.headword)
+    // Setting a word aside works with no review state: the flag is the learner's, not the schedule's.
+    fireEvent.click(screen.getByRole('button', { name: 'More' }))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Not now' })))
+    for (let i = 0; i < 9; i += 1) {
+      expect(headwords).toContain(document.querySelector('.card [lang="en"]')!.textContent)
+      ctx.env.advance(ITEM_SETTLE_MS)
+      fireEvent.click(screen.getByRole('button', { name: 'Show answer' }))
+      ctx.env.advance(ITEM_SETTLE_MS)
+      await act(async () => fireEvent.click(screen.getByRole('button', { name: /Good/ })))
+    }
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Practice complete')
+    expect(screen.getByText('You answered 9 words.')).toBeTruthy()
+    expect(screen.getByText('1 word set aside. You can bring it back in settings.')).toBeTruthy()
+    // Nothing is said to be unlocked or to count for the day's new words; nothing was started.
+    expect(screen.queryByText(/^New unit open/)).toBeNull()
+    expect(ctx.client.snapshot.states.size).toBe(0)
+    expect(ctx.client.snapshot.plan).toEqual(before.plan)
+    expect(ctx.client.snapshot.progress!.levels.A1).toEqual({ kind: 'skipped' })
+    expect(ctx.client.snapshot.flags.size).toBe(1)
+    const links = [...document.querySelectorAll('.done-actions a')].map((a) => [a.textContent, a.getAttribute('href'), a.classList.contains('primary')])
+    expect(links).toEqual([
+      ['Back to the path', '/path', true],
+      ['Practise more', `/practice?unit=${second.unitId}`, false],
+    ])
+  })
+
   it('practises one theme from that theme’s started words, and ends with the way back to the themes', async () => {
     const ctx = await setup()
     await ctx.client.updateSettings({ activeTheme: 'daily-life' })

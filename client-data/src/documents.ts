@@ -167,7 +167,14 @@ export async function pendingDocumentWrites(driver: SqlDriver): Promise<Document
   return rows.map(fromRow).flatMap((d) => (d.patch ? [{ type: d.type, key: d.key, patch: d.patch }] : []))
 }
 
-/** Forgets a pending patch the server rejected; the next pull restores the server's fields. */
+/**
+ * Forgets a pending patch the server rejected. A document the server has issued a version of keeps its row, and
+ * the next pull restores the server's fields. One it never has (version 0: every server version is above that)
+ * exists only as this device's optimistic copy, which no pull would overwrite, so the row goes: the rejected value
+ * really is undone, and if another device did create the document, the pull brings it. Unit unlocks stay: the set
+ * only grows, and the path's own rules rebuild it.
+ */
 export async function dropPendingPatch(tx: SqlDriver, type: string, key: string): Promise<void> {
+  if (type !== UNLOCK_TYPE) await tx.run('DELETE FROM document WHERE type = ? AND key = ? AND version = 0', [type, key])
   await tx.run('UPDATE document SET patch = NULL WHERE type = ? AND key = ?', [type, key])
 }

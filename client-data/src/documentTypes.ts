@@ -52,6 +52,25 @@ export async function setFlag(tx: SqlDriver, wordId: WordId, flag: WordFlag | nu
   else await writeLocalPatch(tx, DOC.wordFlag, wordId, { flag }, false)
 }
 
+/**
+ * The words the learner chose to learn (spec §7.4), each with the time it was chosen. Kept apart from the flags:
+ * a chosen word stays servable and practisable. A stored time this build cannot read counts as the earliest.
+ */
+export async function readToLearn(driver: SqlDriver): Promise<Map<WordId, number>> {
+  const out = new Map<WordId, number>()
+  for (const doc of await listDocuments(driver, DOC.wordLearn)) {
+    const at = doc.fields['at']
+    if (!doc.deleted && isWordId(doc.key)) out.set(doc.key, typeof at === 'number' && Number.isFinite(at) ? at : 0)
+  }
+  return out
+}
+
+/** A mark is a document per word, as a flag is; taking it back is a tombstone (spec §9.2). `at` is when it was chosen. */
+export async function setToLearn(tx: SqlDriver, wordId: WordId, at: number | null): Promise<void> {
+  if (at === null) await writeLocalPatch(tx, DOC.wordLearn, wordId, {}, true)
+  else await writeLocalPatch(tx, DOC.wordLearn, wordId, { at }, false)
+}
+
 export async function readUnlocks(driver: SqlDriver): Promise<Set<string>> {
   const doc = await getDocument(driver, DOC.unitUnlock, '')
   const units = doc?.fields['units']

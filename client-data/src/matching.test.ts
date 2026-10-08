@@ -51,6 +51,32 @@ describe('MatchingRun', () => {
     expect(new Set(MatchingRun.start(client, env, scope)!.snapshot.left.map((e) => corpusWordId(e.entryId)))).toEqual(new Set(startedOf()))
   })
 
+  it('deals the board of a skipped level’s unit from all its words, and a pair starts neither word (spec §7.2, §8.1)', async () => {
+    const env = testEnv()
+    const client = await openSampleClient(env)
+    const unit = client.snapshot.corpus!.units[1]!
+    const scope = { kind: 'unit', id: unit.unitId } as const
+    // Nothing is started: at the learner's own level the unit has nothing to match.
+    expect(MatchingRun.start(client, env, scope)).toBeNull()
+    await client.updateSettings({ declaredLevel: 'A2' })
+    const before = client.snapshot
+    const run = MatchingRun.start(client, env, scope)!
+    expect(run.snapshot.left).toHaveLength(MATCHING_PAIRS)
+    expect(run.snapshot.left.every((e) => unit.wordIds.includes(corpusWordId(e.entryId)))).toBe(true)
+    for (const entry of run.snapshot.left) {
+      env.advance(2_000)
+      await run.select('left', entry.entryId)
+      await run.select('right', entry.entryId)
+    }
+    expect(run.snapshot).toMatchObject({ done: true, error: null })
+    expect(client.snapshot.states.size).toBe(0)
+    expect(client.snapshot.plan).toEqual(before.plan)
+    expect(client.snapshot.progress!.units).toEqual(before.progress!.units)
+    expect(client.snapshot.progress!.levels).toEqual(before.progress!.levels)
+    // Matching over everything still needs started words.
+    expect(MatchingRun.start(client, env)).toBeNull()
+  })
+
   it('deals weaker words more readily, and the strong ones still', async () => {
     const { env, client } = await clientWithWords(9)
     // One more word, forgotten at once: the weakest of the ten.

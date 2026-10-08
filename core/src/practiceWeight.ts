@@ -27,9 +27,12 @@ export const PRACTICE_GRADE_WEIGHT = { again: 1.5, hard: 0.75 } as const
  *
  * It is a weight for a random draw, not a rank: every word can still come up.
  * Practice answers never change the state (spec §7.4), so practising a word
- * does not lower its weight; only its scheduled reviews do.
+ * does not lower its weight; only its scheduled reviews do. A word with no
+ * state (a skipped level's unit is practised whole) has the base weight, 1:
+ * nothing is known about it.
  */
-export function practiceWeight(state: ReviewState): number {
+export function practiceWeight(state: ReviewState | null | undefined): number {
+  if (!state) return 1
   const tier = masteryTier(state)
   const lapses = PRACTICE_LAPSE_WEIGHT * Math.min(Math.max(state.lapses, 0), PRACTICE_LAPSES_COUNTED)
   const memory = tier === 'learning' ? PRACTICE_TIER_WEIGHT.learning : tier === 'young' ? PRACTICE_TIER_WEIGHT.young : 0

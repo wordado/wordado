@@ -150,6 +150,112 @@ describe('Path', () => {
     expect(within(unit('People and greetings')).getByText('Open')).toBeTruthy()
   })
 
+  it('offers to practise every unit of a skipped level, though none of its words is started, and never Start studying (spec §7.2)', async () => {
+    const ctx = await setup()
+    await ctx.client.updateSettings({ declaredLevel: 'A2' })
+    renderWith(<Path />, ctx)
+    const units = ctx.client.snapshot.corpus!.units
+    expect(ctx.client.snapshot.states.size).toBe(0)
+    expect(screen.getAllByRole('link', { name: /^Practise this unit/ }).map((a) => [a.textContent, a.getAttribute('aria-label'), a.getAttribute('href')])).toEqual([
+      ['Practise this unit', 'Practise this unit: People and greetings', `/practice?unit=${units[0]!.unitId}`],
+      ['Practise this unit', 'Practise this unit: Food and drink', `/practice?unit=${units[1]!.unitId}`],
+      ['Practise this unit', 'Practise this unit: Home and every day', `/practice?unit=${units[2]!.unitId}`],
+    ])
+    expect(screen.queryByRole('link', { name: 'Start studying' })).toBeNull()
+    expect(screen.queryByText('Nothing left for today.')).toBeNull()
+    // The units are drawn as before: open, with their count and their words.
+    const food = unit('Food and drink')
+    expect(within(food).getByText('Open')).toBeTruthy()
+    expect(within(food).getByText('0 of 20 started')).toBeTruthy()
+    expect(within(food).getByText('20 words')).toBeTruthy()
+  })
+
+  it('does not offer practice on a skipped level’s unit whose words are all set aside', async () => {
+    const ctx = await setup()
+    await ctx.client.updateSettings({ declaredLevel: 'A2' })
+    for (const wordId of ctx.client.snapshot.corpus!.units[1]!.wordIds) await ctx.client.setFlag(wordId, 'known')
+    renderWith(<Path />, ctx)
+    expect(screen.getAllByRole('link', { name: /^Practise this unit/ }).map((a) => a.getAttribute('aria-label'))).toEqual([
+      'Practise this unit: People and greetings',
+      'Practise this unit: Home and every day',
+    ])
+  })
+
+  it('labels a word chosen with Learn this word in a skipped level’s unit, until it is started (spec §7.4)', async () => {
+    const ctx = await setup()
+    await ctx.client.updateSettings({ declaredLevel: 'A2' })
+    await ctx.client.setToLearn('c:bread-1', true)
+    renderWith(<Path />, ctx)
+    const food = unit('Food and drink')
+    fireEvent.click(within(food).getByText('20 words'))
+    const row = (headword: string) => within(food).getByText(headword).closest('li')!
+    const bread = row('bread')
+    expect(within(bread).getByText('To learn').getAttribute('data-status')).toBe('to-learn')
+    expect(within(row('cheese')).getByText('Not started')).toBeTruthy()
+    expect(within(food).getAllByText('To learn')).toHaveLength(1)
+    // Started by the session, it is a word like any other; the level stays skipped.
+    await act(() => ctx.client.answer({ wordId: 'c:bread-1', mode: 'flashcard', direction: 'en_to_l1', grade: Grade.Good, latencyMs: 2_000, practice: false }))
+    expect(within(bread).queryByText('To learn')).toBeNull()
+    expect(within(bread).getByText('Learning')).toBeTruthy()
+    expect(within(food).getByText('1 of 20 started')).toBeTruthy()
+    expect(screen.getByText('Skipped: you placed above this level.')).toBeTruthy()
+    // Set aside instead, a chosen word reads as set aside, and its mark is gone.
+    await act(() => ctx.client.setToLearn('c:cheese-1', true))
+    expect(within(row('cheese')).getByText('To learn')).toBeTruthy()
+    await act(() => ctx.client.setFlag('c:cheese-1', 'suspended'))
+    expect(within(row('cheese')).queryByText('To learn')).toBeNull()
+    await act(() => ctx.client.setFlag('c:cheese-1', null))
+    expect(within(row('cheese')).getByText('Not started')).toBeTruthy()
+  })
+
+  it('marks a word to learn from a skipped unit’s word list, and takes the mark back there (spec §7.4)', async () => {
+    const ctx = await setup()
+    await ctx.client.updateSettings({ declaredLevel: 'A2' })
+    renderWith(<Path />, ctx)
+    const food = unit('Food and drink')
+    fireEvent.click(within(food).getByText('20 words'))
+    const bread = within(food).getByText('bread').closest('li')!
+    wordMenu(bread, 'bread')
+    expect(within(bread).getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual(['Word actions: bread', 'Learn this word: bread', 'I know it: bread', 'Not now: bread'])
+    await act(async () => fireEvent.click(within(bread).getByRole('button', { name: 'Learn this word: bread' })))
+    expect(ctx.client.snapshot.toLearn).toEqual(['c:bread-1'])
+    expect(within(bread).getByText('To learn')).toBeTruthy()
+    // The choice closes the menu, and focus is back on its button.
+    expect(within(bread).queryByRole('button', { name: /^Learn this word/ })).toBeNull()
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('Word actions: bread')
+    wordMenu(bread, 'bread')
+    expect(within(bread).getAllByRole('button').map((b) => b.textContent)).toEqual(['', 'Don’t learn this word', 'I know it', 'Not now'])
+    await act(async () => fireEvent.click(within(bread).getByRole('button', { name: 'Don’t learn this word: bread' })))
+    expect(ctx.client.snapshot.toLearn).toEqual([])
+    expect(within(bread).getByText('Not started')).toBeTruthy()
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('Word actions: bread')
+    // Set aside, a marked word loses its mark, and brought back it is an ordinary unstarted word again.
+    await act(() => ctx.client.setToLearn('c:bread-1', true))
+    wordMenu(bread, 'bread')
+    await act(async () => fireEvent.click(within(bread).getByRole('button', { name: 'Not now: bread' })))
+    expect(ctx.client.snapshot.toLearn).toEqual([])
+    wordMenu(bread, 'bread')
+    expect(within(bread).getAllByRole('button').map((b) => b.textContent)).toEqual(['', 'Bring back'])
+  })
+
+  it('does not offer Learn this word in the word list of a level being studied, but lets a mark made earlier be taken back', async () => {
+    const ctx = await setup()
+    await ctx.client.updateSettings({ declaredLevel: 'A2' })
+    await ctx.client.setToLearn('c:hello-1', true)
+    await ctx.client.updateSettings({ declaredLevel: 'A1' })
+    renderWith(<Path />, ctx)
+    const people = unit('People and greetings')
+    fireEvent.click(within(people).getByText('20 words'))
+    const goodbye = within(people).getByText('goodbye').closest('li')!
+    wordMenu(goodbye, 'goodbye')
+    expect(within(goodbye).queryByRole('button', { name: /^Learn this word/ })).toBeNull()
+    const hello = within(people).getByText('hello').closest('li')!
+    expect(within(hello).getByText('To learn')).toBeTruthy()
+    wordMenu(hello, 'hello')
+    await act(async () => fireEvent.click(within(hello).getByRole('button', { name: 'Don’t learn this word: hello' })))
+    expect(ctx.client.snapshot.toLearn).toEqual([])
+  })
+
   it('names a folded level’s status in a form that agrees with “level”, not “unit” (plan 12, review)', async () => {
     const ctx = await setup()
     renderWith(<Path />, { ...ctx, locale: 'bg' })

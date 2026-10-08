@@ -68,6 +68,19 @@ export function unitProgress(unit: Unit, states: ReadonlyMap<WordId, ReviewState
   }
 }
 
+/** A band below the declared level: the learner placed above it, and its words are never introduced (spec §7.2). */
+export function isSkippedLevel(level: CefrLevel, declaredLevel: CefrLevel): boolean {
+  return levelIndex(level) < levelIndex(declaredLevel)
+}
+
+/**
+ * How many of a unit's words practice may use (spec §7.4), from the path's own counts: its started live words, or
+ * every live word when its level was skipped. The words `practisable` admits; above zero, the unit can be practised.
+ */
+export function unitPractisable(progress: Pick<UnitProgress, 'live' | 'introduced'>, skipped: boolean): number {
+  return skipped ? progress.live : progress.introduced
+}
+
 export type LevelCompletion =
   /** A band below the declared level: "skipped — placed above", never 100% (spec §7.2). */
   | { readonly kind: 'skipped' }
@@ -80,7 +93,7 @@ export function levelCompletion(
   states: ReadonlyMap<WordId, ReviewState>,
   ctx: Visibility & Pick<PathContext, 'declaredLevel'>,
 ): LevelCompletion {
-  if (levelIndex(level) < levelIndex(ctx.declaredLevel)) return { kind: 'skipped' }
+  if (isSkippedLevel(level, ctx.declaredLevel)) return { kind: 'skipped' }
   let live = 0
   let mature = 0
   for (const unit of units) {

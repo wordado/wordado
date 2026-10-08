@@ -50,6 +50,8 @@ describe('SyncEngine', () => {
     expect(a.learner.localEvents).toEqual([])
     expect(a.learner.marks.get(a.learner.deviceId)).toBe(2)
     expect(a.learner.states.get('c:hello-1')?.reps).toBe(1)
+    // A practice answer for a word never started (a skipped level's unit, spec §7.4) is accepted and starts nothing.
+    expect(a.learner.states.has('c:water-1')).toBe(false)
     expect(a.engine.status).toMatchObject({ phase: 'idle', pendingEvents: 0, failures: 0, lastError: null, upgradeRequired: false })
     expect(a.engine.status.lastSyncAt).toBe(env.now())
     expect(await readPulledXp(a.db.driver)).toEqual({ total: 12, utcDay: expect.any(Number), today: 12 })
@@ -213,6 +215,33 @@ describe('SyncEngine', () => {
     await a.engine.sync()
     expect(await pendingDocumentWrites(a.db.driver)).toEqual([])
     expect((await readSettings(a.db.driver)).newWordLimit).toBe(4)
+  })
+
+  it('removes a rejected write of a document the server never held, of any type, and keeps what the server holds', async () => {
+    const { env, server } = world()
+    const a = await device(server, env)
+    // The server holds this flag; the three writes below are for documents it has never seen, and it refuses them.
+    await a.db.transaction((tx) => setFlag(tx, 'c:kept-1', 'known'))
+    await a.engine.sync()
+    await a.db.transaction(async (tx) => {
+      await tx.run("INSERT INTO document (type, key, class, version, fields, field_versions, deleted, stale_after, patch) VALUES ('settings', '', 'versioned', 0, ?, '{}', 0, NULL, ?)", [
+        JSON.stringify({ newWordLimit: 99 }),
+        JSON.stringify({ baseVersion: 0, fields: { newWordLimit: 99 } }),
+      ])
+      await tx.run("INSERT INTO document (type, key, class, version, fields, field_versions, deleted, stale_after, patch) VALUES ('word_flag', 'c:hello-1', 'versioned', 0, ?, '{}', 0, NULL, ?)", [
+        JSON.stringify({ flag: 'easy' }),
+        JSON.stringify({ baseVersion: 0, fields: { flag: 'easy' } }),
+      ])
+      await tx.run("INSERT INTO document (type, key, class, version, fields, field_versions, deleted, stale_after, patch) VALUES ('word_learn', 'c:hello-1', 'versioned', 0, '{}', '{}', 0, NULL, ?)", [
+        JSON.stringify({ baseVersion: 0, fields: {}, deleted: false }),
+      ])
+      await setFlag(tx, 'c:kept-1', 'suspended')
+    })
+    expect(await a.engine.sync()).toBe('synced')
+    expect(await pendingDocumentWrites(a.db.driver)).toEqual([])
+    expect(await a.db.all('SELECT type, key FROM document ORDER BY type, key')).toEqual([{ type: 'word_flag', key: 'c:kept-1' }])
+    expect([...(await readFlags(a.db.driver))]).toEqual([['c:kept-1', 'suspended']])
+    expect((await readSettings(a.db.driver)).newWordLimit).toBe(10)
   })
 
   it('carries a flag and its removal across devices', async () => {

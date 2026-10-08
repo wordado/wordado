@@ -3,7 +3,7 @@ import type { Corpus } from './corpus'
 import { isValidDistractor } from './distractors'
 import { seededRng } from './rng'
 import type { ReviewState } from './scheduler'
-import { buildItem, CHOICE_OPTIONS, matchingCandidates, practiceWords, type ItemContext } from './studyItems'
+import { buildItem, CHOICE_OPTIONS, matchingCandidates, practisable, practiceWords, type ItemContext } from './studyItems'
 import { Grade, type CorpusEntry, type Mode, type WordFlag } from './types'
 import { corpusWordId, type WordId } from './wordId'
 
@@ -196,6 +196,55 @@ describe('practiceWords', () => {
     const within = new Set([id(apple), id(bread), id(cheese), id(milk)])
     const words = practiceWords({ states, flags, retired: new Set(), exclude: new Set([id(cheese)]), within, count: 10, rng: seededRng(1) })
     expect(new Set(words)).toEqual(new Set([id(apple), id(milk)]))
+  })
+})
+
+describe('practice of a unit of a skipped level (spec §7.2, §7.4)', () => {
+  // Two of the unit's four live words are started; bread is set aside, old is retired.
+  const states = new Map([apple, bread].map((e) => [id(e), state(id(e), 10)]))
+  const flags = new Map<WordId, WordFlag>([[id(bread), 'known']])
+  const retired = new Set([id(old)])
+  const within = new Set([apple, bread, cheese, milk, old].map(id))
+
+  it('admits a word that was never started only when the scope takes unstarted words, and never a flagged or retired one', () => {
+    expect(practisable(id(cheese), { states, flags, retired })).toBe(false)
+    expect(practisable(id(cheese), { states, flags, retired, unstarted: true })).toBe(true)
+    expect(practisable(id(apple), { states, flags, retired, unstarted: true })).toBe(true)
+    expect(practisable(id(bread), { states, flags, retired, unstarted: true })).toBe(false)
+    expect(practisable(id(old), { states, flags, retired, unstarted: true })).toBe(false)
+  })
+
+  it('draws from all the unit’s live words, started or not, and only from the unit', () => {
+    const words = practiceWords({ states, flags, retired, exclude: new Set(), within, unstarted: true, count: 10, rng: seededRng(1) })
+    expect(new Set(words)).toEqual(new Set([id(apple), id(cheese), id(milk)]))
+    expect(new Set(words).size).toBe(words.length)
+    // Any other unit keeps to its started words.
+    expect(practiceWords({ states, flags, retired, exclude: new Set(), within, count: 10, rng: seededRng(1) })).toEqual([id(apple)])
+    // Without a unit there is nothing to take unstarted words from.
+    expect(practiceWords({ states, flags, retired, exclude: new Set(), unstarted: true, count: 10, rng: seededRng(1) })).toEqual([id(apple)])
+  })
+
+  it('gives a word with no review state the base weight: drawn as readily as a strong word, less than a weak one', () => {
+    const weak: ReviewState = { ...state(id(apple), 1), lapses: 2, lastGrade: Grade.Again }
+    const pool = new Map<WordId, ReviewState>([[id(apple), weak], [id(water), state(id(water), 60)]])
+    const unit = new Set([apple, water, cheese, milk].map(id))
+    const rng = seededRng(5)
+    const first = new Map<WordId, number>()
+    for (let i = 0; i < 4_000; i += 1) {
+      const [word] = practiceWords({ states: pool, flags: new Map(), retired: new Set(), exclude: new Set(), within: unit, unstarted: true, count: 1, rng })
+      first.set(word!, (first.get(word!) ?? 0) + 1)
+    }
+    // Weights 5, 1, 1, 1: the weak word leads five times in eight, each of the others one time in eight.
+    expect(first.get(id(apple))! / 4_000).toBeGreaterThan(0.55)
+    for (const e of [water, cheese, milk]) {
+      expect(first.get(id(e))! / 4_000).toBeGreaterThan(0.09)
+      expect(first.get(id(e))! / 4_000).toBeLessThan(0.16)
+    }
+  })
+
+  it('offers matching all the unit’s live words too, and other units their started ones', () => {
+    expect(matchingCandidates(corpus(), states, flags, within, true)).toEqual([apple, cheese, milk])
+    expect(matchingCandidates(corpus(), states, flags, within)).toEqual([apple])
   })
 })
 

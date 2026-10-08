@@ -27,6 +27,11 @@ describe('practiceWeight', () => {
     expect(practiceWeight(state({ lastGrade: Grade.Easy, stability: 400 }))).toBe(1)
   })
 
+  it('is the base weight, 1, for a word with no review state (practice of a skipped level’s unit, spec §7.4)', () => {
+    expect(practiceWeight(undefined)).toBe(1)
+    expect(practiceWeight(null)).toBe(1)
+  })
+
   it('grows as the memory is shorter-lived: mature, then young, then learning', () => {
     const [mature, young, learning] = [60, 10, 1].map((stability) => practiceWeight(state({ stability })))
     expect(young).toBeGreaterThan(mature!)

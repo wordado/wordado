@@ -16,6 +16,20 @@ describe('Home', () => {
     expect(screen.getByText('0 XP today, 0 in all')).toBeTruthy()
   })
 
+  it('counts words chosen with Learn this word among today’s new words, within the daily limit (spec §7.4)', async () => {
+    const ctx = await setup()
+    await ctx.client.updateSettings({ declaredLevel: 'A2', newWordLimit: 2 })
+    renderWith(<Home />, ctx)
+    // Everything is below the declared level: nothing new until a word is chosen.
+    expect(screen.queryByRole('link', { name: 'Start studying' })).toBeNull()
+    await act(() => ctx.client.setToLearn('c:bread-1', true))
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('1 new word')
+    expect(screen.getByRole('link', { name: 'Start studying' })).toBeTruthy()
+    await act(() => ctx.client.setToLearn('c:milk-1', true))
+    await act(() => ctx.client.setToLearn('c:water-1', true))
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('2 new words')
+  })
+
   it('puts practice beside the main action, not among the single modes', async () => {
     const ctx = await setup()
     renderWith(<Home />, ctx)

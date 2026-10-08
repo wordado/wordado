@@ -28,7 +28,10 @@ export interface SessionInput {
    */
   readonly reviewsDoneToday: number
   readonly newWordsDoneToday: number
-  /** New-word sources, each in serve order. Personal words are empty until Phase 2. */
+  /**
+   * New-word sources, each in serve order. The personal source is the words the learner chose to learn
+   * (`learnQueue`); Phase 2 adds the personal dictionary's words to it.
+   */
   readonly personalNew: readonly WordId[]
   /** Null when no collection is active. */
   readonly collectionNew: readonly WordId[] | null
@@ -56,6 +59,18 @@ interface DueWord {
 /** Weakest memory first, with a stable tie-break so every device agrees. */
 function weakestFirst(a: DueWord, b: DueWord): number {
   return a.r - b.r || (a.wordId < b.wordId ? -1 : 1)
+}
+
+/**
+ * The words the learner chose to learn (spec §7.4), in the order chosen: each `word_learn` mark with the time it
+ * was made. A mark is spent once its word is started, and is left out; two made at the same instant are ordered
+ * by word, so every device agrees.
+ */
+export function learnQueue(marks: ReadonlyMap<WordId, number>, states: ReadonlyMap<WordId, ReviewState>): WordId[] {
+  return [...marks]
+    .filter(([wordId]) => !states.has(wordId))
+    .sort(([a, atA], [b, atB]) => atA - atB || (a < b ? -1 : a > b ? 1 : 0))
+    .map(([wordId]) => wordId)
 }
 
 export function composeSession(input: SessionInput): SessionPlan {

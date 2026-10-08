@@ -59,6 +59,8 @@ export class FakeServer implements SyncTransport {
   failAfterNext = false
   /** The next push page with this index fails before it is applied: a backlog split across pushes. */
   failOnPushPage: number | null = null
+  /** Document types this server refuses as invalid: a server from before the type existed. */
+  readonly unknownTypes = new Set<string>()
   minProtocolVersion: number
 
   constructor(private readonly options: FakeServerOptions) {
@@ -128,6 +130,10 @@ export class FakeServer implements SyncTransport {
         rejected.push({ type: write.type, key: write.key, reason: 'server_owned' })
         continue
       }
+      if (this.unknownTypes.has(write.type)) {
+        rejected.push({ type: write.type, key: write.key, reason: 'invalid' })
+        continue
+      }
       const check = checkDocumentWrite(write)
       if (!check.ok) {
         rejected.push({ type: write.type, key: write.key, reason: check.reason })
@@ -193,6 +199,14 @@ export class FakeServer implements SyncTransport {
   setServerOwned(type: string, key: string, fields: Record<string, unknown>, staleAfter: number): WireDocument {
     this.documentVersion += 1
     const doc: WireDocument = { type, key, class: 'server_owned', version: this.documentVersion, fields, fieldVersions: {}, deleted: false, staleAfter }
+    this.documents.set(`${type}/${key}`, doc)
+    return doc
+  }
+
+  /** Stores a versioned document as it stands, unchecked: what another build of the app, or of the server, may have left. */
+  putDocument(type: string, key: string, fields: Record<string, unknown>): WireDocument {
+    this.documentVersion += 1
+    const doc: WireDocument = { type, key, class: 'versioned', version: this.documentVersion, fields, fieldVersions: {}, deleted: false, staleAfter: null }
     this.documents.set(`${type}/${key}`, doc)
     return doc
   }
