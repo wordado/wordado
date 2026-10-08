@@ -706,16 +706,24 @@ that word is started.
 The same control then reads "Will be learned" and takes the choice back, until
 the word is started. Once the word has review state the mark is spent and is
 ignored; it is not deleted. A chosen word is not flagged: it stays servable
-and practisable, and a word that is both chosen and set aside is simply not
-served while the flag stands. The run's end says how many words it added, and
-the path's word list labels a chosen word "To learn".
+and practisable. Setting a chosen word aside (known or suspended) takes its
+mark away with it, so bringing the word back later does not put it at the
+front of the new words; a mark that still meets a flag (made on another
+device) is simply not served while the flag stands. The run's end says how
+many of the words it showed are marked to learn, whenever they were marked.
+The path's word list labels a chosen word "To learn" and can take the mark
+back; in a unit of a skipped level it can also mark a word that was never
+started, so the learner can pick words without playing a round.
 
 Each mark is a `word_learn` versioned document keyed by the word (§6.2, §9.2),
 apart from the word's flag, holding the time it was chosen, which orders the
-learner's own choices and nothing else; taking it back is a tombstone. It is
+learner's own choices and nothing else; taking it back is a tombstone, the
+one write that may go without the time. It is
 written on the device at once, so it works offline, and syncs like a flag, so
 it survives a reinstall and reaches the learner's other devices. A build that
-does not know the type keeps the documents it is sent and ignores them.
+does not know the type keeps the documents it is sent and ignores them. A
+server that does not know it refuses the write, and the mark is then removed
+from the device (§9.2) rather than left showing on that device alone.
 
 ### 7.5 One memory state, several skills
 
@@ -1327,6 +1335,12 @@ includes the `base_version` it was editing.
   on both sides, the write that reaches the server later wins. Ordering by
   server arrival rather than by `updated_at` means a device with a fast clock
   cannot win every conflict.
+- **A refused write is undone on the device.** The client drops the pending
+  patch. For a document the server holds, the next pull — of every document —
+  restores the server's fields. For one the server has never held (the device
+  has no server version of it), there is nothing a pull would overwrite, so
+  the device removes its copy outright; `unit_unlock` is the exception and
+  stays, being grow-only and rebuilt by the path's rules.
 - **Deletes are tombstones**, retained indefinitely (they are tiny). A
   tombstoned user word's review events stay in the log but derive no state;
   undeleting restores it.
@@ -1915,6 +1929,9 @@ owner.
   met in such practice can be chosen to learn. The daily session then serves
   it first among the new words, within the daily limit; the level stays
   skipped. The choice is a `word_learn` document per word, synced like a flag.
+  Setting a word aside clears its mark; the path's word list marks and
+  unmarks; and a refused write of a document the server never held is removed
+  from the device (§9.2).
 
 ### Approval status
 
