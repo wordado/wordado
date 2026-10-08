@@ -381,6 +381,7 @@ export const en = {
   'path.open': 'Open',
   'path.words': { one: '{count} word', other: '{count} words' },
   'path.wordNew': 'Not started',
+  'path.wordSkipped': 'Skipped',
   'path.wordToLearn': 'To learn',
   'path.wordActions': 'Word actions: {word}',
   'path.levelSkipped': 'Skipped',

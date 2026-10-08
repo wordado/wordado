@@ -396,6 +396,7 @@ export const de: Messages = {
   'path.open': 'Offen',
   'path.words': { one: '{count} Wort', other: '{count} Wörter' },
   'path.wordNew': 'Noch nicht begonnen',
+  'path.wordSkipped': 'Übersprungen',
   'path.wordToLearn': 'Zum Lernen',
   'path.wordActions': 'Aktionen für das Wort: {word}',
   'path.levelSkipped': 'Übersprungen',
