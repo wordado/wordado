@@ -84,9 +84,15 @@ export async function answer(page: Page): Promise<string> {
     await page.keyboard.press('3')
   } else {
     await page.keyboard.press('1')
-    await expect(page.getByRole('button', { name: 'Continue' })).toBeFocused()
-    await page.waitForTimeout(SETTLE_MS)
-    await page.keyboard.press('Enter')
+    // The answer is recorded; then a right one moves on by itself, and a wrong one waits for Continue (spec §8.1).
+    await expect(page.locator(`[role="progressbar"][aria-valuenow="${before + 1}"]`).or(page.locator('.done'))).toBeVisible()
+    await expect(page.locator('.feedback-sheet.moves-on')).toHaveCount(0)
+    const next = page.getByRole('button', { name: 'Continue' })
+    if (await next.isVisible()) {
+      await expect(next).toBeFocused()
+      await page.waitForTimeout(SETTLE_MS)
+      await page.keyboard.press('Enter')
+    }
   }
   await expect(page.locator(`[role="progressbar"][aria-valuenow="${before + 1}"]`).or(page.locator('.done'))).toBeVisible()
   return mode
@@ -135,6 +141,32 @@ export async function serveTwoLevelSample(context: BrowserContext): Promise<void
   }
   await context.route('**/content/sample/manifest.json', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify(manifest) }))
   await context.route('**/content/sample/corpus-v0-bg.pack', (route) => route.fulfill({ contentType: 'application/json', body }))
+}
+
+/** The Bulgarian sample's entries, as the pack has them. */
+export interface SampleEntry {
+  readonly headword: string
+  readonly translation: string
+  sense: string
+}
+
+/**
+ * Serves the Bulgarian sample with a sense gloss on every entry (the bundled one has a single gloss), and returns its
+ * entries, so a test knows the right answer to a question. The context must block service workers, as above.
+ */
+export async function serveGlossedSample(context: BrowserContext, gloss: string): Promise<readonly SampleEntry[]> {
+  const pack = JSON.parse(readFileSync(join(SAMPLE_DIR, 'corpus-v0-bg.pack'), 'utf8')) as { entries: SampleEntry[] }
+  for (const entry of pack.entries) entry.sense = gloss
+  const body = Buffer.from(JSON.stringify(pack))
+  const manifest = JSON.parse(readFileSync(join(SAMPLE_DIR, 'manifest.json'), 'utf8')) as { packs: { pack_id: string; sha256: string; bytes: number }[] }
+  for (const p of manifest.packs) {
+    if (p.pack_id !== 'corpus-bg') continue
+    p.sha256 = createHash('sha256').update(body).digest('hex')
+    p.bytes = body.length
+  }
+  await context.route('**/content/sample/manifest.json', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify(manifest) }))
+  await context.route('**/content/sample/corpus-v0-bg.pack', (route) => route.fulfill({ contentType: 'application/json', body }))
+  return pack.entries
 }
 
 /** Through the setup of a sample with more than one level (`serveTwoLevelSample`), declaring `level` on its Level step. */
