@@ -26,7 +26,10 @@ export function FlagControls(props: {
   readonly wordId: WordId
   readonly headword: string
   readonly menu?: boolean
-  /** Offer "Learn this word" on a word that was never started: the path's list of a skipped level's unit. */
+  /**
+   * The word is in a skipped level's unit (the path's list): never started, it reads "Skipped", not "Not started",
+   * since no session will bring it, and "Learn this word" is offered on it.
+   */
   readonly learn?: boolean
   onChange?(next: 'known' | 'suspended' | null): void
 }) {
@@ -41,9 +44,9 @@ export function FlagControls(props: {
   const tier = state ? masteryTier(state) : null
   // Chosen with "Learn this word" and not yet started (spec §7.4): the daily session will bring it.
   const chosen = !flag && !tier && toLearn.includes(props.wordId)
-  const status = flag === 'known' ? t('flag.known') : flag === 'suspended' ? t('flag.suspended') : tier ? t(TIER_LABEL[tier]) : chosen ? t('path.wordToLearn') : t('path.wordNew')
-  /** For the status's colour: set aside, to learn, not started, or the tier of a word being learned. */
-  const kind = flag ?? tier ?? (chosen ? 'to-learn' : 'new')
+  const status = flag === 'known' ? t('flag.known') : flag === 'suspended' ? t('flag.suspended') : tier ? t(TIER_LABEL[tier]) : chosen ? t('path.wordToLearn') : props.learn ? t('path.wordSkipped') : t('path.wordNew')
+  /** For the status's colour: set aside, to learn, skipped, not started, or the tier of a word being learned. */
+  const kind = flag ?? tier ?? (chosen ? 'to-learn' : props.learn ? 'skipped' : 'new')
   const canLearn = props.learn === true && !flag && !tier && !chosen
   // The pressed button is gone once the flag or the mark changes: its replacement takes focus (spec §11.1).
   useEffect(() => {

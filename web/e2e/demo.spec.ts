@@ -353,7 +353,7 @@ test('chooses Learn this word while practising a skipped unit, and the next sess
     await row.getByRole('button', { name: `Word actions: ${word}` }).click()
     await expectAccessible(page, { dark: true })
     await row.getByRole('button', { name: `Don’t learn this word: ${word}` }).click()
-    await expect(row.getByText('Not started')).toBeVisible()
+    await expect(row.getByText('Skipped', { exact: true })).toBeVisible()
     await row.getByRole('button', { name: `Word actions: ${word}` }).click()
     await row.getByRole('button', { name: `Learn this word: ${word}` }).click()
     await expect(row.getByText('To learn')).toBeVisible()

@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, screen, within } from '@testing-library/react'
-import { DAY_MS, Grade } from '@wordado/core'
+import { DAY_MS, entryClips, Grade } from '@wordado/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { answerNew, renderWith, setup } from '../test/fixtures'
+import { answerNew, fakeAudio, renderWith, setup } from '../test/fixtures'
 import { translate, type Locale } from '../i18n/i18n'
 import { LEVEL_STATUS, Path } from './Path'
 
@@ -181,6 +181,39 @@ describe('Path', () => {
     ])
   })
 
+  it('calls a never-started word of a skipped level’s unit Skipped, and one of any other level Not started (spec §7.4)', async () => {
+    const ctx = await setup()
+    renderWith(<Path />, ctx)
+    const food = unit('Food and drink')
+    fireEvent.click(within(food).getByText('20 words'))
+    const status = () => within(within(food).getByText('bread').closest('li')!).getByText(/^(Skipped|Not started)$/)
+    expect(status().textContent).toBe('Not started')
+    expect(status().getAttribute('data-status')).toBe('new')
+    // No session will bring the word once its level is skipped: the label says so.
+    await act(() => ctx.client.updateSettings({ declaredLevel: 'A2' }))
+    expect(status().textContent).toBe('Skipped')
+    expect(status().getAttribute('data-status')).toBe('skipped')
+  })
+
+  it('offers to play each word of a unit’s list, by name, when its clip can play; not otherwise (spec §11.1)', async () => {
+    const ctx = await setup()
+    const audio = fakeAudio({ streamable: () => true })
+    const { unmount } = renderWith(<Path />, { ...ctx, audio })
+    const food = unit('Food and drink')
+    fireEvent.click(within(food).getByText('20 words'))
+    const bread = within(food).getByText('bread').closest('li')!
+    // First in the row, before the word and its menu.
+    expect(within(bread).getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual(['Play the word: bread', 'Word actions: bread'])
+    await act(async () => fireEvent.click(within(bread).getByRole('button', { name: 'Play the word: bread' })))
+    expect(audio.played.map((clip) => clip.clipId)).toEqual([entryClips(ctx.client.snapshot.corpus!, ctx.client.entry('c:bread-1')!)[0]!.clipId])
+    unmount()
+    // Sound off: no button.
+    await act(() => ctx.client.updateSettings({ audio: false }))
+    renderWith(<Path />, { ...ctx, audio })
+    fireEvent.click(within(unit('Food and drink')).getByText('20 words'))
+    expect(screen.queryByRole('button', { name: /^Play the word/ })).toBeNull()
+  })
+
   it('labels a word chosen with Learn this word in a skipped level’s unit, until it is started (spec §7.4)', async () => {
     const ctx = await setup()
     await ctx.client.updateSettings({ declaredLevel: 'A2' })
@@ -191,7 +224,7 @@ describe('Path', () => {
     const row = (headword: string) => within(food).getByText(headword).closest('li')!
     const bread = row('bread')
     expect(within(bread).getByText('To learn').getAttribute('data-status')).toBe('to-learn')
-    expect(within(row('cheese')).getByText('Not started')).toBeTruthy()
+    expect(within(row('cheese')).getByText('Skipped')).toBeTruthy()
     expect(within(food).getAllByText('To learn')).toHaveLength(1)
     // Started by the session, it is a word like any other; the level stays skipped.
     await act(() => ctx.client.answer({ wordId: 'c:bread-1', mode: 'flashcard', direction: 'en_to_l1', grade: Grade.Good, latencyMs: 2_000, practice: false }))
@@ -205,7 +238,7 @@ describe('Path', () => {
     await act(() => ctx.client.setFlag('c:cheese-1', 'suspended'))
     expect(within(row('cheese')).queryByText('To learn')).toBeNull()
     await act(() => ctx.client.setFlag('c:cheese-1', null))
-    expect(within(row('cheese')).getByText('Not started')).toBeTruthy()
+    expect(within(row('cheese')).getByText('Skipped')).toBeTruthy()
   })
 
   it('marks a word to learn from a skipped unit’s word list, and takes the mark back there (spec §7.4)', async () => {
@@ -227,7 +260,7 @@ describe('Path', () => {
     expect(within(bread).getAllByRole('button').map((b) => b.textContent)).toEqual(['', 'Don’t learn this word', 'I know it', 'Not now'])
     await act(async () => fireEvent.click(within(bread).getByRole('button', { name: 'Don’t learn this word: bread' })))
     expect(ctx.client.snapshot.toLearn).toEqual([])
-    expect(within(bread).getByText('Not started')).toBeTruthy()
+    expect(within(bread).getByText('Skipped')).toBeTruthy()
     expect(document.activeElement?.getAttribute('aria-label')).toBe('Word actions: bread')
     // Set aside, a marked word loses its mark, and brought back it is an ordinary unstarted word again.
     await act(() => ctx.client.setToLearn('c:bread-1', true))

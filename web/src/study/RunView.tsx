@@ -202,8 +202,11 @@ function MoreMenu(props: { readonly onOpen: () => void; readonly onKnown: (() =>
   )
 }
 
-/** Plays the word on a flashcard, or beside the headword of a multiple-choice question; offered only when its clip can play now (spec §11.1). */
-function PlayWord(props: { readonly entry: CorpusEntry }) {
+/**
+ * Plays the word on a flashcard, or beside the headword of a multiple-choice question; offered only when its clip
+ * can play now (spec §11.1). `inList`, it is one of many (the path's word list): smaller, and its name says which word.
+ */
+export function PlayWord(props: { readonly entry: CorpusEntry; readonly inList?: boolean }) {
   const { t } = useT()
   const { audio } = useApp()
   const { corpus, settings } = useClientSnapshot()
@@ -219,8 +222,13 @@ function PlayWord(props: { readonly entry: CorpusEntry }) {
   }
   return (
     <>
-      <button type="button" className="play-word" aria-label={t('study.play')} onClick={play}>
-        <Volume2 aria-hidden="true" size={24} strokeWidth={2} />
+      <button
+        type="button"
+        className={props.inList ? 'play-word in-list' : 'play-word'}
+        aria-label={props.inList ? t('flag.action', { action: t('study.play'), word: props.entry.headword }) : t('study.play')}
+        onClick={play}
+      >
+        <Volume2 aria-hidden="true" size={props.inList ? 20 : 24} strokeWidth={2} />
       </button>
       {failed && <p className="note">{t('study.audioFailed')}</p>}
     </>
