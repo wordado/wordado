@@ -354,8 +354,14 @@ export class Client {
 
   setFlag(wordId: WordId, flag: WordFlag | null): Promise<void> {
     return this.guarded(async () => {
-      await this.db.transaction((tx) => setFlag(tx, wordId, flag))
+      await this.db.transaction(async (tx) => {
+        await setFlag(tx, wordId, flag)
+        // Set aside, the word is no longer one to learn: the mark goes with it, so bringing the word back later
+        // does not put it at the front of the new words (spec §7.4).
+        if (flag !== null && this.toLearn.has(wordId)) await setToLearn(tx, wordId, null)
+      })
       this.flags = await readFlags(this.db.driver)
+      this.toLearn = await readToLearn(this.db.driver)
       this.refresh()
     })
   }

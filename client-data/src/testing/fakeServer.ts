@@ -59,6 +59,8 @@ export class FakeServer implements SyncTransport {
   failAfterNext = false
   /** The next push page with this index fails before it is applied: a backlog split across pushes. */
   failOnPushPage: number | null = null
+  /** Document types this server refuses as invalid: a server from before the type existed. */
+  readonly unknownTypes = new Set<string>()
   minProtocolVersion: number
 
   constructor(private readonly options: FakeServerOptions) {
@@ -126,6 +128,10 @@ export class FakeServer implements SyncTransport {
       const existing = this.documents.get(id)
       if (SERVER_OWNED_DOCUMENT_TYPES.has(write.type) || existing?.class === 'server_owned') {
         rejected.push({ type: write.type, key: write.key, reason: 'server_owned' })
+        continue
+      }
+      if (this.unknownTypes.has(write.type)) {
+        rejected.push({ type: write.type, key: write.key, reason: 'invalid' })
         continue
       }
       const check = checkDocumentWrite(write)

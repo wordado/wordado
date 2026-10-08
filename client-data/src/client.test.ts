@@ -227,8 +227,69 @@ describe('Learn this word (spec §7.4)', () => {
     expect(client.snapshot.toLearn).toEqual(['c:bread-1'])
     await client.setFlag('c:bread-1', 'known')
     expect(client.snapshot.plan!.newWords).toEqual(['c:hello-1', 'c:goodbye-1'])
-    await client.setFlag('c:bread-1', null)
-    expect(client.snapshot.plan!.newWords).toEqual(['c:bread-1', 'c:hello-1'])
+    // Setting it aside took the mark with it (the planner's own refusal of a flagged word is core's test).
+    expect(client.snapshot.toLearn).toEqual([])
+  })
+
+  it('clears the mark when the word is set aside, so bringing it back does not put it first', async () => {
+    const env = testEnv()
+    const server = new FakeServer({ now: () => env.now(), accountCreatedAt: env.now() - 60_000 })
+    const client = await openClient(env, server)
+    await client.updateSettings({ newWordLimit: 2 })
+    await client.setToLearn('c:bread-1', true)
+    await client.setToLearn('c:apple-1', true)
+    await client.sync()
+    for (const [wordId, flag] of [['c:bread-1', 'known'], ['c:apple-1', 'suspended']] as const) {
+      await client.setFlag(wordId, flag)
+      expect(client.snapshot.toLearn).not.toContain(wordId)
+      await client.setFlag(wordId, null)
+    }
+    expect(client.snapshot.toLearn).toEqual([])
+    expect(client.snapshot.plan!.newWords).toEqual(['c:hello-1', 'c:goodbye-1'])
+    await client.sync()
+    expect(server.documents.get('word_learn/c:bread-1')).toMatchObject({ deleted: true })
+    expect(server.documents.get('word_learn/c:apple-1')).toMatchObject({ deleted: true })
+    // Bringing a word back clears nothing: a flag removed leaves another word's mark alone.
+    await client.setToLearn('c:milk-1', true)
+    await client.setFlag('c:water-1', 'known')
+    await client.setFlag('c:water-1', null)
+    expect(client.snapshot.toLearn).toEqual(['c:milk-1'])
+  })
+
+  it('serves a chosen word once when its level stops being skipped and the path reaches it too', async () => {
+    const client = await openClient()
+    await client.updateSettings({ declaredLevel: 'A2', newWordLimit: 3 })
+    await client.setToLearn('c:goodbye-1', true)
+    expect(client.snapshot.plan!.newWords).toEqual(['c:goodbye-1'])
+    await client.updateSettings({ declaredLevel: 'A1' })
+    expect(client.snapshot.plan!.newWords).toEqual(['c:goodbye-1', 'c:hello-1', 'c:please-1'])
+  })
+
+  it('takes a mark back for good when the server refuses it: nothing is left on the device or in the outbox (spec §9.2)', async () => {
+    const env = testEnv()
+    const server = new FakeServer({ now: () => env.now(), accountCreatedAt: env.now() - 60_000 })
+    // A server from before the type existed.
+    server.unknownTypes.add('word_learn')
+    const client = await openClient(env, server)
+    await client.updateSettings({ newWordLimit: 4 })
+    await client.setFlag('c:water-1', 'known')
+    await client.setToLearn('c:bread-1', true)
+    expect(client.snapshot.toLearn).toEqual(['c:bread-1'])
+    expect(await client.sync()).toBe('synced')
+    expect(client.snapshot.toLearn).toEqual([])
+    expect(client.snapshot.plan!.newWords[0]).toBe('c:hello-1')
+    expect(await client.hasUnsynced()).toBe(false)
+    // The documents pushed beside it are untouched.
+    expect(client.snapshot.settings.newWordLimit).toBe(4)
+    expect([...client.snapshot.flags]).toEqual([['c:water-1', 'known']])
+    expect(server.documents.has('word_learn/c:bread-1')).toBe(false)
+    // A reopened app agrees, and once the server knows the type a new mark syncs.
+    server.unknownTypes.clear()
+    await client.setToLearn('c:bread-1', true)
+    expect(await client.sync()).toBe('synced')
+    expect(client.snapshot.toLearn).toEqual(['c:bread-1'])
+    expect(await client.hasUnsynced()).toBe(false)
+    expect(server.documents.get('word_learn/c:bread-1')).toMatchObject({ deleted: false })
   })
 
   it('syncs the marks to the account and to a second device, and merges what two devices chose', async () => {

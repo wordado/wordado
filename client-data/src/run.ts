@@ -50,7 +50,7 @@ export interface RunSnapshot {
   readonly answered: number
   /** Words set aside ("I know this", "Not now") in this run (spec §7.4). */
   readonly setAside: number
-  /** Words chosen with "Learn this word" in this run and still chosen (spec §7.4). */
+  /** Words this run showed that are marked with "Learn this word" (spec §7.4), whenever they were marked. */
   readonly toLearn: number
   /** Items left as of now. A word answered Again comes back after the relearn delay and raises it. */
   readonly remaining: number
@@ -131,8 +131,8 @@ export class StudyRun {
   private marking = false
   private finished = false
   private readonly skipped = new Set<WordId>()
-  /** Words this run marked to learn; one unmarked again leaves. */
-  private readonly chosen = new Set<WordId>()
+  /** Every word this run has shown: what its count of words to learn is taken over. */
+  private readonly shown = new Set<WordId>()
   private practiceQueue: WordId[] = []
 
   private constructor(
@@ -180,7 +180,7 @@ export class StudyRun {
       const queue = this.queue()
       const wordId = queue[0]
       if (wordId === undefined) {
-        this.set({ phase: 'done', item: null, feedback: null, remaining: 0 })
+        this.set({ phase: 'done', item: null, feedback: null, remaining: 0, toLearn: this.learnCount() })
         return
       }
       const item = this.itemFor(wordId)
@@ -195,9 +195,16 @@ export class StudyRun {
       this.revealedAt = null
       this.pausedAt = null
       this.pausedMs = 0
-      this.set({ phase: 'prompt', item, feedback: null, remaining: queue.length })
+      this.shown.add(wordId)
+      this.set({ phase: 'prompt', item, feedback: null, remaining: queue.length, toLearn: this.learnCount() })
       return
     }
+  }
+
+  /** How many of the words shown so far are marked to learn now. */
+  private learnCount(): number {
+    const marked = new Set(this.client.snapshot.toLearn)
+    return [...this.shown].filter((wordId) => marked.has(wordId)).length
   }
 
   /** Whether at least ITEM_SETTLE_MS has passed since `reference`, on this run's clock. */
@@ -287,7 +294,7 @@ export class StudyRun {
     }
     this.skipped.add(item.wordId)
     this.practiceQueue = this.practiceQueue.filter((w) => w !== item.wordId)
-    this.set({ setAside: this.snapshot.setAside + 1, error: null })
+    this.set({ setAside: this.snapshot.setAside + 1, toLearn: this.learnCount(), error: null })
     if (!this.finished) this.advance()
   }
 
@@ -308,9 +315,7 @@ export class StudyRun {
     } finally {
       this.marking = false
     }
-    if (on) this.chosen.add(item.wordId)
-    else this.chosen.delete(item.wordId)
-    this.set({ toLearn: this.chosen.size, error: null })
+    this.set({ toLearn: this.learnCount(), error: null })
   }
 
   /**
@@ -332,7 +337,7 @@ export class StudyRun {
   /** Ends the run now; every answer given so far is already recorded, and one still being saved is not undone. */
   finish(): void {
     this.finished = true
-    this.set({ phase: 'done', item: null, feedback: null, remaining: 0 })
+    this.set({ phase: 'done', item: null, feedback: null, remaining: 0, toLearn: this.learnCount() })
   }
 
   /** One answer at a time: a second press while the first is being written is ignored. */

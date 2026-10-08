@@ -262,6 +262,27 @@ describe('StudyRun', () => {
     expect(run.snapshot.toLearn).toBe(2)
   })
 
+  it('counts every marked word the run showed, whenever it was marked, and not one set aside or never shown', async () => {
+    const env = testEnv()
+    const client = await openSampleClient(env)
+    await client.updateSettings({ declaredLevel: 'A2' })
+    const [unit, other] = client.snapshot.corpus!.units
+    // Marked beforehand (on the path): every word of this unit, and one of another.
+    for (const wordId of [...unit!.wordIds, other!.wordIds[0]!]) await client.setToLearn(wordId, true)
+    const run = await StudyRun.start(client, env, options({ kind: 'practice', mode: 'flashcard', scope: { kind: 'unit', id: unit!.unitId } }))
+    expect(run.snapshot.toLearn).toBe(1)
+    await run.setAside('suspended')
+    expect(run.snapshot.toLearn).toBe(1)
+    env.advance(ITEM_SETTLE_MS)
+    run.reveal()
+    env.advance(ITEM_SETTLE_MS)
+    await run.rate(Grade.Good)
+    expect(run.snapshot.toLearn).toBe(2)
+    run.finish()
+    // The word set aside lost its mark; the second and third words were shown and are still marked.
+    expect(run.snapshot).toMatchObject({ phase: 'done', setAside: 1, toLearn: 2 })
+  })
+
   it('never starts empty while the scope has started words: when all are due today, practice uses them and leaves the schedule alone', async () => {
     const env = testEnv()
     const client = await openSampleClient(env)
