@@ -85,6 +85,7 @@ export const bg: Messages = {
   'settings.app': 'Приложението',
   'settings.autoUpdate': 'Автоматично обновяване',
   'settings.autoUpdateHint': 'Wordado минава към нова версия само, когато не сте по средата на нещо. Ако е изключено, ви казва, че има нова версия, и ви изчаква. Важи само за това устройство.',
+  'settings.autoUpdateNotKept': 'Браузърът не можа да запази настройката. Тя важи, докато Wordado е отворено.',
   'settings.about': 'За приложението',
   'about.sources': 'Речникът е съставен по данни от тези източници:',
   'about.ownList': 'Този речник е съставен от Wordado.',

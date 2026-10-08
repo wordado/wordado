@@ -1,7 +1,7 @@
 import { useClient, useClientSnapshot } from '@wordado/client-data'
 import { useState } from 'react'
 import { useApp } from '../app/context'
-import { useUpdateHold } from '../app/updateSafety'
+import { holdingUpdates } from '../app/updateSafety'
 import { useT } from '../i18n/i18n'
 import { useOnline } from '../useOnline'
 
@@ -10,11 +10,10 @@ export function AudioDownload() {
   const { t } = useT()
   const client = useClient()
   const { settings } = useClientSnapshot()
-  const { audio } = useApp()
+  const { audio, lifecycle } = useApp()
   const online = useOnline()
   const [busy, setBusy] = useState(false)
   const [, rerender] = useState(0)
-  useUpdateHold(busy)
   const level = settings.declaredLevel
   const clips = client.levelClips(level)
   if (!settings.audio || clips.length === 0) return null
@@ -23,7 +22,8 @@ export function AudioDownload() {
   const download = async () => {
     setBusy(true)
     try {
-      await audio.prefetch(clips)
+      // The download goes on if the learner leaves this page: no automatic update until it is over.
+      await holdingUpdates(lifecycle, () => audio.prefetch(clips))
     } finally {
       setBusy(false)
       rerender((n) => n + 1)

@@ -3,6 +3,7 @@ import { useEffect } from 'react'
 import { useRoute, type Route } from '../router'
 import type { Backend } from '../storage/protocol'
 import { useApp } from './context'
+import type { LifecyclePort } from './lifecycle'
 
 /**
  * Screens whose state lives only in memory until they are left: a study or practice run (its queue and place,
@@ -52,17 +53,20 @@ export function useUpdateSafety(setup: boolean): void {
   const { lifecycle, backend, packs, accounts } = useApp()
   useEffect(
     () =>
-      lifecycle.watchSafety(() =>
-        safeToUpdate({
-          route,
-          setup,
-          backend,
-          installingPack: packs.store.get().phase === 'downloading',
-          syncing: client.snapshot.sync.phase !== 'idle',
-          notice: accounts.store.get().notice !== null,
-          document,
-        }),
-      ),
+      // All of an in-memory database is memory: no moment is safe there, so there is nothing to watch for.
+      backend === 'memory'
+        ? undefined
+        : lifecycle.watchSafety(() =>
+            safeToUpdate({
+              route,
+              setup,
+              backend,
+              installingPack: packs.store.get().phase === 'downloading',
+              syncing: client.snapshot.sync.phase !== 'idle',
+              notice: accounts.store.get().notice !== null,
+              document,
+            }),
+          ),
     [lifecycle, client, route, setup, backend, packs, accounts],
   )
   useEffect(() => {
@@ -74,8 +78,22 @@ export function useUpdateSafety(setup: boolean): void {
   }, [lifecycle, client])
 }
 
-/** While `busy`, no automatic update: work is in flight that a reload would cut short. */
-export function useUpdateHold(busy: boolean): void {
-  const { lifecycle } = useApp()
-  useEffect(() => (busy ? lifecycle.hold() : undefined), [lifecycle, busy])
+/** How long a hold outlasts a file handed to the browser to save: a navigation in that moment can cancel the save (Safari). */
+export const SAVE_HOLD_MS = 5_000
+
+/**
+ * Runs `work` with the automatic update held off until it settles, wherever the learner goes meanwhile: the hold
+ * is the work's, not the screen's that started it. `lingerMs` keeps it that much longer after a success.
+ */
+export async function holdingUpdates<T>(lifecycle: Pick<LifecyclePort, 'hold'>, work: () => Promise<T>, lingerMs = 0): Promise<T> {
+  const release = lifecycle.hold()
+  let linger = 0
+  try {
+    const result = await work()
+    linger = lingerMs
+    return result
+  } finally {
+    if (linger > 0) setTimeout(release, linger)
+    else release()
+  }
 }

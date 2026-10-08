@@ -11,7 +11,6 @@ describe('ProgressBar (spec §11.1)', () => {
     expect(bar.getAttribute('aria-valuemin')).toBe('0')
     expect(bar.getAttribute('aria-valuemax')).toBe('120')
     expect(bar.getAttribute('aria-valuenow')).toBe('30')
-    expect(bar.hasAttribute('aria-busy')).toBe(false)
     expect((bar.firstElementChild as HTMLElement).style.width).toBe('25%')
   })
 
@@ -22,10 +21,11 @@ describe('ProgressBar (spec §11.1)', () => {
     expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('0')
   })
 
-  it('is busy, with no value, when the size is not known', () => {
+  it('has no value when the size is not known: that is how a progressbar says so', () => {
     const unknown = () => {
       const bar = screen.getByRole('progressbar', { name: 'Updating Wordado…' })
-      expect(bar.getAttribute('aria-busy')).toBe('true')
+      expect(bar.hasAttribute('aria-busy')).toBe(false)
+      expect(bar.hasAttribute('aria-valuemin')).toBe(false)
       expect(bar.hasAttribute('aria-valuenow')).toBe(false)
       expect(bar.hasAttribute('aria-valuemax')).toBe(false)
       expect(bar.classList.contains('is-indeterminate')).toBe(true)

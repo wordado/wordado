@@ -24,8 +24,8 @@ export function AppSettings() {
             checked={autoUpdate}
             aria-describedby={hintId}
             onChange={(e) => {
-              lifecycle.setAutoUpdate(e.target.checked)
-              setStatus(t('settings.saved'))
+              // A browser that keeps nothing still follows the switch, for this visit: say that, not "Saved".
+              setStatus(t(lifecycle.setAutoUpdate(e.target.checked) ? 'settings.saved' : 'settings.autoUpdateNotKept'))
             }}
           />
           {t('settings.autoUpdate')}

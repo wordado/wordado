@@ -73,7 +73,7 @@ export function fakePacks(): PackSwitcher {
 /** Installation and updates as the banners and settings see them; every call is logged. */
 export function fakeLifecycle(
   state: Partial<LifecycleState> = {},
-): LifecyclePort & { calls: string[]; safe: (() => boolean) | null; holds: number } {
+): LifecyclePort & { calls: string[]; safe: (() => boolean) | null; holds: number; keeps: boolean } {
   const calls: string[] = []
   const store = createStore<LifecycleState>({
     updateReady: false,
@@ -86,12 +86,14 @@ export function fakeLifecycle(
     installOffer: null,
     ...state,
   })
-  const port: LifecyclePort & { calls: string[]; safe: (() => boolean) | null; holds: number } = {
+  const port: LifecyclePort & { calls: string[]; safe: (() => boolean) | null; holds: number; keeps: boolean } = {
     calls,
     /** The shell's guard, while it is watching. */
     safe: null,
     /** Holds taken and not yet released. */
     holds: 0,
+    /** Whether the browser keeps the setting; a test may say it does not. */
+    keeps: true,
     store,
     applyUpdate: () => void calls.push('applyUpdate'),
     install: async () => void calls.push('install'),
@@ -99,6 +101,7 @@ export function fakeLifecycle(
     setAutoUpdate: (on) => {
       calls.push(`setAutoUpdate ${on}`)
       store.set({ ...store.get(), autoUpdate: on })
+      return port.keeps
     },
     dismissUpdated: () => {
       calls.push('dismissUpdated')
@@ -194,8 +197,13 @@ export function fakeFixNotices(notices: readonly FixNotice[] = []): FixNoticesPo
 
 /** Renders inside every provider the app has, in English unless told otherwise. */
 export function renderWith(ui: ReactElement, ctx: RenderContext): RenderResult {
+  return render(withProviders(ui, ctx))
+}
+
+/** `ui` inside every provider the app has: what `renderWith` renders, for a test that renders it another way. */
+export function withProviders(ui: ReactElement, ctx: RenderContext): ReactElement {
   const storage = { getItem: () => ctx.locale ?? 'en', setItem: () => undefined }
-  return render(
+  return (
     <I18nProvider storage={storage}>
       <ClientProvider client={ctx.client}>
         <AppProvider
@@ -217,7 +225,7 @@ export function renderWith(ui: ReactElement, ctx: RenderContext): RenderResult {
           {ui}
         </AppProvider>
       </ClientProvider>
-    </I18nProvider>,
+    </I18nProvider>
   )
 }
 

@@ -15,7 +15,7 @@ import { watchContentFiles } from './app/contentFiles'
 import { Credits } from './app/credits'
 import { FixNotices } from './app/fixNotices'
 import { watchL1 } from './app/l1Watch'
-import { AppLifecycle, watchUpdates, type InstallEvent } from './app/lifecycle'
+import { AppLifecycle, AUTO_UPDATE_KEY, watchUpdates, type InstallEvent } from './app/lifecycle'
 import { PackSwitcher } from './app/packSwitch'
 import { Root, type OpeningDownload } from './app/Root'
 import { startSyncLoop } from './app/syncLoop'
@@ -58,6 +58,16 @@ const lifecycle = new AppLifecycle({
   // "Wordado was updated." has to outlive the reload that updated it, in this tab only.
   session: browserStorage('sessionStorage'),
   reload: () => window.location.reload(),
+  visible: () => document.visibilityState === 'visible',
+  reloaded: () => (performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined)?.type === 'reload',
+})
+// A hidden page does not ask whether it may update; it asks again when it is back.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') lifecycle.becameVisible()
+})
+// "Update automatically" switched in another tab of this browser.
+window.addEventListener('storage', (event) => {
+  if (event.key === AUTO_UPDATE_KEY || event.key === null) lifecycle.autoUpdateChanged()
 })
 /** The pack an opening app waits for (spec §9.3), for the starting screen's bar; cleared once the app is open. */
 const openingDownload = createStore<OpeningDownload | null>(null)

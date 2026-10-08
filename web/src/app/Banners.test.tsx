@@ -1,7 +1,8 @@
 import { act, cleanup, fireEvent, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { NotReady } from '../account/controller'
-import { fakeAccounts, fakeFixNotices, fakeLifecycle, renderWith, setup } from '../test/fixtures'
+import { renderToString } from 'react-dom/server'
+import { fakeAccounts, fakeFixNotices, fakeLifecycle, renderWith, setup, withProviders } from '../test/fixtures'
 import { Banners, SyncLine } from './Banners'
 
 afterEach(cleanup)
@@ -73,7 +74,7 @@ describe('Banners', () => {
     const accounts = fakeAccounts()
     accounts.store.set({ expired: false, notice: 'other-account' })
     renderWith(<Banners />, { ...ctx, accounts, account: ana })
-    expect(screen.getByRole('status').textContent).toContain('This device holds the progress of ana@example.com')
+    expect(screen.getByText(/This device holds the progress of ana@example.com/).closest('[role="status"]')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }))
     expect(accounts.calls).toEqual(['dismissNotice'])
   })
@@ -135,17 +136,16 @@ describe('update and install banners (spec §9.1)', () => {
     renderWith(<Banners />, { ...ctx, lifecycle: fakeLifecycle({ updateReady: true, applying: true }) })
     expect(screen.getByText('Updating Wordado…')).toBeTruthy()
     const bar = screen.getByRole('progressbar', { name: 'Updating Wordado…' })
-    expect(bar.getAttribute('aria-busy')).toBe('true')
     expect(bar.hasAttribute('aria-valuenow')).toBe(false)
     expect(screen.queryByRole('button', { name: 'Update now' })).toBeNull()
   })
 
-  it('shows a new version downloading: busy until its worker reports, then files cached of files listed', async () => {
+  it('shows a new version downloading: no share claimed until its worker reports, then files cached of files listed', async () => {
     const ctx = await setup()
     const lifecycle = fakeLifecycle({ download: { done: 0, total: 0 } })
     renderWith(<Banners />, { ...ctx, lifecycle })
     expect(screen.getByText('Downloading a new version of Wordado…')).toBeTruthy()
-    expect(screen.getByRole('progressbar', { name: 'Downloading a new version of Wordado…' }).getAttribute('aria-busy')).toBe('true')
+    expect(screen.getByRole('progressbar', { name: 'Downloading a new version of Wordado…' }).hasAttribute('aria-valuenow')).toBe(false)
     act(() => lifecycle.store.set({ ...lifecycle.store.get(), download: { done: 12, total: 48 } }))
     const bar = screen.getByRole('progressbar', { name: 'Downloading a new version of Wordado…' })
     expect(bar.getAttribute('aria-valuenow')).toBe('12')
@@ -161,10 +161,22 @@ describe('update and install banners (spec §9.1)', () => {
     const ctx = await setup()
     const lifecycle = fakeLifecycle({ updated: true })
     renderWith(<Banners />, { ...ctx, lifecycle })
-    expect(screen.getByRole('status').textContent).toContain('Wordado was updated.')
+    expect(screen.getByText('Wordado was updated.').closest('[role="status"]')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }))
     expect(lifecycle.calls).toEqual(['dismissUpdated'])
     expect(screen.queryByText('Wordado was updated.')).toBeNull()
+  })
+
+  it('puts that line into a status region that was there first, empty, so that it is announced', async () => {
+    const ctx = await setup()
+    const lifecycle = fakeLifecycle({ updated: true })
+    // The first render, before any effect has run: the region, and nothing in it yet.
+    const first = renderToString(withProviders(<Banners />, { ...ctx, lifecycle }))
+    expect(first).toContain('<div role="status"></div>')
+    expect(first).not.toContain('Wordado was updated.')
+    // Nothing to say: the region stays, empty.
+    renderWith(<Banners />, { ...ctx, lifecycle: fakeLifecycle() })
+    expect(document.querySelector('.banners > [role="status"]:empty')).toBeTruthy()
   })
 
   it('offers installation, and "Not now"', async () => {

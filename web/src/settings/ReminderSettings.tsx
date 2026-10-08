@@ -1,6 +1,6 @@
 import { useEffect, useId, useState } from 'react'
 import { useApp } from '../app/context'
-import { useUpdateHold } from '../app/updateSafety'
+import { holdingUpdates } from '../app/updateSafety'
 import { useT, type MessageKey } from '../i18n/i18n'
 import { DEFAULT_REMINDER_MINUTE, type ReminderPrefs } from '../reminders/reminders'
 
@@ -19,13 +19,12 @@ const fromTime = (value: string): number | null => {
 export function ReminderSettings(props: { readonly headingLevel?: 2 | 3 } = {}) {
   const Heading = props.headingLevel === 3 ? 'h3' : 'h2'
   const { t } = useT()
-  const { account, reminders } = useApp()
+  const { account, reminders, lifecycle } = useApp()
   const timeId = useId()
   const [prefs, setPrefs] = useState<ReminderPrefs | null>(() => reminders.prefs())
   const [draft, setDraft] = useState(() => toTime((reminders.prefs() ?? { minute: DEFAULT_REMINDER_MINUTE }).minute))
   const [status, setStatus] = useState<MessageKey | null>(null)
   const [busy, setBusy] = useState(false)
-  useUpdateHold(busy)
   const support = reminders.support()
 
   // The saved minute is the source of truth; the draft only diverges from it while the learner is mid-edit.
@@ -48,11 +47,12 @@ export function ReminderSettings(props: { readonly headingLevel?: 2 | 3 } = {}) 
     setBusy(true)
     try {
       if (next === null) {
-        await reminders.disable()
+        await holdingUpdates(lifecycle, () => reminders.disable())
         setPrefs(null)
         setStatus('reminders.off')
       } else {
-        const outcome = await reminders.enable(next)
+        // The browser may be asking for permission meanwhile: no automatic update under its prompt.
+        const outcome = await holdingUpdates(lifecycle, () => reminders.enable(next))
         if (outcome === 'on') {
           setPrefs(next)
           setStatus('reminders.saved')

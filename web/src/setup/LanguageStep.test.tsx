@@ -121,7 +121,7 @@ describe('LanguageStep, setup mode (plan 11)', () => {
     expect(onDone).toHaveBeenCalledTimes(1)
   })
 
-  it('shows the download while the install runs: a bar that is only busy until the size is known, then one with values', async () => {
+  it('shows the download while the install runs: a bar that claims no share until the size is known, then one with values', async () => {
     const ctx = await setup()
     const fake = controlledPacks()
     renderWith(<LanguageStep mode="setup" onDone={() => undefined} />, { ...ctx, packs: fake.packs })
@@ -131,7 +131,6 @@ describe('LanguageStep, setup mode (plan 11)', () => {
     act(() => fake.packs.store.set({ phase: 'downloading', client: ctx.client, l1: 'bg', received: 0, total: 0 }))
     expect(screen.getByRole('status').textContent).toContain('Getting your words ready')
     const waiting = screen.getByRole('progressbar', { name: 'Getting your words ready' })
-    expect(waiting.getAttribute('aria-busy')).toBe('true')
     expect(waiting.hasAttribute('aria-valuenow')).toBe(false)
     expect(screen.queryByText(/%/)).toBeNull()
     act(() => fake.packs.store.set({ phase: 'downloading', client: ctx.client, l1: 'bg', received: 50, total: 100 }))

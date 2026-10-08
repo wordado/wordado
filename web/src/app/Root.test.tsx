@@ -80,7 +80,7 @@ describe('Root', () => {
     expect(screen.queryByRole('progressbar')).toBeNull()
     act(() => download.set({ received: 0, total: 0 }))
     expect(screen.getByRole('status').textContent).toBe('Downloading your words…')
-    expect(screen.getByRole('progressbar', { name: 'Downloading your words…' }).getAttribute('aria-busy')).toBe('true')
+    expect(screen.getByRole('progressbar', { name: 'Downloading your words…' }).hasAttribute('aria-valuenow')).toBe(false)
     act(() => download.set({ received: 300, total: 1200 }))
     const bar = screen.getByRole('progressbar', { name: 'Downloading your words…' })
     expect(bar.getAttribute('aria-valuenow')).toBe('300')
@@ -102,7 +102,7 @@ describe('Root', () => {
     cleanup()
     const memory = fakeLifecycle()
     await renderRoot({ lifecycle: memory, backend: 'memory' })
-    expect(memory.safe?.()).toBe(false)
+    expect(memory.safe).toBeNull()
   })
 
   it('opens on today, in the demo', async () => {

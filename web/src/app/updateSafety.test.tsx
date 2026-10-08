@@ -1,10 +1,8 @@
 import { act, cleanup, render, screen } from '@testing-library/react'
-import { createStore } from '@wordado/client-data'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { navigate } from '../router'
 import { fakeAccounts, fakeLifecycle, fakePacks, renderWith, setup } from '../test/fixtures'
-import { useStore } from '../useStore'
-import { safeToUpdate, useUpdateHold, useUpdateSafety, type Surroundings } from './updateSafety'
+import { holdingUpdates, safeToUpdate, SAVE_HOLD_MS, useUpdateSafety, type Surroundings } from './updateSafety'
 
 beforeEach(() => window.history.replaceState(null, '', '/'))
 afterEach(cleanup)
@@ -116,27 +114,40 @@ describe('the shell’s guard (spec §9.1)', () => {
     accounts.store.set({ expired: false, notice: 'signed-in' })
     expect(lifecycle.safe?.()).toBe(false)
     after.unmount()
+    // In memory nothing is ever safe: the shell does not even watch, so nothing polls.
     const memory = fakeLifecycle()
     renderWith(<Shell />, { ...ctx, lifecycle: memory, backend: 'memory' })
-    expect(memory.safe?.()).toBe(false)
+    expect(memory.safe).toBeNull()
   })
 
-  it('holds the update while work is in flight, and lets go when it ends', async () => {
-    const ctx = await setup()
+  it('holds the update for as long as the work runs, whatever becomes of the screen that started it', async () => {
     const lifecycle = fakeLifecycle()
-    const work = createStore(true)
-    function Work() {
-      useUpdateHold(useStore(work))
-      return null
+    let finish!: () => void
+    const work = holdingUpdates(lifecycle, () => new Promise<string>((resolve) => (finish = () => resolve('done'))))
+    expect(lifecycle.holds).toBe(1)
+    finish()
+    expect(await work).toBe('done')
+    expect(lifecycle.holds).toBe(0)
+    // Work that fails lets go too, and its failure is the caller's.
+    await expect(holdingUpdates(lifecycle, () => Promise.reject(new Error('offline')))).rejects.toThrow('offline')
+    expect(lifecycle.holds).toBe(0)
+  })
+
+  it('keeps the hold a few seconds after a file is handed to the browser, and not after a failure', async () => {
+    vi.useFakeTimers()
+    try {
+      const lifecycle = fakeLifecycle()
+      await holdingUpdates(lifecycle, async () => undefined, SAVE_HOLD_MS)
+      expect(lifecycle.holds).toBe(1)
+      vi.advanceTimersByTime(SAVE_HOLD_MS - 1)
+      expect(lifecycle.holds).toBe(1)
+      vi.advanceTimersByTime(1)
+      expect(lifecycle.holds).toBe(0)
+      await holdingUpdates(lifecycle, () => Promise.reject(new Error('offline')), SAVE_HOLD_MS).catch(() => undefined)
+      expect(lifecycle.holds).toBe(0)
+    } finally {
+      vi.useRealTimers()
     }
-    const { unmount } = renderWith(<Work />, { ...ctx, lifecycle })
-    expect(lifecycle.holds).toBe(1)
-    act(() => work.set(false))
-    expect(lifecycle.holds).toBe(0)
-    act(() => work.set(true))
-    expect(lifecycle.holds).toBe(1)
-    unmount()
-    expect(lifecycle.holds).toBe(0)
   })
 
   it('passes on that the server refused this build, so the newer app is fetched', async () => {

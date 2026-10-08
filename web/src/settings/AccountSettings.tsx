@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { ConfirmDialog } from '../app/Confirm'
 import { useApp } from '../app/context'
 import { useSignOut } from '../app/signOut'
-import { useUpdateHold } from '../app/updateSafety'
+import { holdingUpdates, SAVE_HOLD_MS } from '../app/updateSafety'
 import { saveFile } from '../download'
 import { errorMessageKey } from '../errors'
 import { useT } from '../i18n/i18n'
@@ -12,14 +12,13 @@ import { useOnline } from '../useOnline'
 /** The account (spec §11): the export, signing out, and self-service deletion. The demo gets the way in. */
 export function AccountSettings() {
   const { t } = useT()
-  const { account, accounts, api } = useApp()
+  const { account, accounts, api, lifecycle } = useApp()
   const online = useOnline()
   const [deleting, setDeleting] = useState(false)
   const [understood, setUnderstood] = useState(false)
   const { signingOut, error: signOutError, start: signOut, dialog: unsyncedDialog } = useSignOut()
   const [exporting, setExporting] = useState(false)
   const [exportError, setExportError] = useState<string | null>(null)
-  useUpdateHold(exporting)
 
   if (account === null) {
     return (
@@ -38,8 +37,16 @@ export function AccountSettings() {
     setExportError(null)
     setExporting(true)
     try {
-      const file = await api.exportData()
-      saveFile(file.name, file.json)
+      // No automatic update while the export is fetched, wherever the learner goes, nor in the moments after the
+      // file is handed to the browser: a reload then can cancel the save.
+      await holdingUpdates(
+        lifecycle,
+        async () => {
+          const file = await api.exportData()
+          saveFile(file.name, file.json)
+        },
+        SAVE_HOLD_MS,
+      )
     } catch (err) {
       setExportError(t(errorMessageKey(err)))
     } finally {

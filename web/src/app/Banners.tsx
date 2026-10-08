@@ -1,6 +1,6 @@
 import { useClientSnapshot } from '@wordado/client-data'
 import type { FixedField } from '@wordado/core'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { AccountNotice } from '../account/controller'
 import { useT, type MessageKey } from '../i18n/i18n'
 import { Link } from '../router'
@@ -159,18 +159,27 @@ function UpdateBanner() {
   )
 }
 
-/** "Wordado was updated." (spec §9.1): once, after the app updated itself, until it is dismissed or the page is left. */
+/**
+ * "Wordado was updated." (spec §9.1): once, after the app updated itself, until it is dismissed or the page is left.
+ * It is true from the page's first render, and a status region that arrives already filled is not announced: the
+ * region is there first, empty, and the line is put into it afterwards (spec §11.1).
+ */
 function UpdatedLine() {
   const { t } = useT()
   const { lifecycle } = useApp()
   const { updated } = useStore(lifecycle.store)
-  if (!updated) return null
+  const [said, setSaid] = useState(false)
+  useEffect(() => setSaid(updated), [updated])
   return (
-    <div className="banner notice-line" role="status">
-      <p>{t('update.done')}</p>
-      <button type="button" className="link-button" onClick={() => lifecycle.dismissUpdated()}>
-        {t('notice.dismiss')}
-      </button>
+    <div role="status">
+      {said && updated && (
+        <div className="banner notice-line">
+          <p>{t('update.done')}</p>
+          <button type="button" className="link-button" onClick={() => lifecycle.dismissUpdated()}>
+            {t('notice.dismiss')}
+          </button>
+        </div>
+      )}
     </div>
   )
 }

@@ -94,6 +94,7 @@ export const es: Messages = {
   'settings.app': 'La aplicación',
   'settings.autoUpdate': 'Actualizar automáticamente',
   'settings.autoUpdateHint': 'Wordado pasa a una versión nueva por sí solo cuando no estás en mitad de nada. Si lo desactivas, te avisa de que hay una versión nueva y te espera. Solo se aplica a este dispositivo.',
+  'settings.autoUpdateNotKept': 'Este navegador no ha podido guardar el ajuste. Dura hasta que cierres Wordado.',
   'settings.about': 'Acerca de',
   'about.sources': 'La lista de palabras se basa en estas fuentes:',
   'about.ownList': 'Esta lista de palabras la ha preparado Wordado.',

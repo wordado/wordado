@@ -94,6 +94,7 @@ export const de: Messages = {
   'settings.app': 'Die App',
   'settings.autoUpdate': 'Automatisch aktualisieren',
   'settings.autoUpdateHint': 'Wordado wechselt von selbst zu einer neuen Version, wenn du gerade nichts anderes machst. Ausgeschaltet sagt es dir, dass eine neue Version bereit ist, und wartet auf dich. Das gilt nur für dieses Gerät.',
+  'settings.autoUpdateNotKept': 'Dieser Browser konnte die Einstellung nicht speichern. Sie gilt, bis Wordado geschlossen wird.',
   'settings.about': 'Über Wordado',
   'about.sources': 'Die Wortliste stützt sich auf diese Quellen:',
   'about.ownList': 'Diese Wortliste wurde von Wordado erstellt.',

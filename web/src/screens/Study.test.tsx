@@ -138,7 +138,6 @@ describe('Study', () => {
     renderWith(<Study kind="session" mode="flashcard" />, ctx)
     expect(screen.getByRole('status').textContent).toBe('Getting your words ready…')
     const bar = screen.getByRole('progressbar', { name: 'Getting your words ready…' })
-    expect(bar.getAttribute('aria-busy')).toBe('true')
     expect(bar.hasAttribute('aria-valuenow')).toBe(false)
     await act(async () => start())
     expect(await screen.findByRole('button', { name: 'Show answer' })).toBeTruthy()

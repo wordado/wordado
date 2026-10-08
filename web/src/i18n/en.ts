@@ -90,6 +90,7 @@ export const en = {
   'settings.app': 'The app',
   'settings.autoUpdate': 'Update automatically',
   'settings.autoUpdateHint': 'Wordado moves to a new version by itself when you are not in the middle of anything. Switched off, it tells you when a new version is ready and waits for you. This applies to this device only.',
+  'settings.autoUpdateNotKept': 'This browser could not keep the setting. It lasts until Wordado is closed.',
   'settings.about': 'About',
   'about.sources': 'The word list is built from these sources:',
   'about.ownList': 'This word list was prepared by Wordado.',

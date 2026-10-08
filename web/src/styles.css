@@ -1484,15 +1484,17 @@ dialog.report textarea {
 }
 
 /* A wait with nothing to measure (ProgressBar without a value): a stripe that travels, or, for a learner who asked
-   for less motion, a still and paler bar, which cannot be read as a share done. */
+   for less motion, still diagonal stripes from end to end, which read as neither a share done nor a finished bar. */
 .bar.is-indeterminate span {
-  opacity: 0.55;
+  background: repeating-linear-gradient(-45deg, var(--rose) 0 0.5rem, transparent 0.5rem 1rem);
+  border-radius: 0;
 }
 
 @media (prefers-reduced-motion: no-preference) {
   .bar.is-indeterminate span {
     width: 40%;
-    opacity: 1;
+    background: var(--rose);
+    border-radius: 999px;
     animation: bar-travel 1.4s ease-in-out infinite;
   }
 

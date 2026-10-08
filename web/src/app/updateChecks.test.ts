@@ -28,6 +28,12 @@ function world(update: () => Promise<unknown> = async () => undefined) {
   }
 }
 
+/** Lets a look's answer, or its failure, arrive. */
+const answered = async () => {
+  await Promise.resolve()
+  await Promise.resolve()
+}
+
 describe('looking for a new version (spec §9.1)', () => {
   it('looks when the app returns to the foreground, visible or online', () => {
     const w = world()
@@ -38,18 +44,19 @@ describe('looking for a new version (spec §9.1)', () => {
     expect(w.updates()).toBe(1)
   })
 
-  it('looks about hourly while the app is open', () => {
+  it('looks about hourly while the app is open', async () => {
     const w = world()
     startUpdateChecks(w.registration, w.deps)
     expect(w.intervals.map((i) => i.ms)).toEqual([UPDATE_CHECK_INTERVAL_MS])
     w.advance(UPDATE_CHECK_INTERVAL_MS)
     w.intervals[0]!.run()
+    await answered()
     w.advance(UPDATE_CHECK_INTERVAL_MS)
     w.intervals[0]!.run()
     expect(w.updates()).toBe(2)
   })
 
-  it('never looks twice within a few minutes, however often the app comes forward', () => {
+  it('never looks twice within a few minutes, however often the app comes forward, nor twice at once', async () => {
     const w = world()
     const check = startUpdateChecks(w.registration, w.deps)
     // The browser looked when the page loaded.
@@ -57,6 +64,10 @@ describe('looking for a new version (spec §9.1)', () => {
     expect(w.updates()).toBe(0)
     w.advance(UPDATE_CHECK_MIN_GAP_MS)
     w.foreground()
+    // Still looking: a second look would only repeat the first.
+    w.foreground()
+    expect(w.updates()).toBe(1)
+    await answered()
     w.foreground()
     w.advance(UPDATE_CHECK_MIN_GAP_MS - 1)
     w.foreground()
@@ -67,13 +78,24 @@ describe('looking for a new version (spec §9.1)', () => {
     expect(w.updates()).toBe(2)
   })
 
-  it('ignores a look that fails, offline, and looks again later', async () => {
+  it('ignores a look that fails, offline, and does not make the next one wait for it', async () => {
     const w = world(() => Promise.reject(new TypeError('offline')))
     startUpdateChecks(w.registration, w.deps)
     w.advance(UPDATE_CHECK_MIN_GAP_MS)
     w.foreground()
-    await Promise.resolve()
+    await answered()
+    // Back online a moment later: the look that got no answer does not count as one.
+    w.foreground()
+    expect(w.updates()).toBe(2)
+  })
+
+  it('reads a clock set back as time gone by, not as a wait', async () => {
+    const w = world()
+    startUpdateChecks(w.registration, w.deps)
     w.advance(UPDATE_CHECK_MIN_GAP_MS)
+    w.foreground()
+    await answered()
+    w.advance(-24 * 60 * 60_000)
     w.foreground()
     expect(w.updates()).toBe(2)
   })
@@ -85,5 +107,8 @@ describe('looking for a new version (spec §9.1)', () => {
     startUpdateChecks(w.registration, w.deps)
     w.advance(UPDATE_CHECK_MIN_GAP_MS)
     expect(() => w.foreground()).not.toThrow()
+    // And it is not left "looking" for good.
+    w.foreground()
+    expect(w.updates()).toBe(2)
   })
 })

@@ -4,12 +4,17 @@ import {
   AppLifecycle,
   AUTO_UPDATE_KEY,
   AUTO_UPDATE_MIN_GAP_MS,
-  SAFE_POLL_MS,
+  AUTO_UPDATED_KEY,
+  SAFE_POLL_STEPS_MS,
   TAKE_OVER_TIMEOUT_MS,
   watchUpdates,
   type InstallEvent,
+  type LifecycleDeps,
   type Timers,
 } from './lifecycle'
+
+/** The longest wait between two looks for a safe moment: moving the clock this far always passes one. */
+const SAFE_POLL_MS = SAFE_POLL_STEPS_MS.at(-1)!
 
 /** A clock and its timers, moved by the test. */
 function fakeClock() {
@@ -18,6 +23,10 @@ function fakeClock() {
   const timers = new Map<number, { readonly at: number; readonly run: () => void }>()
   return {
     now: () => now,
+    /** Timers set and not yet run or cleared. */
+    pending: () => timers.size,
+    /** Sets the clock itself, as a learner or the network might: back, too. */
+    set: (to: number) => void (now = to),
     timers: {
       set: (run: () => void, ms: number) => {
         timers.set(next, { at: now + ms, run })
@@ -40,9 +49,9 @@ function fakeClock() {
   }
 }
 
-function lifecycle(storage = memoryStorage(), session = memoryStorage(), clock = fakeClock()) {
+function lifecycle(storage = memoryStorage(), session = memoryStorage(), clock = fakeClock(), extra: Partial<LifecycleDeps> = {}) {
   let reloads = 0
-  const l = new AppLifecycle({ storage, session, timers: clock.timers, now: clock.now, reload: () => (reloads += 1) })
+  const l = new AppLifecycle({ storage, session, timers: clock.timers, now: clock.now, reload: () => (reloads += 1), ...extra })
   return { l, storage, clock, reloads: () => reloads }
 }
 
@@ -162,7 +171,7 @@ describe('updates (spec §9.1, §4.3)', () => {
 })
 
 /** A registration and its container as `watchUpdates` uses them, with a worker the test installs. */
-function registered(l: AppLifecycle, options: { readonly controller?: unknown } = {}) {
+function registered(l: AppLifecycle, options: { readonly controller?: unknown; readonly installing?: boolean } = {}) {
   const listeners = new Map<string, (event: { readonly data?: unknown }) => void>()
   const posted: unknown[] = []
   const worker = {
@@ -170,7 +179,16 @@ function registered(l: AppLifecycle, options: { readonly controller?: unknown } 
     postMessage: (m: unknown) => void posted.push(m),
     addEventListener: (_: 'statechange', f: () => void) => listeners.set('statechange', f),
   }
-  const registration = { waiting: null, installing: worker, addEventListener: (_: 'updatefound', f: () => void) => listeners.set('updatefound', f) }
+  // `installing` is null until a version is found, unless the test says one was found before the page listened.
+  const registration = {
+    waiting: null,
+    installing: options.installing ? worker : (null as typeof worker | null),
+    addEventListener: (_: 'updatefound', f: () => void) => listeners.set('updatefound', f),
+  }
+  const find = () => {
+    registration.installing = worker
+    fire('updatefound')
+  }
   const container = {
     controller: 'controller' in options ? options.controller : {},
     addEventListener: (type: 'controllerchange' | 'message', f: (event: { readonly data?: unknown }) => void) => listeners.set(type, f),
@@ -180,14 +198,14 @@ function registered(l: AppLifecycle, options: { readonly controller?: unknown } 
   return {
     posted,
     fire,
-    found: () => fire('updatefound'),
+    found: find,
     state: (state: string) => {
       worker.state = state
       fire('statechange')
     },
     /** A new version is found and finishes installing: it waits. */
     install: () => {
-      fire('updatefound')
+      find()
       worker.state = 'installed'
       fire('statechange')
     },
@@ -310,6 +328,8 @@ describe('the automatic update (spec §9.1)', () => {
     w.fire('controllerchange')
     clock.advance(TAKE_OVER_TIMEOUT_MS)
     expect(reloads()).toBe(0)
+    // No bar with no end in sight: the banner and its button are back while the reload waits.
+    expect(l.store.get()).toMatchObject({ applying: false, updateReady: true })
     studying = false
     clock.advance(SAFE_POLL_MS)
     clock.advance(SAFE_POLL_MS)
@@ -331,6 +351,176 @@ describe('the automatic update (spec §9.1)', () => {
     expect(l.store.get()).toMatchObject({ applying: false, updateReady: true })
     l.applyUpdate()
     expect(reloads()).toBe(1)
+  })
+
+  it('lets the learner update at once while the reload waits for the run', () => {
+    const { l, reloads, clock } = lifecycle()
+    let studying = false
+    l.watchSafety(() => !studying)
+    const w = registered(l)
+    w.install()
+    studying = true
+    w.fire('controllerchange')
+    l.applyUpdate()
+    expect(reloads()).toBe(1)
+    studying = false
+    clock.advance(10 * SAFE_POLL_MS)
+    expect(reloads()).toBe(1)
+  })
+
+  it('cancels its own request when the learner switches the setting off before the new version takes control', () => {
+    const session = memoryStorage()
+    const { l, reloads, clock } = lifecycle(memoryStorage(), session)
+    l.watchSafety(() => true)
+    const w = registered(l)
+    w.install()
+    expect(l.store.get().applying).toBe(true)
+    l.setAutoUpdate(false)
+    expect(l.store.get()).toMatchObject({ applying: false, updateReady: true })
+    w.fire('controllerchange')
+    clock.advance(10 * TAKE_OVER_TIMEOUT_MS)
+    expect(reloads()).toBe(0)
+    expect(clock.pending()).toBe(0)
+    expect(lifecycle(memoryStorage(), session).l.store.get().updated).toBe(false)
+  })
+
+  it('asks for a safe moment after 2, 5, 15 and then every 30 seconds, and from the start when the screen changes', () => {
+    const { l, clock } = lifecycle()
+    const asked: number[] = []
+    const start = clock.now()
+    const guard = () => {
+      asked.push((clock.now() - start) / 1000)
+      return false
+    }
+    l.watchSafety(guard)
+    const w = registered(l)
+    w.install()
+    asked.length = 0
+    clock.advance(120_000)
+    expect(asked).toEqual([2, 7, 22, 52, 82, 112])
+    asked.length = 0
+    l.watchSafety(guard)
+    clock.advance(8_000)
+    expect(asked).toEqual([120, 122, 127])
+    expect(w.posted).toEqual([])
+  })
+
+  it('does not ask at all where no moment can be safe: no shell, or the shell gone', () => {
+    const { l, clock } = lifecycle()
+    const w = registered(l)
+    w.install()
+    expect(clock.pending()).toBe(0)
+    const stop = l.watchSafety(() => false)
+    expect(clock.pending()).toBe(1)
+    stop()
+    expect(clock.pending()).toBe(0)
+    clock.advance(10 * SAFE_POLL_MS)
+    expect(w.posted).toEqual([])
+  })
+
+  it('does not ask while the page is hidden, and asks again when it is back', () => {
+    let visible = false
+    let studying = true
+    const { l, clock } = lifecycle(memoryStorage(), memoryStorage(), fakeClock(), { visible: () => visible })
+    l.watchSafety(() => !studying)
+    const w = registered(l)
+    w.install()
+    expect(clock.pending()).toBe(0)
+    visible = true
+    l.becameVisible()
+    expect(clock.pending()).toBe(1)
+    visible = false
+    clock.advance(SAFE_POLL_STEPS_MS[0]!)
+    expect(clock.pending()).toBe(0)
+    // Back, and the run is over meanwhile.
+    studying = false
+    visible = true
+    l.becameVisible()
+    expect(w.posted).toEqual([{ type: 'SKIP_WAITING' }])
+  })
+
+  it('reads a clock set back since the last update as time gone by, not as a wait', () => {
+    const session = memoryStorage()
+    const before = lifecycle(memoryStorage(), session)
+    before.l.watchSafety(() => true)
+    const first = registered(before.l)
+    first.install()
+    first.fire('controllerchange')
+    const after = lifecycle(memoryStorage(), session, before.clock)
+    after.clock.set(after.clock.now() - 24 * 60 * 60_000)
+    after.l.watchSafety(() => true)
+    const second = registered(after.l)
+    second.install()
+    expect(second.posted).toEqual([{ type: 'SKIP_WAITING' }])
+  })
+
+  it('keeps the ten minutes by the device’s own record where the tab’s storage is refused', () => {
+    const refused = {
+      getItem: () => null,
+      setItem: () => {
+        throw new Error('refused')
+      },
+      removeItem: () => undefined,
+    }
+    const storage = memoryStorage()
+    const before = lifecycle(storage, refused)
+    before.l.watchSafety(() => true)
+    const first = registered(before.l)
+    first.install()
+    first.fire('controllerchange')
+    expect(before.reloads()).toBe(1)
+    const after = lifecycle(storage, refused, before.clock)
+    after.l.watchSafety(() => true)
+    const second = registered(after.l)
+    second.install()
+    after.clock.advance(AUTO_UPDATE_MIN_GAP_MS - SAFE_POLL_MS)
+    expect(second.posted).toEqual([])
+    after.clock.advance(2 * SAFE_POLL_MS)
+    expect(second.posted).toEqual([{ type: 'SKIP_WAITING' }])
+  })
+
+  it('does not update itself on a reloaded page that finds no mark of its tab: nothing there could stop a loop', () => {
+    // Storage that keeps nothing across the reload: each page gets its own.
+    const page = () => lifecycle(memoryStorage(), memoryStorage(), fakeClock(), { reloaded: () => true })
+    const { l, reloads, clock } = page()
+    l.watchSafety(() => true)
+    const w = registered(l)
+    w.install()
+    l.markAppTooOld()
+    clock.advance(2 * AUTO_UPDATE_MIN_GAP_MS)
+    expect(w.posted).toEqual([])
+    expect(reloads()).toBe(0)
+    expect(l.store.get().updateReady).toBe(true)
+    // A reload in a tab whose storage is kept finds the mark its first page left, and updates as usual.
+    const session = memoryStorage()
+    lifecycle(memoryStorage(), session)
+    expect(session.getItem(AUTO_UPDATED_KEY)).not.toBeNull()
+    const kept = lifecycle(memoryStorage(), session, fakeClock(), { reloaded: () => true })
+    kept.l.watchSafety(() => true)
+    const again = registered(kept.l)
+    again.install()
+    expect(again.posted).toEqual([{ type: 'SKIP_WAITING' }])
+  })
+
+  it('says whether the browser kept the setting, and follows another tab’s change', () => {
+    const storage = memoryStorage()
+    const { l } = lifecycle(storage)
+    expect(l.setAutoUpdate(false)).toBe(true)
+    // Another tab switches it back on.
+    storage.removeItem(AUTO_UPDATE_KEY)
+    l.autoUpdateChanged()
+    expect(l.store.get().autoUpdate).toBe(true)
+    const refused = {
+      getItem: () => null,
+      setItem: () => {
+        throw new Error('refused')
+      },
+      removeItem: () => undefined,
+    }
+    const visit = lifecycle(refused).l
+    expect(visit.setAutoUpdate(false)).toBe(false)
+    // For this visit it is off all the same.
+    expect(visit.store.get().autoUpdate).toBe(false)
   })
 
   it('says once, after the reload, that Wordado was updated', () => {
@@ -374,7 +564,7 @@ describe('the automatic update (spec §9.1)', () => {
     after.clock.advance(AUTO_UPDATE_MIN_GAP_MS - SAFE_POLL_MS)
     expect(second.posted).toEqual([])
     expect(after.l.store.get().updateReady).toBe(true)
-    after.clock.advance(SAFE_POLL_MS)
+    after.clock.advance(2 * SAFE_POLL_MS)
     expect(second.posted).toEqual([{ type: 'SKIP_WAITING' }])
   })
 
@@ -422,6 +612,17 @@ describe('a new version’s download (spec §9.1)', () => {
     w.fire('message', { type: 'PRECACHE_PROGRESS', done: 1, total: 4 })
     w.fire('message', { type: 'SOMETHING_ELSE', done: 3, total: 4 })
     expect(l.store.get().download).toEqual({ done: 1, total: 4 })
+    w.state('installed')
+    expect(l.store.get()).toMatchObject({ download: null, updateReady: true })
+  })
+
+  it('follows a version that was already installing when the page began to listen', () => {
+    const { l } = lifecycle()
+    l.setAutoUpdate(false)
+    const w = registered(l, { installing: true })
+    expect(l.store.get().download).toEqual({ done: 0, total: 0 })
+    w.fire('message', { type: 'PRECACHE_PROGRESS', done: 3, total: 4 })
+    expect(l.store.get().download).toEqual({ done: 3, total: 4 })
     w.state('installed')
     expect(l.store.get()).toMatchObject({ download: null, updateReady: true })
   })

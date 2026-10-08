@@ -9,8 +9,10 @@ export const AUTO_UPDATE_KEY = 'wordado.autoUpdate'
 /** This tab's last automatic update, kept across its reload (session storage): when, and whether it was said. */
 export const AUTO_UPDATED_KEY = 'wordado.autoUpdated'
 
-/** How often a waiting automatic update asks again whether the moment is safe. */
-export const SAFE_POLL_MS = 2_000
+/** How soon a waiting automatic update asks again whether the moment is safe: sooner at first, then every half minute. */
+export const SAFE_POLL_STEPS_MS: readonly number[] = [2_000, 5_000, 15_000, 30_000]
+/** This device's last automatic update, beside the tab's own mark: a second witness where a tab's storage is refused. */
+export const AUTO_UPDATED_AT_KEY = 'wordado.autoUpdatedAt'
 /** How long the waiting version has to take control before the app gives up and offers the banner again. Tuning (§15). */
 export const TAKE_OVER_TIMEOUT_MS = 20_000
 /** The least time between two automatic updates in one tab, so a server that always has a newer worker cannot loop. */
@@ -69,6 +71,10 @@ export interface LifecycleDeps {
   readonly session?: KeyValue
   readonly timers?: Timers
   now?(): number
+  /** Whether the page is on screen; a hidden page does not poll. Visible when left out. */
+  visible?(): boolean
+  /** Whether this page was loaded by a reload (the navigation's type). */
+  reloaded?(): boolean
 }
 
 /** Installation and updates (spec §9.1): what the banners and settings offer. */
@@ -94,6 +100,13 @@ export class AppLifecycle {
   /** The service worker in control changed since the waiting version was found: that version is the one in control. */
   private switched = false
   private poll: unknown = null
+  /** How many polls found the moment unsafe since the screen last changed: the next waits longer. */
+  private polls = 0
+  /**
+   * This page came from a reload and found no mark of its tab: the tab's storage does not outlive a reload (or is
+   * refused), so nothing could stop a loop. No automatic update on this page; the banner serves.
+   */
+  private readonly unmarked: boolean
   private takeOver: unknown = null
   /** Looks for a newer version at once (the update checks); null without a service worker. */
   private checker: (() => void) | null = null
@@ -102,7 +115,10 @@ export class AppLifecycle {
     this.session = deps.session ?? memoryStorage()
     this.timers = deps.timers ?? realTimers
     const mark = this.mark()
-    if (mark && !mark.said) this.saveMark({ ...mark, said: true })
+    this.unmarked = mark === null && deps.reloaded?.() === true
+    // Every tab leaves a mark at its first page, so a later page without one knows its storage was not kept.
+    if (mark === null) this.saveMark({ at: 0, said: true, reloaded: false })
+    else if (!mark.said) this.saveMark({ ...mark, said: true })
     this.store = createStore<LifecycleState>({
       updateReady: false,
       appTooOld: false,
@@ -137,13 +153,23 @@ export class AppLifecycle {
     }
   }
 
-  private saveMark(mark: AutoMark | null): void {
+  private saveMark(mark: AutoMark): void {
     try {
-      if (mark) this.session.setItem(AUTO_UPDATED_KEY, JSON.stringify(mark))
-      else this.session.removeItem(AUTO_UPDATED_KEY)
+      this.session.setItem(AUTO_UPDATED_KEY, JSON.stringify(mark))
     } catch {
       // Refused storage: the update still happens; it is only not announced after the reload.
     }
+  }
+
+  /** When this tab, or failing its storage this device, last updated itself; 0 for never. */
+  private lastAuto(): number {
+    let device = 0
+    try {
+      device = Number(this.deps.storage.getItem(AUTO_UPDATED_AT_KEY)) || 0
+    } catch {
+      // Refused storage: the tab's own mark is all there is.
+    }
+    return Math.max(this.mark()?.at ?? 0, device)
   }
 
   private visits(): Visits {
@@ -180,6 +206,7 @@ export class AppLifecycle {
   updateFound(worker: { postMessage(message: unknown): void }): void {
     this.waiting = worker
     this.switched = false
+    this.polls = 0
     this.set({ updateReady: true, download: null })
     this.consider()
   }
@@ -229,7 +256,10 @@ export class AppLifecycle {
     this.timers.clear(this.takeOver)
     this.takeOver = null
     if (this.auto && !this.safe()) {
+      // The reload waits for the run to be left; meanwhile the banner and its button, not a bar with no end in sight.
       this.reloadOwed = true
+      this.polls = 0
+      this.set({ applying: false })
       this.consider()
       return
     }
@@ -247,19 +277,39 @@ export class AppLifecycle {
     this.deps.reload()
   }
 
-  /** Switches "Update automatically" on or off, on this device (spec §9.1). */
-  setAutoUpdate(on: boolean): void {
+  /**
+   * Switches "Update automatically" on or off, on this device (spec §9.1). False when the browser would not keep
+   * the choice: it then lasts for this visit.
+   */
+  setAutoUpdate(on: boolean): boolean {
+    let kept = true
     try {
       if (on) this.deps.storage.removeItem(AUTO_UPDATE_KEY)
       else this.deps.storage.setItem(AUTO_UPDATE_KEY, 'off')
+      kept = (this.deps.storage.getItem(AUTO_UPDATE_KEY) !== 'off') === on
     } catch {
-      // Refused storage: the choice lasts for this visit.
+      kept = false
     }
-    // Switched off with a reload of the app's own still owed: nothing more happens unasked.
-    if (!on && this.auto && this.reloadOwed) {
+    this.autoUpdateIs(on)
+    return kept
+  }
+
+  /** Another tab changed "Update automatically" (the `storage` event): this one follows. */
+  autoUpdateChanged(): void {
+    const on = this.readAutoUpdate()
+    if (on !== this.store.get().autoUpdate) this.autoUpdateIs(on)
+  }
+
+  private autoUpdateIs(on: boolean): void {
+    // Switched off with the app's own request under way, or its reload still owed: nothing more happens unasked.
+    if (!on && this.auto) {
+      this.timers.clear(this.takeOver)
+      this.takeOver = null
       this.reloadOwed = false
       this.updateRequested = false
       this.auto = false
+      const mark = this.mark()
+      if (mark) this.saveMark({ ...mark, said: true })
       this.set({ applying: false })
     }
     this.set({ autoUpdate: on })
@@ -272,10 +322,19 @@ export class AppLifecycle {
    */
   watchSafety(guard: () => boolean): () => void {
     this.guard = guard
+    this.polls = 0
     this.consider()
     return () => {
-      if (this.guard === guard) this.guard = null
+      if (this.guard !== guard) return
+      this.guard = null
+      this.consider()
     }
+  }
+
+  /** The page came back on screen: the poll it paused while hidden starts again. */
+  becameVisible(): void {
+    this.polls = 0
+    this.consider()
   }
 
   /** Something that a reload would cut short has begun; call the result when it is over. */
@@ -300,27 +359,40 @@ export class AppLifecycle {
 
   /**
    * The automatic update (spec §9.1): with the setting on, a version that is ready is moved to as soon as nothing is
-   * in progress, once per page; while something is, this asks again every `SAFE_POLL_MS`. The banner stays meanwhile.
+   * in progress, once per page; while something is, this asks again, after 2, 5, 15 and then every 30 seconds
+   * (`SAFE_POLL_STEPS_MS`), from the start whenever the screen changes. The banner stays meanwhile. Nothing is asked
+   * where no moment can be safe (no shell: open in another tab, or failed to open) or while the page is hidden.
    */
   private consider(): void {
     this.timers.clear(this.poll)
     this.poll = null
     const wait = () => {
-      this.poll = this.timers.set(() => this.consider(), SAFE_POLL_MS)
+      if (this.guard === null || this.deps.visible?.() === false) return
+      const ms = SAFE_POLL_STEPS_MS[Math.min(this.polls, SAFE_POLL_STEPS_MS.length - 1)]!
+      this.polls += 1
+      this.poll = this.timers.set(() => this.consider(), ms)
     }
     if (this.reloadOwed) return this.safe() ? this.reloadOnce() : wait()
     const state = this.store.get()
-    if (!state.autoUpdate || this.autoTried || this.updateRequested) return
+    if (!state.autoUpdate || this.autoTried || this.updateRequested || this.unmarked) return
     const mark = this.mark()
     const ready = state.updateReady && this.waiting !== null
     // With no service worker to bring the newer app, only a reload can; a reload under one would bring the same app.
     const reloadOnly = !ready && state.appTooOld && this.checker === null && !mark?.reloaded
     if (!ready && !reloadOnly) return
-    if (!this.safe() || (ready && mark !== null && this.now() - mark.at < AUTO_UPDATE_MIN_GAP_MS)) return wait()
+    // A clock set back since the last update reads as time gone by, not as ten minutes still to wait.
+    const since = this.now() - this.lastAuto()
+    if (!this.safe() || (ready && since >= 0 && since < AUTO_UPDATE_MIN_GAP_MS)) return wait()
     this.autoTried = true
     this.auto = true
     this.updateRequested = true
-    this.saveMark({ at: this.now(), said: !ready, reloaded: !ready || mark?.reloaded === true })
+    const at = this.now()
+    this.saveMark({ at, said: !ready, reloaded: !ready || mark?.reloaded === true })
+    try {
+      this.deps.storage.setItem(AUTO_UPDATED_AT_KEY, String(at))
+    } catch {
+      // Refused storage: the tab's own mark is the witness.
+    }
     this.request()
   }
 
@@ -402,9 +474,7 @@ export function watchUpdates(
   },
   lifecycle: AppLifecycle,
 ): void {
-  if (registration.waiting && container.controller) lifecycle.updateFound(registration.waiting)
-  registration.addEventListener('updatefound', () => {
-    const worker = registration.installing
+  const follow = (worker: WorkerLike | null) => {
     // The first install is no update: the page already has everything it is caching.
     if (!worker || !container.controller) return
     lifecycle.downloadStarted()
@@ -412,7 +482,11 @@ export function watchUpdates(
       if (worker.state === 'installed' && container.controller) lifecycle.updateFound(worker)
       else if (worker.state === 'redundant') lifecycle.downloadEnded()
     })
-  })
+  }
+  if (registration.waiting && container.controller) lifecycle.updateFound(registration.waiting)
+  // A version found before this page was listening is still installing: its `updatefound` will not come again.
+  else follow(registration.installing)
+  registration.addEventListener('updatefound', () => follow(registration.installing))
   container.addEventListener('message', (event) => {
     if (isPrecacheProgress(event.data)) lifecycle.downloadProgress(event.data.done, event.data.total)
   })
