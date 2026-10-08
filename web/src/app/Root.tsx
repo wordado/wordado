@@ -58,7 +58,7 @@ export function Root(props: {
       return (
         <main className="notice">
           <p role="status">{t(download ? 'boot.downloading' : 'boot.starting')}</p>
-          {download && <ProgressBar label={t('boot.downloading')} value={download.received} max={download.total} />}
+          {download ? <ProgressBar label={t('boot.downloading')} value={download.received} max={download.total} /> : <ProgressBar label={t('boot.starting')} />}
         </main>
       )
   }

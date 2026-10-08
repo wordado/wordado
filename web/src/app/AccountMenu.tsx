@@ -2,6 +2,7 @@ import { useT } from '../i18n/i18n'
 import { Link } from '../router'
 import { SyncLine, useSyncMessage } from './Banners'
 import { useApp } from './context'
+import { ProgressBar } from './ProgressBar'
 import { useSignOut } from './signOut'
 import { usePopover } from './usePopover'
 
@@ -54,6 +55,7 @@ export function AccountMenu() {
               <p className="note" role="status">
                 {signingOut ? t('settings.signingOut') : ''}
               </p>
+              {signingOut && <ProgressBar label={t('settings.signingOut')} />}
               {error !== null && (
                 <p className="field-error" role="alert">
                   {error}

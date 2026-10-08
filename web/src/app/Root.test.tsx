@@ -75,9 +75,9 @@ describe('Root', () => {
         <Root boot={boot} download={download} services={services} />
       </I18nProvider>,
     )
-    // Opening with nothing to fetch (or a pack staged later, behind the open app): no bar.
+    // Opening with nothing to fetch (or a pack staged later, behind the open app): a bar that only says it is busy.
     expect(screen.getByRole('status').textContent).toBe('Opening your words…')
-    expect(screen.queryByRole('progressbar')).toBeNull()
+    expect(screen.getByRole('progressbar', { name: 'Opening your words…' }).hasAttribute('aria-valuenow')).toBe(false)
     act(() => download.set({ received: 0, total: 0 }))
     expect(screen.getByRole('status').textContent).toBe('Downloading your words…')
     expect(screen.getByRole('progressbar', { name: 'Downloading your words…' }).hasAttribute('aria-valuenow')).toBe(false)

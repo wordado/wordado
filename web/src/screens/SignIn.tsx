@@ -6,6 +6,7 @@ import { countryOptions } from '../account/countries'
 import { pendingSignIn, type PendingSignIn } from '../account/storage'
 import { useApp } from '../app/context'
 import { privacyUrl } from '../app/site'
+import { ProgressBar } from '../app/ProgressBar'
 import { useT, type MessageKey } from '../i18n/i18n'
 import { Link, navigate } from '../router'
 import { useOnline } from '../useOnline'
@@ -377,7 +378,12 @@ export function SignIn(props: {
             </Field>
             {formAlert}
             {info !== null && <p role="status">{t(info)}</p>}
-            {verifying && <p role="status">{t('signin.working')}</p>}
+            {verifying && (
+              <>
+                <p role="status">{t('signin.working')}</p>
+                <ProgressBar label={t('signin.working')} />
+              </>
+            )}
             <div className="actions">
               <button type="submit" className="button primary" disabled={busy}>
                 {t('signin.verify')}
