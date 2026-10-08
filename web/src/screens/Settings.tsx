@@ -65,7 +65,7 @@ export interface SettingsPage {
 export function Settings(props: { readonly section: SettingsSection | null; readonly page?: SettingsPage }) {
   const { t } = useT()
   const summaries = useSummaries()
-  // A section with nothing to show here (no audio to download, nothing to install) is left out.
+  // A section with nothing to show here (no audio to download) is left out.
   const available = (section: SettingsSection) => summaries[section] !== null
   const section = props.page ? props.page.section : props.section !== null && available(props.section) ? props.section : null
   const shown = section ?? 'study'
@@ -150,7 +150,7 @@ function useSummaries(): Readonly<Record<SettingsSection, string | null>> {
   const client = useClient()
   const { settings, flags, l1 } = useClientSnapshot()
   const { account, audio, reminders, lifecycle } = useApp()
-  const { installable } = useStore(lifecycle.store)
+  const { installable, autoUpdate } = useStore(lifecycle.store)
   const clips = settings.audio ? client.levelClips(settings.declaredLevel) : []
   const cached = audio.cachedClips()
   const prefs = reminders.prefs()
@@ -167,7 +167,7 @@ function useSummaries(): Readonly<Record<SettingsSection, string | null>> {
     // The translation language named in itself, as Native language lists it.
     languages: t('settings.summaryLanguages', { translations: languageName(translations, translations), menus: ENDONYM[locale] }),
     account: account?.email ?? t('settings.summaryDemo'),
-    app: installable === null ? null : t('settings.summaryApp'),
+    app: t(installable !== null ? 'settings.summaryApp' : autoUpdate ? 'settings.summaryAppAuto' : 'settings.summaryAppManual'),
     about: t('settings.summaryAbout'),
   }
 }

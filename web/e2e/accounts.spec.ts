@@ -361,7 +361,11 @@ test('a new account opens in the setup, downloads its words with progress, and e
   await expect(page.getByRole('heading', { name: 'What do you want English for?' })).toBeFocused()
   const bars = await page.evaluate(() => (window as unknown as { __bars: string[] }).__bars)
   expect(bars.length).toBeGreaterThan(0)
-  for (const bar of bars) expect(bar).toMatch(/^Getting your words ready \d+\/[1-9]\d*$/)
+  // Until the pack's size is known the bar is busy (no value); from then on it counts, and never goes back.
+  const busy = 'Getting your words ready null/null'
+  const counting = bars.slice(bars.findIndex((bar) => bar !== busy))
+  expect(counting.length).toBeGreaterThan(0)
+  for (const bar of counting) expect(bar).toMatch(/^Getting your words ready \d+\/[1-9]\d*$/)
   expect(bars.at(-1)).toMatch(/^Getting your words ready (\d+)\/\1$/)
 
   await page.getByRole('button', { name: 'Start studying' }).click()

@@ -1,4 +1,6 @@
 import { expect, test } from '@playwright/test'
+import { readFileSync, writeFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { answer, expectAccessible, finishSetup, finishSetupAt, forwardConsole, heading, serveTwoLevelSample, SETTLE_MS, studyNew, today } from './helpers'
 
 test.beforeEach(async ({ context }) => {
@@ -54,6 +56,57 @@ test('keeps progress offline after the first visit, and after reconnecting', asy
   await context.setOffline(false)
   await page.goto('/')
   await expect(heading(page)).toHaveText('6 new words')
+})
+
+test('a new version waits while a run is in progress, then the app updates itself once and says so (spec §9.1)', async ({ page }) => {
+  // The preview serves `dist` as it is on disk: a byte more in sw.js is a new version to the browser.
+  const worker = fileURLToPath(new URL('../dist/sw.js', import.meta.url))
+  const built = readFileSync(worker)
+  try {
+    await page.goto('/')
+    await finishSetup(page)
+    await page.evaluate(() => navigator.serviceWorker.ready)
+    // The first worker took no page over; from this load on it controls the page, so a second one is an update.
+    await page.reload()
+    await expect(today(page)).toBeVisible()
+    let loads = 0
+    page.on('load', () => (loads += 1))
+
+    await page.getByRole('link', { name: 'Start studying' }).click()
+    await answer(page)
+    writeFileSync(worker, Buffer.concat([built, Buffer.from(`\n// e2e: a newer version, ${Date.now()}\n`)]))
+    await page.evaluate(async () => {
+      const registration = (await navigator.serviceWorker.getRegistration())!
+      await registration.update()
+      const installing = registration.installing
+      if (installing) await new Promise<void>((resolve) => installing.addEventListener('statechange', () => installing.state === 'installed' && resolve()))
+      if (!registration.waiting) throw new Error('no worker is waiting')
+    })
+    // The new version waits, however long the run takes: longer here than the app's own poll for a safe moment.
+    await answer(page)
+    await page.waitForTimeout(5_000)
+    await answer(page)
+    expect(loads).toBe(0)
+    expect(await page.evaluate(async () => (await navigator.serviceWorker.getRegistration())?.waiting != null)).toBe(true)
+
+    // Leaving the run is the safe moment.
+    await page.getByRole('button', { name: 'Stop for now' }).click()
+    await expect(page.locator('.done')).toBeVisible()
+    await page.waitForTimeout(3_000)
+    expect(loads).toBe(0)
+    await page.getByRole('link', { name: 'Back to today' }).click()
+    await expect(page.getByText('Wordado was updated.')).toBeVisible()
+    await expect(today(page)).toBeVisible()
+    // Once: the answers are there, nothing reloads again, and the line is not said twice.
+    await page.waitForTimeout(5_000)
+    expect(loads).toBe(1)
+    expect(await page.evaluate(async () => (await navigator.serviceWorker.getRegistration())?.waiting ?? null)).toBeNull()
+    await page.reload()
+    await expect(today(page)).toBeVisible()
+    await expect(page.getByText('Wordado was updated.')).toHaveCount(0)
+  } finally {
+    writeFileSync(worker, built)
+  }
 })
 
 test('a second tab says Wordado is open elsewhere, and can take over', async ({ page, context }) => {

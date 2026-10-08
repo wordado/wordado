@@ -4,8 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../account/api'
 import { SignOutOffline } from '../account/controller'
 import { fakeApi } from '../test/fakeApi'
-import { fakeAccounts, fakeAudio, fakeReminders, renderWith, setup } from '../test/fixtures'
+import { fakeAccounts, fakeAudio, fakeLifecycle, fakeReminders, renderWith, setup } from '../test/fixtures'
 import { saveFile } from '../download'
+import { SAVE_HOLD_MS } from '../app/updateSafety'
 import { Settings } from './Settings'
 
 vi.mock('../download', () => ({ saveFile: vi.fn() }))
@@ -41,11 +42,21 @@ describe('Settings: the menu', () => {
     expect(row(/^About and privacy/).getAttribute('href')).toBe('/settings/about')
   })
 
-  it('names the signed-in learner, and leaves out the app while there is nothing to install', async () => {
+  it('names the signed-in learner, and says how the app updates', async () => {
     const ctx = await setup()
     renderWith(<Settings section={null} />, { ...ctx, account: ana })
     expect(row(/^Account/).textContent).toContain('ana@example.com')
-    expect(screen.queryByRole('link', { name: /^The app/ })).toBeNull()
+    expect(row(/^The app/).textContent).toContain('Updates automatically')
+    expect(row(/^The app/).getAttribute('href')).toBe('/settings/app')
+  })
+
+  it('says the app updates when asked once that is switched off, and offers installation where it can', async () => {
+    const ctx = await setup()
+    const lifecycle = fakeLifecycle({ autoUpdate: false })
+    renderWith(<Settings section={null} />, { ...ctx, lifecycle })
+    expect(row(/^The app/).textContent).toContain('Updates when you ask')
+    act(() => lifecycle.store.set({ ...lifecycle.store.get(), installable: 'prompt' }))
+    expect(row(/^The app/).textContent).toContain('Install Wordado on this device')
   })
 
   it('marks the open section and offers the way back to the menu', async () => {
@@ -159,6 +170,57 @@ describe('Settings: audio for offline study (spec §9.3)', () => {
   })
 })
 
+describe('Settings: work that outlives its page holds the automatic update (spec §9.1)', () => {
+  it('holds it until the audio download is over, though the learner left the page', async () => {
+    const ctx = await setup()
+    let finish!: () => void
+    const audio = fakeAudio({ prefetch: () => new Promise<number>((resolve) => (finish = () => resolve(0))) })
+    const lifecycle = fakeLifecycle()
+    const { unmount } = renderWith(<Settings section="audio" />, { ...ctx, audio, lifecycle })
+    fireEvent.click(screen.getByRole('button', { name: 'Download A1 audio' }))
+    expect(lifecycle.holds).toBe(1)
+    unmount()
+    expect(lifecycle.holds).toBe(1)
+    await act(async () => finish())
+    expect(lifecycle.holds).toBe(0)
+  })
+
+  it('holds it until the export has arrived and a few seconds past the save, though the learner left the page', async () => {
+    const ctx = await setup()
+    let arrive!: () => void
+    const api = fakeApi()
+    api.exportData = () => new Promise((resolve) => (arrive = () => resolve({ name: 'wordado-export.json', json: '{}' })))
+    const lifecycle = fakeLifecycle()
+    const { unmount } = renderWith(<Settings section="account" />, { ...ctx, account: ana, api, lifecycle })
+    fireEvent.click(screen.getByRole('button', { name: 'Download your data (JSON)' }))
+    expect(lifecycle.holds).toBe(1)
+    unmount()
+    vi.useFakeTimers()
+    try {
+      await act(async () => arrive())
+      expect(lifecycle.holds).toBe(1)
+      vi.advanceTimersByTime(SAVE_HOLD_MS)
+      expect(lifecycle.holds).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('holds it until a reminder is saved, though the learner left the page', async () => {
+    const ctx = await setup()
+    let answer!: () => void
+    const reminders = fakeReminders({ enable: () => new Promise((resolve) => (answer = () => resolve('on'))) })
+    const lifecycle = fakeLifecycle()
+    const { unmount } = renderWith(<Settings section="reminders" />, { ...ctx, account: ana, reminders, lifecycle })
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Remind me to study' }))
+    expect(lifecycle.holds).toBe(1)
+    unmount()
+    expect(lifecycle.holds).toBe(1)
+    await act(async () => answer())
+    expect(lifecycle.holds).toBe(0)
+  })
+})
+
 describe('Settings: the account (spec §11)', () => {
   it('offers an account from the demo, and no export or deletion', async () => {
     const ctx = await setup()
@@ -244,6 +306,42 @@ describe('Settings: the account (spec §11)', () => {
     expect(confirm.disabled).toBe(false)
     await act(async () => fireEvent.click(confirm))
     expect(accounts.calls).toEqual(['deleteAccount'])
+  })
+})
+
+describe('Settings: the app (spec §9.1)', () => {
+  it('updates automatically unless the learner switches that off, and says what it means', async () => {
+    const ctx = await setup()
+    const lifecycle = fakeLifecycle()
+    renderWith(<Settings section="app" />, { ...ctx, lifecycle })
+    const toggle = page().getByRole('checkbox', { name: 'Update automatically' }) as HTMLInputElement
+    expect(toggle.checked).toBe(true)
+    expect(document.getElementById(toggle.getAttribute('aria-describedby')!)?.textContent).toContain('when you are not in the middle of anything')
+    fireEvent.click(toggle)
+    expect(lifecycle.calls).toEqual(['setAutoUpdate false'])
+    expect(toggle.checked).toBe(false)
+    expect(page().getByRole('status').textContent).toBe('Saved')
+    fireEvent.click(toggle)
+    expect(lifecycle.calls).toEqual(['setAutoUpdate false', 'setAutoUpdate true'])
+    expect(toggle.checked).toBe(true)
+  })
+
+  it('does not say Saved when the browser would not keep the setting', async () => {
+    const ctx = await setup()
+    const lifecycle = fakeLifecycle()
+    lifecycle.keeps = false
+    renderWith(<Settings section="app" />, { ...ctx, lifecycle })
+    fireEvent.click(page().getByRole('checkbox', { name: 'Update automatically' }))
+    expect(page().getByRole('status').textContent).toBe('This browser could not keep the setting. It lasts until Wordado is closed.')
+  })
+
+  it('shows the setting as this device keeps it, and installation beside it where the browser offers it', async () => {
+    const ctx = await setup()
+    const lifecycle = fakeLifecycle({ autoUpdate: false, installable: 'prompt' })
+    renderWith(<Settings section="app" />, { ...ctx, lifecycle })
+    expect((page().getByRole('checkbox', { name: 'Update automatically' }) as HTMLInputElement).checked).toBe(false)
+    await act(async () => fireEvent.click(page().getByRole('button', { name: 'Install' })))
+    expect(lifecycle.calls).toEqual(['install'])
   })
 })
 

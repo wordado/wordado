@@ -11,13 +11,16 @@ import { fakeApi } from '../test/fakeApi'
 import type { Backend } from '../storage/protocol'
 import type { AccountActions, AccountState } from '../account/controller'
 import { Boot, type LockPort } from './boot'
+import type { LifecyclePort } from './lifecycle'
 import { PackSwitcher } from './packSwitch'
-import { Root } from './Root'
+import { Root, type OpeningDownload } from './Root'
 
 beforeEach(() => window.history.replaceState(null, '', '/'))
 afterEach(cleanup)
 
-async function renderRoot(options: { free?: boolean; backend?: Backend; fresh?: boolean; packs?: PackSwitcher; accounts?: AccountActions } = {}) {
+async function renderRoot(
+  options: { free?: boolean; backend?: Backend; fresh?: boolean; packs?: PackSwitcher; accounts?: AccountActions; lifecycle?: LifecyclePort } = {},
+) {
   let owner = options.free ?? true
   const lock: LockPort = {
     acquire: async () => owner,
@@ -40,7 +43,7 @@ async function renderRoot(options: { free?: boolean; backend?: Backend; fresh?: 
   )
   render(
     <I18nProvider storage={{ getItem: () => 'en', setItem: () => undefined }}>
-      <Root boot={boot} services={{ env, audio: fakeAudio(), afterRun: () => undefined, api: fakeApi(), accounts: options.accounts ?? fakeAccounts(), reminders: fakeReminders(), lifecycle: fakeLifecycle(), credits: fakeCredits(), fixNotices: fakeFixNotices(), packs: options.packs ?? (options.fresh ? samplePacks() : fakePacks()) }} />
+      <Root boot={boot} services={{ env, audio: fakeAudio(), afterRun: () => undefined, api: fakeApi(), accounts: options.accounts ?? fakeAccounts(), reminders: fakeReminders(), lifecycle: options.lifecycle ?? fakeLifecycle(), credits: fakeCredits(), fixNotices: fakeFixNotices(), packs: options.packs ?? (options.fresh ? samplePacks() : fakePacks()) }} />
     </I18nProvider>,
   )
   await act(() => boot.start())
@@ -59,6 +62,49 @@ function expectWordmark(): void {
 }
 
 describe('Root', () => {
+  it('shows the pack an opening app is waiting for, by the bytes read of the size its manifest states', () => {
+    const boot = new Boot({ env: testEnv(), l1: () => 'bg', openDriver: () => new Promise(() => undefined), fetchManifest: async () => sampleManifest, fetchPack: sampleFetcher }, () => ({
+      acquire: async () => true,
+      takeOver: async () => undefined,
+      drop: () => undefined,
+    }))
+    const download = createStore<OpeningDownload | null>(null)
+    const services = { env: testEnv(), audio: fakeAudio(), afterRun: () => undefined, api: fakeApi(), accounts: fakeAccounts(), reminders: fakeReminders(), lifecycle: fakeLifecycle(), credits: fakeCredits(), fixNotices: fakeFixNotices(), packs: fakePacks() }
+    render(
+      <I18nProvider storage={{ getItem: () => 'en', setItem: () => undefined }}>
+        <Root boot={boot} download={download} services={services} />
+      </I18nProvider>,
+    )
+    // Opening with nothing to fetch (or a pack staged later, behind the open app): no bar.
+    expect(screen.getByRole('status').textContent).toBe('Opening your words…')
+    expect(screen.queryByRole('progressbar')).toBeNull()
+    act(() => download.set({ received: 0, total: 0 }))
+    expect(screen.getByRole('status').textContent).toBe('Downloading your words…')
+    expect(screen.getByRole('progressbar', { name: 'Downloading your words…' }).hasAttribute('aria-valuenow')).toBe(false)
+    act(() => download.set({ received: 300, total: 1200 }))
+    const bar = screen.getByRole('progressbar', { name: 'Downloading your words…' })
+    expect(bar.getAttribute('aria-valuenow')).toBe('300')
+    expect(bar.getAttribute('aria-valuemax')).toBe('1200')
+  })
+
+  it('lets the app update itself only where it is open: not in a tab that another tab owns, in the setup, or in memory (spec §9.1)', async () => {
+    const open = fakeLifecycle()
+    await renderRoot({ lifecycle: open })
+    expect(open.safe?.()).toBe(true)
+    cleanup()
+    const elsewhere = fakeLifecycle()
+    await renderRoot({ lifecycle: elsewhere, free: false })
+    expect(elsewhere.safe).toBeNull()
+    cleanup()
+    const fresh = fakeLifecycle()
+    await renderRoot({ lifecycle: fresh, fresh: true })
+    expect(fresh.safe?.()).toBe(false)
+    cleanup()
+    const memory = fakeLifecycle()
+    await renderRoot({ lifecycle: memory, backend: 'memory' })
+    expect(memory.safe).toBeNull()
+  })
+
   it('opens on today, in the demo', async () => {
     await renderRoot()
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('10 new words')

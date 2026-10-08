@@ -1483,6 +1483,32 @@ dialog.report textarea {
   background: var(--leaf);
 }
 
+/* A wait with nothing to measure (ProgressBar without a value): a stripe that travels, or, for a learner who asked
+   for less motion, still diagonal stripes from end to end, which read as neither a share done nor a finished bar. */
+.bar.is-indeterminate span {
+  background: repeating-linear-gradient(-45deg, var(--rose) 0 0.5rem, transparent 0.5rem 1rem);
+  border-radius: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .bar.is-indeterminate span {
+    width: 40%;
+    background: var(--rose);
+    border-radius: 999px;
+    animation: bar-travel 1.4s ease-in-out infinite;
+  }
+
+  @keyframes bar-travel {
+    from {
+      transform: translateX(-100%);
+    }
+
+    to {
+      transform: translateX(250%);
+    }
+  }
+}
+
 .units {
   margin: 0;
   padding: 0;
@@ -2493,6 +2519,20 @@ dialog.report textarea {
 
 .banners .banner p {
   margin: 0;
+}
+
+/* A run being started: the line and its bar, where the starting app's own are. */
+.study-loading {
+  max-width: 28rem;
+  margin: 20vh auto 0;
+}
+
+/* An update downloading or taking over (spec §9.1): a line and its bar. */
+.update-progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-width: 28rem;
 }
 
 .banner-actions {

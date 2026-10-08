@@ -72,6 +72,18 @@ describe('packFetcher progress (plan 11)', () => {
     ])
   })
 
+  it('measures the bytes read against the size the manifest states, whatever the transfer says of its own length', async () => {
+    // A compressed transfer's content-length is the encoded size, and a chunked one has none: neither is the pack's size.
+    for (const headers of [{ 'content-length': '2' }, {}] as Record<string, string>[]) {
+      const fetchFn: Fetch = async () => new Response(new Uint8Array(5), { headers })
+      const seen: Array<[number, number]> = []
+      await packFetcher(fetchFn, (received, total) => seen.push([received, total]))(descriptor)
+      expect(seen[0]).toEqual([0, 5])
+      expect(seen.at(-1)).toEqual([5, 5])
+      expect(seen.every(([received, total]) => total === 5 && received <= total)).toBe(true)
+    }
+  })
+
   it('falls back to arrayBuffer and reports only the start and the end when there is no readable body', async () => {
     const payload = new Uint8Array(5)
     const fetchFn: Fetch = async () =>
