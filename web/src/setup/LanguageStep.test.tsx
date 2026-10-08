@@ -121,16 +121,18 @@ describe('LanguageStep, setup mode (plan 11)', () => {
     expect(onDone).toHaveBeenCalledTimes(1)
   })
 
-  it('shows the download while the install runs: a status first, then a progress bar with values', async () => {
+  it('shows the download while the install runs: a bar that claims no share until the size is known, then one with values', async () => {
     const ctx = await setup()
     const fake = controlledPacks()
     renderWith(<LanguageStep mode="setup" onDone={() => undefined} />, { ...ctx, packs: fake.packs })
     expect(screen.queryByRole('progressbar')).toBeNull()
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue' })))
-    // Before the manifest arrives the total is unknown: the status says so, and there is no bar yet.
+    // Before the manifest arrives the size is unknown: the status says what is happening, and the bar claims no share.
     act(() => fake.packs.store.set({ phase: 'downloading', client: ctx.client, l1: 'bg', received: 0, total: 0 }))
     expect(screen.getByRole('status').textContent).toContain('Getting your words ready')
-    expect(screen.queryByRole('progressbar')).toBeNull()
+    const waiting = screen.getByRole('progressbar', { name: 'Getting your words ready' })
+    expect(waiting.hasAttribute('aria-valuenow')).toBe(false)
+    expect(screen.queryByText(/%/)).toBeNull()
     act(() => fake.packs.store.set({ phase: 'downloading', client: ctx.client, l1: 'bg', received: 50, total: 100 }))
     const bar = screen.getByRole('progressbar', { name: 'Getting your words ready' })
     expect(bar.getAttribute('aria-valuenow')).toBe('50')
@@ -138,6 +140,18 @@ describe('LanguageStep, setup mode (plan 11)', () => {
     expect(screen.getByText('50%')).toBeTruthy()
     // Nothing can be started twice meanwhile.
     expect((screen.getByRole('button', { name: 'Continue' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('shows no bar for a pack fetched behind the page: another language’s, or one nobody asked for here', async () => {
+    const ctx = await setup()
+    const fake = controlledPacks()
+    renderWith(<LanguageStep mode="setup" onDone={() => undefined} />, { ...ctx, packs: fake.packs })
+    // `watchL1` installing in the background, while this step is idle.
+    act(() => fake.packs.store.set({ phase: 'downloading', client: ctx.client, l1: 'bg', received: 50, total: 100 }))
+    expect(screen.queryByRole('progressbar')).toBeNull()
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue' })))
+    act(() => fake.packs.store.set({ phase: 'downloading', client: ctx.client, l1: 'de', received: 50, total: 100 }))
+    expect(screen.queryByRole('progressbar')).toBeNull()
   })
 
   it('says why on failure, and Try again resets and installs again (Review Focus 4)', async () => {

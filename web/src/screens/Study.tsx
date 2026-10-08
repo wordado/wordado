@@ -2,6 +2,7 @@ import { StudyRun, useClient, type RunKind } from '@wordado/client-data'
 import type { Mode } from '@wordado/core'
 import { useEffect, useState } from 'react'
 import { useApp } from '../app/context'
+import { ProgressBar } from '../app/ProgressBar'
 import { errorMessageKey } from '../errors'
 import { useT } from '../i18n/i18n'
 import { Link } from '../router'
@@ -54,6 +55,13 @@ export function Study(props: { readonly kind: RunKind; readonly mode: Mode | nul
         </Link>
       </section>
     )
-  if (!run) return <p role="status">{t('study.loading')}</p>
+  // Starting a run swaps in a pack that was fetched earlier and plans the day: nothing here has a size to measure.
+  if (!run)
+    return (
+      <section className="study study-loading">
+        <p role="status">{t('study.loading')}</p>
+        <ProgressBar label={t('study.loading')} />
+      </section>
+    )
   return <RunView key={`${kind}:${mode ?? 'mixed'}:${scopeKind ?? ''}:${scopeId ?? ''}`} run={run} kind={kind} scope={scope} />
 }

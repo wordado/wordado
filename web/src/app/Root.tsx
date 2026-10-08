@@ -1,14 +1,29 @@
-import { ClientProvider } from '@wordado/client-data'
+import { ClientProvider, type Store } from '@wordado/client-data'
 import { useT } from '../i18n/i18n'
 import { useStore } from '../useStore'
 import { App } from './App'
 import type { Boot } from './boot'
 import { AppProvider, type AppServices } from './context'
+import { ProgressBar } from './ProgressBar'
 
-/** Renders the boot state: starting, open in another tab, failed, or the app. */
-export function Root(props: { readonly boot: Boot; readonly services: Omit<AppServices, 'backend' | 'account'> }) {
+/** A pack the app is waiting for before it can open (spec §9.3): bytes read of the size its manifest states. */
+export interface OpeningDownload {
+  readonly received: number
+  readonly total: number
+}
+
+const NO_DOWNLOAD: Store<OpeningDownload | null> = { get: () => null, set: () => undefined, subscribe: () => () => undefined }
+
+/** Renders the boot state: starting (with the pack it is fetching, if any), open in another tab, failed, or the app. */
+export function Root(props: {
+  readonly boot: Boot
+  readonly services: Omit<AppServices, 'backend' | 'account'>
+  /** Set while the opening app downloads a pack; a pack fetched behind an open app is never here. */
+  readonly download?: Store<OpeningDownload | null>
+}) {
   const { t } = useT()
   const state = useStore(props.boot.store)
+  const download = useStore(props.download ?? NO_DOWNLOAD)
   switch (state.status) {
     case 'ready':
       return (
@@ -42,7 +57,8 @@ export function Root(props: { readonly boot: Boot; readonly services: Omit<AppSe
     default:
       return (
         <main className="notice">
-          <p role="status">{t('boot.starting')}</p>
+          <p role="status">{t(download ? 'boot.downloading' : 'boot.starting')}</p>
+          {download && <ProgressBar label={t('boot.downloading')} value={download.received} max={download.total} />}
         </main>
       )
   }

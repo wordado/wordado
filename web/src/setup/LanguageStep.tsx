@@ -2,6 +2,7 @@ import { useClient, useClientSnapshot } from '@wordado/client-data'
 import { isSupportedL1, SUPPORTED_L1S, type L1 } from '@wordado/core'
 import { useEffect, useRef, useState } from 'react'
 import { useApp } from '../app/context'
+import { ProgressBar } from '../app/ProgressBar'
 import { errorMessageKey } from '../errors'
 import { languageName, useT } from '../i18n/i18n'
 import { Link } from '../router'
@@ -97,10 +98,9 @@ export function LanguageStep(props: { readonly mode: 'setup' | 'change'; readonl
 
   const busy = attempt.phase === 'installing'
   const failed = attempt.phase === 'failed' ? attempt.l1 : null
-  // The bar shows only once the total is known, so `aria-valuemax` is never 0.
-  const progress =
-    busy && download.phase === 'downloading' && download.client === client && download.l1 === attempt.l1 && download.total > 0 ? download : null
-  const percent = progress
+  // Until the pack's size is known (its manifest is still being fetched) the bar only says that something is happening.
+  const progress = busy && download.phase === 'downloading' && download.client === client && download.l1 === attempt.l1 ? download : null
+  const percent = progress && progress.total > 0
     ? new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 0 }).format(Math.min(1, progress.received / progress.total))
     : null
   const changing = props.mode === 'change' && chosen !== current && !busy && failed === null
@@ -137,12 +137,12 @@ export function LanguageStep(props: { readonly mode: 'setup' | 'change'; readonl
       </p>
       {progress && (
         <div className="download-progress">
-          <div className="bar" role="progressbar" aria-label={t('setup.downloading')} aria-valuemin={0} aria-valuemax={progress.total} aria-valuenow={progress.received}>
-            <span style={{ width: `${Math.min(100, (100 * progress.received) / progress.total)}%` }} />
-          </div>
-          <p className="note" aria-hidden="true">
-            {percent}
-          </p>
+          <ProgressBar label={t('setup.downloading')} value={progress.received} max={progress.total} />
+          {percent !== null && (
+            <p className="note" aria-hidden="true">
+              {percent}
+            </p>
+          )}
         </div>
       )}
 

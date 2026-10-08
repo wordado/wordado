@@ -18,6 +18,7 @@ import { AccountMenu } from './AccountMenu'
 import { useInterfaceLocales } from './interfaceLanguage'
 import { Banners, NoticeLine } from './Banners'
 import { LanguageMenu } from './LanguageMenu'
+import { useUpdateSafety } from './updateSafety'
 
 /** The icons show only in the phone's tab bar; the label is always the link's name. */
 const NAV: readonly { readonly route: Route; readonly label: MessageKey; readonly icon: LucideIcon }[] = [
@@ -89,6 +90,7 @@ const WORDMARK = (
 export function App(props: { readonly resumed: boolean; readonly setup: boolean; onFinishSetup(): void }) {
   const { t } = useT()
   useInterfaceLocales()
+  useUpdateSafety(props.setup)
   const route = useRoute()
   const main = useRef<HTMLElement>(null)
   const first = useRef(true)

@@ -1,7 +1,8 @@
 import { act, cleanup, fireEvent, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { NotReady } from '../account/controller'
-import { fakeAccounts, fakeFixNotices, fakeLifecycle, renderWith, setup } from '../test/fixtures'
+import { renderToString } from 'react-dom/server'
+import { fakeAccounts, fakeFixNotices, fakeLifecycle, renderWith, setup, withProviders } from '../test/fixtures'
 import { Banners, SyncLine } from './Banners'
 
 afterEach(cleanup)
@@ -73,7 +74,7 @@ describe('Banners', () => {
     const accounts = fakeAccounts()
     accounts.store.set({ expired: false, notice: 'other-account' })
     renderWith(<Banners />, { ...ctx, accounts, account: ana })
-    expect(screen.getByRole('status').textContent).toContain('This device holds the progress of ana@example.com')
+    expect(screen.getByText(/This device holds the progress of ana@example.com/).closest('[role="status"]')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }))
     expect(accounts.calls).toEqual(['dismissNotice'])
   })
@@ -119,6 +120,63 @@ describe('update and install banners (spec §9.1)', () => {
     const ctx = await setup()
     renderWith(<Banners />, { ...ctx, lifecycle: fakeLifecycle({ appTooOld: true }) })
     expect(screen.getByText(/too old for the newest words or for syncing/)).toBeTruthy()
+  })
+
+  it('keeps the button while an automatic update waits for a safe moment', async () => {
+    const ctx = await setup()
+    const lifecycle = fakeLifecycle({ updateReady: true, autoUpdate: true })
+    renderWith(<Banners />, { ...ctx, lifecycle })
+    fireEvent.click(screen.getByRole('button', { name: 'Update now' }))
+    expect(lifecycle.calls).toEqual(['applyUpdate'])
+    expect(screen.queryByRole('progressbar')).toBeNull()
+  })
+
+  it('shows that the app is updating, with a bar that claims no share, and no button to press twice', async () => {
+    const ctx = await setup()
+    renderWith(<Banners />, { ...ctx, lifecycle: fakeLifecycle({ updateReady: true, applying: true }) })
+    expect(screen.getByText('Updating Wordado…')).toBeTruthy()
+    const bar = screen.getByRole('progressbar', { name: 'Updating Wordado…' })
+    expect(bar.hasAttribute('aria-valuenow')).toBe(false)
+    expect(screen.queryByRole('button', { name: 'Update now' })).toBeNull()
+  })
+
+  it('shows a new version downloading: no share claimed until its worker reports, then files cached of files listed', async () => {
+    const ctx = await setup()
+    const lifecycle = fakeLifecycle({ download: { done: 0, total: 0 } })
+    renderWith(<Banners />, { ...ctx, lifecycle })
+    expect(screen.getByText('Downloading a new version of Wordado…')).toBeTruthy()
+    expect(screen.getByRole('progressbar', { name: 'Downloading a new version of Wordado…' }).hasAttribute('aria-valuenow')).toBe(false)
+    act(() => lifecycle.store.set({ ...lifecycle.store.get(), download: { done: 12, total: 48 } }))
+    const bar = screen.getByRole('progressbar', { name: 'Downloading a new version of Wordado…' })
+    expect(bar.getAttribute('aria-valuenow')).toBe('12')
+    expect(bar.getAttribute('aria-valuemax')).toBe('48')
+    expect(screen.queryByRole('button', { name: 'Update now' })).toBeNull()
+    // A version that is needed keeps its banner and button while it downloads.
+    act(() => lifecycle.store.set({ ...lifecycle.store.get(), appTooOld: true }))
+    expect(screen.getByRole('button', { name: 'Update now' })).toBeTruthy()
+    expect(screen.getByRole('progressbar')).toBeTruthy()
+  })
+
+  it('says once that Wordado was updated, until it is dismissed', async () => {
+    const ctx = await setup()
+    const lifecycle = fakeLifecycle({ updated: true })
+    renderWith(<Banners />, { ...ctx, lifecycle })
+    expect(screen.getByText('Wordado was updated.').closest('[role="status"]')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }))
+    expect(lifecycle.calls).toEqual(['dismissUpdated'])
+    expect(screen.queryByText('Wordado was updated.')).toBeNull()
+  })
+
+  it('puts that line into a status region that was there first, empty, so that it is announced', async () => {
+    const ctx = await setup()
+    const lifecycle = fakeLifecycle({ updated: true })
+    // The first render, before any effect has run: the region, and nothing in it yet.
+    const first = renderToString(withProviders(<Banners />, { ...ctx, lifecycle }))
+    expect(first).toContain('<div role="status"></div>')
+    expect(first).not.toContain('Wordado was updated.')
+    // Nothing to say: the region stays, empty.
+    renderWith(<Banners />, { ...ctx, lifecycle: fakeLifecycle() })
+    expect(document.querySelector('.banners > [role="status"]:empty')).toBeTruthy()
   })
 
   it('offers installation, and "Not now"', async () => {
