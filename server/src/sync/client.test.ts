@@ -8,7 +8,9 @@ import {
   readPulledXp,
   readFlags,
   readSettings,
+  readToLearn,
   setFlag,
+  setToLearn,
   SyncEngine,
   type AnswerInput,
   type SyncTransport,
@@ -81,6 +83,39 @@ describe('client-data against the real server', () => {
     expect(await readPulledXp(a.db.driver)).toEqual(await readPulledXp(b.db.driver))
     expect((await readPulledXp(a.db.driver))?.total).toBe(40)
   })
+  it('carries the words a learner chose to learn to the account and to a second device, and a mark taken back (spec §7.4)', async () => {
+    const env = testEnv(Date.now())
+    const h = harness({ now: () => env.now() })
+    const session = await h.signIn()
+    const a = await device(session, env)
+    const b = await device(session, env)
+    // Chosen offline on two devices, one of them on a word that is also set aside.
+    await a.db.transaction((tx) => setToLearn(tx, 'c:bread-1' as WordId, env.now()))
+    await a.db.transaction((tx) => setFlag(tx, 'c:bread-1' as WordId, 'suspended'))
+    env.advance(1_000)
+    await b.db.transaction((tx) => setToLearn(tx, 'c:milk-1' as WordId, env.now()))
+    expect(await a.engine.sync()).toBe('synced')
+    expect(await b.engine.sync()).toBe('synced')
+    expect(await a.engine.sync()).toBe('synced')
+    expect([...(await readToLearn(a.db.driver)).keys()].sort()).toEqual(['c:bread-1', 'c:milk-1'])
+    expect(await readToLearn(b.db.driver)).toEqual(await readToLearn(a.db.driver))
+    // The mark and the flag are two documents: neither hides the other.
+    expect([...(await readFlags(b.db.driver))]).toEqual([['c:bread-1', 'suspended']])
+    await b.db.transaction((tx) => setToLearn(tx, 'c:bread-1' as WordId, null))
+    expect(await b.engine.sync()).toBe('synced')
+    expect(await a.engine.sync()).toBe('synced')
+    expect([...(await readToLearn(a.db.driver)).keys()]).toEqual(['c:milk-1'])
+    // A reinstall: a new device of the same account gets the mark back.
+    const c = await device(session, env)
+    expect(await c.engine.sync()).toBe('synced')
+    expect([...(await readToLearn(c.db.driver)).keys()]).toEqual(['c:milk-1'])
+    const stored = await h.deps.db.query<{ key: string; deleted: boolean }>(`select key, deleted from document where user_id = $1 and type = 'word_learn' order by key`, [session.userId])
+    expect(stored).toEqual([
+      { key: 'c:bread-1', deleted: true },
+      { key: 'c:milk-1', deleted: false },
+    ])
+  })
+
   it('syncs an outbox holding more flags than a page takes and a two-hour answer, and the server keeps them all', async () => {
     const env = testEnv(Date.now())
     const h = harness({ now: () => env.now() })
