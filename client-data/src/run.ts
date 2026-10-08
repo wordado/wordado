@@ -1,4 +1,4 @@
-import { buildItem, corpusWordId, gradeAnswer, practiceWords, themeEntries, type Grade, type Mode, type StudyItem, type WordFlag, type WordId } from '@wordado/core'
+import { buildItem, corpusWordId, gradeAnswer, isSkippedLevel, practiceWords, themeEntries, type Grade, type Mode, type StudyItem, type WordFlag, type WordId } from '@wordado/core'
 import type { Client } from './client'
 import type { ClientEnv } from './env'
 import { createStore, type Store } from './store'
@@ -79,16 +79,24 @@ export interface PracticeScope {
   readonly id: string
 }
 
+/** What a scoped practice draws from. */
+export interface ScopePool {
+  /** The words of the unit or theme. */
+  readonly within: ReadonlySet<WordId>
+  /** A unit of a level the learner skipped (spec §7.2): all its words are used, started or not. */
+  readonly unstarted: boolean
+}
+
 /** The words of the unit or theme being practised; undefined for practice over everything, and for one the corpus does not hold. */
-export function scopeWords(client: Client, scope: PracticeScope | undefined): ReadonlySet<WordId> | undefined {
-  const { corpus } = client.snapshot
+export function scopePool(client: Client, scope: PracticeScope | undefined): ScopePool | undefined {
+  const { corpus, settings } = client.snapshot
   if (!scope || !corpus) return undefined
   if (scope.kind === 'unit') {
     const unit = corpus.units.find((u) => u.unitId === scope.id)
-    return unit && new Set(unit.wordIds)
+    return unit && { within: new Set(unit.wordIds), unstarted: isSkippedLevel(unit.level, settings.declaredLevel) }
   }
   if (!corpus.themes.some((t) => t.themeId === scope.id)) return undefined
-  return new Set(themeEntries(corpus, scope.id).map((e) => corpusWordId(e.entryId)))
+  return { within: new Set(themeEntries(corpus, scope.id).map((e) => corpusWordId(e.entryId))), unstarted: false }
 }
 
 const messageOf = (err: unknown): string => (err instanceof Error ? err.message : String(err))
@@ -100,7 +108,8 @@ const messageOf = (err: unknown): string => (err instanceof Error ? err.message 
  * nothing is due now. A practice run draws PRACTICE_RUN_SIZE introduced words
  * (of one unit or theme, when `scope` names it), leaning towards the weaker
  * ones, and records them as practice. It leaves out the words today's session
- * serves unless nothing else is left.
+ * serves unless nothing else is left. A unit of a skipped level is practised
+ * whole: its words need not be started, and practising them starts none.
  */
 export class StudyRun {
   readonly store: Store<RunSnapshot> = createStore(INITIAL)
@@ -132,8 +141,7 @@ export class StudyRun {
     if (options.kind === 'practice') {
       const { states, flags, plan, corpus } = client.snapshot
       const exclude = new Set<WordId>([...(plan?.reviews ?? []), ...(plan?.newWords ?? [])])
-      const within = scopeWords(client, options.scope)
-      run.practiceQueue = practiceWords({ states, flags, retired: corpus?.retired ?? new Set(), exclude, ...(within && { within }), count: PRACTICE_RUN_SIZE, rng: env.rng })
+      run.practiceQueue = practiceWords({ states, flags, retired: corpus?.retired ?? new Set(), exclude, ...scopePool(client, options.scope), count: PRACTICE_RUN_SIZE, rng: env.rng })
     }
     run.advance()
     return run
@@ -320,7 +328,8 @@ export class StudyRun {
         // Finished meanwhile: the count is already 0 and stays put, not recomputed from a queue this run no longer serves.
         remaining: this.finished ? s.remaining : this.queue().length,
         dayCompleted: s.dayCompleted || result.dayCompleted,
-        unlocked: [...s.unlocked, ...result.unlocked],
+        // Practice introduces nothing, so it unlocks nothing: what its answer persisted was owed from before (a change of level).
+        unlocked: practice ? s.unlocked : [...s.unlocked, ...result.unlocked],
         error: null,
       })
       return true

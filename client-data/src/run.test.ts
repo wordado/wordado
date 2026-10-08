@@ -1,4 +1,4 @@
-import { corpusWordId, DAY_MS, Grade, RELEARN_DELAY_MS, themeEntries, type Mode, type WordId } from '@wordado/core'
+import { corpusWordId, DAY_MS, Grade, RELEARN_DELAY_MS, themeEntries, XP_AMOUNTS, type Mode, type WordId } from '@wordado/core'
 import { describe, expect, it, vi } from 'vitest'
 import { ITEM_SETTLE_MS, PRACTICE_RUN_SIZE, StudyRun, type RunOptions } from './run'
 import { openSampleClient } from './testing/sample'
@@ -157,6 +157,71 @@ describe('StudyRun', () => {
     // A larger unit still gives a run of the usual size; a unit with nothing started gives none.
     expect((await StudyRun.start(client, env, options({ kind: 'practice', scope: { kind: 'unit', id: first!.unitId } }))).snapshot.remaining).toBe(PRACTICE_RUN_SIZE)
     expect((await StudyRun.start(client, env, options({ kind: 'practice', scope: { kind: 'unit', id: third!.unitId } }))).snapshot.phase).toBe('done')
+  })
+
+  it('draws the practice of a skipped level’s unit from all its words, and an answer starts none of them (spec §7.2, §7.4)', async () => {
+    const env = testEnv()
+    const client = await openSampleClient(env)
+    // Three words of the first unit are started; then the learner declares A2, and the whole of A1 is skipped.
+    for (const wordId of client.snapshot.plan!.newWords.slice(0, 3)) {
+      await client.answer({ wordId, mode: 'flashcard', direction: 'en_to_l1', grade: Grade.Good, latencyMs: 2_000, practice: false })
+    }
+    env.advance(3_600_000)
+    await client.updateSettings({ declaredLevel: 'A2' })
+    const [first, second] = client.snapshot.corpus!.units
+    expect(client.snapshot.progress!.levels.A1).toEqual({ kind: 'skipped' })
+    const before = client.snapshot
+    expect(before.states.size).toBe(3)
+    for (const unit of [first!, second!]) {
+      const seen: WordId[] = []
+      const run = await StudyRun.start(client, env, options({ kind: 'practice', scope: { kind: 'unit', id: unit.unitId } }))
+      expect(run.snapshot.remaining).toBe(PRACTICE_RUN_SIZE)
+      for (let guard = 0; guard < 40 && run.snapshot.item; guard += 1) {
+        const { item, phase } = run.snapshot
+        if (!seen.includes(item.wordId)) seen.push(item.wordId)
+        env.advance(ITEM_SETTLE_MS)
+        if (item.mode === 'flashcard') {
+          run.reveal()
+          env.advance(ITEM_SETTLE_MS)
+          await run.rate(Grade.Again)
+        } else if (phase === 'prompt') await run.choose(item.answerIndex)
+        else run.next()
+      }
+      expect(run.snapshot).toMatchObject({ phase: 'done', answered: PRACTICE_RUN_SIZE, unlocked: [] })
+      expect(seen).toHaveLength(PRACTICE_RUN_SIZE)
+      expect(seen.every((wordId) => unit.wordIds.includes(wordId))).toBe(true)
+      expect(seen.some((wordId) => !before.states.has(wordId))).toBe(true)
+    }
+    // Nothing was started or introduced, and the path, the plan and the figures stand as they were.
+    const after = client.snapshot
+    expect(after.states).toEqual(before.states)
+    expect(after.plan).toEqual(before.plan)
+    expect(after.path).toEqual(before.path)
+    expect(after.progress!.levels).toEqual(before.progress!.levels)
+    expect(after.progress!.units).toEqual(before.progress!.units)
+    expect(after.progress!.tiers).toEqual(before.progress!.tiers)
+    // Each answer is a practice event at the practice rate.
+    expect(after.xp.total - before.xp.total).toBe(2 * PRACTICE_RUN_SIZE * XP_AMOUNTS.practice)
+    // Practice over everything, and a theme's, still keep to the three started words.
+    expect((await StudyRun.start(client, env, options({ kind: 'practice' }))).snapshot.remaining).toBe(3)
+    const theme = (await StudyRun.start(client, env, options({ kind: 'practice', scope: { kind: 'theme', id: 'daily-life' } }))).snapshot.remaining
+    expect(theme).toBe(themeEntries(client.snapshot.corpus!, 'daily-life').filter((e) => before.states.has(corpusWordId(e.entryId))).length)
+  })
+
+  it('leaves a word set aside out of a skipped level’s unit, and sets an unstarted word aside from the run', async () => {
+    const env = testEnv()
+    const client = await openSampleClient(env)
+    await client.updateSettings({ declaredLevel: 'A2' })
+    const unit = client.snapshot.corpus!.units[0]!
+    for (const wordId of unit.wordIds.slice(0, unit.wordIds.length - 2)) await client.setFlag(wordId, 'known')
+    const run = await StudyRun.start(client, env, options({ kind: 'practice', mode: 'flashcard', scope: { kind: 'unit', id: unit.unitId } }))
+    expect(run.snapshot.remaining).toBe(2)
+    const wordId = run.snapshot.item!.wordId
+    expect(unit.wordIds.slice(-2)).toContain(wordId)
+    await run.setAside('suspended')
+    expect(client.snapshot.flags.get(wordId)).toBe('suspended')
+    expect(run.snapshot).toMatchObject({ setAside: 1, remaining: 1 })
+    expect(client.snapshot.states.size).toBe(0)
   })
 
   it('never starts empty while the scope has started words: when all are due today, practice uses them and leaves the schedule alone', async () => {

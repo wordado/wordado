@@ -50,6 +50,8 @@ describe('SyncEngine', () => {
     expect(a.learner.localEvents).toEqual([])
     expect(a.learner.marks.get(a.learner.deviceId)).toBe(2)
     expect(a.learner.states.get('c:hello-1')?.reps).toBe(1)
+    // A practice answer for a word never started (a skipped level's unit, spec §7.4) is accepted and starts nothing.
+    expect(a.learner.states.has('c:water-1')).toBe(false)
     expect(a.engine.status).toMatchObject({ phase: 'idle', pendingEvents: 0, failures: 0, lastError: null, upgradeRequired: false })
     expect(a.engine.status.lastSyncAt).toBe(env.now())
     expect(await readPulledXp(a.db.driver)).toEqual({ total: 12, utcDay: expect.any(Number), today: 12 })
