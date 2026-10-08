@@ -27,7 +27,8 @@ GitHub environments or with Cloudflare.
 | GitHub environment | `preview` | `production` (deploys from `main` only) |
 
 Shared: the R2 bucket `wordado-content` (Western Europe) at `https://content.wordado.com`, readable from
-both addresses, with the sample pack published; the rate-limit rule on `/v1/sync/*`; `main` protected.
+both addresses, with the corpus published by the content repository's **Corpus** workflow (version 6 on 2026-10-08,
+packs for bg, de and es); the rate-limit rule on `/v1/sync/*`; `main` protected.
 Sign-in, since 2026-09-27: Resend sends codes from `codes@wordado.com` (a sending-only key limited to
 wordado.com), and Google's app (redirect `https://app.wordado.com/api/auth/callback/google`) is in **Testing**: only its listed test users can sign in with Google, until the privacy policy is final (roadmap).
 Mail DNS, since 2026-09-27: DMARC is `v=DMARC1; p=none; rua=mailto:<id>@dmarc-reports.cloudflare.net;`, its

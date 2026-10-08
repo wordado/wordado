@@ -85,7 +85,8 @@ awaiting confirmation. §16 lists every such change and its status.
 The full product is described first; the MVP subset follows.
 
 - **MVP (Phase 1a):** web client only; Bulgarian; A1–B1; flashcard, multiple
-  choice, listening by selection, matching. See §14.
+  choice, listening by selection, matching. As built: Bulgarian, German and
+  Spanish, A1–C1. See §14.
 - **CEFR levels:** A1, A2, B1, B2, C1. (C2 is out of scope.)
 - **Native languages (L1):** Bulgarian, Spanish, German, French, Russian.
   Bulgarian is the lead language and ships first (§14).
@@ -1580,7 +1581,7 @@ alone.
 The **app's own interface** is localised into each supported L1 and English.
 Interface strings ship with the app, not the corpus pack; the learner's UI
 language defaults to their L1 and can be changed independently of it. Phase 1a
-ships Bulgarian and English.
+ships Bulgarian and English; as built, also German and Spanish (§14).
 
 The interface offers the learner's **own L1 and English**, nothing else (decided
 2026-10-02): once a pack is installed, the language menu and Settings list just
@@ -1679,20 +1680,26 @@ Bulgarian and Russian are Cyrillic-script languages. Consequences:
 The release plan with rationale per item is in
 `docs/research/2026-09-20-release-plan.html`.
 
-### Phase 1a — Bulgarian beta
+### Phase 1a — Beta (planned for Bulgarian; built for Bulgarian, German and Spanish)
 
-This is the MVP: the whole Phase 1 product, for one L1. Bulgarian ships first
-and gets the highest content quality bar; the other four L1s are not a
-dependency for learning whether the core loop works.
+This is the MVP: the whole Phase 1 product. It was planned for one L1:
+Bulgarian ships first and gets the highest content quality bar; the other four
+L1s are not a dependency for learning whether the core loop works. As built,
+German and Spanish joined it: each was a new pack with no code change, so the
+three L1s were published together, in the same corpus versions (2026-10-08;
+§16).
 
 - Accounts with passwordless sign-in (Google, emailed code), the age gate, and
   a demo mode that carries over on sign-up (†). Self-service account deletion
   and a JSON data export (§11).
 - Corpus A1–B1, Bulgarian translations, audio to the quality bar (§5.4).
+  As published, the corpus runs from A1 to C1 for Bulgarian, German and
+  Spanish (about 8,900 entries in corpus version 6).
   The beta opens on AI-reviewed content, with native-speaker checks of the
   rows the AI review flags; full native-speaker review continues during the
   beta and learner reports feed it (§5.4, §8.10).
-  Interface in Bulgarian and English (§11.2).
+  Interface in Bulgarian and English (§11.2); as built, also in German and
+  Spanish.
 - Game modes: flashcard, multiple choice, listening by selection, matching
   (practice only). Mode escalation from recognition to flashcard recall (§7.5).
 - FSRS with the desired-retention setting (§7.1); the optional placement test
@@ -1723,13 +1730,17 @@ stays: it is small, and retrofitting it means a sync-protocol change.
 - Spanish, German, French, and Russian translations for A1–B1, each released
   when its native-speaker review is complete. The general launch also waits for
   full native-speaker review of the translations of every L1 it ships, the
-  beta's included (§5.4).
+  beta's included (§5.4). German and Spanish are already published, on
+  AI-reviewed content like Bulgarian (see Phase 1a); what remains for them is
+  the native-speaker review. French and Russian have not started.
 - Corpus B2–C1 in every L1 shipped so far (moved up from Phase 2 on
-  2026-10-02; §16). Later L1s get B2–C1 with their A1–B1. No code change: a new pack per
+  2026-10-02; §16). Published for Bulgarian, German and Spanish since corpus
+  version 4 (2026-10-03). Later L1s get B2–C1 with their A1–B1. No code change: a new pack per
   L1. Russian ships last (R11).
 - iOS and Android apps (Expo), built alongside the language releases and
   shipped when ready, with Sign in with Apple. They are views and a
-  `SqlDriver` over the shared `core` and `client-data`.
+  `SqlDriver` over the shared `core` and `client-data`. Postponed on
+  2026-10-01: the web beta comes first, and the apps have not started (§16).
 
 ### Phase 2
 
@@ -2071,6 +2082,19 @@ owner.
   the data export being prepared each show the busy bar. None of them can be
   measured, so none shows a share done. Background sync keeps its status line.
 
+**2026-10-08 — phasing brought in line with what shipped.** No new decision:
+§14 now says what was built, where it differs from the plan.
+
+- **L1 rollout (§14):** the beta was planned for Bulgarian alone. German and
+  Spanish were built and published with it, in the same corpus versions, so
+  Phase 1a serves three L1s and Phase 1b keeps French and Russian. The general
+  launch still waits for the native-speaker review of every L1.
+- **Levels (§14):** B2–C1 is published for all three L1s; corpus version 6
+  (2026-10-08) has about 8,900 entries from A1 to C1.
+- **Interface (§11.2, §14):** English, Bulgarian, German and Spanish.
+- **Mobile apps (§14):** postponed by the product owner on 2026-10-01. They
+  stay in Phase 1b and have not started.
+
 ### Approval status
 
 Every change since the original approval that alters a settled product
@@ -2088,6 +2112,8 @@ decision, the phasing, or scope. † in the body marks those still pending.
 | † Phases chosen for the research improvements: new Phase 1 modes, desired retention, import moved up, images, extra sentences (§14) | Pending |
 | B2–C1 corpus moved from Phase 2 to Phase 1b (§14) | Decided by the product owner, 2026-10-02 |
 | Beta on AI-reviewed content; native-speaker review gates the general launch, not the beta (§5.4, §8.10, §14) | Decided by the product owner, 2026-10-04 |
+| German and Spanish published with the Bulgarian beta (§14) | Shipped; corpus version 6 on 2026-10-08 carries all three |
+| iOS and Android apps postponed; the web beta comes first (§14) | Decided by the product owner, 2026-10-01 |
 | † Scope added to Phase 1a by the second review: error reporting, reminders, known/suspended words, account deletion, data export, accessibility target, interface localisation (§14) | Pending |
 
 ---
