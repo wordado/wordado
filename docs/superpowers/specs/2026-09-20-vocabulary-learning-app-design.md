@@ -1284,26 +1284,35 @@ nothing is in progress and automatic updates are on*.
   board or placement test is on screen (the run's end screen included); the
   first-run setup, the sign-in and the change of native language are not on
   screen; no dialog or menu is open and nothing is being typed; no pack
-  install, sync, export, audio download or sign-out is in flight; and no
-  account notice is waiting to be read. Otherwise it waits, with the banner
-  and its button, and looks again every few seconds and whenever the screen
-  changes. On the in-memory fallback it is never safe: that learner updates
-  from the banner.
+  install, sync, export, audio download, reminder change or sign-out is in
+  flight, wherever the learner has gone since starting it (an export holds
+  the update a few seconds past the file's save); and no account notice is
+  waiting to be read. Otherwise it waits, with the banner and its button, and
+  looks again after 2, 5 and 15 seconds, then every 30, from the start
+  whenever the screen changes, and not at all while the page is hidden. Where
+  no moment can be safe — the in-memory fallback, a tab that another tab
+  owns, an app that failed to open — it neither updates nor looks: that
+  learner updates from the banner.
 - *Once.* One automatic attempt per page. If the waiting version has not taken
   control within about twenty seconds the app gives up and the banner offers
   the update again; a version that takes control after a run has begun
-  reloads only when the run is left. A tab does not update itself twice within
-  ten minutes. After an automatic update the app says "Wordado was updated."
-  once.
+  reloads only when the run is left, and until then the banner and its button
+  are shown, not a progress bar. Switching the setting off cancels a request
+  of the app's own that is still under way. A tab does not update itself twice
+  within ten minutes, by its own record or, failing that, the device's; a page
+  that was reloaded and finds no record of its tab at all (storage refused)
+  does not update itself. A clock set back is read as time gone by. After an
+  automatic update the app says "Wordado was updated." once.
 - *Looking for a new version.* Besides the browser's own check at each load,
   the app asks when it returns to the foreground (the page becomes visible, or
   the device comes online) and about hourly while open, never more often than
-  every five minutes; a failed check is ignored.
+  every five minutes; a failed check is ignored and does not count towards
+  the five minutes.
 - *Progress.* While a new version downloads, the banner area shows a bar: the
   files its worker has cached of those it lists (the list gives no sizes, so
   files, not bytes). While the app moves to it, and wherever else nothing can
   be measured (a run being started), the bar only says that something is
-  happening. A corpus pack the app is waiting for — at the first run, on a
+  happening, without motion for a learner who asked for less. A corpus pack the app is waiting for — at the first run, on a
   change of native language, and when a launch has a pack to fetch — shows the
   bytes read of the size its manifest states; a pack staged behind the open
   app (§9.3) shows nothing.
@@ -1745,6 +1754,9 @@ resolved when the implementation plan is written.
 - Monetisation, in its own specification, outside this repository.
 - Image sourcing (generated or licensed) and the list of entries that get one.
 - Tokenisation and lemmatisation approach for paste-text capture.
+- App updates (§9.1): a second tab left open keeps its old scripts under the
+  new service worker until it is reloaded, and the screen shown when the app
+  fails to open offers no update. Whether either needs more than a reload.
 
 **Legal review, required before the corpus pipeline and enrichment are built:**
 
