@@ -5,6 +5,7 @@ import { useState, type ReactNode } from 'react'
 import { localized, useT, type MessageKey } from '../i18n/i18n'
 import { Link } from '../router'
 import { FlagControls } from '../study/FlagControls'
+import { PlayWord } from '../study/RunView'
 import { levelStatus, levelToOpen, unitsAtFirst, type LevelStatus, type UnitStatus } from './pathFolding'
 import { todayCounts } from './today'
 
@@ -209,6 +210,7 @@ function UnitItem(props: {
           if (!entry) return null
           return (
             <li key={wordId}>
+              <PlayWord entry={entry} inList />
               <span lang="en" className="word-head">
                 {entry.headword}
               </span>

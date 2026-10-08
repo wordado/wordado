@@ -140,6 +140,8 @@ export const bg: Messages = {
   'settings.audio': 'Звук и упражнения за слушане',
   'settings.latency': 'Бавните отговори да се броят за „трудно“',
   'settings.latencyHint': 'Изключете, за да се оценява само дали отговорът е верен, а не колко бързо е даден.',
+  'settings.autoContinue': 'Автоматично продължаване след верен отговор',
+  'settings.autoContinueHint': 'Следващият въпрос идва сам след верен отговор. След грешен отговор винаги ви изчаква. Важи само за това устройство.',
   'settings.saveFailed': 'Промяната не беше запазена: {message}',
 
   'settings.audioDownload': 'Звук за учене офлайн',
@@ -374,6 +376,7 @@ export const bg: Messages = {
   'path.open': 'Отворен',
   'path.words': { one: '{count} дума', other: '{count} думи' },
   'path.wordNew': 'Незапочната',
+  'path.wordSkipped': 'Пропусната',
   'path.wordToLearn': 'За учене',
   'path.wordActions': 'Действия с думата: {word}',
   'path.levelSkipped': 'Пропуснато',

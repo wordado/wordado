@@ -7,12 +7,16 @@ import { fakeApi } from '../test/fakeApi'
 import { fakeAccounts, fakeAudio, fakeLifecycle, fakeReminders, renderWith, setup } from '../test/fixtures'
 import { saveFile } from '../download'
 import { SAVE_HOLD_MS } from '../app/updateSafety'
+import { AUTO_CONTINUE_KEY } from '../study/autoContinue'
 import { Settings } from './Settings'
 
 vi.mock('../download', () => ({ saveFile: vi.fn() }))
 
 beforeEach(() => window.history.replaceState(null, '', '/settings'))
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  window.localStorage.removeItem(AUTO_CONTINUE_KEY)
+})
 
 const ana = { userId: 'u1', email: 'ana@example.com' }
 
@@ -123,6 +127,30 @@ describe('Settings: studying (spec §7.1, §7.4, §11.1)', () => {
     await act(async () => fireEvent.click(screen.getByRole('checkbox', { name: 'Play audio, and include listening exercises' })))
     await act(async () => fireEvent.click(screen.getByRole('checkbox', { name: 'Count slow answers as “hard”' })))
     expect(ctx.client.snapshot.settings).toMatchObject({ retention: 'intensive', audio: false, latencyGrading: false })
+  })
+
+  it('continues automatically after a right answer unless the learner switches that off, on this device only', async () => {
+    const ctx = await setup()
+    const synced = ctx.client.snapshot.settings
+    renderWith(<Settings section="study" />, ctx)
+    const toggle = screen.getByRole('checkbox', { name: 'Continue automatically after a right answer' }) as HTMLInputElement
+    expect(toggle.checked).toBe(true)
+    expect(document.getElementById(toggle.getAttribute('aria-describedby')!)?.textContent).toBe(
+      'The next question comes by itself after a right answer. A wrong answer always waits for you. This applies to this device only.',
+    )
+    fireEvent.click(toggle)
+    expect(toggle.checked).toBe(false)
+    expect(window.localStorage.getItem(AUTO_CONTINUE_KEY)).toBe('off')
+    expect(page().getByRole('status').textContent).toBe('Saved')
+    // No synced setting changed.
+    expect(ctx.client.snapshot.settings).toBe(synced)
+    cleanup()
+    renderWith(<Settings section="study" />, ctx)
+    const again = screen.getByRole('checkbox', { name: 'Continue automatically after a right answer' }) as HTMLInputElement
+    expect(again.checked).toBe(false)
+    fireEvent.click(again)
+    expect(again.checked).toBe(true)
+    expect(window.localStorage.getItem(AUTO_CONTINUE_KEY)).toBeNull()
   })
 
   it('sets and clears a daily goal', async () => {

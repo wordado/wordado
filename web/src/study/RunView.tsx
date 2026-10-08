@@ -1,5 +1,5 @@
 import { useClient, useClientSnapshot, type RunKind, type RunSnapshot, type StudyRun } from '@wordado/client-data'
-import { entryClips, Grade, isAboveLevel, type ChoiceItem, type CorpusEntry } from '@wordado/core'
+import { entryClips, Grade, isAboveLevel, type ChoiceItem, type CorpusEntry, type StudyItem } from '@wordado/core'
 import { BookPlus, Check, Clock, Ellipsis, Flag, Flame, LockOpen, Play, Volume2, X } from 'lucide-react'
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { useApp } from '../app/context'
@@ -11,6 +11,7 @@ import { GRADE_LABEL } from '../labels'
 import { Link } from '../router'
 import type { PracticeScopeView } from '../screens/practiceScope'
 import { useStore } from '../useStore'
+import { AUTO_CONTINUE_MS, readAutoContinue } from './autoContinue'
 import { Headword, Translation } from './Headword'
 import { keyAction } from './keys'
 import { ReportDialog } from './ReportDialog'
@@ -24,6 +25,8 @@ export function RunView(props: { readonly run: StudyRun; readonly kind: RunKind;
   const snapshot = useStore(run.store)
   const { settings, states, toLearn } = useClientSnapshot()
   const [reporting, setReporting] = useState(false)
+  // The item whose ⋯ menu the learner opened: it does not move on by itself, or a report would be about the next word.
+  const [held, setHeld] = useState<StudyItem | null>(null)
   const card = useRef<HTMLDivElement>(null)
 
   // Keys work anywhere on the page, except in a form field or while the report dialog is open.
@@ -80,6 +83,7 @@ export function RunView(props: { readonly run: StudyRun; readonly kind: RunKind;
   const frame = (children: ReactNode) => (
     <div className="card" ref={card} tabIndex={-1} data-mode={item.mode} data-phase={snapshot.phase}>
       <MoreMenu
+        onOpen={() => setHeld(item)}
         onKnown={settingAside ? () => void run.setAside('known') : null}
         onNotNow={settingAside ? () => void run.setAside('suspended') : null}
         onReport={() => setReporting(true)}
@@ -117,7 +121,7 @@ export function RunView(props: { readonly run: StudyRun; readonly kind: RunKind;
           {snapshot.answered} / {total}
         </p>
       </div>
-      {item.mode === 'flashcard' ? <Flashcard run={run} snapshot={snapshot} entry={item.entry} frame={frame} /> : <Choice run={run} snapshot={snapshot} item={item} frame={frame} />}
+      {item.mode === 'flashcard' ? <Flashcard run={run} snapshot={snapshot} entry={item.entry} frame={frame} /> : <Choice run={run} snapshot={snapshot} item={item} frame={frame} stays={held === item || canLearn} />}
       <p className="note keys-hint">{t('study.keysHint')}</p>
       {reporting && <ReportDialog wordId={item.wordId} entry={item.entry} onClose={() => setReporting(false)} />}
     </section>
@@ -146,7 +150,7 @@ function LearnToggle(props: { readonly headword: string; readonly on: boolean; o
 }
 
 /** Setting the word aside and reporting it: rarer than answering, so behind the card's ⋯ button. */
-function MoreMenu(props: { readonly onKnown: (() => void) | null; readonly onNotNow: (() => void) | null; readonly onReport: () => void }) {
+function MoreMenu(props: { readonly onOpen: () => void; readonly onKnown: (() => void) | null; readonly onNotNow: (() => void) | null; readonly onReport: () => void }) {
   const { t } = useT()
   const { open, close, root, trigger, onKeyDown, triggerProps, panelId } = usePopover()
   const choose = (action: () => void) => () => {
@@ -155,7 +159,17 @@ function MoreMenu(props: { readonly onKnown: (() => void) | null; readonly onNot
   }
   return (
     <div className="card-more" ref={root} onKeyDown={onKeyDown}>
-      <button ref={trigger} type="button" className="card-more-button" aria-label={t('study.more')} {...triggerProps}>
+      <button
+        ref={trigger}
+        type="button"
+        className="card-more-button"
+        aria-label={t('study.more')}
+        {...triggerProps}
+        onClick={() => {
+          if (!open) props.onOpen()
+          triggerProps.onClick()
+        }}
+      >
         <Ellipsis aria-hidden="true" size={22} />
       </button>
       {open && (
@@ -188,8 +202,11 @@ function MoreMenu(props: { readonly onKnown: (() => void) | null; readonly onNot
   )
 }
 
-/** Plays the word on a flashcard, offered only when its clip can play now (spec §11.1). */
-function PlayWord(props: { readonly entry: CorpusEntry }) {
+/**
+ * Plays the word on a flashcard, or beside the headword of a multiple-choice question; offered only when its clip
+ * can play now (spec §11.1). `inList`, it is one of many (the path's word list): smaller, and its name says which word.
+ */
+export function PlayWord(props: { readonly entry: CorpusEntry; readonly inList?: boolean }) {
   const { t } = useT()
   const { audio } = useApp()
   const { corpus, settings } = useClientSnapshot()
@@ -205,8 +222,13 @@ function PlayWord(props: { readonly entry: CorpusEntry }) {
   }
   return (
     <>
-      <button type="button" className="play-word" aria-label={t('study.play')} onClick={play}>
-        <Volume2 aria-hidden="true" size={24} strokeWidth={2} />
+      <button
+        type="button"
+        className={props.inList ? 'play-word in-list' : 'play-word'}
+        aria-label={props.inList ? t('flag.action', { action: t('study.play'), word: props.entry.headword }) : t('study.play')}
+        onClick={play}
+      >
+        <Volume2 aria-hidden="true" size={props.inList ? 20 : 24} strokeWidth={2} />
       </button>
       {failed && <p className="note">{t('study.audioFailed')}</p>}
     </>
@@ -308,7 +330,14 @@ function useListening(item: ChoiceItem, run: StudyRun): { replay: () => void; fa
   return { replay: play, failed }
 }
 
-function Choice(props: { readonly run: StudyRun; readonly snapshot: RunSnapshot; readonly item: ChoiceItem; readonly frame: (children: ReactNode) => ReactNode }) {
+function Choice(props: {
+  readonly run: StudyRun
+  readonly snapshot: RunSnapshot
+  readonly item: ChoiceItem
+  readonly frame: (children: ReactNode) => ReactNode
+  /** The feedback has something to act on (the ⋯ menu was opened, or "Learn this word" is offered): it waits for Continue. */
+  readonly stays: boolean
+}) {
   const { t } = useT()
   const { corpus } = useClientSnapshot()
   const { run, snapshot, item } = props
@@ -316,9 +345,21 @@ function Choice(props: { readonly run: StudyRun; readonly snapshot: RunSnapshot;
   const listening = item.mode === 'listening_select'
   const { replay, failed } = useListening(item, run)
   const feedback = snapshot.phase === 'feedback' ? snapshot.feedback : null
-  const continueButton = useRef<HTMLButtonElement>(null)
+  // This device's choice, as it was when the run reached its first question.
+  const [autoContinue] = useState(() => readAutoContinue())
+  // A right answer moves on by itself (spec §8.1); a wrong one waits, so the learner can read the answer.
+  const movesOn = feedback !== null && feedback.correct && autoContinue && !props.stays
   useEffect(() => {
-    if (feedback) continueButton.current?.focus()
+    if (!movesOn) return
+    // `next` only leaves the feedback: the answer was recorded when it was chosen. Cleared when the learner moves on first.
+    const timer = setTimeout(() => run.next(), AUTO_CONTINUE_MS)
+    return () => clearTimeout(timer)
+  }, [movesOn, feedback, run])
+  const sheet = useRef<HTMLDivElement>(null)
+  const continueButton = useRef<HTMLButtonElement>(null)
+  // The option that had focus is disabled now: Continue takes it, or the feedback itself when there is no button.
+  useEffect(() => {
+    if (feedback) (continueButton.current ?? sheet.current)?.focus()
   }, [feedback])
   const showsTranslations = !listening && item.direction === 'en_to_l1'
   const answerText = showsTranslations ? item.entry.translations[0] : item.entry.headword
@@ -338,12 +379,13 @@ function Choice(props: { readonly run: StudyRun; readonly snapshot: RunSnapshot;
         ) : item.direction === 'en_to_l1' ? (
           <>
             <Headword entry={item.entry} />
+            <PlayWord entry={item.entry} />
             <p className="instruction">{t('study.chooseTranslation')}</p>
           </>
         ) : (
           <>
             <p className="prompt-text">
-              <Translation entry={item.entry} lang={l1} />
+              <Translation entry={item.entry} lang={l1} stacked />
             </p>
             <p className="instruction">{t('study.chooseWord')}</p>
           </>
@@ -366,16 +408,24 @@ function Choice(props: { readonly run: StudyRun; readonly snapshot: RunSnapshot;
                   <span className="option-key" aria-hidden="true">
                     {index + 1}
                   </span>{' '}
-                  <span className="option-text">{showsTranslations ? <Translation entry={option} lang={l1} /> : <span lang="en">{option.headword}</span>}</span>
-                  {isAnswer && <span aria-hidden="true"> ✓</span>}
-                  {isWrong && <span aria-hidden="true"> ✗</span>}
+                  <span className="option-text">{showsTranslations ? <Translation entry={option} lang={l1} stacked /> : <span lang="en">{option.headword}</span>}</span>
+                  {/* Its place is kept before the answer, so a gloss does not wrap anew when the mark comes. */}
+                  <span className="option-mark" aria-hidden="true">
+                    {isAnswer ? '✓' : isWrong ? '✗' : ''}
+                  </span>
                 </button>
               </li>
             )
           })}
         </ol>
 
-        <div className={`feedback-sheet${feedback ? (feedback.correct ? ' is-correct' : ' is-incorrect') : ''}`}>
+        {/* While a right answer waits to move on, a tap here moves on at once; Enter and Space do the same (keys.ts). */}
+        <div
+          ref={sheet}
+          tabIndex={-1}
+          className={`feedback-sheet${feedback ? (feedback.correct ? ' is-correct' : ' is-incorrect') : ''}${movesOn ? ' moves-on' : ''}`}
+          onClick={movesOn ? () => run.next() : undefined}
+        >
           <div className="feedback" role="status">
             {feedback && (
               <p className={feedback.correct ? 'correct' : 'incorrect'}>
@@ -386,7 +436,7 @@ function Choice(props: { readonly run: StudyRun; readonly snapshot: RunSnapshot;
               </p>
             )}
           </div>
-          {feedback && (
+          {feedback && !movesOn && (
             <button type="button" ref={continueButton} className="button study-main study-continue" onClick={() => run.next()}>
               {t('study.continue')}
             </button>

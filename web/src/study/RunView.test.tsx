@@ -2,12 +2,17 @@ import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react
 import { ITEM_SETTLE_MS, StudyRun, type RunOptions } from '@wordado/client-data'
 import { Grade } from '@wordado/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { AUTO_CONTINUE_KEY, AUTO_CONTINUE_MS } from './autoContinue'
 import type { AudioPort } from '../content/audio'
 import { ClipSuperseded } from '../content/audio'
 import { fakeAudio, renderWith, setup } from '../test/fixtures'
 import { RunView } from './RunView'
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.useRealTimers()
+  window.localStorage.clear()
+})
 
 async function start(mode: RunOptions['mode'], audio: AudioPort = fakeAudio()) {
   const ctx = await setup({ audio })
@@ -50,7 +55,9 @@ describe('RunView: multiple choice', () => {
     await press(String(item.answerIndex + 1))
     expect(screen.getByRole('status').textContent).toContain('Correct')
     expect(document.querySelector('.is-answer')?.textContent).toContain('✓')
-    expect(document.activeElement?.textContent).toBe('Continue')
+    // No Continue after a right answer: the feedback itself takes focus, so Enter still reaches the page.
+    expect(screen.queryByRole('button', { name: 'Continue' })).toBeNull()
+    expect(document.activeElement?.classList.contains('feedback-sheet')).toBe(true)
     env.advance(ITEM_SETTLE_MS)
     await press('Enter')
     expect(run.snapshot.phase).toBe('prompt')
@@ -66,6 +73,7 @@ describe('RunView: multiple choice', () => {
     await act(async () => fireEvent.click(options()[wrong]!))
     expect(screen.getByRole('status').textContent).toMatch(/^✗ Not quite\. The answer is .+\.$/)
     expect(document.querySelector('.is-wrong')?.textContent).toContain('✗')
+    expect(document.activeElement?.textContent).toBe('Continue')
   })
 
   it('records one answer for a double press', async () => {
@@ -99,6 +107,168 @@ describe('RunView: multiple choice', () => {
     env.advance(ITEM_SETTLE_MS)
     await press('Enter')
     expect(document.activeElement?.classList.contains('card')).toBe(true)
+  })
+})
+
+/** Answers and moves on, by the run itself, until the question on screen has the wanted direction. */
+async function reach(run: StudyRun, env: { advance(ms: number): void }, direction: 'en_to_l1' | 'l1_to_en') {
+  for (let i = 0; i < 30; i += 1) {
+    const item = run.snapshot.item
+    if (!item || item.mode === 'flashcard') throw new Error('expected a choice item')
+    if (item.direction === direction) return item
+    env.advance(ITEM_SETTLE_MS)
+    await act(async () => run.choose(item.answerIndex))
+    env.advance(ITEM_SETTLE_MS)
+    await act(async () => run.next())
+  }
+  throw new Error(`no ${direction} question came`)
+}
+
+describe('RunView: a right answer moves on by itself (spec §8.1)', () => {
+  /** A question on screen, the clock past its settle time, and the timers in the test's hands. */
+  async function question(mode: RunOptions['mode'] = 'multiple_choice', audio?: AudioPort) {
+    const ctx = await start(mode, audio)
+    const item = ctx.run.snapshot.item!
+    if (item.mode === 'flashcard') throw new Error('expected a choice item')
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    ctx.env.advance(ITEM_SETTLE_MS)
+    return { ...ctx, item, next: vi.spyOn(ctx.run, 'next') }
+  }
+  const wait = (ms: number) => act(async () => void vi.advanceTimersByTime(ms))
+
+  it('shows the green line with no Continue, then the next question, having recorded the answer once', async () => {
+    const { run, env, item, next } = await question()
+    await press(String(item.answerIndex + 1))
+    expect(screen.getByRole('status').textContent).toBe('✓ Correct')
+    expect(screen.queryByRole('button', { name: 'Continue' })).toBeNull()
+    expect(run.snapshot.answered).toBe(1)
+    env.advance(AUTO_CONTINUE_MS)
+    await wait(AUTO_CONTINUE_MS - 1)
+    expect(run.snapshot.phase).toBe('feedback')
+    await wait(1)
+    expect(next).toHaveBeenCalledTimes(1)
+    expect(run.snapshot.phase).toBe('prompt')
+    expect(run.snapshot.item?.wordId).not.toBe(item.wordId)
+    expect(run.snapshot.answered).toBe(1)
+    // The new prompt takes focus, as it does after Continue.
+    expect(document.activeElement?.classList.contains('card')).toBe(true)
+    await wait(10 * AUTO_CONTINUE_MS)
+    expect(next).toHaveBeenCalledTimes(1)
+  })
+
+  it('moves on once when Enter comes before the timer', async () => {
+    const { run, env, item, next } = await question()
+    await press(String(item.answerIndex + 1))
+    env.advance(ITEM_SETTLE_MS)
+    await press('Enter')
+    const second = run.snapshot.item
+    expect(second?.wordId).not.toBe(item.wordId)
+    env.advance(AUTO_CONTINUE_MS)
+    await wait(10 * AUTO_CONTINUE_MS)
+    expect(next).toHaveBeenCalledTimes(1)
+    expect(run.snapshot.item).toBe(second)
+    expect(run.snapshot.phase).toBe('prompt')
+  })
+
+  it('moves on at once at a tap on the feedback', async () => {
+    const { run, env, item, next } = await question()
+    await press(String(item.answerIndex + 1))
+    env.advance(ITEM_SETTLE_MS)
+    await act(async () => fireEvent.click(screen.getByRole('status')))
+    expect(run.snapshot.item?.wordId).not.toBe(item.wordId)
+    await wait(10 * AUTO_CONTINUE_MS)
+    expect(next).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not move on after the learner has left the screen', async () => {
+    const { item, next } = await question()
+    await press(String(item.answerIndex + 1))
+    cleanup()
+    vi.advanceTimersByTime(10 * AUTO_CONTINUE_MS)
+    expect(next).not.toHaveBeenCalled()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('keeps Continue after a wrong answer, however long the learner reads', async () => {
+    const { run, env, item, next } = await question()
+    await press(String(((item.answerIndex + 1) % item.options.length) + 1))
+    expect(document.activeElement?.textContent).toBe('Continue')
+    env.advance(10 * AUTO_CONTINUE_MS)
+    await wait(10 * AUTO_CONTINUE_MS)
+    expect(next).not.toHaveBeenCalled()
+    expect(run.snapshot.phase).toBe('feedback')
+    // A tap on the feedback is not Continue there.
+    await act(async () => fireEvent.click(screen.getByRole('status')))
+    expect(run.snapshot.phase).toBe('feedback')
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue' })))
+    expect(run.snapshot.phase).toBe('prompt')
+  })
+
+  it('moves on after a right answer to a listening question too', async () => {
+    const { run, env, item } = await question('listening_select', fakeAudio({ streamable: () => true }))
+    await press(String(item.answerIndex + 1))
+    expect(screen.queryByRole('button', { name: 'Continue' })).toBeNull()
+    env.advance(AUTO_CONTINUE_MS)
+    await wait(AUTO_CONTINUE_MS)
+    expect(run.snapshot.item?.wordId).not.toBe(item.wordId)
+  })
+
+  it('waits for Continue once the learner opens the ⋯ menu, so a report is about the word they answered', async () => {
+    const { run, env, item, next } = await question()
+    await press(String(item.answerIndex + 1))
+    more()
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeTruthy()
+    env.advance(10 * AUTO_CONTINUE_MS)
+    await wait(10 * AUTO_CONTINUE_MS)
+    expect(next).not.toHaveBeenCalled()
+    expect(run.snapshot.item?.wordId).toBe(item.wordId)
+  })
+
+  it('switched off on this device, waits for Continue as before', async () => {
+    window.localStorage.setItem(AUTO_CONTINUE_KEY, 'off')
+    const { run, env, item, next } = await question()
+    await press(String(item.answerIndex + 1))
+    expect(screen.getByRole('status').textContent).toBe('✓ Correct')
+    expect(document.activeElement?.textContent).toBe('Continue')
+    env.advance(10 * AUTO_CONTINUE_MS)
+    await wait(10 * AUTO_CONTINUE_MS)
+    expect(next).not.toHaveBeenCalled()
+    await act(async () => fireEvent.click(screen.getByRole('status')))
+    expect(run.snapshot.phase).toBe('feedback')
+    await press('Enter')
+    expect(run.snapshot.phase).toBe('prompt')
+  })
+})
+
+describe('RunView: the multiple-choice listen button', () => {
+  it('plays the English word beside the headword, without answering; the translations are stacked', async () => {
+    const audio = fakeAudio({ streamable: () => true })
+    const { run, env } = await start('multiple_choice', audio)
+    const item = await reach(run, env, 'en_to_l1')
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Play the word' })))
+    expect(audio.played).toHaveLength(1)
+    expect(run.snapshot.phase).toBe('prompt')
+    expect(run.snapshot.item).toBe(item)
+    expect(document.querySelectorAll('button.option .translation.is-stacked')).toHaveLength(4)
+  })
+
+  it('is not offered when the audio cannot play', async () => {
+    const { run, env } = await start('multiple_choice')
+    await reach(run, env, 'en_to_l1')
+    expect(screen.queryByRole('button', { name: 'Play the word' })).toBeNull()
+  })
+
+  it('is never offered, and nothing is played, when the translation is shown: before the answer or after it', async () => {
+    const audio = fakeAudio({ streamable: () => true })
+    const { run, env } = await start('multiple_choice', audio)
+    const item = await reach(run, env, 'l1_to_en')
+    expect(document.querySelector('.prompt-text .translation.is-stacked')).not.toBeNull()
+    expect(screen.queryByRole('button', { name: 'Play the word' })).toBeNull()
+    env.advance(ITEM_SETTLE_MS)
+    await press(String(((item.answerIndex + 1) % item.options.length) + 1))
+    expect(run.snapshot.phase).toBe('feedback')
+    expect(screen.queryByRole('button', { name: 'Play the word' })).toBeNull()
+    expect(audio.played).toHaveLength(0)
   })
 })
 
@@ -475,6 +645,20 @@ describe('Learn this word (spec §7.4)', () => {
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue' })))
     expect(run.snapshot.phase).toBe('prompt')
     expect(screen.queryByRole('button', { name: /^Learn this word/ })).toBeNull()
+  })
+
+  it('keeps Continue after a right answer too, while the word is offered: there is something to press', async () => {
+    const { run, env } = await practiseSkipped('multiple_choice')
+    const item = run.snapshot.item!
+    if (item.mode === 'flashcard') throw new Error('expected a choice item')
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    env.advance(ITEM_SETTLE_MS)
+    await press(String(item.answerIndex + 1))
+    expect(screen.getByRole('button', { name: `Learn this word: ${item.entry.headword}` })).toBeTruthy()
+    expect(document.activeElement?.textContent).toBe('Continue')
+    env.advance(10 * AUTO_CONTINUE_MS)
+    await act(async () => void vi.advanceTimersByTime(10 * AUTO_CONTINUE_MS))
+    expect(run.snapshot.item?.wordId).toBe(item.wordId)
   })
 
   it('offers it on a flashcard once the answer is shown, and the done screen says how many words were added', async () => {

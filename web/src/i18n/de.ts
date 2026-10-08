@@ -149,6 +149,8 @@ export const de: Messages = {
   'settings.audio': 'Audio abspielen und Hörübungen einbeziehen',
   'settings.latency': 'Langsame Antworten als „schwer“ werten',
   'settings.latencyHint': 'Schalte das aus, um nur danach bewertet zu werden, ob du richtig liegst, nicht wie schnell.',
+  'settings.autoContinue': 'Nach einer richtigen Antwort automatisch weiter',
+  'settings.autoContinueHint': 'Nach einer richtigen Antwort kommt die nächste Frage von selbst. Nach einer falschen Antwort wird immer auf dich gewartet. Das gilt nur für dieses Gerät.',
   'settings.saveFailed': 'Deine Änderung wurde nicht gespeichert: {message}',
 
   'settings.audioDownload': 'Audio zum Offline-Lernen',
@@ -394,6 +396,7 @@ export const de: Messages = {
   'path.open': 'Offen',
   'path.words': { one: '{count} Wort', other: '{count} Wörter' },
   'path.wordNew': 'Noch nicht begonnen',
+  'path.wordSkipped': 'Übersprungen',
   'path.wordToLearn': 'Zum Lernen',
   'path.wordActions': 'Aktionen für das Wort: {word}',
   'path.levelSkipped': 'Übersprungen',

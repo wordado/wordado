@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { answer, expectAccessible, finishSetup, finishSetupAt, forwardConsole, heading, serveTwoLevelSample, SETTLE_MS, studyNew, today } from './helpers'
+import { answer, expectAccessible, finishSetup, finishSetupAt, forwardConsole, heading, serveGlossedSample, serveTwoLevelSample, SETTLE_MS, studyNew, today } from './helpers'
 
 test.beforeEach(async ({ context }) => {
   forwardConsole(context)
@@ -33,6 +33,112 @@ for (const mode of ['flashcard', 'multiple_choice', 'listening_select']) {
     expect(await answer(page)).toBe(mode)
   })
 }
+
+test('a multiple-choice question: the gloss on its own row, a right answer moves on by itself, a wrong one waits (spec §8.1)', async ({ browser }) => {
+  test.slow()
+  const GLOSS = 'for the test'
+  const context = await browser.newContext({ serviceWorkers: 'block' })
+  forwardConsole(context)
+  await context.addInitScript(() => localStorage.setItem('wordado.locale', 'en'))
+  const entries = await serveGlossedSample(context, GLOSS)
+  try {
+    const page = await context.newPage()
+    await page.goto('/')
+    await finishSetup(page)
+    await page.goto('/study?mode=multiple_choice')
+    const prompt = page.locator('.card[data-phase="prompt"]')
+    const options = page.locator('button.option')
+    const progress = page.getByRole('progressbar', { name: 'Session progress' })
+    /** The question on screen, once it can be answered: its direction, and the text of its right and of a wrong option. */
+    const question = async () => {
+      await expect(prompt).toBeVisible()
+      await page.waitForTimeout(SETTLE_MS)
+      const word = prompt.locator('.hw-word')
+      if ((await word.count()) > 0) {
+        const headword = await word.textContent()
+        const texts = await options.locator('.translation-word').allTextContents()
+        const right = entries.find((e) => e.headword === headword && texts.includes(e.translation))!.translation
+        return { direction: 'en_to_l1', right, wrong: texts.find((text) => text !== right)! } as const
+      }
+      const shown = await prompt.locator('.prompt-text .translation-word').textContent()
+      const texts = await options.locator('.option-text').allTextContents()
+      const right = entries.find((e) => e.translation === shown && texts.includes(e.headword))!.headword
+      return { direction: 'l1_to_en', right, wrong: texts.find((text) => text !== right)! } as const
+    }
+    const option = (text: string) => options.filter({ has: page.getByText(text, { exact: true }) })
+
+    // Both directions come within a few questions: each shows its gloss on a row of its own.
+    const seen = new Set<string>()
+    for (let i = 0; i < 20 && seen.size < 2; i += 1) {
+      const q = await question()
+      if (q.direction === 'en_to_l1') {
+        // The translation and its gloss are two rows of one option, read as "word, gloss"; no brackets.
+        const first = options.first()
+        const word = first.locator('.translation-word')
+        const gloss = first.locator('.sense')
+        await expect(gloss).toHaveText(GLOSS)
+        expect((await gloss.boundingBox())!.y).toBeGreaterThanOrEqual((await word.boundingBox())!.y + (await word.boundingBox())!.height - 1)
+        // The comma is only heard; a row of its own puts a space before it in the computed name, which is not spoken.
+        await expect(first).toHaveAccessibleName(`${await word.textContent()} , ${GLOSS}`)
+        // The flashcard's listen button, beside the headword, where this browser plays the clips.
+        if (await page.evaluate(() => new Audio().canPlayType('audio/mp4') !== '')) await expect(prompt.getByRole('button', { name: 'Play the word' })).toBeVisible()
+      } else {
+        const word = prompt.locator('.prompt-text .translation-word')
+        const gloss = prompt.locator('.prompt-text .sense')
+        await expect(gloss).toHaveText(GLOSS)
+        expect((await gloss.boundingBox())!.y).toBeGreaterThanOrEqual((await word.boundingBox())!.y + (await word.boundingBox())!.height - 1)
+        // Hearing the word would give the answer away.
+        await expect(prompt.getByRole('button', { name: 'Play the word' })).toHaveCount(0)
+      }
+      if (!seen.has(q.direction)) await expectAccessible(page, { dark: true })
+      seen.add(q.direction)
+      if (seen.size < 2) await answer(page)
+    }
+    expect([...seen].sort()).toEqual(['en_to_l1', 'l1_to_en'])
+
+    // A right answer: the green line, no Continue, and the next question without a click.
+    let q = await question()
+    let before = Number(await progress.getAttribute('aria-valuenow'))
+    await option(q.right).click()
+    await expect(page.locator('.feedback-sheet.is-correct')).toBeVisible()
+    await expect(page.getByRole('status')).toContainText('Correct')
+    await expect(page.getByRole('button', { name: 'Continue' })).toHaveCount(0)
+    await expect(progress).toHaveAttribute('aria-valuenow', String(before + 1))
+    await expect(prompt).toBeVisible()
+    // The keyboard goes on working on the new question.
+    await expect(prompt).toBeFocused()
+
+    // A wrong answer waits for Continue, however long.
+    q = await question()
+    await option(q.wrong).click()
+    await expect(page.locator('.feedback-sheet.is-incorrect')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Continue' })).toBeFocused()
+    await page.waitForTimeout(2_000)
+    await expect(page.locator('.card[data-phase="feedback"]')).toBeVisible()
+    await page.getByRole('button', { name: 'Continue' }).click()
+    await expect(prompt).toBeVisible()
+
+    // Switched off in Settings, a right answer waits for Continue too, as it always did.
+    await page.goto('/settings/study')
+    const auto = page.getByRole('checkbox', { name: 'Continue automatically after a right answer' })
+    await expect(auto).toBeChecked()
+    await expectAccessible(page, { dark: true })
+    await auto.uncheck()
+    await page.goto('/study?mode=multiple_choice')
+    q = await question()
+    before = Number(await progress.getAttribute('aria-valuenow'))
+    await option(q.right).click()
+    await expect(page.locator('.feedback-sheet.is-correct')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Continue' })).toBeFocused()
+    await page.waitForTimeout(2_000)
+    await expect(page.locator('.card[data-phase="feedback"]')).toBeVisible()
+    await expect(progress).toHaveAttribute('aria-valuenow', String(before + 1))
+    await page.keyboard.press('Enter')
+    await expect(prompt).toBeVisible()
+  } finally {
+    await context.close()
+  }
+})
 
 test('keeps progress offline after the first visit, and after reconnecting', async ({ page, context, browserName }) => {
   test.skip(browserName === 'webkit', 'Playwright’s WebKit fails page.goto while offline ("WebKit encountered an internal error"); Safari offline is on the release checklist (docs/deploy.md)')
@@ -247,7 +353,7 @@ test('chooses Learn this word while practising a skipped unit, and the next sess
     await row.getByRole('button', { name: `Word actions: ${word}` }).click()
     await expectAccessible(page, { dark: true })
     await row.getByRole('button', { name: `Don’t learn this word: ${word}` }).click()
-    await expect(row.getByText('Not started')).toBeVisible()
+    await expect(row.getByText('Skipped', { exact: true })).toBeVisible()
     await row.getByRole('button', { name: `Word actions: ${word}` }).click()
     await row.getByRole('button', { name: `Learn this word: ${word}` }).click()
     await expect(row.getByText('To learn')).toBeVisible()

@@ -145,6 +145,8 @@ export const en = {
   'settings.audio': 'Play audio, and include listening exercises',
   'settings.latency': 'Count slow answers as “hard”',
   'settings.latencyHint': 'Switch this off to be graded on whether you are right, not how quickly.',
+  'settings.autoContinue': 'Continue automatically after a right answer',
+  'settings.autoContinueHint': 'The next question comes by itself after a right answer. A wrong answer always waits for you. This applies to this device only.',
   'settings.saveFailed': 'Your change wasn’t saved: {message}',
 
   'settings.audioDownload': 'Audio for offline study',
@@ -379,6 +381,7 @@ export const en = {
   'path.open': 'Open',
   'path.words': { one: '{count} word', other: '{count} words' },
   'path.wordNew': 'Not started',
+  'path.wordSkipped': 'Skipped',
   'path.wordToLearn': 'To learn',
   'path.wordActions': 'Word actions: {word}',
   'path.levelSkipped': 'Skipped',
