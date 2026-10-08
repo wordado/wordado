@@ -4,6 +4,7 @@ import { useId, useState } from 'react'
 import { errorMessageKey } from '../errors'
 import { useT, type MessageKey } from '../i18n/i18n'
 import { Link } from '../router'
+import { readAutoContinue, setAutoContinue } from '../study/autoContinue'
 import { DailyGoalSetting } from './DailyGoalSetting'
 import { NumberSetting } from './NumberSetting'
 
@@ -34,13 +35,25 @@ export function offeredLevels(corpus: Corpus | null, declared: CefrLevel): CefrL
   return CEFR_LEVELS.filter((l) => shipped.has(l))
 }
 
-/** Level, limits, retention, goal, audio and latency grading (spec §7.1, §7.2, §7.4, §8.4, §11.1). */
+/**
+ * Level, limits, retention, goal, audio, latency grading and automatic continue (spec §7.1, §7.2, §7.4, §8.1, §8.4,
+ * §11.1). All are the learner's and follow them between devices, but the last: it is this device's own, kept in the
+ * browser's storage, so no synced document changes for it.
+ */
 export function StudySettings() {
   const { t } = useT()
   const { settings, corpus } = useClientSnapshot()
-  const { save, status } = useSave()
+  const { save: saveSetting, status } = useSave()
   const latencyHintId = useId()
   const retentionHintId = useId()
+  const autoContinueHintId = useId()
+  const [autoContinue, setAutoContinueOn] = useState(() => readAutoContinue())
+  // What the switch that is this device's own last said; a saved setting's own message replaces it.
+  const [deviceStatus, setDeviceStatus] = useState<string | null>(null)
+  const save = (patch: Partial<Settings>) => {
+    setDeviceStatus(null)
+    return saveSetting(patch)
+  }
   const levels = offeredLevels(corpus, settings.declaredLevel)
   return (
     <section aria-labelledby="settings-study">
@@ -121,8 +134,26 @@ export function StudySettings() {
           {t('settings.latencyHint')}
         </p>
       </div>
+      <div className="field switch-field">
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={autoContinue}
+            aria-describedby={autoContinueHintId}
+            onChange={(e) => {
+              // A browser that keeps nothing still follows the switch, for this visit: say that, not "Saved".
+              setDeviceStatus(t(setAutoContinue(e.target.checked) ? 'settings.saved' : 'settings.autoUpdateNotKept'))
+              setAutoContinueOn(e.target.checked)
+            }}
+          />
+          {t('settings.autoContinue')}
+        </label>
+        <p className="note" id={autoContinueHintId}>
+          {t('settings.autoContinueHint')}
+        </p>
+      </div>
       <p className="note" role="status">
-        {status}
+        {deviceStatus ?? status}
       </p>
     </section>
   )

@@ -149,6 +149,8 @@ export const es: Messages = {
   'settings.audio': 'Reproducir el audio e incluir ejercicios de escucha',
   'settings.latency': 'Contar las respuestas lentas como «difícil»',
   'settings.latencyHint': 'Desactívalo para que solo se valore si aciertas, no lo rápido que respondes.',
+  'settings.autoContinue': 'Continuar automáticamente tras una respuesta correcta',
+  'settings.autoContinueHint': 'La siguiente pregunta llega sola tras una respuesta correcta. Tras una respuesta incorrecta siempre te espera. Solo se aplica a este dispositivo.',
   'settings.saveFailed': 'No se ha guardado tu cambio: {message}',
 
   'settings.audioDownload': 'Audio para estudiar sin conexión',
