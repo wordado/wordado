@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { DaySummary } from './activity'
 import { TIER_MIN_STABILITY_DAYS } from './mastery'
-import { levelCompletion, retentionRate, unitProgress } from './progress'
+import { isSkippedLevel, levelCompletion, retentionRate, unitPractisable, unitProgress } from './progress'
 import { applyGrade, localDay, type ReviewState } from './scheduler'
+import { practisable } from './studyItems'
 import { Grade, type CefrLevel, type Unit, type WordFlag } from './types'
 import { corpusWordId, type WordId } from './wordId'
 
@@ -89,5 +90,31 @@ describe('levelCompletion', () => {
 
   it('is zero, not NaN, for a band with no live entry', () => {
     expect(levelCompletion('B1', units, new Map(), { ...visible, declaredLevel: 'A1' })).toEqual({ kind: 'progress', live: 0, mature: 0, share: 0 })
+  })
+})
+
+describe('what of a unit can be practised (spec §7.2, §7.4)', () => {
+  const u = unit('a1-u1', 'A1', 1, [1, 2, 3, 4, 5])
+
+  it('calls a level skipped when it is below the declared one', () => {
+    expect(isSkippedLevel('A1', 'A2')).toBe(true)
+    expect(isSkippedLevel('A2', 'A2')).toBe(false)
+    expect(isSkippedLevel('B1', 'A2')).toBe(false)
+  })
+
+  it('counts the started live words of a unit, and every live word of a skipped level’s unit: the words `practisable` admits', () => {
+    const states = new Map([state(1, true), state(2, false), state(3, true)])
+    const ctx = { retired: new Set([w(5)]), flags: new Map<WordId, WordFlag>([[w(3), 'known']]) }
+    const progress = unitProgress(u, states, ctx)
+    for (const skipped of [false, true]) {
+      const admitted = u.wordIds.filter((id) => practisable(id, { ...ctx, states, unstarted: skipped }))
+      expect(unitPractisable(progress, skipped)).toBe(admitted.length)
+    }
+    expect(unitPractisable(progress, false)).toBe(2)
+    expect(unitPractisable(progress, true)).toBe(3)
+    // Nothing started: only a skipped level's unit can be practised.
+    const none = unitProgress(u, new Map(), ctx)
+    expect(unitPractisable(none, false)).toBe(0)
+    expect(unitPractisable(none, true)).toBe(3)
   })
 })

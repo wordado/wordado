@@ -86,21 +86,26 @@ export interface PracticeContext {
   readonly flags: ReadonlyMap<WordId, WordFlag>
   /** Words a later pack retired (spec §5.1): `Corpus.retired`. */
   readonly retired: ReadonlySet<WordId>
+  /**
+   * Practice of one unit of a level the learner skipped (`isSkippedLevel`): its words were never started, so all
+   * of them may be used. Absent everywhere else.
+   */
+  readonly unstarted?: boolean
 }
 
 /**
- * Whether practice may use a word (spec §7.4): started, and live — neither set aside nor retired. The one rule
- * behind every practice pool and every "can this be practised" check; a unit's `UnitProgress.introduced` counts
- * the same words.
+ * Whether practice may use a word (spec §7.4): started, and live — neither set aside nor retired. In a unit of a
+ * skipped level (`unstarted`) a live word need not be started. The one rule behind every practice pool and every
+ * "can this be practised" check; `unitPractisable` counts the same words of a unit.
  */
 export function practisable(wordId: WordId, ctx: PracticeContext): boolean {
-  return ctx.states.has(wordId) && isLive(wordId, ctx)
+  return (ctx.unstarted === true || ctx.states.has(wordId)) && isLive(wordId, ctx)
 }
 
 export interface PracticeInput extends PracticeContext {
   /** Words the schedule serves now; practising them would only duplicate the session, so they are used only when nothing else is left. */
   readonly exclude: ReadonlySet<WordId>
-  /** Practising one unit: its words, and the run keeps to them. Absent for practice over everything. */
+  /** Practising one unit or theme: its words, and the run keeps to them. Absent for practice over everything. */
   readonly within?: ReadonlySet<WordId>
   readonly count: number
   readonly rng: Rng
@@ -111,25 +116,33 @@ export interface PracticeInput extends PracticeContext {
  * today's session — unless that leaves nothing, when the session's words are
  * used after all: practice never touches the schedule, and a repeat is better
  * than a run with nothing in it. The draw leans towards weaker words
- * (`practiceWeight`) and never repeats one.
+ * (`practiceWeight`) and never repeats one. With `unstarted`, the words of
+ * `within` that were never started are drawn too, at the base weight.
  */
 export function practiceWords(input: PracticeInput): WordId[] {
   const { within, states } = input
-  const started = [...states.keys()].filter((id) => practisable(id, input) && (!within || within.has(id)))
-  const outside = started.filter((id) => !input.exclude.has(id))
-  const candidates = outside.length > 0 ? outside : started
-  return weightedOrder(candidates, (id) => practiceWeight(states.get(id)!), input.rng).slice(0, Math.max(0, input.count))
+  // Unstarted words have no state to be listed by: they come from the unit itself.
+  const pool = input.unstarted && within ? [...within] : [...states.keys()].filter((id) => !within || within.has(id))
+  const usable = pool.filter((id) => practisable(id, { ...input, unstarted: input.unstarted === true && within !== undefined }))
+  const outside = usable.filter((id) => !input.exclude.has(id))
+  const candidates = outside.length > 0 ? outside : usable
+  return weightedOrder(candidates, (id) => practiceWeight(states.get(id)), input.rng).slice(0, Math.max(0, input.count))
 }
 
-/** What a matching board may use (spec §8.1): introduced, live corpus words; those of `within` when practising one unit. */
+/**
+ * What a matching board may use (spec §8.1): introduced, live corpus words; those of `within` when practising one
+ * unit, and with `unstarted` (a unit of a skipped level) all its live words.
+ */
 export function matchingCandidates(
   corpus: Corpus,
   states: ReadonlyMap<WordId, ReviewState>,
   flags: ReadonlyMap<WordId, WordFlag>,
   within?: ReadonlySet<WordId>,
+  unstarted = false,
 ): CorpusEntry[] {
   return [...corpus.entries.values()].filter((e) => {
     const wordId = corpusWordId(e.entryId)
-    return !e.retired && practisable(wordId, { states, flags, retired: corpus.retired }) && (!within || within.has(wordId))
+    if (within && !within.has(wordId)) return false
+    return !e.retired && practisable(wordId, { states, flags, retired: corpus.retired, unstarted: unstarted && within !== undefined })
   })
 }
