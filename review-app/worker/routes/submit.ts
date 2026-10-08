@@ -2,9 +2,9 @@ import type { Hono } from 'hono'
 import type { SubmissionView } from '../../shared/hosted'
 import { apiError, jsonBody, type AppEnv, type Deps } from '../app'
 import { getAssignment, listSubmissions, setSubmissionStatus, submissionByPr, unsubmit } from '../db'
-import { githubFor, verifyWebhook } from '../github'
+import { githubFor, GitHubError, verifyWebhook } from '../github'
 import { currentSnapshot } from '../snapshotStore'
-import { settleClaim, submit } from '../submit'
+import { PrUnconfirmed, settleClaim, submit } from '../submit'
 import { NO_SNAPSHOT, ownAssignment, reviewerNames } from './reviewer'
 
 export function submitRoutes(app: Hono<AppEnv>, deps: Deps): void {
@@ -22,8 +22,8 @@ export function submitRoutes(app: Hono<AppEnv>, deps: Deps): void {
       const out = await submit(deps, me, a, gh, rules)
       return 'status' in out ? apiError(c, out.status, out.message) : c.json(out)
     } catch (err) {
-      deps.log(`submit failed: ${err instanceof Error ? err.message : String(err)}`)
-      return c.json({ message: 'Could not reach GitHub, try again' }, 502)
+      deps.log(`submit failed: ${err instanceof Error ? (err instanceof GitHubError || err instanceof PrUnconfirmed ? err.message : (err.stack ?? err.message)) : String(err)}`)
+      return c.json({ message: failureMessage(err) }, 502)
     }
   })
 
@@ -60,6 +60,22 @@ export function submitRoutes(app: Hono<AppEnv>, deps: Deps): void {
     }
     return c.json(out)
   })
+}
+
+const SAVED = 'Your decisions are saved; try Submit again.'
+
+/** What the reviewer reads after a failed submit: of the error, only GitHub's status and its own explanation. */
+function failureMessage(err: unknown): string {
+  if (err instanceof PrUnconfirmed) {
+    // The claim is kept (the pull request may exist), so an immediate Submit would be refused.
+    const cause = err.cause instanceof GitHubError ? err.cause : null
+    const why = cause === null ? '' : cause.status === 0 ? ' (GitHub was not reached)' : ` (${cause.status}${cause.detail ? `: ${cause.detail}` : ''})`
+    return `GitHub did not confirm the pull request${why}. Your decisions are saved; try Submit again in a couple of minutes.`
+  }
+  if (!(err instanceof GitHubError)) return 'The submit failed. Your decisions are saved; try again.'
+  if (err.status === 0) return `Could not reach GitHub. ${SAVED}`
+  const said = `${err.status}${err.detail ? `: ${err.detail}` : ''}`
+  return err.what === 'pull request' ? `GitHub did not accept the pull request (${said}). ${SAVED}` : `GitHub refused the submit (${err.what}, ${said}). ${SAVED}`
 }
 
 async function closeSubmission(deps: Deps, id: number, merged: boolean): Promise<void> {

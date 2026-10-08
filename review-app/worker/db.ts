@@ -162,6 +162,10 @@ export async function pendingClaim(db: D1Database, assignmentId: number): Promis
   const r = await db.prepare("SELECT * FROM submissions WHERE assignment = ? AND pr IS NULL AND status = 'open'").bind(assignmentId).first<SubmissionRecord>()
   return r ? submissionRow(r) : null
 }
+/** Whether a claim other than `id` names this branch (a submit of another assignment that is using it). */
+export async function branchClaimedByOther(db: D1Database, branch: string, id: number): Promise<boolean> {
+  return (await db.prepare("SELECT id FROM submissions WHERE branch = ? AND pr IS NULL AND status = 'open' AND id != ?").bind(branch, id).first()) !== null
+}
 export async function setSubmissionBranch(db: D1Database, id: number, branch: string): Promise<void> {
   await db.prepare('UPDATE submissions SET branch = ? WHERE id = ?').bind(branch, id).run()
 }

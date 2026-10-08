@@ -14,6 +14,7 @@ export interface Deps {
   readonly fetch: (input: string, init?: RequestInit) => Promise<Response>
   readonly now: () => Date
   readonly log: (line: string) => void
+  readonly sleep: (ms: number) => Promise<void>
 }
 
 export type AppEnv = { Variables: { me: ReviewerRow } }
