@@ -24,7 +24,7 @@ export interface PracticeScopeView {
   readonly label: MessageKey
   /** The mixed run's button. */
   readonly start: MessageKey
-  /** Matching's sentence when the scope has fewer than five such words. */
+  /** Matching's sentence when the scope has fewer than five such words; a skipped level's unit does not ask for started ones. */
   readonly needWords: MessageKey
   /** Where the learner came from, and what the way back is called. */
   readonly back: Route
@@ -54,7 +54,7 @@ export function usePracticeScope(params: ScopeParams): PracticeScopeView | null 
         skipped,
         label: 'practice.unit',
         start: 'path.practiseUnit',
-        needWords: 'practice.needWordsUnit',
+        needWords: skipped ? 'practice.needWordsSkippedUnit' : 'practice.needWordsUnit',
         back: { name: 'path' },
         backLabel: 'practice.toPath',
       }

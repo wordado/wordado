@@ -212,7 +212,7 @@ function UnitItem(props: {
               <span lang="en" className="word-head">
                 {entry.headword}
               </span>
-              <FlagControls wordId={wordId} headword={entry.headword} menu />
+              <FlagControls wordId={wordId} headword={entry.headword} menu learn={props.skipped} />
             </li>
           )
         })}

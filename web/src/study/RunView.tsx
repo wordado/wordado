@@ -116,9 +116,9 @@ export function RunView(props: { readonly run: StudyRun; readonly kind: RunKind;
 }
 
 /**
- * "Learn this word" (spec §7.4): a switch on the card, beside the word's other controls. On, it reads "Will be
- * learned" and the daily session serves the word as a new one; pressing it again takes that back. Its name says
- * which word, beginning with its visible text (WCAG 2.5.3).
+ * "Learn this word" (spec §7.4): a button on the card, beside the word's other controls. Pressed, it reads "Will
+ * be learned" and the daily session serves the word as a new one; pressing it again takes that back. The state is
+ * said once, by the name, which changes with the visible text and begins with it (WCAG 2.5.3), then says which word.
  */
 function LearnToggle(props: { readonly headword: string; readonly on: boolean; onChange(on: boolean): void }) {
   const { t } = useT()
@@ -127,7 +127,6 @@ function LearnToggle(props: { readonly headword: string; readonly on: boolean; o
     <button
       type="button"
       className={`button learn-toggle${props.on ? ' is-on' : ''}`}
-      aria-pressed={props.on}
       aria-label={t('flag.action', { action: label, word: props.headword })}
       onClick={() => props.onChange(!props.on)}
     >

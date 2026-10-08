@@ -330,6 +330,7 @@ export const en = {
   'practice.matching': 'Match words with their translations',
   'practice.needWords': 'Learn a few words first: matching needs five.',
   'practice.needWordsUnit': 'Matching needs five started words from this unit.',
+  'practice.needWordsSkippedUnit': 'Matching needs five words from this unit.',
   'practice.needWordsTheme': 'Matching needs five started words from this theme.',
   'practice.noneYet': 'Nothing to practise yet. Study a few new words first.',
   'practice.mixed': 'Mixed practice',
@@ -379,6 +380,7 @@ export const en = {
   'flag.markKnown': 'I know it',
   'flag.markLater': 'Not now',
   'flag.bringBack': 'Bring back',
+  'flag.dontLearn': 'Don’t learn this word',
   'flag.action': '{action}: {word}',
 
   'themes.title': 'Themes',

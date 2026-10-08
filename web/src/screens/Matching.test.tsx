@@ -68,6 +68,16 @@ describe('Matching', () => {
     expect(ctx.client.snapshot.states.size).toBe(0)
   })
 
+  it('asks a skipped level’s unit for five words, not five started ones, when too few are left', async () => {
+    const ctx = await setup()
+    await ctx.client.updateSettings({ declaredLevel: 'A2' })
+    const second = ctx.client.snapshot.corpus!.units[1]!
+    for (const wordId of second.wordIds.slice(4)) await ctx.client.setFlag(wordId, 'known')
+    renderWith(<Matching unit={second.unitId} />, ctx)
+    expect(screen.getByText('Matching needs five words from this unit.')).toBeTruthy()
+    expect(screen.queryByText(/started words/)).toBeNull()
+  })
+
   it('needs five started words of the theme when practising one theme, then deals only that theme’s words', async () => {
     const ctx = await setup()
     await ctx.client.updateSettings({ activeTheme: 'daily-life' })

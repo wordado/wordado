@@ -345,6 +345,7 @@ export const de: Messages = {
   'practice.matching': 'Ordne Wörter ihren Übersetzungen zu',
   'practice.needWords': 'Lern zuerst ein paar Wörter: Zum Zuordnen braucht es fünf.',
   'practice.needWordsUnit': 'Zum Zuordnen braucht es fünf begonnene Wörter aus dieser Einheit.',
+  'practice.needWordsSkippedUnit': 'Zum Zuordnen braucht es fünf Wörter aus dieser Einheit.',
   'practice.needWordsTheme': 'Zum Zuordnen braucht es fünf begonnene Wörter aus diesem Thema.',
   'practice.noneYet': 'Noch nichts zu üben. Lern zuerst ein paar neue Wörter.',
   'practice.mixed': 'Gemischte Übung',
@@ -394,6 +395,7 @@ export const de: Messages = {
   'flag.markKnown': 'Ich kenne es',
   'flag.markLater': 'Nicht jetzt',
   'flag.bringBack': 'Zurückholen',
+  'flag.dontLearn': 'Dieses Wort nicht lernen',
   'flag.action': '{action}: {word}',
 
   'themes.title': 'Themen',

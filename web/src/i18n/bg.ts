@@ -325,6 +325,7 @@ export const bg: Messages = {
   'practice.matching': 'Свържете думите с преводите им',
   'practice.needWords': 'Първо научете няколко думи: за свързването трябват пет.',
   'practice.needWordsUnit': 'За свързването трябват пет започнати думи от този урок.',
+  'practice.needWordsSkippedUnit': 'За свързването трябват пет думи от този урок.',
   'practice.needWordsTheme': 'За свързването трябват пет започнати думи от тази тема.',
   'practice.noneYet': 'Все още няма какво да упражнявате. Първо научете няколко нови думи.',
   'practice.mixed': 'Смесено упражнение',
@@ -374,6 +375,7 @@ export const bg: Messages = {
   'flag.markKnown': 'Знам я',
   'flag.markLater': 'Не сега',
   'flag.bringBack': 'Върнете',
+  'flag.dontLearn': 'Не искам да уча тази дума',
   'flag.action': '{action}: {word}',
 
   'themes.title': 'Теми',

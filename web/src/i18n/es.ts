@@ -343,6 +343,7 @@ export const es: Messages = {
   'practice.matching': 'Empareja palabras con sus traducciones',
   'practice.needWords': 'Aprende antes algunas palabras: para emparejar hacen falta cinco.',
   'practice.needWordsUnit': 'Para emparejar hacen falta cinco palabras empezadas de esta unidad.',
+  'practice.needWordsSkippedUnit': 'Para emparejar hacen falta cinco palabras de esta unidad.',
   'practice.needWordsTheme': 'Para emparejar hacen falta cinco palabras empezadas de este tema.',
   'practice.noneYet': 'Todavía no hay nada que practicar. Estudia antes algunas palabras nuevas.',
   'practice.mixed': 'Práctica variada',
@@ -392,6 +393,7 @@ export const es: Messages = {
   'flag.markKnown': 'Ya la sé',
   'flag.markLater': 'Ahora no',
   'flag.bringBack': 'Recuperar',
+  'flag.dontLearn': 'No aprender esta palabra',
   'flag.action': '{action}: {word}',
 
   'themes.title': 'Temas',

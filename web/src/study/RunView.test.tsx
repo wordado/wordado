@@ -387,17 +387,19 @@ describe('Learn this word (spec §7.4)', () => {
     await press(String(((item.answerIndex + 1) % 4) + 1))
     const off = screen.getByRole('button', { name: `Learn this word: ${word}` })
     expect(off.textContent).toBe('Learn this word')
-    expect(off.getAttribute('aria-pressed')).toBe('false')
+    // The state is said by the name alone: not by aria-pressed as well.
+    expect(off.hasAttribute('aria-pressed')).toBe(false)
     expect(document.activeElement?.textContent).toBe('Continue')
     await act(async () => fireEvent.click(off))
     const on = screen.getByRole('button', { name: `Will be learned: ${word}` })
     expect(on.textContent).toBe('Will be learned')
-    expect(on.getAttribute('aria-pressed')).toBe('true')
+    expect(on.hasAttribute('aria-pressed')).toBe(false)
+    expect(screen.queryByRole('button', { name: `Learn this word: ${word}` })).toBeNull()
     expect(client.snapshot.toLearn).toEqual([item.wordId])
     expect(client.snapshot.plan!.newWords).toEqual([item.wordId])
     expect(client.snapshot.states.size).toBe(0)
     await act(async () => fireEvent.click(on))
-    expect(screen.getByRole('button', { name: `Learn this word: ${word}` }).getAttribute('aria-pressed')).toBe('false')
+    expect(screen.getByRole('button', { name: `Learn this word: ${word}` })).toBeTruthy()
     expect(client.snapshot.toLearn).toEqual([])
     // The run goes on as it was.
     env.advance(ITEM_SETTLE_MS)
@@ -428,6 +430,23 @@ describe('Learn this word (spec §7.4)', () => {
     expect(screen.getByText('2 words will come up in your next sessions.')).toBeTruthy()
     expect(client.snapshot.toLearn).toEqual(chosen)
     expect(client.snapshot.plan!.newWords).toEqual(chosen)
+  })
+
+  it('counts a word marked before the run among the run’s words to learn, and not once it is set aside', async () => {
+    const ctx = await setup()
+    await ctx.client.updateSettings({ declaredLevel: 'A2' })
+    const unit = ctx.client.snapshot.corpus!.units[0]!
+    for (const wordId of unit.wordIds) await ctx.client.setToLearn(wordId, true)
+    const run = await StudyRun.start(ctx.client, ctx.env, { kind: 'practice', mode: 'flashcard', scope: { kind: 'unit', id: unit.unitId }, cachedClips: () => new Set(), online: () => false })
+    renderWith(<RunView run={run} kind="practice" />, ctx)
+    more()
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Not now' })))
+    ctx.env.advance(ITEM_SETTLE_MS)
+    fireEvent.click(screen.getByRole('button', { name: 'Show answer' }))
+    expect(screen.getByRole('button', { name: /^Will be learned: / })).toBeTruthy()
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Stop for now' })))
+    expect(screen.getByText('1 word will come up in your next sessions.')).toBeTruthy()
+    expect(ctx.client.snapshot.toLearn).toHaveLength(19)
   })
 
   it('says one word in the singular, and nothing when none was added', async () => {

@@ -3020,6 +3020,8 @@ ul.unit-words {
 
 .word-menu {
   position: relative;
+  /* On a narrow screen a long word pushes the menu to a line of its own: it stays at the right edge, where its panel opens inwards. */
+  margin-left: auto;
 }
 
 .word-menu-button {

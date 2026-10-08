@@ -199,11 +199,61 @@ describe('Path', () => {
     expect(within(bread).getByText('Learning')).toBeTruthy()
     expect(within(food).getByText('1 of 20 started')).toBeTruthy()
     expect(screen.getByText('Skipped: you placed above this level.')).toBeTruthy()
-    // Set aside instead, a chosen word reads as set aside.
+    // Set aside instead, a chosen word reads as set aside, and its mark is gone.
     await act(() => ctx.client.setToLearn('c:cheese-1', true))
     expect(within(row('cheese')).getByText('To learn')).toBeTruthy()
     await act(() => ctx.client.setFlag('c:cheese-1', 'suspended'))
     expect(within(row('cheese')).queryByText('To learn')).toBeNull()
+    await act(() => ctx.client.setFlag('c:cheese-1', null))
+    expect(within(row('cheese')).getByText('Not started')).toBeTruthy()
+  })
+
+  it('marks a word to learn from a skipped unit’s word list, and takes the mark back there (spec §7.4)', async () => {
+    const ctx = await setup()
+    await ctx.client.updateSettings({ declaredLevel: 'A2' })
+    renderWith(<Path />, ctx)
+    const food = unit('Food and drink')
+    fireEvent.click(within(food).getByText('20 words'))
+    const bread = within(food).getByText('bread').closest('li')!
+    wordMenu(bread, 'bread')
+    expect(within(bread).getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual(['Word actions: bread', 'Learn this word: bread', 'I know it: bread', 'Not now: bread'])
+    await act(async () => fireEvent.click(within(bread).getByRole('button', { name: 'Learn this word: bread' })))
+    expect(ctx.client.snapshot.toLearn).toEqual(['c:bread-1'])
+    expect(within(bread).getByText('To learn')).toBeTruthy()
+    // The choice closes the menu, and focus is back on its button.
+    expect(within(bread).queryByRole('button', { name: /^Learn this word/ })).toBeNull()
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('Word actions: bread')
+    wordMenu(bread, 'bread')
+    expect(within(bread).getAllByRole('button').map((b) => b.textContent)).toEqual(['', 'Don’t learn this word', 'I know it', 'Not now'])
+    await act(async () => fireEvent.click(within(bread).getByRole('button', { name: 'Don’t learn this word: bread' })))
+    expect(ctx.client.snapshot.toLearn).toEqual([])
+    expect(within(bread).getByText('Not started')).toBeTruthy()
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('Word actions: bread')
+    // Set aside, a marked word loses its mark, and brought back it is an ordinary unstarted word again.
+    await act(() => ctx.client.setToLearn('c:bread-1', true))
+    wordMenu(bread, 'bread')
+    await act(async () => fireEvent.click(within(bread).getByRole('button', { name: 'Not now: bread' })))
+    expect(ctx.client.snapshot.toLearn).toEqual([])
+    wordMenu(bread, 'bread')
+    expect(within(bread).getAllByRole('button').map((b) => b.textContent)).toEqual(['', 'Bring back'])
+  })
+
+  it('does not offer Learn this word in the word list of a level being studied, but lets a mark made earlier be taken back', async () => {
+    const ctx = await setup()
+    await ctx.client.updateSettings({ declaredLevel: 'A2' })
+    await ctx.client.setToLearn('c:hello-1', true)
+    await ctx.client.updateSettings({ declaredLevel: 'A1' })
+    renderWith(<Path />, ctx)
+    const people = unit('People and greetings')
+    fireEvent.click(within(people).getByText('20 words'))
+    const goodbye = within(people).getByText('goodbye').closest('li')!
+    wordMenu(goodbye, 'goodbye')
+    expect(within(goodbye).queryByRole('button', { name: /^Learn this word/ })).toBeNull()
+    const hello = within(people).getByText('hello').closest('li')!
+    expect(within(hello).getByText('To learn')).toBeTruthy()
+    wordMenu(hello, 'hello')
+    await act(async () => fireEvent.click(within(hello).getByRole('button', { name: 'Don’t learn this word: hello' })))
+    expect(ctx.client.snapshot.toLearn).toEqual([])
   })
 
   it('names a folded level’s status in a form that agrees with “level”, not “unit” (plan 12, review)', async () => {
