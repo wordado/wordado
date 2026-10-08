@@ -1,7 +1,7 @@
-import { buildMatchingBoard, corpusWordId, gradeAnswer, matchingCandidates, MATCHING_PAIRS, practiceWeight, shuffle, type CorpusEntry } from '@wordado/core'
+import { buildMatchingBoard, corpusWordId, gradeAnswer, matchingCandidates, MATCHING_PAIRS, practiceWeight, scopePool, shuffle, type CorpusEntry, type PracticeScope } from '@wordado/core'
 import type { Client } from './client'
 import { createStore, type Store } from './store'
-import { scopePool, type PracticeScope, type RunEnv } from './run'
+import type { RunEnv } from './run'
 
 export type MatchingSide = 'left' | 'right'
 
@@ -54,16 +54,23 @@ export class MatchingRun {
 
   /**
    * A board of MATCHING_PAIRS introduced words, or null until the learner has that many; of one unit or theme, when
-   * `scope` names it, and of any of its words for a unit of a skipped level. Like every practice it leans towards
-   * weaker words (spec §7.4).
+   * `scope` names it, and of any of its words for a theme or a unit of a skipped level. Like every practice it leans
+   * towards weaker words, and in a scope it deals the words the visit has not shown first (spec §7.4).
    */
   static start(client: Client, env: RunEnv, scope?: PracticeScope): MatchingRun | null {
-    const { corpus, states, flags } = client.snapshot
+    const { corpus, states, flags, settings } = client.snapshot
     if (!corpus) return null
-    const weight = (entry: CorpusEntry) => practiceWeight(states.get(corpusWordId(entry.entryId)))
-    const pool = scopePool(client, scope)
-    const board = buildMatchingBoard(matchingCandidates(corpus, states, flags, pool?.within, pool?.unstarted), MATCHING_PAIRS, env.rng, weight)
-    return board ? new MatchingRun(client, env, board) : null
+    const wordId = (entry: CorpusEntry) => corpusWordId(entry.entryId)
+    const weight = (entry: CorpusEntry) => practiceWeight(states.get(wordId(entry)))
+    const pool = scopePool(corpus, settings.declaredLevel, scope)
+    const candidates = matchingCandidates(corpus, states, flags, pool?.within, pool?.unstarted)
+    // The scope the corpus holds: what its boards deal is remembered for the visit.
+    const visitScope = pool ? scope : undefined
+    const shown = visitScope && client.practiceVisit.begin(visitScope, candidates.map(wordId))
+    const board = buildMatchingBoard(candidates, MATCHING_PAIRS, env.rng, weight, shown && ((entry) => shown.has(wordId(entry))))
+    if (!board) return null
+    if (visitScope) for (const entry of board) client.practiceVisit.show(visitScope, wordId(entry))
+    return new MatchingRun(client, env, board)
   }
 
   get snapshot(): MatchingSnapshot {

@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, screen } from '@testing-library/react'
-import { corpusWordId, Grade, themeEntries } from '@wordado/core'
+import { corpusWordId, themeEntries } from '@wordado/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { answerNew, renderWith, setup } from '../test/fixtures'
 import { Matching } from './Matching'
@@ -78,25 +78,56 @@ describe('Matching', () => {
     expect(screen.queryByText(/started words/)).toBeNull()
   })
 
-  it('needs five started words of the theme when practising one theme, then deals only that theme’s words', async () => {
+  it('needs five words of the theme, started or not, and deals only that theme’s words (spec §7.4, §8.1)', async () => {
     const ctx = await setup()
-    await ctx.client.updateSettings({ activeTheme: 'daily-life' })
-    await answerNew(ctx.client, ctx.env, 4)
-    await ctx.client.updateSettings({ activeTheme: null })
-    await answerNew(ctx.client, ctx.env, 6)
-    const theme = new Set(themeEntries(ctx.client.snapshot.corpus!, 'daily-life').map((e) => corpusWordId(e.entryId)))
-    const started = () => [...ctx.client.snapshot.states.keys()].filter((wordId) => theme.has(wordId))
-    expect(started()).toHaveLength(4)
+    const theme = themeEntries(ctx.client.snapshot.corpus!, 'daily-life').map((e) => corpusWordId(e.entryId))
+    // Four words of the theme are not set aside; none is started.
+    for (const wordId of theme.slice(4)) await ctx.client.setFlag(wordId, 'known')
     renderWith(<Matching theme="daily-life" />, ctx)
-    expect(screen.getByText('Matching needs five started words from this theme.')).toBeTruthy()
+    expect(screen.getByText('Matching needs five words from this theme.')).toBeTruthy()
+    expect(screen.queryByText(/started words/)).toBeNull()
     expect(screen.getByText('Theme: Daily life')).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Back to practice' }).getAttribute('href')).toBe('/practice?theme=daily-life')
     cleanup()
-    const fifth = [...theme].find((wordId) => !ctx.client.snapshot.states.has(wordId))!
-    await ctx.client.answer({ wordId: fifth, mode: 'flashcard', direction: 'en_to_l1', grade: Grade.Good, latencyMs: 2_000, practice: false })
+    await ctx.client.setFlag(theme[4]!, null)
     renderWith(<Matching theme="daily-life" />, ctx)
-    expect(new Set(english().map((b) => `c:${b.dataset.entry!}`))).toEqual(new Set<string>(started()))
+    expect(new Set(english().map((b) => `c:${b.dataset.entry!}`))).toEqual(new Set<string>(theme.slice(0, 5)))
     expect(screen.getByRole('link', { name: 'Back to practice' }).getAttribute('href')).toBe('/practice?theme=daily-life')
+    for (const button of english()) {
+      await click(button)
+      await click(translationFor(button.dataset.entry!))
+    }
+    expect(screen.getByRole('button', { name: 'Play again' })).toBeTruthy()
+    expect(ctx.client.snapshot.states.size).toBe(0)
+  })
+
+  it('says the same without "started" in every language', async () => {
+    const ctx = await setup()
+    for (const e of themeEntries(ctx.client.snapshot.corpus!, 'daily-life').slice(4)) await ctx.client.setFlag(corpusWordId(e.entryId), 'known')
+    for (const [locale, sentence] of [
+      ['bg', 'За свързването трябват пет думи от тази тема.'],
+      ['de', 'Zum Zuordnen braucht es fünf Wörter aus diesem Thema.'],
+      ['es', 'Para emparejar hacen falta cinco palabras de este tema.'],
+    ] as const) {
+      renderWith(<Matching theme="daily-life" />, { ...ctx, locale })
+      expect(screen.getByText(sentence)).toBeTruthy()
+      cleanup()
+    }
+  })
+
+  it('deals a theme’s next boards from the words not yet shown (spec §7.4)', async () => {
+    const ctx = await setup()
+    renderWith(<Matching theme="daily-life" />, ctx)
+    const dealt = new Set<string>()
+    for (let board = 1; board <= 5; board += 1) {
+      for (const button of english()) dealt.add(button.dataset.entry!)
+      expect(dealt.size).toBe(5 * board)
+      for (const button of english()) {
+        await click(button)
+        await click(translationFor(button.dataset.entry!))
+      }
+      await click(screen.getByRole('button', { name: 'Play again' }))
+    }
   })
 
   it('plays over everything for a locked unit', async () => {

@@ -1,5 +1,5 @@
-import { buildItem, corpusWordId, gradeAnswer, isSkippedLevel, practiceWords, themeEntries, type Grade, type Mode, type StudyItem, type WordFlag, type WordId } from '@wordado/core'
-import type { Client } from './client'
+import { buildItem, gradeAnswer, practiceCandidates, practiceWords, scopePool, type Grade, type Mode, type PracticeInput, type PracticeScope, type StudyItem, type WordFlag, type WordId } from '@wordado/core'
+import type { Client, ClientSnapshot } from './client'
 import type { ClientEnv } from './env'
 import { createStore, type Store } from './store'
 
@@ -75,31 +75,22 @@ const INITIAL: RunSnapshot = {
   error: null,
 }
 
-/** What practice keeps to when it is not over everything (spec §7.4): one unit of the path, or one theme. */
-export interface PracticeScope {
-  readonly kind: 'unit' | 'theme'
-  /** The unit's or the theme's ID. */
-  readonly id: string
+/** What a practice run draws from now: the learner's words, without today's session, kept to the scope if the corpus holds it. */
+function practiceInput(snapshot: ClientSnapshot, scope: PracticeScope | undefined): Omit<PracticeInput, 'count' | 'rng' | 'shown'> {
+  const { states, flags, plan, corpus, settings } = snapshot
+  const exclude = new Set<WordId>([...(plan?.reviews ?? []), ...(plan?.newWords ?? [])])
+  return { states, flags, retired: corpus?.retired ?? new Set(), exclude, ...scopePool(corpus, settings.declaredLevel, scope) }
 }
 
-/** What a scoped practice draws from. */
-export interface ScopePool {
-  /** The words of the unit or theme. */
-  readonly within: ReadonlySet<WordId>
-  /** A unit of a level the learner skipped (spec §7.2): all its words are used, started or not. */
-  readonly unstarted: boolean
-}
-
-/** The words of the unit or theme being practised; undefined for practice over everything, and for one the corpus does not hold. */
-export function scopePool(client: Client, scope: PracticeScope | undefined): ScopePool | undefined {
-  const { corpus, settings } = client.snapshot
-  if (!scope || !corpus) return undefined
-  if (scope.kind === 'unit') {
-    const unit = corpus.units.find((u) => u.unitId === scope.id)
-    return unit && { within: new Set(unit.wordIds), unstarted: isSkippedLevel(unit.level, settings.declaredLevel) }
-  }
-  if (!corpus.themes.some((t) => t.themeId === scope.id)) return undefined
-  return { within: new Set(themeEntries(corpus, scope.id).map((e) => corpusWordId(e.entryId))), unstarted: false }
+/**
+ * How far this visit has gone through the practice of a unit or theme (spec §7.4): how many of the words a run
+ * would draw from now it has already shown. Null for practice over everything, which keeps no such memory.
+ */
+export function visitProgress(client: Client, scope: PracticeScope | undefined): { readonly seen: number; readonly total: number } | null {
+  const input = practiceInput(client.snapshot, scope)
+  if (!scope || !input.within) return null
+  const candidates = practiceCandidates(input)
+  return { seen: client.practiceVisit.seen(scope, candidates), total: candidates.length }
 }
 
 const messageOf = (err: unknown): string => (err instanceof Error ? err.message : String(err))
@@ -111,8 +102,10 @@ const messageOf = (err: unknown): string => (err instanceof Error ? err.message 
  * nothing is due now. A practice run draws PRACTICE_RUN_SIZE introduced words
  * (of one unit or theme, when `scope` names it), leaning towards the weaker
  * ones, and records them as practice. It leaves out the words today's session
- * serves unless nothing else is left. A unit of a skipped level is practised
- * whole: its words need not be started, and practising them starts none.
+ * serves unless nothing else is left. A theme, and a unit of a skipped level,
+ * is practised whole: its words need not be started, and practising them
+ * starts none. Within one visit a scope's runs take the words not yet shown
+ * first (`PracticeVisit`), so they cover it before any word repeats.
  */
 export class StudyRun {
   readonly store: Store<RunSnapshot> = createStore(INITIAL)
@@ -134,6 +127,8 @@ export class StudyRun {
   /** Every word this run has shown: what its count of words to learn is taken over. */
   private readonly shown = new Set<WordId>()
   private practiceQueue: WordId[] = []
+  /** The unit or theme this practice run keeps to, when the corpus holds it: what it shows is remembered for the visit. */
+  private visitScope: PracticeScope | undefined
 
   private constructor(
     private readonly client: Client,
@@ -146,9 +141,10 @@ export class StudyRun {
     await client.startSession()
     const run = new StudyRun(client, env, options)
     if (options.kind === 'practice') {
-      const { states, flags, plan, corpus } = client.snapshot
-      const exclude = new Set<WordId>([...(plan?.reviews ?? []), ...(plan?.newWords ?? [])])
-      run.practiceQueue = practiceWords({ states, flags, retired: corpus?.retired ?? new Set(), exclude, ...scopePool(client, options.scope), count: PRACTICE_RUN_SIZE, rng: env.rng })
+      const input = practiceInput(client.snapshot, options.scope)
+      run.visitScope = input.within ? options.scope : undefined
+      const shown = run.visitScope && client.practiceVisit.begin(run.visitScope, practiceCandidates(input))
+      run.practiceQueue = practiceWords({ ...input, ...(shown && { shown }), count: PRACTICE_RUN_SIZE, rng: env.rng })
     }
     run.advance()
     return run
@@ -196,6 +192,7 @@ export class StudyRun {
       this.pausedAt = null
       this.pausedMs = 0
       this.shown.add(wordId)
+      if (this.visitScope) this.client.practiceVisit.show(this.visitScope, wordId)
       this.set({ phase: 'prompt', item, feedback: null, remaining: queue.length, toLearn: this.learnCount() })
       return
     }
@@ -300,7 +297,7 @@ export class StudyRun {
 
   /**
    * "Learn this word" for the word on screen, or taking it back (spec §7.4): the daily session will serve it as a
-   * new word. Offered in practice of a skipped level's unit, on a word that was never started; allowed at any
+   * new word. Offered in practice of a theme or of a skipped level's unit, on a word that was never started; allowed at any
    * point of the item, the feedback after an answer included. The run itself goes on as it was.
    */
   async setLearn(on: boolean): Promise<void> {

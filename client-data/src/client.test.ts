@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { canonicalJson, Grade, type Pack, type PackDescriptor, type PackManifest } from '@wordado/core'
+import { canonicalJson, corpusWordId, Grade, themeEntries, type Pack, type PackDescriptor, type PackManifest } from '@wordado/core'
 import { describe, expect, it } from 'vitest'
 import { Client, ClientClosed } from './client'
 import { Database } from './database'
@@ -263,6 +263,23 @@ describe('Learn this word (spec §7.4)', () => {
     expect(client.snapshot.plan!.newWords).toEqual(['c:goodbye-1'])
     await client.updateSettings({ declaredLevel: 'A1' })
     expect(client.snapshot.plan!.newWords).toEqual(['c:goodbye-1', 'c:hello-1', 'c:please-1'])
+  })
+
+  it('serves a chosen word once when the theme it belongs to is then chosen for study (spec §7.4, §8.9)', async () => {
+    const client = await openClient()
+    await client.updateSettings({ newWordLimit: 4 })
+    const theme = themeEntries(client.snapshot.corpus!, 'daily-life').map((e) => corpusWordId(e.entryId))
+    // Marked while practising the theme: its third word, and one that is not the theme's.
+    await client.setToLearn(theme[2]!, true)
+    await client.setToLearn('c:goodbye-1', true)
+    expect(theme).not.toContain('c:goodbye-1')
+    await client.updateSettings({ activeTheme: 'daily-life' })
+    // The learner's own choices first, in the order made; then the theme, without the word already there.
+    expect(client.snapshot.plan!.newWords).toEqual([theme[2], 'c:goodbye-1', theme[0], theme[1]])
+    await client.answer({ wordId: theme[2]!, mode: 'flashcard', direction: 'en_to_l1', grade: Grade.Good, latencyMs: 2_000, practice: false })
+    // Started, it is served by neither source again.
+    expect(client.snapshot.plan!.newWords).toEqual(['c:goodbye-1', theme[0], theme[1]])
+    expect(client.snapshot.toLearn).toEqual(['c:goodbye-1'])
   })
 
   it('takes a mark back for good when the server refuses it: nothing is left on the device or in the outbox (spec §9.2)', async () => {

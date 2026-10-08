@@ -1,4 +1,4 @@
-import { useClientSnapshot, type RunKind, type RunSnapshot, type StudyRun } from '@wordado/client-data'
+import { useClient, useClientSnapshot, type RunKind, type RunSnapshot, type StudyRun } from '@wordado/client-data'
 import { entryClips, Grade, isAboveLevel, type ChoiceItem, type CorpusEntry } from '@wordado/core'
 import { BookPlus, Check, Clock, Ellipsis, Flag, Flame, LockOpen, Play, Volume2, X } from 'lucide-react'
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
@@ -70,8 +70,11 @@ export function RunView(props: { readonly run: StudyRun; readonly kind: RunKind;
 
   const total = snapshot.answered + snapshot.remaining
   const settingAside = snapshot.phase === 'prompt' || snapshot.phase === 'revealed'
-  // "Learn this word" (spec §7.4): on a practised word that was never started, once its answer is on screen.
-  const canLearn = props.kind === 'practice' && !states.has(item.wordId) && (snapshot.phase === 'feedback' || snapshot.phase === 'revealed')
+  // A practised word that was never started (a theme, or a unit of a skipped level, spec §7.4): the card says so.
+  const newToLearner = props.kind === 'practice' && !states.has(item.wordId)
+  const aboveLevel = isAboveLevel(item.entry.level, settings.declaredLevel)
+  // "Learn this word": on such a word, once its answer is on screen.
+  const canLearn = newToLearner && (snapshot.phase === 'feedback' || snapshot.phase === 'revealed')
   /** The card: the prompt's frame, with its ⋯ menu; each mode fills it and adds its actions below. */
   const frame = (children: ReactNode) => (
     <div className="card" ref={card} tabIndex={-1} data-mode={item.mode} data-phase={snapshot.phase}>
@@ -80,7 +83,12 @@ export function RunView(props: { readonly run: StudyRun; readonly kind: RunKind;
         onNotNow={settingAside ? () => void run.setAside('suspended') : null}
         onReport={() => setReporting(true)}
       />
-      {isAboveLevel(item.entry.level, settings.declaredLevel) && <p className="note above-level">{t('study.aboveLevel', { level: item.entry.level })}</p>}
+      {(newToLearner || aboveLevel) && (
+        <div className="card-labels">
+          {newToLearner && <p className="note new-to-you">{t('study.newToYou')}</p>}
+          {aboveLevel && <p className="note above-level">{t('study.aboveLevel', { level: item.entry.level })}</p>}
+        </div>
+      )}
       {children}
       {canLearn && <LearnToggle headword={item.entry.headword} on={toLearn.includes(item.wordId)} onChange={(on) => void run.setLearn(on)} />}
       {snapshot.error !== null && <p role="alert">{t('study.error', { message: snapshot.error })}</p>}
@@ -391,13 +399,25 @@ function Choice(props: { readonly run: StudyRun; readonly snapshot: RunSnapshot;
 function Done(props: { readonly snapshot: RunSnapshot; readonly kind: RunKind; readonly scope: PracticeScopeView | null }) {
   const { t, locale } = useT()
   const { afterRun } = useApp()
-  const { corpus } = useClientSnapshot()
-  const { snapshot } = props
+  const client = useClient()
+  const { corpus, settings } = useClientSnapshot()
+  const { snapshot, scope } = props
   const heading = useRef<HTMLHeadingElement>(null)
+  const studyingLine = useRef<HTMLParagraphElement>(null)
+  // The theme this screen has just made the study theme, by name: said in a line once the button is gone.
+  const [studying, setStudying] = useState<string | null>(null)
   useEffect(() => {
     heading.current?.focus()
     afterRun()
   }, [afterRun])
+  // The button that had focus is gone once the theme is chosen: the line that says so takes it, and is read.
+  useEffect(() => {
+    if (studying !== null) studyingLine.current?.focus()
+  }, [studying])
+  // "Study this theme" (spec §8.9): after practising a theme that is not the one being studied and still has words to start.
+  const studyTheme = scope?.scope.kind === 'theme' && scope.scope.id !== settings.activeTheme && scope.unstarted > 0 ? scope : null
+  const themeName = studyTheme ? localized(studyTheme.title, locale, corpus?.l1 ?? '') : ''
+  const study = (themeId: string) => void client.updateSettings({ activeTheme: themeId }).then(() => setStudying(themeName))
   const unitTitle = (unitId: string) => {
     const unit = corpus?.units.find((u) => u.unitId === unitId)
     // No corpus yet: packL1 can't match any locale, so `localized` falls back to English.
@@ -432,20 +452,31 @@ function Done(props: { readonly snapshot: RunSnapshot; readonly kind: RunKind; r
       ))}
       {snapshot.toLearn > 0 && <p className="done-line done-note">{t('done.toLearn', { count: snapshot.toLearn })}</p>}
       {snapshot.setAside > 0 && <p className="done-line done-note">{t('done.setAside', { count: snapshot.setAside })}</p>}
+      {studying !== null && (
+        <p className="done-line done-note done-studying" ref={studyingLine} tabIndex={-1}>
+          {t('themes.nowStudying', { name: studying })}
+        </p>
+      )}
       <div className="done-actions">
         {/* A unit's or a theme's practice began on the path or the themes, so that is the way back; its "Practise more" stays in the scope. */}
-        {props.scope ? (
-          <Link className="button primary study-main" to={props.scope.back}>
-            {t(props.scope.backLabel)}
+        {scope ? (
+          <Link className="button primary study-main" to={scope.back}>
+            {t(scope.backLabel)}
           </Link>
         ) : (
           <Link className="button primary study-main" to={{ name: 'home' }}>
             {t('done.home')}
           </Link>
         )}
-        <Link className="button study-main" to={{ name: 'practice', ...props.scope?.params }}>
+        <Link className="button study-main" to={{ name: 'practice', ...scope?.params }}>
           {t('done.practiceMore')}
         </Link>
+        {/* The same choice as "Study this next" on the themes screen; the learner stays here, and a line says it is done. */}
+        {studyTheme && (
+          <button type="button" className="button study-main done-study-theme" aria-label={t('done.studyThemeNamed', { name: themeName })} onClick={() => study(studyTheme.scope.id)}>
+            {t('done.studyTheme')}
+          </button>
+        )}
       </div>
     </section>
   )

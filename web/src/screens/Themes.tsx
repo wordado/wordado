@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { localized, useT, type MessageKey } from '../i18n/i18n'
 import { Link } from '../router'
 import { ThemeIcon } from '../themes/icons'
-import { themePractisable } from './practiceScope'
+import { scopeWords } from './practiceScope'
 
 /** Where a theme stands for the learner: the one chosen, one with a started word, or one not started. */
 type ThemeGroup = 'now' | 'studied' | 'new'
@@ -14,7 +14,8 @@ const GROUP_TITLE: Readonly<Record<ThemeGroup, MessageKey>> = { now: 'themes.act
 /**
  * Theme collections (spec §8.9): choosing one puts its words first; nothing else changes. The themes stand in three
  * groups — the one being studied, those with a started word, the rest — so the learner sees which is chosen, which
- * can be practised, and that choosing another replaces the choice.
+ * are under way, and that choosing another replaces the choice. The groups are about the plan; any theme can be
+ * practised whole, whichever group it stands in.
  */
 export function Themes() {
   const { t, locale } = useT()
@@ -115,16 +116,16 @@ function ThemeCard(props: {
   const started = entries.filter((e) => states.has(corpusWordId(e.entryId))).length
   const aboveLevel = entries.some((e) => levelIndex(e.level) > levelIndex(settings.declaredLevel))
   const name = localized(theme.name, locale, corpus!.l1)
-  // Practice draws on started words that are not set aside (spec §7.4); the bar above counts every started word.
-  const canPractise = themePractisable(corpus!, theme.themeId, { states, flags }) > 0
+  // Practice draws on every word of the theme that is not set aside, started or not (spec §7.4); the bar counts the started ones.
+  const canPractise = scopeWords({ corpus, settings, states, flags }, { kind: 'theme', id: theme.themeId }).words > 0
   const startedText = t('themes.started', { started, count: entries.length })
   const practise = canPractise && (
-    <Link className="button theme-practise" to={{ name: 'practice', theme: theme.themeId }} aria-label={t('themes.practiseNamed', { name })}>
+    <Link className={`button theme-practise${group === 'new' ? ' is-quiet' : ''}`} to={{ name: 'practice', theme: theme.themeId }} aria-label={t('themes.practiseNamed', { name })}>
       {t('themes.practise')}
     </Link>
   )
   return (
-    <li className={`panel theme-card is-${group === 'now' ? 'active' : group}`}>
+    <li className={`panel theme-card is-${group === 'now' ? 'active' : group}${group === 'new' && canPractise ? ' has-practise' : ''}`}>
       <span className="theme-icon" aria-hidden="true">
         <ThemeIcon themeId={theme.themeId} size={24} />
       </span>
@@ -172,11 +173,15 @@ function ThemeCard(props: {
         </div>
       )}
       {group === 'new' && (
-        // On a phone the one button sits beside the title, under its short label.
-        <button type="button" className="button theme-action theme-next" aria-label={t('themes.nextNamed', { name })} onClick={props.onChoose}>
-          <span className="label-long">{t('themes.next')}</span>
-          <span className="label-short">{t('themes.chooseShort')}</span>
-        </button>
+        <>
+          {/* On a phone the button sits beside the title, under its short label. */}
+          <button type="button" className="button theme-action theme-next" aria-label={t('themes.nextNamed', { name })} onClick={props.onChoose}>
+            <span className="label-long">{t('themes.next')}</span>
+            <span className="label-short">{t('themes.chooseShort')}</span>
+          </button>
+          {/* The quieter of the two here: a theme not started is mostly there to be chosen, and can be practised whole all the same. */}
+          {practise}
+        </>
       )}
     </li>
   )

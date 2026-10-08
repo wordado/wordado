@@ -46,12 +46,10 @@ describe('Themes', () => {
     expect(ctx.client.snapshot.settings.activeTheme).toBeNull()
   })
 
-  it('offers to practise a theme once one of its words is started and not set aside, without choosing the theme', async () => {
+  it('offers to practise a theme with nothing started, without choosing the theme, and not once every word is set aside', async () => {
     const ctx = await setup()
     renderWith(<Themes />, ctx)
-    expect(screen.queryByRole('link', { name: /^Practise this theme/ })).toBeNull()
-    const first = corpusWordId(themeEntries(ctx.client.snapshot.corpus!, 'daily-life')[0]!.entryId)
-    await act(() => ctx.client.answer({ wordId: first, mode: 'flashcard', direction: 'en_to_l1', grade: Grade.Good, latencyMs: 2_000, practice: false }))
+    expect(ctx.client.snapshot.states.size).toBe(0)
     const link = screen.getByRole('link', { name: 'Practise this theme: Daily life' })
     expect(link.textContent).toBe('Practise this theme')
     expect(link.getAttribute('href')).toBe('/practice?theme=daily-life')
@@ -59,22 +57,29 @@ describe('Themes', () => {
     fireEvent.click(link)
     expect(ctx.client.snapshot.settings.activeTheme).toBeNull()
     expect(screen.getByRole('button', { name: 'Study this next: Daily life' })).toBeTruthy()
-    await act(() => ctx.client.setFlag(first, 'suspended'))
+    const words = themeEntries(ctx.client.snapshot.corpus!, 'daily-life').map((e) => corpusWordId(e.entryId))
+    for (const wordId of words.slice(1)) await act(() => ctx.client.setFlag(wordId, 'suspended'))
+    // One word is left to practise.
+    expect(screen.getByRole('link', { name: 'Practise this theme: Daily life' })).toBeTruthy()
+    await act(() => ctx.client.setFlag(words[0]!, 'known'))
     expect(screen.queryByRole('link', { name: /^Practise this theme/ })).toBeNull()
-    // Set aside, the word is still started: the theme stays among the studied ones, as its bar says.
-    expect(themesIn('Studied')).toEqual(['Daily life'])
+    expect(card('Daily life').classList.contains('has-practise')).toBe(false)
+    // Nothing was started by any of it: the theme is still not started, and can still be chosen.
+    expect(themesIn('Not started')).toEqual(['Daily life'])
+    expect(screen.getByRole('button', { name: 'Study this next: Daily life' })).toBeTruthy()
   })
 
-  it('does not offer practice on a theme whose only started word has been retired', async () => {
+  it('does not offer practice on a theme whose only word that is not set aside has been retired', async () => {
     const ctx = await setup()
-    const entry = themeEntries(ctx.client.snapshot.corpus!, 'daily-life')[0]!
-    const wordId = corpusWordId(entry.entryId)
+    const [entry, ...rest] = themeEntries(ctx.client.snapshot.corpus!, 'daily-life')
+    const wordId = corpusWordId(entry!.entryId)
     await ctx.client.answer({ wordId, mode: 'flashcard', direction: 'en_to_l1', grade: Grade.Good, latencyMs: 2_000, practice: false })
+    for (const other of rest) await ctx.client.setFlag(corpusWordId(other.entryId), 'known')
     renderWith(<Themes />, ctx)
     expect(screen.getByRole('link', { name: 'Practise this theme: Daily life' })).toBeTruthy()
     // A later pack retires the word (spec §5.1); its review state stays.
     const snapshot = ctx.client.snapshot
-    const entries = new Map(snapshot.corpus!.entries).set(entry.entryId, { ...entry, retired: true })
+    const entries = new Map(snapshot.corpus!.entries).set(entry!.entryId, { ...entry!, retired: true })
     act(() => ctx.client.store.set({ ...snapshot, corpus: { ...snapshot.corpus!, entries, retired: new Set([wordId]) } }))
     expect(screen.queryByRole('link', { name: /^Practise this theme/ })).toBeNull()
   })
@@ -121,23 +126,54 @@ describe('Themes: three groups', () => {
     expect(themesIn('Studied')).toEqual(['First words'])
     expect(themesIn('Not started')).toEqual(['Daily life'])
 
-    // The chosen theme: the chip, the way back to the path, and no practice without a started word.
+    const actions = (title: string) => [...card(title).querySelectorAll('a, button')].map((el) => [el.getAttribute('aria-label') ?? el.textContent, el.classList.contains('is-quiet')])
+
+    // The chosen theme: the chip, practice though nothing of it is started, and the way back to the path.
     const now = within(group('Studying now'))
     expect(within(card('Later words')).getByText('Studying now')).toBeTruthy()
     expect(card('Later words').classList.contains('is-active')).toBe(true)
-    expect(now.getAllByRole('button').map((b) => b.textContent)).toEqual(['Back to the path'])
-    expect(now.queryByRole('link')).toBeNull()
+    expect(actions('Later words')).toEqual([
+      ['Practise this theme: Later words', false],
+      ['Back to the path', false],
+    ])
     expect(now.queryByText('No theme chosen. New words follow your path.')).toBeNull()
 
     // A studied theme: practice first, then the quieter choice.
     const studied = within(card('First words'))
-    expect([...card('First words').querySelectorAll('a, button')].map((el) => el.getAttribute('aria-label'))).toEqual(['Practise this theme: First words', 'Study this next: First words'])
+    expect(actions('First words')).toEqual([
+      ['Practise this theme: First words', false],
+      ['Study this next: First words', true],
+    ])
     expect(studied.getByText('5 of 30 words started')).toBeTruthy()
 
-    // A theme not started: one button.
-    expect([...card('Daily life').querySelectorAll('a, button')].map((el) => el.getAttribute('aria-label'))).toEqual(['Study this next: Daily life'])
+    // A theme not started: choosing it first, then the quieter practice of the whole theme.
+    expect(actions('Daily life')).toEqual([
+      ['Study this next: Daily life', false],
+      ['Practise this theme: Daily life', true],
+    ])
     expect(card('Daily life').classList.contains('is-new')).toBe(true)
+    expect(card('Daily life').classList.contains('has-practise')).toBe(true)
+    expect(screen.getAllByRole('link', { name: /^Practise this theme/ }).map((a) => a.getAttribute('href'))).toEqual([
+      '/practice?theme=later-words',
+      '/practice?theme=first-words',
+      '/practice?theme=daily-life',
+    ])
     expect(within(card('Daily life')).getByText('0 of 25 words started')).toBeTruthy()
+  })
+
+  it('offers practice in every group, and leaves it out only where no word can be practised', async () => {
+    const ctx = await setup()
+    withMoreThemes(ctx.client)
+    await answerNew(ctx.client, ctx.env, 5)
+    await ctx.client.updateSettings({ activeTheme: 'later-words' })
+    // Every word of one theme is set aside: the theme stays where the plan puts it, without practice.
+    for (const e of themeEntries(ctx.client.snapshot.corpus!, 'daily-life')) await ctx.client.setFlag(corpusWordId(e.entryId), 'known')
+    renderWith(<Themes />, ctx)
+    expect(themesIn('Not started')).toEqual(['Daily life'])
+    expect(screen.getAllByRole('link', { name: /^Practise this theme/ }).map((a) => a.getAttribute('aria-label'))).toEqual(['Practise this theme: Later words', 'Practise this theme: First words'])
+    expect([...card('Daily life').querySelectorAll('a, button')].map((el) => el.getAttribute('aria-label'))).toEqual(['Study this next: Daily life'])
+    // Practice starts nothing, so it moves no theme to another group.
+    expect(groups()).toEqual(['Studying now', 'Studied', 'Not started'])
   })
 
   it('leaves out the not-started group once every theme is started or chosen', async () => {
