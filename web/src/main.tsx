@@ -3,6 +3,7 @@ import '@fontsource-variable/literata'
 import './styles.css'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { createStore } from '@wordado/client-data'
 import { dayToIsoDate, localDay, validateCredits, validateFixes } from '@wordado/core'
 import { httpApi } from './account/api'
 import { AccountController } from './account/controller'
@@ -16,8 +17,9 @@ import { FixNotices } from './app/fixNotices'
 import { watchL1 } from './app/l1Watch'
 import { AppLifecycle, watchUpdates, type InstallEvent } from './app/lifecycle'
 import { PackSwitcher } from './app/packSwitch'
-import { Root } from './app/Root'
+import { Root, type OpeningDownload } from './app/Root'
 import { startSyncLoop } from './app/syncLoop'
+import { startUpdateChecks } from './app/updateChecks'
 import { AudioStore } from './content/audio'
 import { AudioSwitch } from './content/audioSwitch'
 import { fetchManifest, manifestUrlFor, packFetcher, SAMPLE_MANIFEST_URL } from './content/packs'
@@ -51,7 +53,14 @@ let controller: AccountController | null = null
 // either way the controller shows "sign in again" and the outbox waits.
 const transport = httpTransport({ onUnauthorized: () => controller?.sessionExpired(), expectedUser })
 
-const lifecycle = new AppLifecycle({ storage: browserStorage('localStorage'), reload: () => window.location.reload() })
+const lifecycle = new AppLifecycle({
+  storage: browserStorage('localStorage'),
+  // "Wordado was updated." has to outlive the reload that updated it, in this tab only.
+  session: browserStorage('sessionStorage'),
+  reload: () => window.location.reload(),
+})
+/** The pack an opening app waits for (spec §9.3), for the starting screen's bar; cleared once the app is open. */
+const openingDownload = createStore<OpeningDownload | null>(null)
 /** The word data's attributions (plan 8b), for Settings › About. */
 const credits = new Credits({
   storage: browserStorage('localStorage'),
@@ -78,7 +87,8 @@ const boot = new Boot(
     transport: () => transport,
     startSync: (client, backend) => startSyncLoop(client, { everyAnswer: backend === 'memory', now: env.now }),
     fetchManifest: (account) => fetchManifest(manifestUrlFor(account)),
-    fetchPack: packFetcher(),
+    // The app cannot open until this pack is in: its download is shown. The periodic check's is not (below).
+    fetchPack: packFetcher(undefined, (received, total) => openingDownload.set({ received, total })),
     // Before the app shows, so the first session already knows which clips can play (spec §9.3).
     prepare: async (client, account) => {
       audio.use(manifestUrlFor(account))
@@ -103,6 +113,11 @@ boot.store.subscribe(() => {
   stopAudioWatch?.()
   stopAudioWatch = state.status === 'ready' ? refreshAudioOnActivation(state.client, audio) : null
   if (state.status === 'ready') lifecycle.recordVisit(dayToIsoDate(localDay(env.now(), env.tzOffsetMin())))
+})
+
+// The starting screen's bar is for the pack that open is waiting on, and goes with it.
+boot.store.subscribe(() => {
+  if (boot.store.get().status !== 'starting' && openingDownload.get() !== null) openingDownload.set(null)
 })
 
 // The credits and "your report was fixed" follow the pack the learner has (plan 8b, Decision 6).
@@ -153,6 +168,7 @@ startPackChecks({
     const state = boot.store.get()
     return fetchManifest(manifestUrlFor(state.status === 'ready' ? state.account : null))
   },
+  // Staged behind the open app, to swap in at the next session's start: no bar for it.
   fetchPack: packFetcher(),
   online: () => navigator.onLine,
   onReport: (report) => noteInstallReport(report, lifecycle),
@@ -221,7 +237,7 @@ createRoot(document.getElementById('root')!).render(
         localeMounted = true
       }}
     >
-      <Root boot={boot} services={{ env, audio, afterRun, api, accounts: controller!, reminders, lifecycle, credits, fixNotices, packs }} />
+      <Root boot={boot} download={openingDownload} services={{ env, audio, afterRun, api, accounts: controller!, reminders, lifecycle, credits, fixNotices, packs }} />
     </I18nProvider>
   </StrictMode>,
 )
@@ -237,10 +253,14 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') void boot.resume()
 })
 
-// Offline after the first visit (spec §9.1), and "a new version is ready". Not in development, where it would cache the dev server.
+// Offline after the first visit (spec §9.1), and "a new version is ready": looked for when the app comes back to
+// the foreground and about hourly, and moved to at a safe moment. Not in development, where it would cache the dev server.
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js').then(
-    (registration) => watchUpdates(registration, navigator.serviceWorker, lifecycle),
+    (registration) => {
+      watchUpdates(registration, navigator.serviceWorker, lifecycle)
+      lifecycle.attachChecker(startUpdateChecks(registration))
+    },
     () => undefined,
   )
 }

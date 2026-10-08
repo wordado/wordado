@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../account/api'
 import { SignOutOffline } from '../account/controller'
 import { fakeApi } from '../test/fakeApi'
-import { fakeAccounts, fakeAudio, fakeReminders, renderWith, setup } from '../test/fixtures'
+import { fakeAccounts, fakeAudio, fakeLifecycle, fakeReminders, renderWith, setup } from '../test/fixtures'
 import { saveFile } from '../download'
 import { Settings } from './Settings'
 
@@ -41,11 +41,21 @@ describe('Settings: the menu', () => {
     expect(row(/^About and privacy/).getAttribute('href')).toBe('/settings/about')
   })
 
-  it('names the signed-in learner, and leaves out the app while there is nothing to install', async () => {
+  it('names the signed-in learner, and says how the app updates', async () => {
     const ctx = await setup()
     renderWith(<Settings section={null} />, { ...ctx, account: ana })
     expect(row(/^Account/).textContent).toContain('ana@example.com')
-    expect(screen.queryByRole('link', { name: /^The app/ })).toBeNull()
+    expect(row(/^The app/).textContent).toContain('Updates automatically')
+    expect(row(/^The app/).getAttribute('href')).toBe('/settings/app')
+  })
+
+  it('says the app updates when asked once that is switched off, and offers installation where it can', async () => {
+    const ctx = await setup()
+    const lifecycle = fakeLifecycle({ autoUpdate: false })
+    renderWith(<Settings section={null} />, { ...ctx, lifecycle })
+    expect(row(/^The app/).textContent).toContain('Updates when you ask')
+    act(() => lifecycle.store.set({ ...lifecycle.store.get(), installable: 'prompt' }))
+    expect(row(/^The app/).textContent).toContain('Install Wordado on this device')
   })
 
   it('marks the open section and offers the way back to the menu', async () => {
@@ -244,6 +254,33 @@ describe('Settings: the account (spec §11)', () => {
     expect(confirm.disabled).toBe(false)
     await act(async () => fireEvent.click(confirm))
     expect(accounts.calls).toEqual(['deleteAccount'])
+  })
+})
+
+describe('Settings: the app (spec §9.1)', () => {
+  it('updates automatically unless the learner switches that off, and says what it means', async () => {
+    const ctx = await setup()
+    const lifecycle = fakeLifecycle()
+    renderWith(<Settings section="app" />, { ...ctx, lifecycle })
+    const toggle = page().getByRole('checkbox', { name: 'Update automatically' }) as HTMLInputElement
+    expect(toggle.checked).toBe(true)
+    expect(document.getElementById(toggle.getAttribute('aria-describedby')!)?.textContent).toContain('when you are not in the middle of anything')
+    fireEvent.click(toggle)
+    expect(lifecycle.calls).toEqual(['setAutoUpdate false'])
+    expect(toggle.checked).toBe(false)
+    expect(page().getByRole('status').textContent).toBe('Saved')
+    fireEvent.click(toggle)
+    expect(lifecycle.calls).toEqual(['setAutoUpdate false', 'setAutoUpdate true'])
+    expect(toggle.checked).toBe(true)
+  })
+
+  it('shows the setting as this device keeps it, and installation beside it where the browser offers it', async () => {
+    const ctx = await setup()
+    const lifecycle = fakeLifecycle({ autoUpdate: false, installable: 'prompt' })
+    renderWith(<Settings section="app" />, { ...ctx, lifecycle })
+    expect((page().getByRole('checkbox', { name: 'Update automatically' }) as HTMLInputElement).checked).toBe(false)
+    await act(async () => fireEvent.click(page().getByRole('button', { name: 'Install' })))
+    expect(lifecycle.calls).toEqual(['install'])
   })
 })
 

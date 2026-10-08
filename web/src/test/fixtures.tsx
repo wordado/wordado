@@ -71,15 +71,54 @@ export function fakePacks(): PackSwitcher {
 }
 
 /** Installation and updates as the banners and settings see them; every call is logged. */
-export function fakeLifecycle(state: Partial<LifecycleState> = {}): LifecyclePort & { calls: string[] } {
+export function fakeLifecycle(
+  state: Partial<LifecycleState> = {},
+): LifecyclePort & { calls: string[]; safe: (() => boolean) | null; holds: number } {
   const calls: string[] = []
-  return {
+  const store = createStore<LifecycleState>({
+    updateReady: false,
+    appTooOld: false,
+    autoUpdate: true,
+    applying: false,
+    download: null,
+    updated: false,
+    installable: null,
+    installOffer: null,
+    ...state,
+  })
+  const port: LifecyclePort & { calls: string[]; safe: (() => boolean) | null; holds: number } = {
     calls,
-    store: createStore<LifecycleState>({ updateReady: false, appTooOld: false, installable: null, installOffer: null, ...state }),
+    /** The shell's guard, while it is watching. */
+    safe: null,
+    /** Holds taken and not yet released. */
+    holds: 0,
+    store,
     applyUpdate: () => void calls.push('applyUpdate'),
     install: async () => void calls.push('install'),
     dismissInstall: () => void calls.push('dismissInstall'),
+    setAutoUpdate: (on) => {
+      calls.push(`setAutoUpdate ${on}`)
+      store.set({ ...store.get(), autoUpdate: on })
+    },
+    dismissUpdated: () => {
+      calls.push('dismissUpdated')
+      store.set({ ...store.get(), updated: false })
+    },
+    markAppTooOld: () => void calls.push('markAppTooOld'),
+    watchSafety: (guard) => {
+      port.safe = guard
+      return () => {
+        port.safe = null
+      }
+    },
+    hold: () => {
+      port.holds += 1
+      return () => {
+        port.holds -= 1
+      }
+    },
   }
+  return port
 }
 
 /** The account controller as the screens see it: every call is logged, and each can be overridden. */

@@ -4,6 +4,7 @@ import { useT } from '../i18n/i18n'
 import { navigate } from '../router'
 import { ConfirmDialog } from './Confirm'
 import { useApp } from './context'
+import { useUpdateHold } from './updateSafety'
 
 /**
  * Signing out as every button that offers it does (spec §11): answers that
@@ -16,6 +17,7 @@ export function useSignOut() {
   const [signingOut, setSigningOut] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [unsynced, setUnsynced] = useState(false)
+  useUpdateHold(signingOut)
 
   const signOut = async (force: boolean) => {
     const outcome = await accounts.signOut({ force })

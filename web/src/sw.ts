@@ -1,20 +1,31 @@
-import { cleanupOutdatedCaches, createHandlerBoundToURL, precacheAndRoute, type PrecacheEntry } from 'workbox-precaching'
+import { addPlugins, cleanupOutdatedCaches, createHandlerBoundToURL, precacheAndRoute, type PrecacheEntry } from 'workbox-precaching'
 import { NavigationRoute, registerRoute } from 'workbox-routing'
+import { precacheProgressPlugin } from './app/precacheProgress'
 import { reminderNotification } from './reminders/notification'
 import { readInterfaceLanguage } from './reminders/prefs'
 
 // Workbox injects the precache list at the literal `self.__WB_MANIFEST`; the cast compiles away and leaves it intact.
 const manifest = (self as unknown as { __WB_MANIFEST: (string | PrecacheEntry)[] }).__WB_MANIFEST
 
+const sw = self as unknown as ServiceWorkerGlobalScope
+
 cleanupOutdatedCaches()
+// While a new version installs, the open pages are told how many of its files are cached (spec §9.1). A page this
+// worker does not control yet is told too: it is the one waiting for the update.
+addPlugins([
+  precacheProgressPlugin(new Set(manifest.map((entry) => (typeof entry === 'string' ? entry : entry.url))).size, (message) => {
+    void sw.clients
+      .matchAll({ type: 'window', includeUncontrolled: true })
+      .then((windows) => windows.forEach((window) => window.postMessage(message)))
+      .catch(() => undefined)
+  }),
+])
 // The shell, both SQLite builds, the fonts and the bundled sample's manifest and pack (spec §8.6, §9.1). Its audio
 // is not precached: the app fetches the clips into the one audio cache, `wordado-audio-v1` (decision of plan 6b).
 precacheAndRoute(manifest)
 // Every in-app URL is the shell; the router takes it from there. The API is never the shell. The privacy
 // policy is on the website (wordado.com), another origin this route never sees.
 registerRoute(new NavigationRoute(createHandlerBoundToURL('/index.html'), { denylist: [/^\/api\//, /^\/v1\//] }))
-
-const sw = self as unknown as ServiceWorkerGlobalScope
 
 // A reminder (spec §8.11): the push is empty; ask the server what to say (plan 5).
 sw.addEventListener('push', (event) => {
@@ -40,7 +51,8 @@ sw.addEventListener('notificationclick', (event) => {
   )
 })
 
-// "Update now" (spec §9.1): the waiting version takes over only when the learner asks.
+// "Update now" (spec §9.1): the waiting version takes over only when the learner asks, or when the page finds
+// nothing in progress and updates itself.
 sw.addEventListener('message', (event) => {
   if ((event.data as { type?: unknown } | null)?.type === 'SKIP_WAITING') void sw.skipWaiting()
 })

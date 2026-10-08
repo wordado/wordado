@@ -1,6 +1,7 @@
 import { useClient, useClientSnapshot } from '@wordado/client-data'
 import { useState } from 'react'
 import { useApp } from '../app/context'
+import { useUpdateHold } from '../app/updateSafety'
 import { useT } from '../i18n/i18n'
 import { useOnline } from '../useOnline'
 
@@ -13,6 +14,7 @@ export function AudioDownload() {
   const online = useOnline()
   const [busy, setBusy] = useState(false)
   const [, rerender] = useState(0)
+  useUpdateHold(busy)
   const level = settings.declaredLevel
   const clips = client.levelClips(level)
   if (!settings.audio || clips.length === 0) return null

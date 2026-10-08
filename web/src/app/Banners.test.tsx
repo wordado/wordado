@@ -121,6 +121,52 @@ describe('update and install banners (spec §9.1)', () => {
     expect(screen.getByText(/too old for the newest words or for syncing/)).toBeTruthy()
   })
 
+  it('keeps the button while an automatic update waits for a safe moment', async () => {
+    const ctx = await setup()
+    const lifecycle = fakeLifecycle({ updateReady: true, autoUpdate: true })
+    renderWith(<Banners />, { ...ctx, lifecycle })
+    fireEvent.click(screen.getByRole('button', { name: 'Update now' }))
+    expect(lifecycle.calls).toEqual(['applyUpdate'])
+    expect(screen.queryByRole('progressbar')).toBeNull()
+  })
+
+  it('shows that the app is updating, with a bar that claims no share, and no button to press twice', async () => {
+    const ctx = await setup()
+    renderWith(<Banners />, { ...ctx, lifecycle: fakeLifecycle({ updateReady: true, applying: true }) })
+    expect(screen.getByText('Updating Wordado…')).toBeTruthy()
+    const bar = screen.getByRole('progressbar', { name: 'Updating Wordado…' })
+    expect(bar.getAttribute('aria-busy')).toBe('true')
+    expect(bar.hasAttribute('aria-valuenow')).toBe(false)
+    expect(screen.queryByRole('button', { name: 'Update now' })).toBeNull()
+  })
+
+  it('shows a new version downloading: busy until its worker reports, then files cached of files listed', async () => {
+    const ctx = await setup()
+    const lifecycle = fakeLifecycle({ download: { done: 0, total: 0 } })
+    renderWith(<Banners />, { ...ctx, lifecycle })
+    expect(screen.getByText('Downloading a new version of Wordado…')).toBeTruthy()
+    expect(screen.getByRole('progressbar', { name: 'Downloading a new version of Wordado…' }).getAttribute('aria-busy')).toBe('true')
+    act(() => lifecycle.store.set({ ...lifecycle.store.get(), download: { done: 12, total: 48 } }))
+    const bar = screen.getByRole('progressbar', { name: 'Downloading a new version of Wordado…' })
+    expect(bar.getAttribute('aria-valuenow')).toBe('12')
+    expect(bar.getAttribute('aria-valuemax')).toBe('48')
+    expect(screen.queryByRole('button', { name: 'Update now' })).toBeNull()
+    // A version that is needed keeps its banner and button while it downloads.
+    act(() => lifecycle.store.set({ ...lifecycle.store.get(), appTooOld: true }))
+    expect(screen.getByRole('button', { name: 'Update now' })).toBeTruthy()
+    expect(screen.getByRole('progressbar')).toBeTruthy()
+  })
+
+  it('says once that Wordado was updated, until it is dismissed', async () => {
+    const ctx = await setup()
+    const lifecycle = fakeLifecycle({ updated: true })
+    renderWith(<Banners />, { ...ctx, lifecycle })
+    expect(screen.getByRole('status').textContent).toContain('Wordado was updated.')
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }))
+    expect(lifecycle.calls).toEqual(['dismissUpdated'])
+    expect(screen.queryByText('Wordado was updated.')).toBeNull()
+  })
+
   it('offers installation, and "Not now"', async () => {
     const ctx = await setup()
     const lifecycle = fakeLifecycle({ installable: 'prompt', installOffer: 'prompt' })

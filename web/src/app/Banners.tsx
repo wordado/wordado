@@ -8,6 +8,7 @@ import { useOnline } from '../useOnline'
 import { useStore } from '../useStore'
 import { ConfirmDialog } from './Confirm'
 import { useApp } from './context'
+import { ProgressBar } from './ProgressBar'
 import { syncMessage, type SyncMessage } from './syncMessage'
 
 const NOTICE: Readonly<Record<AccountNotice, MessageKey>> = {
@@ -30,6 +31,7 @@ export function Banners() {
   return (
     <div className="banners">
       <UpdateBanner />
+      <UpdatedLine />
       <InstallBanner />
       <NoticeLine />
       <FixBanner />
@@ -114,21 +116,61 @@ const FIELD: Readonly<Record<FixedField, MessageKey>> = {
   level: 'fixed.field.level',
 }
 
-/** A newer version is waiting, or this one is too old for the packs or the server (spec §4.3, §9.3). */
+/**
+ * A newer version is waiting, or this one is too old for the packs or the server (spec §4.3, §9.3); and what an
+ * update is doing (spec §9.1): downloading, by the files its worker says it has cached, or taking over, which
+ * nothing measures.
+ */
 function UpdateBanner() {
   const { t } = useT()
   const { lifecycle } = useApp()
-  const { updateReady, appTooOld } = useStore(lifecycle.store)
+  const { updateReady, appTooOld, applying, download } = useStore(lifecycle.store)
   const { sync } = useClientSnapshot()
-  if (!updateReady && !appTooOld && !sync.upgradeRequired) return null
+  if (applying) {
+    return (
+      <div className="banner update-progress" role="status">
+        <p>{t('update.applying')}</p>
+        <ProgressBar label={t('update.applying')} />
+      </div>
+    )
+  }
+  const offered = updateReady || appTooOld || sync.upgradeRequired
+  const downloading = !updateReady && download !== null
+  if (!offered && !downloading) return null
   return (
-    <div className="banner warning">
-      <p>{t(updateReady ? 'update.ready' : 'update.needed')}</p>
-      <p className="banner-actions">
-        <button type="button" className="link-button" onClick={() => lifecycle.applyUpdate()}>
-          {t('update.now')}
-        </button>
-      </p>
+    <>
+      {offered && (
+        <div className="banner warning">
+          <p>{t(updateReady ? 'update.ready' : 'update.needed')}</p>
+          <p className="banner-actions">
+            <button type="button" className="link-button" onClick={() => lifecycle.applyUpdate()}>
+              {t('update.now')}
+            </button>
+          </p>
+        </div>
+      )}
+      {downloading && (
+        <div className="banner update-progress" role="status">
+          <p>{t('update.downloading')}</p>
+          <ProgressBar label={t('update.downloading')} value={download.done} max={download.total} />
+        </div>
+      )}
+    </>
+  )
+}
+
+/** "Wordado was updated." (spec §9.1): once, after the app updated itself, until it is dismissed or the page is left. */
+function UpdatedLine() {
+  const { t } = useT()
+  const { lifecycle } = useApp()
+  const { updated } = useStore(lifecycle.store)
+  if (!updated) return null
+  return (
+    <div className="banner notice-line" role="status">
+      <p>{t('update.done')}</p>
+      <button type="button" className="link-button" onClick={() => lifecycle.dismissUpdated()}>
+        {t('notice.dismiss')}
+      </button>
     </div>
   )
 }

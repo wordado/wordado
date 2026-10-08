@@ -1,5 +1,6 @@
 import { useEffect, useId, useState } from 'react'
 import { useApp } from '../app/context'
+import { useUpdateHold } from '../app/updateSafety'
 import { useT, type MessageKey } from '../i18n/i18n'
 import { DEFAULT_REMINDER_MINUTE, type ReminderPrefs } from '../reminders/reminders'
 
@@ -24,6 +25,7 @@ export function ReminderSettings(props: { readonly headingLevel?: 2 | 3 } = {}) 
   const [draft, setDraft] = useState(() => toTime((reminders.prefs() ?? { minute: DEFAULT_REMINDER_MINUTE }).minute))
   const [status, setStatus] = useState<MessageKey | null>(null)
   const [busy, setBusy] = useState(false)
+  useUpdateHold(busy)
   const support = reminders.support()
 
   // The saved minute is the source of truth; the draft only diverges from it while the learner is mid-edit.

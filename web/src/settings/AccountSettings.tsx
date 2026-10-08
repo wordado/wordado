@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { ConfirmDialog } from '../app/Confirm'
 import { useApp } from '../app/context'
 import { useSignOut } from '../app/signOut'
+import { useUpdateHold } from '../app/updateSafety'
 import { saveFile } from '../download'
 import { errorMessageKey } from '../errors'
 import { useT } from '../i18n/i18n'
@@ -18,6 +19,7 @@ export function AccountSettings() {
   const { signingOut, error: signOutError, start: signOut, dialog: unsyncedDialog } = useSignOut()
   const [exporting, setExporting] = useState(false)
   const [exportError, setExportError] = useState<string | null>(null)
+  useUpdateHold(exporting)
 
   if (account === null) {
     return (
