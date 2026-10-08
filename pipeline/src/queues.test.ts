@@ -87,6 +87,33 @@ describe('exportQueues and importQueues', () => {
     expect(exportAll(dir, draft([entry('water-1')]))).toEqual([])
   })
 
+  it('re-issues a row whose open file holds an older proposal, and takes it out of that file', () => {
+    const dir = makeContent()
+    exportAll(dir, draft([entry('water-1'), entry('bread-1')]))
+    const old = 'review/translation-bg/2026-10-01-01.csv'
+    const changed = entry('water-1', { l1: { bg: { translation: 'водата', alternates: [], sense: '' } } })
+    expect(exportAll(dir, draft([changed, entry('bread-1')]))).toEqual(['review/translation-bg/2026-10-01-02.csv'])
+    expect(csvRecords(readFileSync(join(dir, old), 'utf8')).rows.map((r) => r['key'])).toEqual(['bread-1'])
+    expect(JSON.parse(readFileSync(join(dir, old.replace('.csv', '.json')), 'utf8')).items.map((i: { key: string }) => i.key)).toEqual(['bread-1'])
+    const fresh = 'review/translation-bg/2026-10-01-02.csv'
+    expect(csvRecords(readFileSync(join(dir, fresh), 'utf8')).rows).toMatchObject([{ key: 'water-1', translation: 'водата' }])
+    editRow(dir, fresh, 'water-1', { verdict: 'ok' })
+    importQueues(dir, specs, { by: 'Мария', now: NOW })
+    expect(Decisions.read(dir).all('translation-bg')).toMatchObject([{ key: 'water-1', verdict: 'ok', proposed: { translation: 'водата' } }])
+    expect(exportAll(dir, draft([changed, entry('bread-1')]))).toEqual([])
+  })
+
+  it('removes an open file left with no rows, and keeps a stale row that already has a verdict', () => {
+    const dir = makeContent()
+    exportAll(dir, draft([entry('water-1')]))
+    const changed = entry('water-1', { english: { ipa: 'ˈwɔːtər', variants: [], examples: ['Water, please.'] }, l1: { bg: { translation: 'водата', alternates: [], sense: '' } } })
+    editRow(dir, 'review/english/2026-10-01-01.csv', 'water-1', { verdict: 'ok' })
+    expect(exportAll(dir, draft([changed]))).toEqual(['review/translation-bg/2026-10-01-01.csv'])
+    expect(readdirSync(join(dir, 'review/translation-bg'))).toEqual(['2026-10-01-01.csv', '2026-10-01-01.json'])
+    expect(csvRecords(readFileSync(join(dir, 'review/translation-bg/2026-10-01-01.csv'), 'utf8')).rows).toMatchObject([{ key: 'water-1', translation: 'водата' }])
+    expect(csvRecords(readFileSync(join(dir, 'review/english/2026-10-01-01.csv'), 'utf8')).rows).toMatchObject([{ key: 'water-1', verdict: 'ok', ipa: 'ˈwɔːtə' }])
+  })
+
   it('ok on an untouched row is ok; ok on edited cells is a fix; drop is a drop', () => {
     const dir = makeContent()
     exportAll(dir, draft([entry('water-1'), entry('bread-1'), entry('salt-1')]))

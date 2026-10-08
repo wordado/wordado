@@ -105,7 +105,7 @@ function rowsOf(dir: string, queue: string, ctx: Ctx, opts: { withOtherSenses: b
 const rank = (r: RowView) => (r.reports !== '' ? 0 : r.severity === 'major' ? 1 : r.severity === 'minor' ? 2 : r.ai === 'unreviewed' ? 3 : 4)
 
 /** Rows of one queue, open ones in order: reported, then major, minor, then (when withUnflagged) the rest. A
- * stale row (its file is older than the draft) always shows, so a reviewer notices it needs `corpus queues` again. */
+ * stale row (its file is older than the draft) always shows; the next `corpus queues` re-issues it with the current proposal. */
 export function listRows(dir: string, queue: string, opts: { withUnflagged: boolean }): RowView[] {
   const ctx = makeCtx(dir)
   return rowsOf(dir, queue, ctx, { withOtherSenses: true })
