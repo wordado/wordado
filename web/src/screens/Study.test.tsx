@@ -131,6 +131,20 @@ describe('Study', () => {
     ])
   })
 
+  it('says the words are being got ready while the run starts, with a bar that claims no share', async () => {
+    const ctx = await setup()
+    let start!: () => void
+    vi.spyOn(ctx.client, 'startSession').mockImplementation(() => new Promise<string[]>((resolve) => (start = () => resolve([]))))
+    renderWith(<Study kind="session" mode="flashcard" />, ctx)
+    expect(screen.getByRole('status').textContent).toBe('Getting your words ready…')
+    const bar = screen.getByRole('progressbar', { name: 'Getting your words ready…' })
+    expect(bar.getAttribute('aria-busy')).toBe('true')
+    expect(bar.hasAttribute('aria-valuenow')).toBe(false)
+    await act(async () => start())
+    expect(await screen.findByRole('button', { name: 'Show answer' })).toBeTruthy()
+    expect(screen.queryByRole('progressbar', { name: 'Getting your words ready…' })).toBeNull()
+  })
+
   it('shows the error instead of loading forever when the run cannot start', async () => {
     const ctx = await setup()
     vi.spyOn(ctx.client, 'startSession').mockRejectedValue(new Error('database is locked'))
