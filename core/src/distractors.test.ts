@@ -188,4 +188,26 @@ describe('buildMatchingBoard', () => {
   it('returns null when it cannot', () => {
     expect(buildMatchingBoard([big, large, small], 3, seededRng(5))).toBeNull()
   })
+
+  it('deals the entries not yet shown first, and still never two that clash (spec §7.4, §8.1)', () => {
+    const others = ['a', 'b', 'c', 'd', 'e', 'f'].map((h) => entry(h, [`${h}-bg`]))
+    const pool = [big, large, ...others]
+    // Everything but big, large and one more has been shown: the board leads with the unseen ones, but takes only one of the clashing pair.
+    const shown = new Set(others.slice(1).map((e) => e.entryId))
+    for (let seed = 1; seed <= 40; seed += 1) {
+      const board = buildMatchingBoard(pool, 5, seededRng(seed), undefined, (e) => shown.has(e.entryId))!
+      expect(board).toHaveLength(5)
+      expect(board).toContain(others[0])
+      expect(board.filter((e) => e === big || e === large)).toHaveLength(1)
+      expect(new Set(board.slice(0, 2))).toEqual(new Set([others[0], board.includes(big) ? big : large]))
+    }
+    // Boards that remember what they dealt go through the whole pool before repeating.
+    const seen = new Set<string>()
+    const rng = seededRng(3)
+    for (let round = 0; round < 2; round += 1) {
+      const board = buildMatchingBoard(others.concat(big), 5, rng, () => 1, (e) => seen.has(e.entryId))!
+      for (const e of board) seen.add(e.entryId)
+    }
+    expect(seen.size).toBe(7)
+  })
 })

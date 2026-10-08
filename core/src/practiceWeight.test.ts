@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { PRACTICE_WEIGHT_MAX, practiceWeight, weightedOrder } from './practiceWeight'
+import { pickUnseenFirst, PRACTICE_WEIGHT_MAX, practiceWeight, weightedOrder } from './practiceWeight'
 import { seededRng } from './rng'
 import type { ReviewState } from './scheduler'
 import { Grade } from './types'
@@ -106,5 +106,73 @@ describe('weightedOrder', () => {
       // The item with the bad weight is still ordered, and all but never first.
       expect(first).toBeLessThan(3)
     }
+  })
+})
+
+describe('pickUnseenFirst: a visit covers the scope before it repeats (spec §7.4)', () => {
+  const items = Array.from({ length: 23 }, (_, i) => `w${i}`)
+  const even = () => 1
+
+  it('goes through every candidate before any comes twice, round after round', () => {
+    for (let seed = 1; seed <= 20; seed += 1) {
+      const rng = seededRng(seed)
+      const shown = new Set<string>()
+      for (const expected of [10, 20]) {
+        const round = pickUnseenFirst(items, shown, 10, even, rng)
+        expect(round).toHaveLength(10)
+        expect(round.some((item) => shown.has(item))).toBe(false)
+        for (const item of round) shown.add(item)
+        expect(shown.size).toBe(expected)
+      }
+      // Three are left: they lead the round, and words already shown fill it up, none twice.
+      const last = pickUnseenFirst(items, shown, 10, even, rng)
+      expect(last).toHaveLength(10)
+      expect(new Set(last).size).toBe(10)
+      expect(last.slice(0, 3).every((item) => !shown.has(item))).toBe(true)
+      expect(last.slice(3).every((item) => shown.has(item))).toBe(true)
+      for (const item of last) shown.add(item)
+      expect(shown.size).toBe(items.length)
+    }
+  })
+
+  it('starts over once all have been shown: the draw is then the plain weighted one', () => {
+    const all = new Set(items)
+    expect(pickUnseenFirst(items, all, 10, even, seededRng(4))).toEqual(weightedOrder(items, even, seededRng(4)).slice(0, 10))
+    expect(pickUnseenFirst(items, new Set(), 10, even, seededRng(4))).toEqual(weightedOrder(items, even, seededRng(4)).slice(0, 10))
+  })
+
+  it('leans towards the heavier words among those not yet shown, and among those that fill a round up', () => {
+    const weight = (item: string) => (item === 'w0' || item === 'w20' ? 5 : 1)
+    const shown = new Set(items.slice(0, 18))
+    const rng = seededRng(9)
+    let unseenLead = 0
+    let fillLead = 0
+    const ROUNDS = 3_000
+    for (let i = 0; i < ROUNDS; i += 1) {
+      const round = pickUnseenFirst(items, shown, 6, weight, rng)
+      // Five unseen words (w18 to w22), then one of the eighteen shown.
+      expect(round.slice(0, 5).every((item) => !shown.has(item))).toBe(true)
+      if (round[0] === 'w20') unseenLead += 1
+      if (round[5] === 'w0') fillLead += 1
+    }
+    // Expected 5/9 against 1/9 for a light unseen word, and 5/22 against 1/22 for a light shown one.
+    expect(unseenLead / ROUNDS).toBeGreaterThan(0.5)
+    expect(unseenLead / ROUNDS).toBeLessThan(0.62)
+    expect(fillLead / ROUNDS).toBeGreaterThan(0.18)
+    expect(fillLead / ROUNDS).toBeLessThan(0.28)
+  })
+
+  it('gives no more than there are, nothing for a count of zero or less, and ignores shown words that are not candidates', () => {
+    expect(pickUnseenFirst(items.slice(0, 4), new Set(), 10, even, seededRng(1))).toHaveLength(4)
+    expect(pickUnseenFirst(items.slice(0, 4), new Set(['w1', 'gone']), 10, even, seededRng(1)).slice(3)).toEqual(['w1'])
+    expect(pickUnseenFirst(items, new Set(), 0, even, seededRng(1))).toEqual([])
+    expect(pickUnseenFirst(items, new Set(), -2, even, seededRng(1))).toEqual([])
+    expect(pickUnseenFirst([], new Set(['w1']), 10, even, seededRng(1))).toEqual([])
+  })
+
+  it('is the same draw for the same seed, and another for another', () => {
+    const shown = new Set(items.slice(0, 7))
+    expect(pickUnseenFirst(items, shown, 10, even, seededRng(42))).toEqual(pickUnseenFirst(items, shown, 10, even, seededRng(42)))
+    expect(pickUnseenFirst(items, shown, 10, even, seededRng(42))).not.toEqual(pickUnseenFirst(items, shown, 10, even, seededRng(43)))
   })
 })

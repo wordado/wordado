@@ -1,12 +1,13 @@
-import type { Corpus } from './corpus'
+import { themeEntries, type Corpus } from './corpus'
 import { pickDistractors } from './distractors'
 import { masteryTier } from './mastery'
 import { chooseMode } from './modeSelection'
 import { isLive } from './path'
-import { practiceWeight, weightedOrder } from './practiceWeight'
+import { pickUnseenFirst, practiceWeight } from './practiceWeight'
+import { isSkippedLevel } from './progress'
 import { shuffle, type Rng } from './rng'
 import type { ReviewState } from './scheduler'
-import type { CorpusEntry, Direction, Mode, WordFlag } from './types'
+import type { CefrLevel, CorpusEntry, Direction, Mode, WordFlag } from './types'
 import { corpusWordId, parseWordId, type WordId } from './wordId'
 
 /** Options shown in a choice item, the answer included (spec §8.1). Tuning (§15). */
@@ -87,19 +88,50 @@ export interface PracticeContext {
   /** Words a later pack retired (spec §5.1): `Corpus.retired`. */
   readonly retired: ReadonlySet<WordId>
   /**
-   * Practice of one unit of a level the learner skipped (`isSkippedLevel`): its words were never started, so all
-   * of them may be used. Absent everywhere else.
+   * Practice that takes its scope whole (`scopePool`): a theme, or a unit of a level the learner skipped. All the
+   * scope's live words may be used, started or not. Absent everywhere else.
    */
   readonly unstarted?: boolean
 }
 
 /**
- * Whether practice may use a word (spec §7.4): started, and live — neither set aside nor retired. In a unit of a
- * skipped level (`unstarted`) a live word need not be started. The one rule behind every practice pool and every
- * "can this be practised" check; `unitPractisable` counts the same words of a unit.
+ * Whether practice may use a word (spec §7.4): started, and live — neither set aside nor retired. In a scope that
+ * is practised whole (`unstarted`) a live word need not be started. The one rule behind every practice pool and
+ * every "can this be practised" check; `unitPractisable` counts the same words of a unit.
  */
 export function practisable(wordId: WordId, ctx: PracticeContext): boolean {
   return (ctx.unstarted === true || ctx.states.has(wordId)) && isLive(wordId, ctx)
+}
+
+/** What practice keeps to when it is not over everything (spec §7.4): one unit of the path, or one theme. */
+export interface PracticeScope {
+  readonly kind: 'unit' | 'theme'
+  /** The unit's or the theme's ID. */
+  readonly id: string
+}
+
+/** What a scoped practice draws from. */
+export interface ScopePool {
+  /** The words of the unit or theme. */
+  readonly within: ReadonlySet<WordId>
+  /** The scope is practised whole: all its live words are used, started or not, and none is started by it. */
+  readonly unstarted: boolean
+}
+
+/**
+ * The words of the unit or theme being practised, and whether the never-started ones are among them (spec §7.4):
+ * a theme is practised whole, and so is a unit of a level the learner skipped (§7.2), whose words are never
+ * introduced; any other unit keeps to its started words. Undefined for practice over everything, and for a unit
+ * or theme the corpus does not hold. The one place that decides it.
+ */
+export function scopePool(corpus: Corpus | null, declaredLevel: CefrLevel, scope: PracticeScope | undefined): ScopePool | undefined {
+  if (!scope || !corpus) return undefined
+  if (scope.kind === 'unit') {
+    const unit = corpus.units.find((u) => u.unitId === scope.id)
+    return unit && { within: new Set(unit.wordIds), unstarted: isSkippedLevel(unit.level, declaredLevel) }
+  }
+  if (!corpus.themes.some((t) => t.themeId === scope.id)) return undefined
+  return { within: new Set(themeEntries(corpus, scope.id).map((e) => corpusWordId(e.entryId))), unstarted: true }
 }
 
 export interface PracticeInput extends PracticeContext {
@@ -107,31 +139,39 @@ export interface PracticeInput extends PracticeContext {
   readonly exclude: ReadonlySet<WordId>
   /** Practising one unit or theme: its words, and the run keeps to them. Absent for practice over everything. */
   readonly within?: ReadonlySet<WordId>
+  /** Words this visit has already shown in the scope: the others are drawn first (`pickUnseenFirst`). Absent for practice over everything. */
+  readonly shown?: ReadonlySet<WordId>
   readonly count: number
   readonly rng: Rng
 }
 
 /**
- * Words for extra practice (spec §7.4): introduced, not flagged, not retired, not in
- * today's session — unless that leaves nothing, when the session's words are
- * used after all: practice never touches the schedule, and a repeat is better
- * than a run with nothing in it. The draw leans towards weaker words
- * (`practiceWeight`) and never repeats one. With `unstarted`, the words of
- * `within` that were never started are drawn too, at the base weight.
+ * The words a practice run may draw now (spec §7.4): introduced, not flagged, not retired, not in today's
+ * session — unless that leaves nothing, when the session's words are used after all: practice never touches the
+ * schedule, and a repeat is better than a run with nothing in it. With `unstarted`, the words of `within` that
+ * were never started are among them.
  */
-export function practiceWords(input: PracticeInput): WordId[] {
+export function practiceCandidates(input: Omit<PracticeInput, 'count' | 'rng' | 'shown'>): WordId[] {
   const { within, states } = input
-  // Unstarted words have no state to be listed by: they come from the unit itself.
+  // Unstarted words have no state to be listed by: they come from the unit or theme itself.
   const pool = input.unstarted && within ? [...within] : [...states.keys()].filter((id) => !within || within.has(id))
   const usable = pool.filter((id) => practisable(id, { ...input, unstarted: input.unstarted === true && within !== undefined }))
   const outside = usable.filter((id) => !input.exclude.has(id))
-  const candidates = outside.length > 0 ? outside : usable
-  return weightedOrder(candidates, (id) => practiceWeight(states.get(id)), input.rng).slice(0, Math.max(0, input.count))
+  return outside.length > 0 ? outside : usable
+}
+
+/**
+ * Words for extra practice (spec §7.4): `count` of `practiceCandidates`. The draw leans towards weaker words
+ * (`practiceWeight`) and never repeats one; a never-started word is drawn at the base weight. Given what the
+ * visit has `shown`, the words not yet shown are drawn first.
+ */
+export function practiceWords(input: PracticeInput): WordId[] {
+  return pickUnseenFirst(practiceCandidates(input), input.shown ?? new Set(), input.count, (id) => practiceWeight(input.states.get(id)), input.rng)
 }
 
 /**
  * What a matching board may use (spec §8.1): introduced, live corpus words; those of `within` when practising one
- * unit, and with `unstarted` (a unit of a skipped level) all its live words.
+ * unit or theme, and with `unstarted` (a scope practised whole) all its live words.
  */
 export function matchingCandidates(
   corpus: Corpus,
