@@ -709,7 +709,12 @@ seen. `core` composes each session as follows.
    still comes first, so a board may take a word already shown where the
    unseen ones clash. The scoped practice screen shows the visit's progress in
    one quiet line ("12 of 38 words seen"), counted over the words a run can
-   draw now. The memory is held in memory only: it is not stored, not synced,
+   draw now; when words of the scope are left to today's session, the line
+   says how many ("9 of 24 words seen · 1 in today's session"), so a total
+   that drops when a word is chosen to learn is accounted for. "All shown" is
+   one notion for runs and boards alike — every word a run can draw now — so a
+   board may deal a session word without holding the start back. The memory
+   is held in memory only: it is not stored, not synced,
    and gone when the app is closed. Practice over everything keeps none and
    draws as before.
 
