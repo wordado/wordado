@@ -653,23 +653,32 @@ seen. `core` composes each session as follows.
    is not practice: it serves due words, in that mode, and counts normally.
    Practice can also be **kept to one unit or one theme**, opened from that
    unit on the path (§7.2) or that theme on the themes screen (§8.9): the same
-   ways to practise, drawing only on its started words under the same rules as
-   any practice. It is practice in every respect above, and changes neither
-   the schedule, the daily session, which words are introduced, nor the
-   learner's chosen collection.
+   ways to practise, under the same rules as any practice. A unit's practice
+   draws only on its started words; a theme's on the whole theme (below). It
+   is practice in every respect above, and changes neither the schedule, the
+   daily session, which words are introduced, nor the learner's chosen
+   collection.
 
-   *A unit of a skipped level* (§7.2) is the one exception to "started words":
-   its practice draws on **all** the unit's words that are neither set aside
-   nor retired, started or not, because a skipped level's words are never
-   introduced and there would be nothing to practise. Nothing is started by
-   it: an answer to a never-started word is an ordinary practice event, so it
-   creates no review state, does not introduce the word, and leaves the daily
-   session, the unlocks, the level's skipped status and every progress figure
-   as they were. The practice screen says the words are from a level the
-   learner skipped. Everywhere else — practice over everything, a theme, a
-   unit at or above the declared level — only started words are used.
+   *A theme, and a unit of a skipped level* (§7.2), are **practised whole**:
+   the two exceptions to "started words". Their practice draws on **all** the
+   words of the theme or unit that are neither set aside nor retired, started
+   or not. A learner with a trip next week wants to go through everything in
+   *Travel* now, not only what the plan has reached; and a skipped level's
+   words are never introduced, so there would be nothing to practise. Nothing
+   is started by it: an answer to a never-started word is an ordinary practice
+   event, so it creates no review state, does not introduce the word, and
+   leaves the daily session, the unlocks, a level's skipped status, the
+   chosen collection and every progress figure as they were. The practice
+   screen says so in one quiet line — that the words are from a level the
+   learner skipped, or that the practice covers the whole theme, including
+   words not started (the latter only while the theme has such words). In a
+   run, the card of a word the learner has not started carries a small
+   **New to you** label, beside *Above your level* when both apply.
+   Everywhere else — practice over everything, a unit at or above the
+   declared level — only started words are used.
 
-   *Which words practice picks.* Started words that are neither set aside nor
+   *Which words practice picks.* Started words — or, where the scope is
+   practised whole, all its words — that are neither set aside nor
    retired. A practice run leaves out the words today's session serves —
    practising them would only repeat the session. Those words come back only
    when the scope would otherwise have nothing at all: practice never touches
@@ -682,10 +691,27 @@ seen. `core` composes each session as follows.
    never forgotten and was last rated good or easy has weight 1, and a word
    gains weight for having been forgotten before (lapses), for short-lived
    memory (learning or young, by stability), and for a last scheduled rating
-   of again or hard, up to a cap of 5. A word with no review state (a skipped
-   level's unit) has weight 1. It is a lean, not a sort: every word can
-   still come up. The weights are tuning (§15) and read only what the review
-   state already holds.
+   of again or hard, up to a cap of 5. A word with no review state (a theme,
+   or a skipped level's unit) has weight 1. It is a lean, not a sort: every
+   word can still come up. The weights are tuning (§15) and read only what the
+   review state already holds.
+
+   *Covering a unit or theme before repeating.* A run is ten words, so a
+   weighted draw made afresh each time would repeat some words of a larger
+   scope and miss others. Practice kept to a unit or theme therefore remembers
+   which of its words it has shown **since the app was opened**, and each
+   pick — a run's words and a matching board alike, in one memory per unit or
+   theme — takes the words **not yet shown first**, weighted among themselves
+   as above. A pick the unseen words cannot fill is filled up with words
+   already shown; once every word a pick could use has been shown, the scope
+   starts over. A word counts as shown when it has come on screen, not when
+   it was drawn. On a matching board the rule against clashing pairs (§8.1)
+   still comes first, so a board may take a word already shown where the
+   unseen ones clash. The scoped practice screen shows the visit's progress in
+   one quiet line ("12 of 38 words seen"), counted over the words a run can
+   draw now. The memory is held in memory only: it is not stored, not synced,
+   and gone when the app is closed. Practice over everything keeps none and
+   draws as before.
 
 **Known and suspended words.** A learner can flag any word *known* ("I don't
 need this") or *suspended* ("not now"). Either removes it from the new-word
@@ -694,14 +720,17 @@ undone. A known word is shown as known-by-declaration and never counted as
 mature. Flags are versioned documents (§9.2).
 
 **Words chosen to learn.** While practising a word that was never started (a
-unit of a skipped level, above), the learner can choose **Learn this word**:
+theme, or a unit of a skipped level, above), the learner can choose **Learn
+this word**:
 once the answer is on screen the card offers it, named with the word. The
 word then enters normal learning: the daily session serves it as a new word,
 ahead of the collection and the path and within the daily new-word limit, so
 the home screen counts it among the day's new words exactly as it will be
 served. From its first scheduled review it is a word like any other. It does
 not un-skip its level: the level stays "skipped — placed above", and only
-that word is started.
+that word is started. A chosen word that the collection or the path would
+serve as well — marked in a theme's practice, and the theme then chosen for
+study — is served once, from the learner's own choices.
 
 The same control then reads "Will be learned" and takes the choice back, until
 the word is started. Once the word has review state the mark is spent and is
@@ -1167,17 +1196,27 @@ be practised, and that choosing another replaces the choice. **Studying now**
 holds the chosen theme, with the way back to path order, or one line saying
 that no theme is chosen and new words follow the path. **Studied** holds every
 other theme with a started word: practice first, and a quieter *Study this
-next*. **Not started** holds the rest, shown more quietly, with *Study this
-next* alone. A group with no themes is left out; within a group the themes
+next*. **Not started** holds the rest, shown more quietly: *Study this next*
+first, and a quieter *Practise this theme*. The groups are about the plan —
+what is being studied, what has been, what has not; practice is offered in
+all three. A group with no themes is left out; within a group the themes
 keep the pack's order. Choosing a theme moves its card to the first group and
 the one before it to the group its own state gives it; focus follows the card
 and the change is announced.
 
-*Practising a theme.* Every theme with at least one started word that is not
-set aside offers practice kept to that theme (§7.4). It is separate from
-choosing the theme: it does not change the active collection, and it draws
-only on started words, so a theme's words above the learner's level are
-practised only once they have been started.
+*Practising a theme.* Every theme with at least one word that is neither set
+aside nor retired offers practice kept to that theme (§7.4), in whichever
+group it stands. It covers the **whole theme**, started or not, words above
+the learner's level included, and it is separate from choosing the theme: it
+starts no word, does not change the active collection, and moves the theme to
+no other group.
+
+When a theme's practice ends, the done screen offers, besides the way back to
+the themes and *Practise more*, **Study this theme** — if the theme is not the
+one being studied and still has words to start. It makes the theme the active
+collection exactly as *Study this next* does; the learner stays on the done
+screen, where a line says the theme is now being studied. The line counting
+the words marked with *Learn this word* (§7.4) stays as it is.
 
 **Exam collections — Phase 3.** *IELTS, TOEFL, academic.* These wait because
 they need B2–C1 entries, which arrive in Phase 2, and separate curation.
@@ -1986,6 +2025,24 @@ owner.
   Setting a word aside clears its mark; the path's word list marks and
   unmarks; and a refused write of a document the server never held is removed
   from the device (§9.2).
+
+**2026-10-08 — practising a whole theme.** Decided by the product owner.
+
+- **Practice (§7.4, §8.9):** a theme's practice covers the whole theme: all
+  its live words that are not set aside, started or not, as a skipped level's
+  unit already was. Nothing is started by it. This replaces "a theme's
+  practice draws only on started words" of 2026-10-07.
+- **Practice (§7.4), same day:** within one visit, practice kept to a unit or
+  theme takes the words not yet shown first and starts over when all have
+  been shown; the practice screen shows how many have been seen. In memory
+  only. A never-started word's card is labelled "New to you".
+- **Themes (§8.9), same day:** every theme with a word to practise offers
+  practice, in all three groups, and the done screen of a theme's practice
+  offers "Study this theme".
+- **Streaks (§8.4), same day:** practice keeps counting towards the day, and
+  practice alone can complete one, as §8.4 has it. Reconsidered now that a
+  whole theme can be practised without studying it, and kept deliberately:
+  nothing changes.
 
 **2026-10-08 — automatic app updates.** Decided by the product owner.
 
