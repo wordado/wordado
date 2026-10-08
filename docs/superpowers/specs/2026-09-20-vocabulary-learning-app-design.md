@@ -591,6 +591,13 @@ started word that is not set aside also offers **practice of that unit**
 (§7.4), so a learner can go back over an open unit at any time. A locked unit
 offers neither.
 
+A unit of a skipped level — one below the declared level — offers practice of
+that unit too, whenever it has a live word that is not set aside, although none
+of its words was ever started: the learner placed above it and may still want
+to go over it. Such practice uses all the unit's words and starts none of them
+(§7.4); the level stays "skipped — placed above". It never offers the daily
+session, which does not serve its words.
+
 ### 7.3 Grading inputs
 
 Every game mode reports a grade plus response latency. A correct-but-slow
@@ -647,6 +654,17 @@ seen. `core` composes each session as follows.
    the schedule, the daily session, which words are introduced, nor the
    learner's chosen collection.
 
+   *A unit of a skipped level* (§7.2) is the one exception to "started words":
+   its practice draws on **all** the unit's words that are neither set aside
+   nor retired, started or not, because a skipped level's words are never
+   introduced and there would be nothing to practise. Nothing is started by
+   it: an answer to a never-started word is an ordinary practice event, so it
+   creates no review state, does not introduce the word, and leaves the daily
+   session, the unlocks, the level's skipped status and every progress figure
+   as they were. The practice screen says the words are from a level the
+   learner skipped. Everywhere else — practice over everything, a theme, a
+   unit at or above the declared level — only started words are used.
+
    *Which words practice picks.* Started words that are neither set aside nor
    retired. A practice run leaves out the words today's session serves —
    practising them would only repeat the session. Those words come back only
@@ -660,7 +678,8 @@ seen. `core` composes each session as follows.
    never forgotten and was last rated good or easy has weight 1, and a word
    gains weight for having been forgotten before (lapses), for short-lived
    memory (learning or young, by stability), and for a last scheduled rating
-   of again or hard, up to a cap of 5. It is a lean, not a sort: every word can
+   of again or hard, up to a cap of 5. A word with no review state (a skipped
+   level's unit) has weight 1. It is a lean, not a sort: every word can
    still come up. The weights are tuning (§15) and read only what the review
    state already holds.
 
@@ -1851,6 +1870,13 @@ owner.
 - **Themes (§8.9), same day:** the themes screen sorts the themes into
   studying now, studied and not started, and "Study this next" replaces
   "Study this theme".
+
+**2026-10-08 — practice of a skipped level's unit.** Decided by the product
+owner.
+
+- **Path, practice (§7.2, §7.4):** a unit of a level below the declared one
+  offers practice of that unit, drawn from all its live words that are not set
+  aside, started or not. Nothing is started by it, and the level stays skipped.
 
 ### Approval status
 
