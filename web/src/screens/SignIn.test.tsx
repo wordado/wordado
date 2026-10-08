@@ -204,10 +204,12 @@ describe('SignIn: a code by email (spec §8.6)', () => {
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'ana@example.com' } })
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Email me a code' })))
     expect(screen.queryByText('Signing you in…')).toBeNull()
+    expect(screen.queryByRole('progressbar')).toBeNull()
     fireEvent.change(screen.getByLabelText('Code'), { target: { value: '123456' } })
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
     await act(async () => undefined)
     expect(screen.getByText('Signing you in…')).toBeTruthy()
+    expect(screen.getByRole('progressbar', { name: 'Signing you in…' }).hasAttribute('aria-valuenow')).toBe(false)
     await act(async () => resolveVerify())
   })
 

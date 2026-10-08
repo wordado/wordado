@@ -289,9 +289,11 @@ describe('Settings: the account (spec §11)', () => {
     await act(async () => fireEvent.click(button))
     expect(button.disabled).toBe(true)
     expect(screen.getByText('Signing out…').getAttribute('role')).toBe('status')
+    expect(screen.getByRole('progressbar', { name: 'Signing out…' }).hasAttribute('aria-valuenow')).toBe(false)
     await act(async () => fail(new SignOutOffline(new Error('offline'))))
     expect(button.disabled).toBe(false)
     expect(screen.queryByText('Signing out…')).toBeNull()
+    expect(screen.queryByRole('progressbar')).toBeNull()
     expect(screen.getByRole('alert').textContent).toBe('Signing out needs a connection. Your progress stays on this device.')
   })
 

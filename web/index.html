@@ -11,7 +11,13 @@
     <title>Wordado</title>
   </head>
   <body>
-    <div id="root"></div>
+    <!-- Shown until the app's code has loaded and rendered over it: a wait like any other gets a bar. -->
+    <div id="root">
+      <main class="notice">
+        <p>Wordado</p>
+        <div class="bar is-indeterminate" role="progressbar" aria-label="Wordado"><span></span></div>
+      </main>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
