@@ -3,8 +3,8 @@ import { applyDecisions, type QueueRules } from '../shared/apply'
 import type { SubmitResult } from '../shared/hosted'
 import { rowHash } from '../shared/rowHash'
 import type { Deps } from './app'
-import { claimSubmission, completeSubmission, listDecisions, listReviewers, listSubmissions, pendingClaim, releaseSubmission, setSubmissionBranch, type AssignmentRow, type DecisionRow, type ReviewerRow, type SubmissionRow } from './db'
-import type { GitHub } from './github'
+import { branchClaimedByOther, claimSubmission, completeSubmission, listDecisions, listReviewers, listSubmissions, pendingClaim, releaseSubmission, setSubmissionBranch, type AssignmentRow, type DecisionRow, type ReviewerRow, type SubmissionRow } from './db'
+import { GitHubError, type GitHub } from './github'
 import { reviewMailer } from './mail'
 
 export function branchSlug(name: string, email: string): string {
@@ -16,6 +16,9 @@ const AUTHOR_EMAIL = 'review@wordado.com'
 const IN_PROGRESS = 'A submit is already in progress for this assignment. Try again in a minute.'
 /** How long a claim with no pull request is taken for a submit still running, before it is given up. */
 const CLAIM_GRACE_MS = 2 * 60_000
+/** The wait before the one more try at opening the pull request, unless GitHub names a wait of its own. */
+const RETRY_WAIT_MS = 2000
+const RETRY_AFTER_MAX_S = 5
 
 /**
  * Settles a claim that has no pull request recorded (a submit cut off mid-way, or one whose record failed after
@@ -31,6 +34,77 @@ export async function settleClaim(deps: Deps, gh: GitHub, claim: SubmissionRow):
   if (deps.now().getTime() - Date.parse(claim.createdAt) < CLAIM_GRACE_MS) return { state: 'running' }
   await releaseSubmission(deps.env.DB, claim.id)
   return { state: 'released' }
+}
+
+/** A failure that may pass by itself: GitHub's own trouble, a rate limit, or GitHub not reached. */
+function passing(err: unknown): err is GitHubError {
+  if (!(err instanceof GitHubError)) return false
+  return err.status >= 500 || err.status === 0 || err.status === 429 || (err.status === 403 && (err.retryAfter !== null || /rate limit|abuse/i.test(err.detail)))
+}
+
+/** A failure after which the pull request may exist all the same: anything but GitHub's plain refusal (a 4xx other than 422 and 429). */
+function ambiguous(err: unknown): boolean {
+  return !(err instanceof GitHubError) || err.status >= 500 || err.status === 0 || err.status === 429 || err.status === 422
+}
+
+/**
+ * Opening the pull request failed and GitHub did not say whether it exists. The claim is kept, so that
+ * settleClaim decides later and no second pull request is opened.
+ */
+export class PrUnconfirmed extends Error {
+  constructor(override readonly cause: unknown) {
+    super(`pull request not confirmed: ${cause instanceof Error ? cause.message : String(cause)}`)
+    this.name = 'PrUnconfirmed'
+  }
+}
+
+/**
+ * Opens the pull request, trying once more after a failure that may pass (not when GitHub asks for a longer wait
+ * than RETRY_AFTER_MAX_S). A failed call may still have opened it, and a 422 may mean it is there already: after
+ * such a failure a pull request found for the branch is used, and when GitHub cannot say whether there is one
+ * the failure is PrUnconfirmed.
+ */
+async function openPr(deps: Deps, gh: GitHub, o: { title: string; head: string; body: string }): Promise<{ number: number; url: string }> {
+  let maybeOpened = false
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await gh.openPr(o)
+    } catch (err) {
+      maybeOpened ||= ambiguous(err)
+      const again = attempt === 1 && passing(err) && (err.retryAfter ?? 0) <= RETRY_AFTER_MAX_S
+      if (again) {
+        deps.log(`submit: ${err.message} for ${o.head}, trying once more`)
+        await deps.sleep(err.retryAfter !== null && err.retryAfter > 0 ? err.retryAfter * 1000 : RETRY_WAIT_MS)
+      }
+      if (maybeOpened) {
+        const found = await gh.findPr(o.head).then((pr) => pr ?? ('none' as const), () => 'unknown' as const)
+        if (typeof found === 'object') return found
+        if (!again && found === 'unknown') throw new PrUnconfirmed(err)
+      }
+      if (!again) throw err
+    }
+  }
+}
+
+/**
+ * A branch of this base name left by a submit that failed before its pull request, holding exactly what this
+ * submit would write: its one commit has this tree, this parent and this message, no pull request was ever
+ * opened from it, and no other claim names it. Null when there is none, or when GitHub fails to say (the submit
+ * then writes a new branch); such a branch is never changed.
+ */
+async function leftBehind(deps: Deps, gh: GitHub, claim: number, base: string, want: { tree: string; parent: string; message: string }): Promise<string | null> {
+  try {
+    const candidates = (await gh.branches(`${base}-`)).filter((b) => /^\d+$/.test(b.name.slice(base.length + 1)))
+    for (const b of candidates) {
+      const c = await gh.commitOf(b.sha)
+      if (c.tree !== want.tree || c.parents.length !== 1 || c.parents[0] !== want.parent || c.message.trimEnd() !== want.message.trimEnd()) continue
+      if (await branchClaimedByOther(deps.env.DB, b.name, claim)) continue
+      if ((await gh.findPr(b.name)) === null) return b.name
+    }
+  } catch (err) {
+    deps.log(`submit: no look for a branch left behind (${base}): ${err instanceof Error ? err.message : String(err)}`)
+  }
+  return null
 }
 
 /** Spec §7.2: the assignment's unsubmitted decisions, checked against main, as one commit and one pull request. */
@@ -85,8 +159,15 @@ export async function submit(deps: Deps, me: ReviewerRow, a: AssignmentRow, gh: 
   if (claim === null) return { status: 409, message: IN_PROGRESS }
   let pr: { number: number; url: string }
   try {
-    for (;;) {
-      const made = await gh.commitFiles({ parent: head, branch, message, author: { name: me.name, email: AUTHOR_EMAIL }, files })
+    const tree = await gh.writeTree(head, files)
+    // A submit that failed before its pull request left its branch: when it holds exactly this commit, use it.
+    const reuse = await leftBehind(deps, gh, claim, base, { tree, parent: head, message })
+    if (reuse !== null) {
+      if (reuse !== branch) await setSubmissionBranch(deps.env.DB, claim, reuse)
+      branch = reuse
+    }
+    while (reuse === null) {
+      const made = await gh.commitFiles({ parent: head, branch, message, author: { name: me.name, email: AUTHOR_EMAIL }, files, tree })
       if ('commit' in made) break
       n += 1
       if (n > 20) throw new Error('could not find a free branch name')
@@ -97,8 +178,15 @@ export async function submit(deps: Deps, me: ReviewerRow, a: AssignmentRow, gh: 
     const perFile = files.map((f) => `- ${f.path}: ${sent.filter((d) => d.file === f.path).length}`).join('\n')
     const notes = sent.filter((d) => d.note !== '').map((d) => `- ${d.key}: ${d.note}`).join('\n')
     const body = `Submitted by ${me.name} in the review app.\n\n${counts}\n\n${perFile}${notes ? `\n\nNotes:\n${notes}` : ''}${leftOut.length ? `\n\nLeft out (changed or gone since decided): ${leftOut.map((l) => l.key).join(', ')}` : ''}`
-    pr = await gh.openPr({ title: `${a.queue}: ${sent.length} decisions by ${me.name}`, head: branch, body })
+    pr = await openPr(deps, gh, { title: `${a.queue}: ${sent.length} decisions by ${me.name}`, head: branch, body })
   } catch (err) {
+    const cause = err instanceof PrUnconfirmed ? err.cause : err
+    if (cause instanceof GitHubError) deps.log(`submit of assignment ${a.id} failed at ${cause.what}: branch ${branch}, status ${cause.status}, ${cause.detail || 'no detail'}`)
+    if (err instanceof PrUnconfirmed) {
+      // The pull request may exist: the claim stays, and settleClaim completes or releases it later.
+      deps.log(`submit of assignment ${a.id}: GitHub did not say whether ${branch} has a pull request; the claim is kept`)
+      throw err
+    }
     // No pull request exists: give the claim up, so the decisions can be submitted again.
     await releaseSubmission(deps.env.DB, claim)
     throw err
