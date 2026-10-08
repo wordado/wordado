@@ -63,7 +63,13 @@ export function Practice(props: ScopeParams) {
               {t(scope?.start ?? 'home.practice')}
             </Link>
           </div>
-          {visit && <p className="note practice-visit">{t('practice.visitSeen', { seen: visit.seen, count: visit.total })}</p>}
+          {visit && (
+            <p className="note practice-visit">
+              {t('practice.visitSeen', { seen: visit.seen, count: visit.total })}
+              {/* Words of the scope that today's session serves: practice leaves them to it, and says where they are. */}
+              {visit.inSession > 0 && ` · ${t('practice.visitInSession', { count: visit.inSession })}`}
+            </p>
+          )}
           <h2 className="practice-one-way">{t('practice.oneWay')}</h2>
           <ul className="practice-list">
             {ONE_WAY.map((way) => (

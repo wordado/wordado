@@ -1,5 +1,6 @@
 import { corpusWordId, DAY_MS, Grade, RELEARN_DELAY_MS, themeEntries, XP_AMOUNTS, type Mode, type WordId } from '@wordado/core'
 import { describe, expect, it, vi } from 'vitest'
+import { MatchingRun } from './matching'
 import { ITEM_SETTLE_MS, PRACTICE_RUN_SIZE, StudyRun, visitProgress, type RunOptions } from './run'
 import { openSampleClient } from './testing/sample'
 import { testEnv, type TestEnv } from './testing/testEnv'
@@ -645,25 +646,25 @@ describe('a visit’s practice of one unit or theme covers it before repeating (
     const client = await openSampleClient(env)
     const theme = themeEntries(client.snapshot.corpus!, 'daily-life').map((e) => corpusWordId(e.entryId))
     expect(theme).toHaveLength(25)
-    expect(visitProgress(client, scope)).toEqual({ seen: 0, total: 25 })
+    expect(visitProgress(client, scope)).toEqual({ seen: 0, total: 25, inSession: 0 })
     const first = await round(client, env)
     expect(new Set(first).size).toBe(PRACTICE_RUN_SIZE)
-    expect(visitProgress(client, scope)).toEqual({ seen: 10, total: 25 })
+    expect(visitProgress(client, scope)).toMatchObject({ seen: 10, total: 25 })
     const second = await round(client, env)
     expect(second).toHaveLength(PRACTICE_RUN_SIZE)
     expect(second.some((wordId) => first.includes(wordId))).toBe(false)
-    expect(visitProgress(client, scope)).toEqual({ seen: 20, total: 25 })
+    expect(visitProgress(client, scope)).toMatchObject({ seen: 20, total: 25 })
     // Five are left: they lead the third round, and words already shown fill it up to its usual size.
     const third = await round(client, env)
     expect(new Set(third).size).toBe(PRACTICE_RUN_SIZE)
     expect(third.slice(0, 5).some((wordId) => first.includes(wordId) || second.includes(wordId))).toBe(false)
     expect(third.slice(5).every((wordId) => first.includes(wordId) || second.includes(wordId))).toBe(true)
     expect(new Set([...first, ...second, ...third])).toEqual(new Set(theme))
-    expect(visitProgress(client, scope)).toEqual({ seen: 25, total: 25 })
+    expect(visitProgress(client, scope)).toMatchObject({ seen: 25, total: 25 })
     // All shown: the next round starts over.
     const fourth = await round(client, env)
     expect(new Set(fourth).size).toBe(PRACTICE_RUN_SIZE)
-    expect(visitProgress(client, scope)).toEqual({ seen: 10, total: 25 })
+    expect(visitProgress(client, scope)).toMatchObject({ seen: 10, total: 25 })
     // Forty practice answers, and no word started.
     expect(client.snapshot.states.size).toBe(0)
   })
@@ -677,16 +678,16 @@ describe('a visit’s practice of one unit or theme covers it before repeating (
     // Stopped with the third word on screen.
     const begun = await round(client, env, {}, 2)
     expect(begun).toHaveLength(3)
-    expect(visitProgress(client, scope)).toEqual({ seen: 3, total: 25 })
-    expect(visitProgress(client, unitScope)).toEqual({ seen: 0, total: unit.wordIds.length })
+    expect(visitProgress(client, scope)).toMatchObject({ seen: 3, total: 25 })
+    expect(visitProgress(client, unitScope)).toMatchObject({ seen: 0, total: unit.wordIds.length })
     // Another way to practise the same theme carries on from there.
     const mixed = await round(client, env, { mode: 'multiple_choice' }, 0)
     expect(begun).not.toContain(mixed[0])
-    expect(visitProgress(client, scope)).toEqual({ seen: 4, total: 25 })
+    expect(visitProgress(client, scope)).toMatchObject({ seen: 4, total: 25 })
     const ofUnit = await round(client, env, { scope: unitScope })
     expect(ofUnit.every((wordId) => unit.wordIds.includes(wordId))).toBe(true)
-    expect(visitProgress(client, unitScope)).toEqual({ seen: 10, total: unit.wordIds.length })
-    expect(visitProgress(client, scope)).toEqual({ seen: 4, total: 25 })
+    expect(visitProgress(client, unitScope)).toMatchObject({ seen: 10, total: unit.wordIds.length })
+    expect(visitProgress(client, scope)).toMatchObject({ seen: 4, total: 25 })
     const more = await round(client, env, { scope: unitScope })
     expect(more.some((wordId) => ofUnit.includes(wordId))).toBe(false)
   })
@@ -696,13 +697,19 @@ describe('a visit’s practice of one unit or theme covers it before repeating (
     const client = await openSampleClient(env)
     await client.updateSettings({ activeTheme: 'daily-life' })
     // Ten of the theme's words are today's new words: practice keeps to the other fifteen.
-    expect(visitProgress(client, scope)).toEqual({ seen: 0, total: 15 })
+    expect(visitProgress(client, scope)).toEqual({ seen: 0, total: 15, inSession: 10 })
     const first = await round(client, env)
     const second = await round(client, env)
     expect(first.concat(second).some((wordId) => client.snapshot.plan!.newWords.includes(wordId))).toBe(false)
-    expect(visitProgress(client, scope)).toEqual({ seen: 15, total: 15 })
+    expect(visitProgress(client, scope)).toMatchObject({ seen: 15, total: 15 })
     await client.setFlag(first[0]!, 'known')
-    expect(visitProgress(client, scope)).toEqual({ seen: 14, total: 14 })
+    expect(visitProgress(client, scope)).toEqual({ seen: 14, total: 14, inSession: 10 })
+    // A word chosen to learn joins today's new words: it leaves the count for the session, and the line can say so.
+    await client.updateSettings({ activeTheme: null })
+    expect(visitProgress(client, scope)).toMatchObject({ total: 24, inSession: 0 })
+    const unseen = themeEntries(client.snapshot.corpus!, 'daily-life').map((e) => corpusWordId(e.entryId)).find((wordId) => !first.concat(second).includes(wordId))!
+    await client.setToLearn(unseen, true)
+    expect(visitProgress(client, scope)).toEqual({ seen: 14, total: 23, inSession: 1 })
   })
 
   it('keeps no memory for practice over everything, nor for a theme the corpus does not hold', async () => {
@@ -719,12 +726,62 @@ describe('a visit’s practice of one unit or theme covers it before repeating (
     expect(visitProgress(client, nowhere)).toBeNull()
   })
 
+  it('starts over for runs and matching boards at the same moment: when every word a run can draw has been shown', async () => {
+    const env = testEnv()
+    const client = await openSampleClient(env)
+    await client.updateSettings({ activeTheme: 'daily-life' })
+    const session = new Set(client.snapshot.plan!.newWords)
+    const dealt = () => MatchingRun.start(client, env, scope)!.snapshot.left.map((e) => corpusWordId(e.entryId))
+    // Two rounds show the fifteen words a run can draw; the ten of today's session have not been shown.
+    await round(client, env)
+    await round(client, env)
+    expect(visitProgress(client, scope)).toEqual({ seen: 15, total: 15, inSession: 10 })
+    // The session's unseen words do not hold the start back: the next board starts over, as the next run would,
+    // and deals from the whole theme again, a session word like any other.
+    const board = dealt()
+    const counted = board.filter((wordId) => !session.has(wordId)).length
+    expect(visitProgress(client, scope)).toEqual({ seen: counted, total: 15, inSession: 10 })
+    // Boards alone get there too, session words among them or not; then a run starts over in the same way.
+    for (let guard = 0; guard < 20 && visitProgress(client, scope)!.seen < 15; guard += 1) dealt()
+    expect(visitProgress(client, scope)!.seen).toBe(15)
+    expect(await round(client, env)).toHaveLength(PRACTICE_RUN_SIZE)
+    expect(visitProgress(client, scope)).toMatchObject({ seen: 10, total: 15 })
+  })
+
+  it('hands a round a copy of what was shown: a later round does not change it', async () => {
+    const env = testEnv()
+    const client = await openSampleClient(env)
+    const theme = themeEntries(client.snapshot.corpus!, 'daily-life').map((e) => corpusWordId(e.entryId))
+    const first = await round(client, env)
+    const held = client.practiceVisit.begin(scope, theme)
+    expect(new Set(held)).toEqual(new Set(first))
+    await round(client, env)
+    client.practiceVisit.show(scope, theme.find((wordId) => !held.has(wordId))!)
+    expect(new Set(held)).toEqual(new Set(first))
+    expect(client.practiceVisit.begin(scope, theme).size).toBeGreaterThan(held.size)
+  })
+
+  it('belongs to its client: another client, as after signing out or switching account, opens with nothing shown', async () => {
+    const env = testEnv()
+    const one = await openSampleClient(env)
+    await round(one, env)
+    MatchingRun.start(one, env, scope)
+    expect(visitProgress(one, scope)!.seen).toBe(15)
+    const other = await openSampleClient(env)
+    expect(other.practiceVisit).not.toBe(one.practiceVisit)
+    expect(visitProgress(other, scope)).toEqual({ seen: 0, total: 25, inSession: 0 })
+    expect(other.practiceVisit.begin(scope, themeEntries(other.snapshot.corpus!, 'daily-life').map((e) => corpusWordId(e.entryId))).size).toBe(0)
+    // What the other shows stays its own.
+    await round(other, env)
+    expect(visitProgress(one, scope)!.seen).toBe(15)
+  })
+
   it('is gone with the app: a client opened anew has shown nothing', async () => {
     const env = testEnv()
     const client = await openSampleClient(env)
     await round(client, env)
-    expect(visitProgress(client, scope)).toEqual({ seen: 10, total: 25 })
+    expect(visitProgress(client, scope)).toMatchObject({ seen: 10, total: 25 })
     const again = await openSampleClient(env)
-    expect(visitProgress(again, scope)).toEqual({ seen: 0, total: 25 })
+    expect(visitProgress(again, scope)).toMatchObject({ seen: 0, total: 25 })
   })
 })

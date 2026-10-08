@@ -86,12 +86,12 @@ describe('MatchingRun', () => {
     for (let board = 1; board <= theme.length / MATCHING_PAIRS; board += 1) {
       dealt.push(...MatchingRun.start(client, env, scope)!.snapshot.left.map((e) => corpusWordId(e.entryId)))
       expect(new Set(dealt).size).toBe(board * MATCHING_PAIRS)
-      expect(visitProgress(client, scope)).toEqual({ seen: board * MATCHING_PAIRS, total: theme.length })
+      expect(visitProgress(client, scope)).toMatchObject({ seen: board * MATCHING_PAIRS, total: theme.length })
     }
     expect(new Set(dealt)).toEqual(new Set(theme))
     // All shown: the next board starts over.
     expect(MatchingRun.start(client, env, scope)!.snapshot.left).toHaveLength(MATCHING_PAIRS)
-    expect(visitProgress(client, scope)).toEqual({ seen: MATCHING_PAIRS, total: theme.length })
+    expect(visitProgress(client, scope)).toMatchObject({ seen: MATCHING_PAIRS, total: theme.length })
     // Matching over everything keeps no memory.
     expect(visitProgress(client, undefined)).toBeNull()
   })

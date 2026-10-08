@@ -14,8 +14,9 @@ export class PracticeVisit {
   }
 
   /**
-   * What a new round draws against: the words the scope has shown so far. Once every one of the round's
-   * `candidates` has been shown the scope starts over, and nothing counts as shown.
+   * What a new round draws against: the words the scope has shown so far, as a copy that later rounds do not
+   * change. Once every one of `candidates` — the words a run of the scope can draw now, for runs and matching
+   * boards alike — has been shown, the scope starts over, and nothing counts as shown.
    */
   begin(scope: PracticeScope, candidates: readonly WordId[]): ReadonlySet<WordId> {
     const key = PracticeVisit.key(scope)
@@ -25,7 +26,7 @@ export class PracticeVisit {
       this.shown.delete(key)
       return new Set()
     }
-    return shown
+    return new Set(shown)
   }
 
   /** A word of the scope came on screen. */

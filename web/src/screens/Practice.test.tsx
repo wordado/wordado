@@ -233,6 +233,43 @@ describe('Practice', () => {
       expect(screen.getByText(`Видени 10 от ${unit.wordIds.length} думи`)).toBeTruthy()
     })
 
+    it('says where the words left to today’s session are, and counts one word in the singular', async () => {
+      const ctx = await setup()
+      const theme = themeEntries(ctx.client.snapshot.corpus!, 'daily-life').map((e) => corpusWordId(e.entryId))
+      renderWith(<Practice theme="daily-life" />, ctx)
+      expect(screen.getByText('0 of 25 words seen')).toBeTruthy()
+      cleanup()
+      // Chosen to learn, a word is one of today's new words: practice leaves it to the session.
+      await ctx.client.setToLearn(theme[0]!, true)
+      renderWith(<Practice theme="daily-life" />, ctx)
+      expect(screen.getByText('0 of 24 words seen · 1 in today’s session').className).toBe('note practice-visit')
+      cleanup()
+      await ctx.client.setToLearn(theme[1]!, true)
+      for (const [locale, line] of [
+        ['en', '0 of 23 words seen · 2 in today’s session'],
+        ['bg', 'Видени 0 от 23 думи · 2 са в днешната сесия'],
+        ['de', '0 von 23 Wörtern gesehen · 2 in der heutigen Sitzung'],
+        ['es', '0 de 23 palabras vistas · 2 en la ronda de hoy'],
+      ] as const) {
+        renderWith(<Practice theme="daily-life" />, { ...ctx, locale })
+        expect(screen.getByText(line)).toBeTruthy()
+        cleanup()
+      }
+      // One word left to practise, one left to the session.
+      await ctx.client.setToLearn(theme[1]!, false)
+      for (const wordId of theme.slice(2)) await ctx.client.setFlag(wordId, 'known')
+      for (const [locale, line] of [
+        ['en', '0 of 1 word seen · 1 in today’s session'],
+        ['bg', 'Видяна 0 от 1 дума · 1 е в днешната сесия'],
+        ['de', '0 von 1 Wort gesehen · 1 in der heutigen Sitzung'],
+        ['es', '0 de 1 palabra vista · 1 en la ronda de hoy'],
+      ] as const) {
+        renderWith(<Practice theme="daily-life" />, { ...ctx, locale })
+        expect(screen.getByText(line)).toBeTruthy()
+        cleanup()
+      }
+    })
+
     it('says nothing of it for practice over everything', async () => {
       const ctx = await setup()
       await answerNew(ctx.client, ctx.env, 5)

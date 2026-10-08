@@ -163,6 +163,22 @@ describe('Study', () => {
       expect([...document.querySelectorAll('.done-actions > *')].map((el) => el.textContent)).toEqual(['Back to themes', 'Practise more'])
     })
 
+    it('says so when the choice cannot be saved, keeps the offer, and takes the theme up on the next try', async () => {
+      const ctx = await setup()
+      await practiseTheme(ctx)
+      await stop()
+      const failing = vi.spyOn(ctx.client, 'updateSettings').mockRejectedValueOnce(new Error('database is locked'))
+      await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Study this theme: Daily life' })))
+      expect(screen.getByRole('alert').textContent).toBe('Your change wasn’t saved: Something went wrong. Try again.')
+      expect(ctx.client.snapshot.settings.activeTheme).toBeNull()
+      expect(screen.queryByText('Now studying: Daily life')).toBeNull()
+      expect(failing).toHaveBeenCalledTimes(1)
+      await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Study this theme: Daily life' })))
+      expect(ctx.client.snapshot.settings.activeTheme).toBe('daily-life')
+      expect(screen.queryByRole('alert')).toBeNull()
+      expect(screen.getByText('Now studying: Daily life')).toBeTruthy()
+    })
+
     it('is not offered when the theme is already the one being studied', async () => {
       const ctx = await setup()
       await ctx.client.updateSettings({ activeTheme: 'daily-life' })

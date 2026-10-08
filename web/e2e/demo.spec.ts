@@ -346,7 +346,7 @@ test('practises a whole theme that is not started, chooses a word to learn, and 
   await expect(group('Studying now').getByRole('heading', { level: 3 })).toHaveCount(0)
   // The visit remembers the words it showed. The chosen word is one of today's new words now, which practice leaves to the session.
   await group('Not started').getByRole('link', { name: 'Practise this theme: Daily life' }).click()
-  await expect(page.getByText('9 of 24 words seen')).toBeVisible()
+  await expect(page.getByText('9 of 24 words seen · 1 in today’s session')).toBeVisible()
   await expectAccessible(page, { dark: true })
   await page.getByRole('link', { name: 'Flashcards' }).click()
   await expect(page.locator('.card[data-phase="prompt"]')).toBeVisible()

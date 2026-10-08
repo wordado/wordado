@@ -5,6 +5,7 @@ import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { useApp } from '../app/context'
 import { usePopover } from '../app/usePopover'
 import { ClipSuperseded } from '../content/audio'
+import { errorMessageKey } from '../errors'
 import { localized, useT } from '../i18n/i18n'
 import { GRADE_LABEL } from '../labels'
 import { Link } from '../router'
@@ -417,7 +418,16 @@ function Done(props: { readonly snapshot: RunSnapshot; readonly kind: RunKind; r
   // "Study this theme" (spec §8.9): after practising a theme that is not the one being studied and still has words to start.
   const studyTheme = scope?.scope.kind === 'theme' && scope.scope.id !== settings.activeTheme && scope.unstarted > 0 ? scope : null
   const themeName = studyTheme ? localized(studyTheme.title, locale, corpus?.l1 ?? '') : ''
-  const study = (themeId: string) => void client.updateSettings({ activeTheme: themeId }).then(() => setStudying(themeName))
+  const [studyError, setStudyError] = useState<string | null>(null)
+  const study = (themeId: string) =>
+    void client.updateSettings({ activeTheme: themeId }).then(
+      () => {
+        setStudyError(null)
+        setStudying(themeName)
+      },
+      // Not saved: the offer stays, with the reason, as a setting that fails to save says it anywhere.
+      (err: unknown) => setStudyError(t('settings.saveFailed', { message: t(errorMessageKey(err)) })),
+    )
   const unitTitle = (unitId: string) => {
     const unit = corpus?.units.find((u) => u.unitId === unitId)
     // No corpus yet: packL1 can't match any locale, so `localized` falls back to English.
@@ -455,6 +465,11 @@ function Done(props: { readonly snapshot: RunSnapshot; readonly kind: RunKind; r
       {studying !== null && (
         <p className="done-line done-note done-studying" ref={studyingLine} tabIndex={-1}>
           {t('themes.nowStudying', { name: studying })}
+        </p>
+      )}
+      {studyError !== null && (
+        <p className="field-error" role="alert">
+          {studyError}
         </p>
       )}
       <div className="done-actions">

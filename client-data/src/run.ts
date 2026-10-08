@@ -1,4 +1,4 @@
-import { buildItem, gradeAnswer, practiceCandidates, practiceWords, scopePool, type Grade, type Mode, type PracticeInput, type PracticeScope, type StudyItem, type WordFlag, type WordId } from '@wordado/core'
+import { buildItem, gradeAnswer, practicePool, practiceWords, scopePool, type Grade, type Mode, type PracticeInput, type PracticePool, type PracticeScope, type StudyItem, type WordFlag, type WordId } from '@wordado/core'
 import type { Client, ClientSnapshot } from './client'
 import type { ClientEnv } from './env'
 import { createStore, type Store } from './store'
@@ -83,14 +83,24 @@ function practiceInput(snapshot: ClientSnapshot, scope: PracticeScope | undefine
 }
 
 /**
- * How far this visit has gone through the practice of a unit or theme (spec §7.4): how many of the words a run
- * would draw from now it has already shown. Null for practice over everything, which keeps no such memory.
+ * The words a run kept to this unit or theme can draw now, and those it leaves to today's session; null for
+ * practice over everything, and for a unit or theme the corpus does not hold. The visit's "all shown" is counted
+ * over these candidates, for runs and matching boards alike.
  */
-export function visitProgress(client: Client, scope: PracticeScope | undefined): { readonly seen: number; readonly total: number } | null {
-  const input = practiceInput(client.snapshot, scope)
-  if (!scope || !input.within) return null
-  const candidates = practiceCandidates(input)
-  return { seen: client.practiceVisit.seen(scope, candidates), total: candidates.length }
+export function scopedPracticePool(snapshot: ClientSnapshot, scope: PracticeScope | undefined): PracticePool | null {
+  const input = practiceInput(snapshot, scope)
+  return scope && input.within ? practicePool(input) : null
+}
+
+/**
+ * How far this visit has gone through the practice of a unit or theme (spec §7.4): how many of the words a run
+ * would draw from now it has already shown, and how many more words of the scope are left to today's session.
+ * Null for practice over everything, which keeps no such memory.
+ */
+export function visitProgress(client: Client, scope: PracticeScope | undefined): { readonly seen: number; readonly total: number; readonly inSession: number } | null {
+  const pool = scopedPracticePool(client.snapshot, scope)
+  if (!scope || !pool) return null
+  return { seen: client.practiceVisit.seen(scope, pool.candidates), total: pool.candidates.length, inSession: pool.heldBack.length }
 }
 
 const messageOf = (err: unknown): string => (err instanceof Error ? err.message : String(err))
@@ -143,7 +153,7 @@ export class StudyRun {
     if (options.kind === 'practice') {
       const input = practiceInput(client.snapshot, options.scope)
       run.visitScope = input.within ? options.scope : undefined
-      const shown = run.visitScope && client.practiceVisit.begin(run.visitScope, practiceCandidates(input))
+      const shown = run.visitScope && client.practiceVisit.begin(run.visitScope, practicePool(input).candidates)
       run.practiceQueue = practiceWords({ ...input, ...(shown && { shown }), count: PRACTICE_RUN_SIZE, rng: env.rng })
     }
     run.advance()

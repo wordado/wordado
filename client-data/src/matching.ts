@@ -1,7 +1,7 @@
 import { buildMatchingBoard, corpusWordId, gradeAnswer, matchingCandidates, MATCHING_PAIRS, practiceWeight, scopePool, shuffle, type CorpusEntry, type PracticeScope } from '@wordado/core'
 import type { Client } from './client'
 import { createStore, type Store } from './store'
-import type { RunEnv } from './run'
+import { scopedPracticePool, type RunEnv } from './run'
 
 export type MatchingSide = 'left' | 'right'
 
@@ -64,9 +64,10 @@ export class MatchingRun {
     const weight = (entry: CorpusEntry) => practiceWeight(states.get(wordId(entry)))
     const pool = scopePool(corpus, settings.declaredLevel, scope)
     const candidates = matchingCandidates(corpus, states, flags, pool?.within, pool?.unstarted)
-    // The scope the corpus holds: what its boards deal is remembered for the visit.
+    // The scope the corpus holds: what its boards deal is remembered for the visit. It starts over when a run of
+    // the scope would: a board may deal today's session words, but they do not hold the start back.
     const visitScope = pool ? scope : undefined
-    const shown = visitScope && client.practiceVisit.begin(visitScope, candidates.map(wordId))
+    const shown = visitScope && client.practiceVisit.begin(visitScope, scopedPracticePool(client.snapshot, visitScope)?.candidates ?? [])
     const board = buildMatchingBoard(candidates, MATCHING_PAIRS, env.rng, weight, shown && ((entry) => shown.has(wordId(entry))))
     if (!board) return null
     if (visitScope) for (const entry of board) client.practiceVisit.show(visitScope, wordId(entry))
