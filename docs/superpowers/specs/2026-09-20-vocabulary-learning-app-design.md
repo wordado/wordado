@@ -1266,6 +1266,48 @@ eviction.
   outbox, releases the lock, and shows the notice; the session resumes in the
   new tab from the next item.
 
+**Updates of the app.** A new version is downloaded by the service worker
+behind the open app and waits; it never takes over under a study session. The
+rule (plan 6a) was that nothing swaps under a session unless the learner asks;
+it is now that nothing swaps under a session unless the learner asks, *or
+nothing is in progress and automatic updates are on*.
+
+- *The setting.* **Update automatically**, under Settings → The app, on by
+  default. It is kept on the device, not in the synced settings: it is about
+  this installation, and it has to work in the demo and before any sync.
+  Switched off, the app only offers "A new version of Wordado is ready. Update
+  now", as before.
+- *A safe moment.* With the setting on, a version that is ready — or needed,
+  because a pack or the server refuses this build (§4.3, §9.3) — is moved to
+  as soon as a reload would cost the learner nothing: the app is open in this
+  tab on storage that survives a reload; no study or practice run, matching
+  board or placement test is on screen (the run's end screen included); the
+  first-run setup, the sign-in and the change of native language are not on
+  screen; no dialog or menu is open and nothing is being typed; no pack
+  install, sync, export, audio download or sign-out is in flight; and no
+  account notice is waiting to be read. Otherwise it waits, with the banner
+  and its button, and looks again every few seconds and whenever the screen
+  changes. On the in-memory fallback it is never safe: that learner updates
+  from the banner.
+- *Once.* One automatic attempt per page. If the waiting version has not taken
+  control within about twenty seconds the app gives up and the banner offers
+  the update again; a version that takes control after a run has begun
+  reloads only when the run is left. A tab does not update itself twice within
+  ten minutes. After an automatic update the app says "Wordado was updated."
+  once.
+- *Looking for a new version.* Besides the browser's own check at each load,
+  the app asks when it returns to the foreground (the page becomes visible, or
+  the device comes online) and about hourly while open, never more often than
+  every five minutes; a failed check is ignored.
+- *Progress.* While a new version downloads, the banner area shows a bar: the
+  files its worker has cached of those it lists (the list gives no sizes, so
+  files, not bytes). While the app moves to it, and wherever else nothing can
+  be measured (a run being started), the bar only says that something is
+  happening. A corpus pack the app is waiting for — at the first run, on a
+  change of native language, and when a launch has a pack to fetch — shows the
+  bytes read of the size its manifest states; a pack staged behind the open
+  app (§9.3) shows nothing.
+
 ### 9.2 Sync protocol
 
 Two mechanisms, chosen to avoid a CRDT layer entirely. Neither trusts a client
@@ -1932,6 +1974,17 @@ owner.
   Setting a word aside clears its mark; the path's word list marks and
   unmarks; and a refused write of a document the server never held is removed
   from the device (§9.2).
+
+**2026-10-08 — automatic app updates.** Decided by the product owner.
+
+- **Updates (§9.1):** the app moves to a new
+  version by itself at a safe moment, with **Update automatically** (on by
+  default, per device) to switch that off; it looks for a new version on
+  returning to the foreground and hourly; and it shows progress for an app
+  update and for a pack it is waiting on. Plan 6a's rule changes from "nothing
+  swaps under a session unless the learner asks" to "unless the learner asks,
+  or nothing is in progress and automatic updates are on": the swap still
+  never happens under a session.
 
 ### Approval status
 
