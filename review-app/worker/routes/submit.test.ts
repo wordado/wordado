@@ -28,6 +28,9 @@ let sleeps: number[] = []
 /** Answers for the next calls that open a pull request, in place of the fake's; 'after' lets the fake open it first. */
 let pullAnswers: { res: () => Response; after?: boolean }[] = []
 let pullCalls = 0
+/** Answers for the next look-ups of a branch's pull request, and for every listing of branches, in place of the fake's. */
+let lookupAnswers: (() => Response)[] = []
+let listingAnswer: (() => Response) | null = null
 
 function walk(dir: string): string[] {
   return readdirSync(dir).flatMap((n) => (statSync(join(dir, n)).isDirectory() ? walk(join(dir, n)) : [join(dir, n)]))
@@ -55,6 +58,8 @@ beforeEach(async () => {
   sleeps = []
   pullAnswers = []
   pullCalls = 0
+  lookupAnswers = []
+  listingAnswer = null
   deps = testDeps(env, {
     log: (line) => logs.push(line),
     sleep: async (ms) => void sleeps.push(ms),
@@ -67,6 +72,8 @@ beforeEach(async () => {
           if (answer?.after) await fake.fetch(input.replace('https://api.github.test', 'https://x'), init)
           if (answer) return answer.res()
         }
+        if (input.includes('/pulls?head=') && lookupAnswers.length > 0) return lookupAnswers.shift()!()
+        if (input.includes('/git/matching-refs/') && listingAnswer) return listingAnswer()
         return fake.fetch(input.replace('https://api.github.test', 'https://x'), init)
       }
       if (input.startsWith('https://api.resend.com/')) {
@@ -313,6 +320,60 @@ describe('when GitHub does not open the pull request', () => {
     expect(logs.join('\n')).not.toMatch(/inst-token|Bearer/)
   })
 
+  it('does not blame GitHub for a failure of its own: a neutral sentence, the cause in the log, the claim released', async () => {
+    await decideFirst(1)
+    for (let n = 1; n <= 20; n += 1) fake.branches.set(`review/translation-bg-ivan-20261005-${n}`, 'sha-main')
+    const res = await submitNow()
+    expect(res.status).toBe(502)
+    expect(await messageOf(res)).toBe('The submit failed. Your decisions are saved; try again.')
+    expect(logs.some((l) => l.includes('could not find a free branch name'))).toBe(true)
+    expect(await listSubmissions(env.DB)).toHaveLength(0)
+  })
+
+  describe('when GitHub cannot say whether the pull request was opened', () => {
+    const down = () => new Response('{"message":"Server Error"}', { status: 500 })
+    const unreachable = (): Response => { throw new TypeError('connect ECONNRESET 10.0.0.1') }
+
+    async function unconfirmed(answers: typeof pullAnswers, lookups: typeof lookupAnswers, message: string): Promise<void> {
+      await decideFirst(2)
+      pullAnswers = answers
+      lookupAnswers = lookups
+      const res = await submitNow()
+      expect(res.status).toBe(502)
+      expect(await messageOf(res)).toBe(message)
+      // The claim stays, with its decisions.
+      expect(await listSubmissions(env.DB)).toMatchObject([{ branch: BRANCH, pr: null, status: 'open' }])
+      expect((await listDecisions(env.DB, id)).every((d) => d.submission !== null)).toBe(true)
+      expect(logs.some((l) => l.includes('the claim is kept'))).toBe(true)
+      // The next Submit finds the pull request for the claim: no second branch, no second pull request.
+      const next = await submitNow()
+      expect(next.status).toBe(200)
+      expect(await next.json()).toMatchObject({ pr: 1, count: 2 })
+      expect(fake.pulls).toHaveLength(1)
+      expect(reviewBranches()).toEqual([BRANCH])
+      expect(await listSubmissions(env.DB)).toMatchObject([{ branch: BRANCH, pr: 1 }])
+    }
+
+    it('keeps the claim after a 502 that opened it, and the next Submit completes with that pull request', async () => {
+      await unconfirmed([{ ...refused(502, { message: 'Server Error' }), after: true }, refused(502, { message: 'Server Error' })], [down, down], 'GitHub did not confirm the pull request (502: Server Error). Your decisions are saved; try Submit again in a couple of minutes.')
+    })
+    it('keeps the claim after a network error that opened it', async () => {
+      await unconfirmed([{ res: unreachable, after: true }, { res: unreachable }], [unreachable, unreachable], 'GitHub did not confirm the pull request (GitHub was not reached). Your decisions are saved; try Submit again in a couple of minutes.')
+    })
+    it('keeps the claim after a 422 when the look-up fails: in progress at first, released later, and its branch used again', async () => {
+      await decideFirst(1)
+      pullAnswers = [refused(422, { message: 'Validation Failed' })]
+      lookupAnswers = [down]
+      expect((await submitNow()).status).toBe(502)
+      expect(await listSubmissions(env.DB)).toMatchObject([{ branch: BRANCH, pr: null }])
+      expect((await submitNow()).status).toBe(409)
+      await env.DB.prepare('UPDATE submissions SET created_at = ?').bind('2026-10-05T11:50:00Z').run()
+      expect((await submitNow()).status).toBe(200)
+      expect(fake.pulls).toMatchObject([{ number: 1, head: BRANCH }])
+      expect(reviewBranches()).toEqual([BRANCH])
+    })
+  })
+
   describe('the branch a failed submit left behind', () => {
     /** A submit whose commit is written and whose pull request is refused: the branch stays, the claim is released. */
     async function failedSubmit(n = 1): Promise<void> {
@@ -360,6 +421,31 @@ describe('when GitHub does not open the pull request', () => {
       expect(fake.pulls).toMatchObject([{ head: 'review/translation-bg-ivan-20261005-2' }])
       expect(fake.commits.get(fake.branches.get('review/translation-bg-ivan-20261005-2')!)!.parents).toEqual([fake.mainSha])
       expect(fake.branches.get(BRANCH)).toBe(left)
+    })
+
+    it('is left alone when another claim names it', async () => {
+      await failedSubmit()
+      const other = await insertAssignment(env.DB, { reviewer: 'ivan@example.com', queue: 'level', files: '*', flaggedOnly: false, createdAt: 't' })
+      await insertSubmission(env.DB, { assignment: other, branch: BRANCH, pr: null, url: null, count: 1, leftOut: 0, status: 'open', createdAt: '2026-10-05T11:59:30Z' })
+      expect((await submitNow()).status).toBe(200)
+      expect(fake.pulls).toMatchObject([{ head: 'review/translation-bg-ivan-20261005-2' }])
+    })
+
+    it.each([500, 403])('is not looked for when GitHub answers %i for the branches: the submit writes a new branch', async (status) => {
+      await failedSubmit()
+      listingAnswer = () => new Response('{"message":"no"}', { status })
+      const res = await submitNow()
+      expect(res.status).toBe(200)
+      expect(fake.pulls).toMatchObject([{ number: 1, head: 'review/translation-bg-ivan-20261005-2' }])
+      expect(logs.some((l) => l.includes('no look for a branch left behind'))).toBe(true)
+    })
+
+    it('is used though its message ends with a newline', async () => {
+      await failedSubmit()
+      const commit = fake.commits.get(fake.branches.get(BRANCH)!)!
+      commit.message = `${commit.message}\n`
+      expect((await submitNow()).status).toBe(200)
+      expect(reviewBranches()).toEqual([BRANCH])
     })
 
     it('is left alone when a pull request was opened from it, even a closed one', async () => {
