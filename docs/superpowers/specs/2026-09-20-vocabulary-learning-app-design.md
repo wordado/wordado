@@ -2095,6 +2095,7 @@ owner.
   has loaded; the app opening, a sign-in code being checked, signing out and
   the data export being prepared each show the busy bar. None of them can be
   measured, so none shows a share done. Background sync keeps its status line.
+
 **2026-10-08 — the multiple-choice question.** Decided by the product owner.
 
 - **Sense gloss (§5.2):** in a multiple-choice question and its answers the
