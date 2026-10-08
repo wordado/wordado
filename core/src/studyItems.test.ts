@@ -3,7 +3,7 @@ import type { Corpus } from './corpus'
 import { isValidDistractor } from './distractors'
 import { seededRng } from './rng'
 import type { ReviewState } from './scheduler'
-import { buildItem, CHOICE_OPTIONS, matchingCandidates, practiceCandidates, practisable, practiceWords, scopePool, type ItemContext } from './studyItems'
+import { buildItem, CHOICE_OPTIONS, matchingCandidates, practiceCandidates, practicePool, practisable, practiceWords, scopePool, type ItemContext } from './studyItems'
 import { Grade, type CorpusEntry, type Mode, type WordFlag } from './types'
 import { corpusWordId, type WordId } from './wordId'
 
@@ -311,6 +311,20 @@ describe('practiceWords within a visit (spec §7.4)', () => {
     const shown = new Set([id(apple), id(bread), id(cheese), id(milk)])
     expect(practiceCandidates({ ...base, exclude })).not.toContain(id(water))
     expect(practiceWords({ ...base, exclude, shown, count: 10, rng: seededRng(1) })).not.toContain(id(water))
+  })
+
+  it('tells the words left to today’s session apart from the candidates, and holds none back when they are all there is', () => {
+    const exclude = new Set([id(water), id(milk), id(old)])
+    const pool = practicePool({ ...base, exclude })
+    expect(new Set(pool.candidates)).toEqual(new Set([id(apple), id(bread), id(cheese)]))
+    expect(new Set(pool.heldBack)).toEqual(new Set([id(water), id(milk)]))
+    // A session word practice could not use anyway (set aside) is not counted as held back.
+    expect(practicePool({ ...base, flags: new Map<WordId, WordFlag>([[id(milk), 'known']]), exclude }).heldBack).toEqual([id(water)])
+    // Every usable word is in the session: practice draws them after all, and none is held back.
+    const all = practicePool({ ...base, exclude: new Set(states.keys()) })
+    expect(all.candidates).toHaveLength(5)
+    expect(all.heldBack).toEqual([])
+    expect(practicePool({ ...base, exclude: new Set() }).heldBack).toEqual([])
   })
 
   it('draws as it always did when nothing has been shown', () => {

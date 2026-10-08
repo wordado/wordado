@@ -145,19 +145,31 @@ export interface PracticeInput extends PracticeContext {
   readonly rng: Rng
 }
 
+/** What a practice run may draw now, and what it leaves to the session. */
+export interface PracticePool {
+  readonly candidates: WordId[]
+  /** Words practice could use but leaves to today's session, which serves them; empty when they are drawn after all. */
+  readonly heldBack: WordId[]
+}
+
 /**
  * The words a practice run may draw now (spec §7.4): introduced, not flagged, not retired, not in today's
  * session — unless that leaves nothing, when the session's words are used after all: practice never touches the
  * schedule, and a repeat is better than a run with nothing in it. With `unstarted`, the words of `within` that
- * were never started are among them.
+ * were never started are among them. The words kept out for the session are told apart, by the same rule.
  */
-export function practiceCandidates(input: Omit<PracticeInput, 'count' | 'rng' | 'shown'>): WordId[] {
+export function practicePool(input: Omit<PracticeInput, 'count' | 'rng' | 'shown'>): PracticePool {
   const { within, states } = input
   // Unstarted words have no state to be listed by: they come from the unit or theme itself.
   const pool = input.unstarted && within ? [...within] : [...states.keys()].filter((id) => !within || within.has(id))
   const usable = pool.filter((id) => practisable(id, { ...input, unstarted: input.unstarted === true && within !== undefined }))
   const outside = usable.filter((id) => !input.exclude.has(id))
-  return outside.length > 0 ? outside : usable
+  return outside.length > 0 ? { candidates: outside, heldBack: usable.filter((id) => input.exclude.has(id)) } : { candidates: usable, heldBack: [] }
+}
+
+/** The candidates of `practicePool`. */
+export function practiceCandidates(input: Omit<PracticeInput, 'count' | 'rng' | 'shown'>): WordId[] {
+  return practicePool(input).candidates
 }
 
 /**
