@@ -1380,8 +1380,11 @@ nothing is in progress and automatic updates are on*.
 - *Progress.* While a new version downloads, the banner area shows a bar: the
   files its worker has cached of those it lists (the list gives no sizes, so
   files, not bytes). While the app moves to it, and wherever else nothing can
-  be measured (a run being started), the bar only says that something is
-  happening, without motion for a learner who asked for less. A corpus pack the app is waiting for — at the first run, on a
+  be measured (the page before the app's code has loaded, the app opening, a
+  run being started, a sign-in code being checked, signing out, the data
+  export being prepared), the bar only says that something is happening,
+  without motion for a learner who asked for less. Background sync blocks
+  nothing and keeps its quiet status line. A corpus pack the app is waiting for — at the first run, on a
   change of native language, and when a launch has a pack to fetch — shows the
   bytes read of the size its manifest states; a pack staged behind the open
   app (§9.3) shows nothing.
@@ -2087,6 +2090,14 @@ owner.
   swaps under a session unless the learner asks" to "unless the learner asks,
   or nothing is in progress and automatic updates are on": the swap still
   never happens under a session.
+
+**2026-10-08 — a bar on every wait.** Decided by the product owner.
+
+- **Progress (§9.1):** every slow operation shows a progress bar, not a line
+  of text alone. The page shows the name and a busy bar until the app's code
+  has loaded; the app opening, a sign-in code being checked, signing out and
+  the data export being prepared each show the busy bar. None of them can be
+  measured, so none shows a share done. Background sync keeps its status line.
 
 **2026-10-08 — the multiple-choice question.** Decided by the product owner.
 

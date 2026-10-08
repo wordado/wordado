@@ -5,6 +5,7 @@ import { useSignOut } from '../app/signOut'
 import { holdingUpdates, SAVE_HOLD_MS } from '../app/updateSafety'
 import { saveFile } from '../download'
 import { errorMessageKey } from '../errors'
+import { ProgressBar } from '../app/ProgressBar'
 import { useT } from '../i18n/i18n'
 import { Link, navigate } from '../router'
 import { useOnline } from '../useOnline'
@@ -68,6 +69,7 @@ export function AccountSettings() {
               <p className="note" role="status">
                 {exporting ? t('settings.exporting') : ''}
               </p>
+              {exporting && <ProgressBar label={t('settings.exporting')} />}
               {exportError !== null && (
                 <p className="field-error" role="alert">
                   {exportError}
@@ -85,6 +87,7 @@ export function AccountSettings() {
           <p className="note" role="status">
             {signingOut ? t('settings.signingOut') : ''}
           </p>
+          {signingOut && <ProgressBar label={t('settings.signingOut')} />}
           {signOutError !== null && (
             <p className="field-error" role="alert">
               {signOutError}
