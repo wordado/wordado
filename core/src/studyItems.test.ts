@@ -3,7 +3,7 @@ import type { Corpus } from './corpus'
 import { isValidDistractor } from './distractors'
 import { seededRng } from './rng'
 import type { ReviewState } from './scheduler'
-import { buildItem, CHOICE_OPTIONS, matchingCandidates, practisable, practiceWords, type ItemContext } from './studyItems'
+import { buildItem, CHOICE_OPTIONS, matchingCandidates, practiceCandidates, practicePool, practisable, practiceWords, scopePool, type ItemContext } from './studyItems'
 import { Grade, type CorpusEntry, type Mode, type WordFlag } from './types'
 import { corpusWordId, type WordId } from './wordId'
 
@@ -245,6 +245,90 @@ describe('practice of a unit of a skipped level (spec §7.2, §7.4)', () => {
   it('offers matching all the unit’s live words too, and other units their started ones', () => {
     expect(matchingCandidates(corpus(), states, flags, within, true)).toEqual([apple, cheese, milk])
     expect(matchingCandidates(corpus(), states, flags, within)).toEqual([apple])
+  })
+})
+
+describe('scopePool: which practice takes its scope whole (spec §7.4)', () => {
+  const travel = [apple, cheese, old].map((e) => ({ ...e, themes: ['travel'] }))
+  const scoped: Corpus = {
+    ...corpus([...travel, bread, milk]),
+    units: [
+      { unitId: 'a1-01', level: 'A1', order: 1, title: { en: 'One', l1: 'Едно' }, wordIds: [id(apple), id(bread)] },
+      { unitId: 'a2-01', level: 'A2', order: 2, title: { en: 'Two', l1: 'Две' }, wordIds: [id(cheese), id(milk)] },
+    ],
+    themes: [{ themeId: 'travel', name: { en: 'Travel', l1: 'Пътуване' }, description: { en: '', l1: '' } }],
+  }
+
+  it('takes a theme whole, whatever the learner’s level: every live word of the theme, started or not', () => {
+    for (const declared of ['A1', 'A2', 'B1'] as const) {
+      expect(scopePool(scoped, declared, { kind: 'theme', id: 'travel' })).toEqual({ within: new Set([apple, cheese].map(id)), unstarted: true })
+    }
+  })
+
+  it('takes a unit whole only when its level was skipped', () => {
+    expect(scopePool(scoped, 'A1', { kind: 'unit', id: 'a1-01' })).toEqual({ within: new Set([id(apple), id(bread)]), unstarted: false })
+    expect(scopePool(scoped, 'A2', { kind: 'unit', id: 'a1-01' })).toEqual({ within: new Set([id(apple), id(bread)]), unstarted: true })
+    expect(scopePool(scoped, 'A2', { kind: 'unit', id: 'a2-01' })).toMatchObject({ unstarted: false })
+    expect(scopePool(scoped, 'A1', { kind: 'unit', id: 'a2-01' })).toMatchObject({ unstarted: false })
+  })
+
+  it('is nothing for practice over everything, without a corpus, and for a unit or theme the corpus does not hold', () => {
+    expect(scopePool(scoped, 'A1', undefined)).toBeUndefined()
+    expect(scopePool(null, 'A1', { kind: 'theme', id: 'travel' })).toBeUndefined()
+    expect(scopePool(scoped, 'A1', { kind: 'theme', id: 'nowhere' })).toBeUndefined()
+    expect(scopePool(scoped, 'A1', { kind: 'unit', id: 'nowhere' })).toBeUndefined()
+  })
+
+  it('gives a theme’s practice its live, unflagged words, started or not, and practice over everything the started ones', () => {
+    const states = new Map([apple, bread].map((e) => [id(e), state(id(e), 10)]))
+    const flags = new Map<WordId, WordFlag>([[id(milk), 'known']])
+    const ctx = { states, flags, retired: scoped.retired, exclude: new Set<WordId>() }
+    const theme = scopePool(scoped, 'A1', { kind: 'theme', id: 'travel' })
+    // Cheese was never started and is practised all the same; the theme's retired word is not.
+    expect(new Set(practiceCandidates({ ...ctx, ...theme }))).toEqual(new Set([id(apple), id(cheese)]))
+    expect(matchingCandidates(scoped, states, flags, theme?.within, theme?.unstarted).map(id)).toEqual([id(apple), id(cheese)])
+    expect(new Set(practiceCandidates(ctx))).toEqual(new Set([id(apple), id(bread)]))
+    expect(new Set(practiceCandidates({ ...ctx, ...scopePool(scoped, 'A1', { kind: 'unit', id: 'a2-01' }) }))).toEqual(new Set())
+  })
+})
+
+describe('practiceWords within a visit (spec §7.4)', () => {
+  const states = new Map([apple, bread, cheese, milk, water].map((e) => [id(e), state(id(e), 10)]))
+  const base = { states, flags: new Map<WordId, WordFlag>(), retired: new Set<WordId>(), exclude: new Set<WordId>() }
+
+  it('draws the words the visit has not shown first, and fills a round up with shown ones', () => {
+    const shown = new Set([id(apple), id(bread), id(cheese)])
+    for (let seed = 1; seed <= 20; seed += 1) {
+      expect(new Set(practiceWords({ ...base, shown, count: 2, rng: seededRng(seed) }))).toEqual(new Set([id(milk), id(water)]))
+      const round = practiceWords({ ...base, shown, count: 4, rng: seededRng(seed) })
+      expect(new Set(round.slice(0, 2))).toEqual(new Set([id(milk), id(water)]))
+      expect(shown.has(round[2]!) && shown.has(round[3]!) && round[2] !== round[3]).toBe(true)
+    }
+  })
+
+  it('keeps today’s session out of the candidates as before: a shown word outside it comes before an unseen one inside it never', () => {
+    const exclude = new Set([id(water)])
+    const shown = new Set([id(apple), id(bread), id(cheese), id(milk)])
+    expect(practiceCandidates({ ...base, exclude })).not.toContain(id(water))
+    expect(practiceWords({ ...base, exclude, shown, count: 10, rng: seededRng(1) })).not.toContain(id(water))
+  })
+
+  it('tells the words left to today’s session apart from the candidates, and holds none back when they are all there is', () => {
+    const exclude = new Set([id(water), id(milk), id(old)])
+    const pool = practicePool({ ...base, exclude })
+    expect(new Set(pool.candidates)).toEqual(new Set([id(apple), id(bread), id(cheese)]))
+    expect(new Set(pool.heldBack)).toEqual(new Set([id(water), id(milk)]))
+    // A session word practice could not use anyway (set aside) is not counted as held back.
+    expect(practicePool({ ...base, flags: new Map<WordId, WordFlag>([[id(milk), 'known']]), exclude }).heldBack).toEqual([id(water)])
+    // Every usable word is in the session: practice draws them after all, and none is held back.
+    const all = practicePool({ ...base, exclude: new Set(states.keys()) })
+    expect(all.candidates).toHaveLength(5)
+    expect(all.heldBack).toEqual([])
+    expect(practicePool({ ...base, exclude: new Set() }).heldBack).toEqual([])
+  })
+
+  it('draws as it always did when nothing has been shown', () => {
+    expect(practiceWords({ ...base, shown: new Set(), count: 3, rng: seededRng(8) })).toEqual(practiceWords({ ...base, count: 3, rng: seededRng(8) }))
   })
 })
 

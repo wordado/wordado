@@ -56,3 +56,22 @@ export function weightedOrder<T>(items: readonly T[], weight: (item: T) => numbe
     .sort((a, b) => b.key - a.key)
     .map((keyed) => keyed.item)
 }
+
+/**
+ * A weighted random order that covers before it repeats (spec §7.4): the items not yet shown come first, in
+ * weighted order among themselves, and those already shown follow, in weighted order too. With every item shown,
+ * or none, it is `weightedOrder` over them all: the round starts over.
+ */
+export function unseenFirstOrder<T>(items: readonly T[], shown: (item: T) => boolean, weight: (item: T) => number, rng: Rng): T[] {
+  return [...weightedOrder(items.filter((item) => !shown(item)), weight, rng), ...weightedOrder(items.filter(shown), weight, rng)]
+}
+
+/**
+ * `count` of the candidates for one round of practice kept to a unit or theme (spec §7.4): those not yet shown
+ * in this visit first, so that rounds go through the whole scope before any word repeats; a round the unseen
+ * ones cannot fill is filled up with words already shown, and once all are shown the draw starts over. Never
+ * more than there are candidates, never one twice. What was shown is the caller's to remember.
+ */
+export function pickUnseenFirst<T>(candidates: readonly T[], shown: ReadonlySet<T>, count: number, weight: (item: T) => number, rng: Rng): T[] {
+  return unseenFirstOrder(candidates, (item) => shown.has(item), weight, rng).slice(0, Math.max(0, count))
+}

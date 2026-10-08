@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, screen } from '@testing-library/react'
 import { ITEM_SETTLE_MS } from '@wordado/client-data'
-import { DAY_MS, Grade, themeEntries } from '@wordado/core'
+import { corpusWordId, DAY_MS, Grade, themeEntries } from '@wordado/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { answerNew, renderWith, setup } from '../test/fixtures'
 import { Study } from './Study'
@@ -83,7 +83,7 @@ describe('Study', () => {
     ])
   })
 
-  it('practises one theme from that theme’s started words, and ends with the way back to the themes', async () => {
+  it('practises a theme whole, labels the words never started, and ends with the way back to the themes', async () => {
     const ctx = await setup()
     await ctx.client.updateSettings({ activeTheme: 'daily-life' })
     await answerNew(ctx.client, ctx.env, 3)
@@ -92,10 +92,26 @@ describe('Study', () => {
     ctx.env.advance(3_600_000)
     const states = ctx.client.snapshot.states
     renderWith(<Study kind="practice" mode="flashcard" theme="daily-life" />, ctx)
-    expect((await screen.findByRole('progressbar', { name: 'Session progress' })).getAttribute('aria-valuemax')).toBe('3')
-    const headwords = themeEntries(ctx.client.snapshot.corpus!, 'daily-life').map((e) => e.headword)
-    expect(headwords).toContain(document.querySelector('.card [lang="en"]')!.textContent)
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Stop for now' })))
+    // Three of the theme's words are started; the run is a full one all the same.
+    expect((await screen.findByRole('progressbar', { name: 'Session progress' })).getAttribute('aria-valuemax')).toBe('10')
+    const entries = themeEntries(ctx.client.snapshot.corpus!, 'daily-life')
+    let fresh = 0
+    for (let i = 0; i < 10; i += 1) {
+      const entry = entries.find((e) => e.headword === document.querySelector('.card [lang="en"]')!.textContent)!
+      const started = states.has(corpusWordId(entry.entryId))
+      // "New to you" on a word never started, from the prompt on; never on a started one.
+      expect(screen.queryByText('New to you') !== null).toBe(!started)
+      if (!started) fresh += 1
+      ctx.env.advance(ITEM_SETTLE_MS)
+      fireEvent.click(screen.getByRole('button', { name: 'Show answer' }))
+      expect(screen.queryByText('New to you') !== null).toBe(!started)
+      // "Learn this word" goes with the label.
+      expect(screen.queryByRole('button', { name: `Learn this word: ${entry.headword}` }) !== null).toBe(!started)
+      ctx.env.advance(ITEM_SETTLE_MS)
+      await act(async () => fireEvent.click(screen.getByRole('button', { name: /Good/ })))
+    }
+    expect(fresh).toBeGreaterThanOrEqual(7)
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Practice complete')
     const links = [...document.querySelectorAll('.done-actions a')].map((a) => [a.textContent, a.getAttribute('href'), a.classList.contains('primary')])
     expect(links).toEqual([
       ['Back to themes', '/themes', true],
@@ -103,6 +119,113 @@ describe('Study', () => {
     ])
     expect(ctx.client.snapshot.states).toEqual(states)
     expect(ctx.client.snapshot.settings.activeTheme).toBeNull()
+  })
+
+  describe('"Study this theme" when a theme’s practice ends (spec §8.9)', () => {
+    async function practiseTheme(ctx: Awaited<ReturnType<typeof setup>>, props: { unit?: string; theme?: string } = { theme: 'daily-life' }) {
+      renderWith(<Study kind="practice" mode="flashcard" {...props} />, ctx)
+      await screen.findByRole('progressbar', { name: 'Session progress' })
+    }
+    const stop = () => act(async () => fireEvent.click(screen.getByRole('button', { name: 'Stop for now' })))
+    const offer = () => screen.queryByRole('button', { name: /^Study this theme/ })
+
+    it('is offered after the practice of a theme that is not being studied and has words to start; chosen, it sets the theme and says so', async () => {
+      const ctx = await setup()
+      await practiseTheme(ctx)
+      // Mark the first word to learn on the way.
+      const word = document.querySelector('.card [lang="en"]')!.textContent
+      ctx.env.advance(ITEM_SETTLE_MS)
+      fireEvent.click(screen.getByRole('button', { name: 'Show answer' }))
+      await act(async () => fireEvent.click(screen.getByRole('button', { name: `Learn this word: ${word}` })))
+      await stop()
+      expect(screen.getByText('1 word will come up in your next sessions.')).toBeTruthy()
+      const button = screen.getByRole('button', { name: 'Study this theme: Daily life' })
+      expect(button.textContent).toBe('Study this theme')
+      // After the two ways on that were always there.
+      expect([...document.querySelectorAll('.done-actions > *')].map((el) => el.textContent)).toEqual(['Back to themes', 'Practise more', 'Study this theme'])
+      expect(ctx.client.snapshot.settings.activeTheme).toBeNull()
+      await act(async () => fireEvent.click(button))
+      // Exactly what "Study this next" does: the theme is the study theme, and its words are the day's new words.
+      expect(ctx.client.snapshot.settings.activeTheme).toBe('daily-life')
+      const theme = themeEntries(ctx.client.snapshot.corpus!, 'daily-life').map((e) => corpusWordId(e.entryId))
+      const planned = ctx.client.snapshot.plan!.newWords
+      expect(planned).toHaveLength(10)
+      expect(planned.every((wordId) => theme.includes(wordId))).toBe(true)
+      // The marked word is served once, first, though the theme would serve it too.
+      expect(ctx.client.entry(planned[0]!)!.headword).toBe(word)
+      expect(new Set(planned).size).toBe(10)
+      // The learner stays: the offer gives way to a line that says it, which takes the focus the button had.
+      expect(offer()).toBeNull()
+      const line = screen.getByText('Now studying: Daily life')
+      expect(document.activeElement).toBe(line)
+      expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Practice complete')
+      expect(screen.getByText('1 word will come up in your next sessions.')).toBeTruthy()
+      expect([...document.querySelectorAll('.done-actions > *')].map((el) => el.textContent)).toEqual(['Back to themes', 'Practise more'])
+    })
+
+    it('says so when the choice cannot be saved, keeps the offer, and takes the theme up on the next try', async () => {
+      const ctx = await setup()
+      await practiseTheme(ctx)
+      await stop()
+      const failing = vi.spyOn(ctx.client, 'updateSettings').mockRejectedValueOnce(new Error('database is locked'))
+      await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Study this theme: Daily life' })))
+      expect(screen.getByRole('alert').textContent).toBe('Your change wasn’t saved: Something went wrong. Try again.')
+      expect(ctx.client.snapshot.settings.activeTheme).toBeNull()
+      expect(screen.queryByText('Now studying: Daily life')).toBeNull()
+      expect(failing).toHaveBeenCalledTimes(1)
+      await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Study this theme: Daily life' })))
+      expect(ctx.client.snapshot.settings.activeTheme).toBe('daily-life')
+      expect(screen.queryByRole('alert')).toBeNull()
+      expect(screen.getByText('Now studying: Daily life')).toBeTruthy()
+    })
+
+    it('is not offered when the theme is already the one being studied', async () => {
+      const ctx = await setup()
+      await ctx.client.updateSettings({ activeTheme: 'daily-life' })
+      await practiseTheme(ctx)
+      await stop()
+      expect(screen.getByRole('link', { name: 'Back to themes' })).toBeTruthy()
+      expect(offer()).toBeNull()
+      expect(screen.queryByText('Now studying: Daily life')).toBeNull()
+    })
+
+    it('is not offered when every word of the theme is started or set aside: there is nothing left to study', async () => {
+      const ctx = await setup()
+      await ctx.client.updateSettings({ activeTheme: 'daily-life', newWordLimit: 30 })
+      await answerNew(ctx.client, ctx.env, 24)
+      await ctx.client.updateSettings({ activeTheme: null })
+      const last = themeEntries(ctx.client.snapshot.corpus!, 'daily-life').map((e) => corpusWordId(e.entryId)).find((wordId) => !ctx.client.snapshot.states.has(wordId))!
+      await ctx.client.setFlag(last, 'known')
+      ctx.env.advance(3_600_000)
+      await practiseTheme(ctx)
+      expect(screen.queryByText('New to you')).toBeNull()
+      await stop()
+      expect(screen.getByRole('link', { name: 'Back to themes' })).toBeTruthy()
+      expect(offer()).toBeNull()
+    })
+
+    it('is not offered after a unit’s practice, or after practice over everything', async () => {
+      const ctx = await setup()
+      await answerNew(ctx.client, ctx.env, 5)
+      ctx.env.advance(3_600_000)
+      for (const props of [{ unit: ctx.client.snapshot.corpus!.units[0]!.unitId }, {}]) {
+        await practiseTheme(ctx, props)
+        await stop()
+        expect(screen.getByRole('link', { name: 'Practise more' })).toBeTruthy()
+        expect(offer()).toBeNull()
+        cleanup()
+      }
+    })
+
+    it('speaks the interface language', async () => {
+      const ctx = await setup()
+      renderWith(<Study kind="practice" mode="flashcard" theme="daily-life" />, { ...ctx, locale: 'de' })
+      // Once the run has started: its first word is one never started.
+      expect(await screen.findByText('Neu für dich')).toBeTruthy()
+      await act(async () => fireEvent.click(document.querySelector<HTMLButtonElement>('.study-close')!))
+      await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Dieses Thema lernen: Daily life' })))
+      expect(screen.getByText('Du lernst jetzt: Daily life')).toBeTruthy()
+    })
   })
 
   it('never starts a practice run empty: with every started word due today, it practises them', async () => {

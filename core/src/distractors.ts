@@ -1,4 +1,4 @@
-import { weightedOrder } from './practiceWeight'
+import { unseenFirstOrder, weightedOrder } from './practiceWeight'
 import { shuffle, type Rng } from './rng'
 import type { CorpusEntry } from './types'
 import { corpusWordId, type WordId } from './wordId'
@@ -74,16 +74,21 @@ export function pickDistractors(
  * Chooses `size` entries for a matching board on which no two pairs share a
  * headword or a translation. Null when the candidates cannot fill a board.
  * With `weight`, heavier entries are dealt more readily (practice leans
- * towards weaker words, spec §7.4); the rule against clashes is the same.
+ * towards weaker words, spec §7.4), and with `shown` the entries not yet
+ * shown are dealt before the others (`unseenFirstOrder`); the rule against
+ * clashes is the same, so a board may still take an entry already shown
+ * where the unseen ones clash or run out.
  */
 export function buildMatchingBoard(
   candidates: readonly CorpusEntry[],
   size: number,
   rng: Rng,
   weight?: (entry: CorpusEntry) => number,
+  shown?: (entry: CorpusEntry) => boolean,
 ): CorpusEntry[] | null {
   const board: CorpusEntry[] = []
-  for (const entry of weight ? weightedOrder(candidates, weight, rng) : shuffle(candidates, rng)) {
+  const order = shown ? unseenFirstOrder(candidates, shown, weight ?? (() => 1), rng) : weight ? weightedOrder(candidates, weight, rng) : shuffle(candidates, rng)
+  for (const entry of order) {
     if (board.length >= size) break
     if (!entry.retired && !board.some((other) => clash(entry, other, false))) board.push(entry)
   }

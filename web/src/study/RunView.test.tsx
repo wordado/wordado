@@ -289,6 +289,75 @@ describe('RunView: the above-level marker', () => {
   it('is absent when the item is at the learner’s declared level (the sample is all A1)', async () => {
     await start('flashcard')
     expect(document.querySelector('.above-level')).toBeNull()
+    expect(document.querySelector('.card-labels')).toBeNull()
+  })
+})
+
+describe('RunView: "New to you" (spec §7.4)', () => {
+  const practise = async (ctx: Awaited<ReturnType<typeof setup>>, scope?: { kind: 'unit' | 'theme'; id: string }) => {
+    const run = await StudyRun.start(ctx.client, ctx.env, { kind: 'practice', mode: 'flashcard', ...(scope && { scope }), cachedClips: () => new Set(), online: () => false })
+    renderWith(<RunView run={run} kind="practice" />, ctx)
+    return run
+  }
+
+  it('labels a practised word that was never started, in a theme and in a unit of a skipped level, before and after the answer', async () => {
+    const ctx = await setup()
+    await practise(ctx, { kind: 'theme', id: 'daily-life' })
+    const label = screen.getByText('New to you')
+    expect(label.className).toBe('note new-to-you')
+    // On the card, before the word.
+    expect(label.closest('.card')).toBeTruthy()
+    expect(label.compareDocumentPosition(document.querySelector('.card [lang="en"]')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    ctx.env.advance(ITEM_SETTLE_MS)
+    fireEvent.click(screen.getByRole('button', { name: 'Show answer' }))
+    expect(screen.getByText('New to you')).toBeTruthy()
+    cleanup()
+    await ctx.client.updateSettings({ declaredLevel: 'A2' })
+    await practise(ctx, { kind: 'unit', id: ctx.client.snapshot.corpus!.units[0]!.unitId })
+    expect(screen.getByText('New to you')).toBeTruthy()
+  })
+
+  it('shows beside "Above your level" when the word is both', async () => {
+    const ctx = await setup()
+    // The theme's words as a later pack might level them: above the learner's A1.
+    // One widened snapshot per snapshot: the store must answer the same object until it changes.
+    const get = ctx.client.store.get
+    const levelled = new WeakMap<object, ReturnType<typeof get>>()
+    ctx.client.store.get = () => {
+      const snapshot = get()
+      const corpus = snapshot.corpus!
+      if (!levelled.has(snapshot)) {
+        const entries = new Map([...corpus.entries].map(([id, e]) => [id, e.themes.includes('daily-life') ? { ...e, level: 'B1' as const } : e]))
+        levelled.set(snapshot, { ...snapshot, corpus: { ...corpus, entries } })
+      }
+      return levelled.get(snapshot)!
+    }
+    await practise(ctx, { kind: 'theme', id: 'daily-life' })
+    const labels = document.querySelector('.card-labels')!
+    expect([...labels.children].map((el) => el.textContent)).toEqual(['New to you', 'Above your level (B1)'])
+  })
+
+  it('is absent on a started word in practice, and on a new word in a session', async () => {
+    const ctx = await setup()
+    await ctx.client.answer({ wordId: ctx.client.snapshot.plan!.newWords[0]!, mode: 'flashcard', direction: 'en_to_l1', grade: Grade.Good, latencyMs: 2_000, practice: false })
+    ctx.env.advance(3_600_000)
+    await practise(ctx)
+    expect(screen.getByRole('button', { name: 'Show answer' })).toBeTruthy()
+    expect(screen.queryByText('New to you')).toBeNull()
+    cleanup()
+    // A session's new word is new too, but that is what a session is for.
+    await start('flashcard')
+    expect(screen.queryByText('New to you')).toBeNull()
+  })
+
+  it('speaks every interface language', async () => {
+    for (const [locale, text] of [['bg', 'Нова за вас'], ['de', 'Neu für dich'], ['es', 'Nueva para ti']] as const) {
+      const ctx = await setup()
+      const run = await StudyRun.start(ctx.client, ctx.env, { kind: 'practice', mode: 'flashcard', scope: { kind: 'theme', id: 'daily-life' }, cachedClips: () => new Set(), online: () => false })
+      renderWith(<RunView run={run} kind="practice" />, { ...ctx, locale })
+      expect(screen.getByText(text)).toBeTruthy()
+      cleanup()
+    }
   })
 })
 

@@ -917,8 +917,26 @@ main:focus,
   color: var(--ink-soft);
 }
 
+/* What the card says about its word before the word itself: never started, above the learner's level, or both. */
+.card-labels {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1) var(--space-2);
+}
+
 .above-level {
   margin: 0;
+}
+
+/* "New to you": a word practice shows though the learner never started it. */
+.new-to-you {
+  margin: 0;
+  padding: 0.125rem 0.625rem;
+  font-weight: 600;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
 }
 
 /* "Learn this word", under the answer on the card: quiet until it is on. */
@@ -1250,6 +1268,11 @@ main:focus,
 .done-note {
   font-weight: 400;
   color: var(--ink-soft);
+}
+
+/* The line that takes focus when "Study this theme" has done its work. */
+.done-studying:focus {
+  outline: none;
 }
 
 .done-icon {
@@ -1850,8 +1873,25 @@ dialog.report textarea {
   font-weight: 600;
 }
 
-/* "Study this next" beside "Practise this theme": the quieter of the two. */
-.theme-next.is-quiet {
+/* Not started, with practice offered: the quiet link takes a row of its own under the bar. */
+.theme-card.is-new.has-practise {
+  grid-template-areas:
+    'icon text action'
+    '. progress progress'
+    '. practise practise';
+}
+
+/* Its text starts where the bar's does, and it keeps close to the bar it belongs under. */
+.is-new .theme-practise {
+  grid-area: practise;
+  justify-self: start;
+  margin-top: calc(-1 * var(--space-2));
+  padding-inline: 0;
+}
+
+/* Of a card's two actions, the quieter: "Study this next" on a studied theme, "Practise this theme" on one not started. */
+.theme-next.is-quiet,
+.theme-practise.is-quiet {
   font-weight: 500;
   color: var(--ink-soft);
   background: transparent;
@@ -1894,6 +1934,13 @@ dialog.report textarea {
   .theme-actions {
     width: 100%;
     margin-top: auto;
+  }
+
+  /* Under "Study this next", as close as a studied theme's two actions are. */
+  .is-new .theme-practise {
+    width: 100%;
+    margin-top: calc(var(--space-2) - var(--space-3));
+    padding-inline: var(--space-4);
   }
 
   .theme-next .label-long {
@@ -2135,9 +2182,14 @@ dialog.report textarea {
   font: 600 var(--step-1) / 1.3 var(--font-entry);
 }
 
-/* Why a skipped level's unit shows words the learner never started: one quiet line under the unit's name. */
+/* Why a theme or a skipped level's unit shows words the learner never started: one quiet line under its name. */
 .practice-skipped {
   margin: var(--space-1) 0 0;
+}
+
+/* How far this visit has gone through the unit's or theme's words: one quiet line under the mixed run. */
+.practice-visit {
+  margin: 0 0 0 var(--space-1);
 }
 
 .practice-mixed {

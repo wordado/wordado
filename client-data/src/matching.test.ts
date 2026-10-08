@@ -1,6 +1,7 @@
-import { corpusWordId, Grade, MATCHING_PAIRS, themeEntries } from '@wordado/core'
+import { corpusWordId, Grade, MATCHING_PAIRS, themeEntries, XP_AMOUNTS } from '@wordado/core'
 import { describe, expect, it, vi } from 'vitest'
 import { MatchingRun } from './matching'
+import { visitProgress } from './run'
 import { openSampleClient } from './testing/sample'
 import { testEnv } from './testing/testEnv'
 
@@ -36,19 +37,63 @@ describe('MatchingRun', () => {
     expect(MatchingRun.start(client, env, { kind: 'unit', id: second!.unitId })!.snapshot.left.every((e) => second!.wordIds.includes(corpusWordId(e.entryId)))).toBe(true)
   })
 
-  it('deals a theme’s board from that theme’s started words only', async () => {
-    const { env, client } = await clientWithWords(10)
+  it('deals a theme’s board from all the theme’s words, and a pair starts neither word (spec §7.4, §8.1)', async () => {
+    const env = testEnv()
+    const client = await openSampleClient(env)
     const theme = themeEntries(client.snapshot.corpus!, 'daily-life').map((e) => corpusWordId(e.entryId))
     const scope = { kind: 'theme', id: 'daily-life' } as const
-    const startedOf = () => theme.filter((wordId) => client.snapshot.states.has(wordId))
-    // Words of the theme not yet started, as a chosen theme would bring them forward (spec §8.9): up to four in all, then a fifth.
-    const fresh = theme.filter((wordId) => !client.snapshot.states.has(wordId))
-    const introduce = (wordId: (typeof theme)[number]) => client.answer({ wordId, mode: 'flashcard', direction: 'en_to_l1', grade: Grade.Good, latencyMs: 2000, practice: false })
-    expect(startedOf().length).toBeLessThan(MATCHING_PAIRS)
-    while (startedOf().length < MATCHING_PAIRS - 1) await introduce(fresh.shift()!)
+    const before = client.snapshot
+    expect(before.states.size).toBe(0)
+    const run = MatchingRun.start(client, env, scope)!
+    expect(run.snapshot.left).toHaveLength(MATCHING_PAIRS)
+    expect(run.snapshot.left.every((e) => theme.includes(corpusWordId(e.entryId)))).toBe(true)
+    for (const entry of run.snapshot.left) {
+      env.advance(2_000)
+      await run.select('left', entry.entryId)
+      await run.select('right', entry.entryId)
+    }
+    expect(run.snapshot).toMatchObject({ done: true, error: null })
+    expect(client.snapshot.states.size).toBe(0)
+    expect(client.snapshot.plan).toEqual(before.plan)
+    expect(client.snapshot.path).toEqual(before.path)
+    expect(client.snapshot.progress!.units).toEqual(before.progress!.units)
+    expect(client.snapshot.progress!.levels).toEqual(before.progress!.levels)
+    expect(client.snapshot.progress!.tiers).toEqual(before.progress!.tiers)
+    expect(client.snapshot.settings.activeTheme).toBeNull()
+    expect(client.snapshot.xp.total - before.xp.total).toBe(MATCHING_PAIRS * XP_AMOUNTS.practice)
+    // Matching over everything still needs started words, and so does a unit of the learner's own level.
+    expect(MatchingRun.start(client, env)).toBeNull()
+    expect(MatchingRun.start(client, env, { kind: 'unit', id: client.snapshot.corpus!.units[1]!.unitId })).toBeNull()
+  })
+
+  it('needs five words of the theme that are not set aside', async () => {
+    const env = testEnv()
+    const client = await openSampleClient(env)
+    const theme = themeEntries(client.snapshot.corpus!, 'daily-life').map((e) => corpusWordId(e.entryId))
+    const scope = { kind: 'theme', id: 'daily-life' } as const
+    for (const wordId of theme.slice(MATCHING_PAIRS - 1)) await client.setFlag(wordId, 'suspended')
     expect(MatchingRun.start(client, env, scope)).toBeNull()
-    await introduce(fresh.shift()!)
-    expect(new Set(MatchingRun.start(client, env, scope)!.snapshot.left.map((e) => corpusWordId(e.entryId)))).toEqual(new Set(startedOf()))
+    await client.setFlag(theme[MATCHING_PAIRS]!, null)
+    expect(new Set(MatchingRun.start(client, env, scope)!.snapshot.left.map((e) => corpusWordId(e.entryId)))).toEqual(new Set([...theme.slice(0, MATCHING_PAIRS - 1), theme[MATCHING_PAIRS]]))
+  })
+
+  it('deals a scope’s boards from the words the visit has not shown first, in one memory with its runs (spec §7.4)', async () => {
+    const env = testEnv()
+    const client = await openSampleClient(env)
+    const theme = themeEntries(client.snapshot.corpus!, 'daily-life').map((e) => corpusWordId(e.entryId))
+    const scope = { kind: 'theme', id: 'daily-life' } as const
+    const dealt: string[] = []
+    for (let board = 1; board <= theme.length / MATCHING_PAIRS; board += 1) {
+      dealt.push(...MatchingRun.start(client, env, scope)!.snapshot.left.map((e) => corpusWordId(e.entryId)))
+      expect(new Set(dealt).size).toBe(board * MATCHING_PAIRS)
+      expect(visitProgress(client, scope)).toMatchObject({ seen: board * MATCHING_PAIRS, total: theme.length })
+    }
+    expect(new Set(dealt)).toEqual(new Set(theme))
+    // All shown: the next board starts over.
+    expect(MatchingRun.start(client, env, scope)!.snapshot.left).toHaveLength(MATCHING_PAIRS)
+    expect(visitProgress(client, scope)).toMatchObject({ seen: MATCHING_PAIRS, total: theme.length })
+    // Matching over everything keeps no memory.
+    expect(visitProgress(client, undefined)).toBeNull()
   })
 
   it('deals the board of a skipped level’s unit from all its words, and a pair starts neither word (spec §7.2, §8.1)', async () => {

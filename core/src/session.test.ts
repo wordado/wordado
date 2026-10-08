@@ -222,6 +222,14 @@ describe('words the learner chose to learn (spec §7.4)', () => {
     expect(plan.newWords).toEqual([w(2), w(1), w(3)])
   })
 
+  it('serves a chosen word once when the collection would serve it too (marked in a theme’s practice, then the theme is studied)', () => {
+    const personalNew = learnQueue(new Map([[w(21), 5]]), new Map())
+    const plan = composeSession(input({ newWordLimit: 4, personalNew, collectionNew: [w(20), w(21), w(22), w(23)], pathNew: [w(1)] }))
+    expect(plan.newWords).toEqual([w(21), w(20), w(22), w(23)])
+    // The slot it would have taken twice goes to the next word of the theme, not to nothing.
+    expect(new Set(plan.newWords).size).toBe(4)
+  })
+
   it('does not serve a chosen word that is set aside or already started, and waits with the rest while new words are paused', () => {
     const personalNew = [...marks.keys()]
     const flags = new Map<WordId, WordFlag>([[w(7), 'suspended']])

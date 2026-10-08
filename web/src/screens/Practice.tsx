@@ -1,4 +1,4 @@
-import { useClientSnapshot } from '@wordado/client-data'
+import { useClient, useClientSnapshot, visitProgress } from '@wordado/client-data'
 import { ChevronLeft, ChevronRight, Layers, ListChecks, Repeat, Shuffle, type LucideIcon } from 'lucide-react'
 import { useId } from 'react'
 import { localized, useT, type MessageKey } from '../i18n/i18n'
@@ -16,12 +16,17 @@ const ONE_WAY: readonly { route(scope: ScopeParams): Route; readonly label: Mess
 /**
  * Extra practice (spec §7.4): outside the schedule, at reduced XP, never touching review state. Over every started
  * word, or over one unit's or one theme's when the path or the themes sent the learner here (`unit`, `theme`); a
- * unit or theme that cannot be practised is ignored. A unit of a skipped level is practised whole, and says so.
+ * unit or theme that cannot be practised is ignored. A theme, and a unit of a skipped level, is practised whole, and
+ * says so where that brings words the learner never started. A unit's or a theme's practice also says how far this
+ * visit has gone through its words.
  */
 export function Practice(props: ScopeParams) {
   const { t, locale } = useT()
+  const client = useClient()
   const { states, flags, corpus } = useClientSnapshot()
   const scope = usePracticeScope(props)
+  // Read as the screen is shown: the visit's memory changes only in a run, which is another screen.
+  const visit = scope && visitProgress(client, scope.scope)
   const params = scope?.params ?? {}
   // Words practice may use, in the scope or over everything: with none, no way to practise is offered.
   const none = (scope ? scope.words : practisableCount(states.keys(), { states, flags, retired: corpus?.retired ?? new Set() })) === 0
@@ -37,6 +42,7 @@ export function Practice(props: ScopeParams) {
         <h1 id="practice-title">{t('practice.title')}</h1>
         {scope && <p className="practice-scope">{t(scope.label, { title: localized(scope.title, locale, corpus?.l1 ?? '') })}</p>}
         {scope?.skipped && <p className="note practice-skipped">{t('practice.skippedLevel')}</p>}
+        {scope?.scope.kind === 'theme' && scope.unstarted > 0 && <p className="note practice-skipped">{t('practice.wholeTheme')}</p>}
         <p className="lede">{t('practice.intro')}</p>
       </div>
       {none ? (
@@ -57,6 +63,13 @@ export function Practice(props: ScopeParams) {
               {t(scope?.start ?? 'home.practice')}
             </Link>
           </div>
+          {visit && (
+            <p className="note practice-visit">
+              {t('practice.visitSeen', { seen: visit.seen, count: visit.total })}
+              {/* Words of the scope that today's session serves: practice leaves them to it, and says where they are. */}
+              {visit.inSession > 0 && ` · ${t('practice.visitInSession', { count: visit.inSession })}`}
+            </p>
+          )}
           <h2 className="practice-one-way">{t('practice.oneWay')}</h2>
           <ul className="practice-list">
             {ONE_WAY.map((way) => (

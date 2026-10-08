@@ -30,6 +30,7 @@ import { ensureDevice, getUserId, setUserId } from './meta'
 import { activateStagedPacks, activePackVersion, installedPacks, installPacks, loadActiveCorpus, type InstallReport, type PackFetcher } from './packs'
 import { migrate } from './schema'
 import { createStore, type Store } from './store'
+import { PracticeVisit } from './practiceVisit'
 import { availableModes, dayCompleteInput, entryOf, levelClips, newUnlocks, pathView, progressView, sessionPlan, today, toLearnWords, upcomingClips, type PathView, type ProgressView, type StudyContext } from './study'
 import { INITIAL_SYNC_STATUS, readPulledXp, SyncEngine, type PulledXp, type SyncOutcome, type SyncStatus, type SyncTransport } from './sync'
 
@@ -116,6 +117,8 @@ export class Client {
   /** Answers and document writes still running: `close` waits for them (spec §9.1). */
   private readonly inFlight = new Set<Promise<unknown>>()
   private closing = false
+  /** What scoped practice has shown since this client was opened (spec §7.4): in memory, never stored. */
+  readonly practiceVisit = new PracticeVisit()
 
   private constructor(
     private readonly db: Database,
