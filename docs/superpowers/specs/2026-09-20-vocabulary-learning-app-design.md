@@ -352,7 +352,9 @@ Each corpus entry carries:
 - Headword (English), plus accepted spelling variants (*colour* / *color*)
 - Part of speech
 - Sense gloss — a few words, per L1, shown wherever the headword alone is
-  ambiguous ("bank — *money*")
+  ambiguous ("bank — *money*"). In a multiple-choice question and its answers
+  it stands on a line of its own under the translation, smaller and without
+  brackets; elsewhere it follows the translation in brackets.
 - IPA transcription
 - CEFR level (A1–C1)
 - Audio reference (TTS-generated at build time, UK and US where sensible)
@@ -805,6 +807,26 @@ All scheduling, selection, and state transitions live in `core`.
 | Typing / cloze | Translation → type English word; or fill the gap in an example sentence | Binary with typo tolerance, plus latency | 2 |
 
 Grades follow the table in §7.3.
+
+**The multiple-choice question.** When the English word is shown (EN→L1), a
+listen button beside it plays the word, as on a flashcard, under the same
+conditions: sound is on and the clip is cached or the device is online. When
+the translation is shown (L1→EN) there is no audio at all, before or after
+the answer. The answers themselves never play anything: a tap there is the
+answer.
+
+**A right answer moves on by itself.** In multiple choice and listening
+(select), a right answer shows its confirmation for a short fixed time (about
+a second; tuning, §15) and the next item comes without a tap; Enter, Space or
+a tap on the confirmation moves on at once. A wrong answer always waits for
+**Continue**, so the learner can read the right one. So does a right answer
+when its card has something to act on: "Learn this word" (§7.4) is offered, or
+the learner has opened the card's menu. **Continue automatically after a right
+answer** in settings switches this off; it is on by default and kept per
+device, in the browser's storage, so no synced document changes. Moving on by
+the timer is the same step as Continue: the answer, its grade and its latency
+(§7.3) are recorded when the answer is given, and nothing is graded, counted
+or recorded differently.
 
 Two modes that need little new work join Phase 1. **Listening (select)** needs
 no new content: every entry already
@@ -1573,7 +1595,10 @@ respects the reduced-motion preference; and a learner who turns audio off, or
 cannot use it, is never served listening items — `core` treats audio as
 unavailable for them (§7.5). Latency-based grading (§7.3) can be switched off
 in settings, so that a learner who needs more time is graded on correctness
-alone.
+alone; so can moving on by itself after a right answer (§8.1), for a learner
+who wants to leave each question in their own time. While a right answer
+waits to move on, its confirmation is announced as before, and takes the
+keyboard focus in place of the Continue button that is not there.
 
 ### 11.2 Internationalisation
 
@@ -2070,6 +2095,19 @@ owner.
   has loaded; the app opening, a sign-in code being checked, signing out and
   the data export being prepared each show the busy bar. None of them can be
   measured, so none shows a share done. Background sync keeps its status line.
+
+**2026-10-08 — the multiple-choice question.** Decided by the product owner.
+
+- **Sense gloss (§5.2):** in a multiple-choice question and its answers the
+  gloss stands on its own line under the translation, without brackets. Lists,
+  the flashcard and the matching game keep the one-line form.
+- **Listening (§8.1):** the English word of an EN→L1 question has the
+  flashcard's listen button. An L1→EN question has no audio, before or after
+  the answer.
+- **Moving on (§8.1, §11.1):** a right answer moves on by itself after about a
+  second; a wrong one keeps Continue. **Continue automatically after a right
+  answer** (on by default, per device) switches it off. Nothing about grading
+  or what an answer records changes.
 
 ### Approval status
 

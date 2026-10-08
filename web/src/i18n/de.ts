@@ -149,6 +149,8 @@ export const de: Messages = {
   'settings.audio': 'Audio abspielen und Hörübungen einbeziehen',
   'settings.latency': 'Langsame Antworten als „schwer“ werten',
   'settings.latencyHint': 'Schalte das aus, um nur danach bewertet zu werden, ob du richtig liegst, nicht wie schnell.',
+  'settings.autoContinue': 'Nach einer richtigen Antwort automatisch weiter',
+  'settings.autoContinueHint': 'Nach einer richtigen Antwort kommt die nächste Frage von selbst. Nach einer falschen Antwort wird immer auf dich gewartet. Das gilt nur für dieses Gerät.',
   'settings.saveFailed': 'Deine Änderung wurde nicht gespeichert: {message}',
 
   'settings.audioDownload': 'Audio zum Offline-Lernen',
