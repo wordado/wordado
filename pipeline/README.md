@@ -354,8 +354,11 @@ sense; a hard-to-translate word gets the best translation and a note. Until repo
   speech, however many there are.) Find the lemma's line in `cache/senses.jsonl` and restore a sense with the
   sample's part of speech. That file is plain JSON, one item per line. Then run `draft` again.
 - **A stale decision.** A prompt version was bumped, so proposals changed, and their earlier verdicts no longer
-  apply (Decision 5). `queues` offers them again. Open files under `review/` still hold the old proposals, so
-  delete them before running `corpus queues` again.
+  apply (Decision 5). `queues` offers them again.
+- **A proposal changed while its row was open.** A level fix reshapes units and their titles; a new prompt version
+  changes a translation. `queues` (so every `draft`) takes such a row out of its open file and writes it to a new
+  one with the current proposal, because a verdict on the old one would settle nothing. A row that already has a
+  verdict stays for `import`. Edits typed into a row without a verdict are lost with it.
 - **The budget stopped a draft.** Run `draft` again: everything already paid for is in `cache/`.
 - **`live` fails before a release.** `last-published/` is behind the CDN, or ahead of it: pull `main` of the
   content repository. If a publish failed after uploading the manifest, restore `last-published/` from the CDN's

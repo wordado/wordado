@@ -159,7 +159,37 @@ function openFiles(dir: string, queue: string): string[] {
 
 const sidecarOf = (csv: string) => csv.replace(/\.csv$/, '.json')
 
-/** Writes pending items not already in an open file, `batchSize` rows per file. Returns the files written. */
+/**
+ * Takes out of the queue's open files the rows whose proposal the draft has since changed, and returns the keys still
+ * open. Such a row can no longer be decided where it is: a verdict binds to the proposal in the sidecar (Decision 5),
+ * so it would not settle the current one, and the reviewer would be judging a value that is gone (unit titles after
+ * the levels were rebuilt, 2026-10-08). A row that already has a verdict stays for `import`.
+ */
+function retireStale(dir: string, queue: string, current: ReadonlyMap<string, string>): Set<string> {
+  const open = new Set<string>()
+  for (const file of openFiles(dir, queue)) {
+    const sidecar = readJson<Sidecar>(sidecarOf(file))
+    const { header: cols, rows } = csvRecords(readFileSync(file, 'utf8'))
+    const decided = new Set(rows.filter((r) => (r['verdict'] ?? '').trim() !== '').map((r) => (r['key'] ?? '').trim()))
+    const stale = new Set(sidecar.items.filter((i) => !decided.has(i.key) && current.has(i.key) && current.get(i.key) !== canonicalJson(i.proposed)).map((i) => i.key))
+    const items = sidecar.items.filter((i) => !stale.has(i.key))
+    for (const i of items) open.add(i.key)
+    if (stale.size === 0) continue
+    if (items.length === 0) {
+      rmSync(file)
+      rmSync(sidecarOf(file))
+    } else {
+      writeFileSync(file, formatCsv([cols, ...rows.filter((r) => !stale.has((r['key'] ?? '').trim())).map((r) => cols.map((c) => r[c] ?? ''))]))
+      writeJson(sidecarOf(file), { queue, items } satisfies Sidecar)
+    }
+  }
+  return open
+}
+
+/**
+ * Writes pending items not already in an open file, `batchSize` rows per file. Returns the files written. An open
+ * row with an outdated proposal is written again, with the current one (`retireStale`).
+ */
 export function exportQueues(
   dir: string,
   items: ReadonlyMap<string, readonly QueueItem[]>,
@@ -171,7 +201,7 @@ export function exportQueues(
   for (const [queue, all] of [...items].sort(([a], [b]) => (a < b ? -1 : 1))) {
     const spec = specs.get(queue)
     if (!spec) throw new Error(`no queue ${queue}`)
-    const open = new Set(openFiles(dir, queue).flatMap((f) => readJson<Sidecar>(sidecarOf(f)).items.map((i) => i.key)))
+    const open = retireStale(dir, queue, new Map(all.map((i) => [i.key, canonicalJson(i.proposed)])))
     const fresh = all.filter((i) => !open.has(i.key))
     const qdir = contentPaths(dir).queueDir(queue)
     let n = 0
