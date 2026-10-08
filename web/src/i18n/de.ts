@@ -352,6 +352,7 @@ export const de: Messages = {
   'practice.back': 'Zurück zur Übung',
   'practice.unit': 'Einheit: {title}',
   'practice.toPath': 'Zurück zum Lernpfad',
+  'practice.skippedLevel': 'Aus einem übersprungenen Niveau: Diese Wörter können neu für dich sein.',
   'practice.theme': 'Thema: {title}',
   'practice.toThemes': 'Zurück zu den Themen',
   'matching.progressLabel': 'Zugeordnete Paare',

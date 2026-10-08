@@ -350,6 +350,7 @@ export const es: Messages = {
   'practice.back': 'Volver a la práctica',
   'practice.unit': 'Unidad: {title}',
   'practice.toPath': 'Volver a la ruta',
+  'practice.skippedLevel': 'De un nivel omitido: puede que estas palabras sean nuevas para ti.',
   'practice.theme': 'Tema: {title}',
   'practice.toThemes': 'Volver a los temas',
   'matching.progressLabel': 'Parejas encontradas',

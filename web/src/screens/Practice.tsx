@@ -16,7 +16,7 @@ const ONE_WAY: readonly { route(scope: ScopeParams): Route; readonly label: Mess
 /**
  * Extra practice (spec §7.4): outside the schedule, at reduced XP, never touching review state. Over every started
  * word, or over one unit's or one theme's when the path or the themes sent the learner here (`unit`, `theme`); a
- * unit or theme that cannot be practised is ignored.
+ * unit or theme that cannot be practised is ignored. A unit of a skipped level is practised whole, and says so.
  */
 export function Practice(props: ScopeParams) {
   const { t, locale } = useT()
@@ -24,7 +24,7 @@ export function Practice(props: ScopeParams) {
   const scope = usePracticeScope(props)
   const params = scope?.params ?? {}
   // Words practice may use, in the scope or over everything: with none, no way to practise is offered.
-  const none = (scope ? scope.started : practisableCount(states.keys(), { states, flags, retired: corpus?.retired ?? new Set() })) === 0
+  const none = (scope ? scope.words : practisableCount(states.keys(), { states, flags, retired: corpus?.retired ?? new Set() })) === 0
   return (
     <section className="practice" aria-labelledby="practice-title">
       {scope && (
@@ -36,6 +36,7 @@ export function Practice(props: ScopeParams) {
       <div className="practice-head">
         <h1 id="practice-title">{t('practice.title')}</h1>
         {scope && <p className="practice-scope">{t(scope.label, { title: localized(scope.title, locale, corpus?.l1 ?? '') })}</p>}
+        {scope?.skipped && <p className="note practice-skipped">{t('practice.skippedLevel')}</p>}
         <p className="lede">{t('practice.intro')}</p>
       </div>
       {none ? (

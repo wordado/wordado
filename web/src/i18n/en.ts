@@ -337,6 +337,7 @@ export const en = {
   'practice.back': 'Back to practice',
   'practice.unit': 'Unit: {title}',
   'practice.toPath': 'Back to the path',
+  'practice.skippedLevel': 'From a level you skipped: these words may be new to you.',
   'practice.theme': 'Theme: {title}',
   'practice.toThemes': 'Back to themes',
   'matching.progressLabel': 'Pairs matched',

@@ -332,6 +332,7 @@ export const bg: Messages = {
   'practice.back': 'Обратно към упражненията',
   'practice.unit': 'Урок: {title}',
   'practice.toPath': 'Обратно към пътя',
+  'practice.skippedLevel': 'От пропуснато ниво: тези думи може да са нови за вас.',
   'practice.theme': 'Тема: {title}',
   'practice.toThemes': 'Обратно към темите',
   'matching.progressLabel': 'Свързани двойки',

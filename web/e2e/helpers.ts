@@ -1,5 +1,9 @@
 import AxeBuilder from '@axe-core/playwright'
-import { expect, type Page } from '@playwright/test'
+import { expect, type BrowserContext, type Page } from '@playwright/test'
+import { createHash } from 'node:crypto'
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { bg } from '../src/i18n/bg'
 import { de } from '../src/i18n/de'
 import { en, type Messages } from '../src/i18n/en'
@@ -103,4 +107,44 @@ export async function expectAccessible(page: Page, options: { readonly dark?: bo
     expect(results.violations.map((v) => `${colorScheme} ${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`)).toEqual([])
   }
   await page.emulateMedia({ colorScheme: 'light', reducedMotion: null })
+}
+
+// From the string form of import.meta.url: the unit suite loads this file under happy-dom, which replaces the global URL class.
+const SAMPLE_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'pipeline', 'samples', 'a1')
+
+/**
+ * Serves the Bulgarian sample with its first unit as A1 and the rest as A2, so the demo has a level to place above:
+ * the bundled sample is all A1, and nothing can be skipped in it. Only the levels change; the manifest's checksum
+ * follows the new bytes. The context must block service workers, or the app's own would answer instead.
+ */
+export async function serveTwoLevelSample(context: BrowserContext): Promise<void> {
+  interface Leveled {
+    level: string
+    unit_id?: string
+  }
+  const pack = JSON.parse(readFileSync(join(SAMPLE_DIR, 'corpus-v0-bg.pack'), 'utf8')) as { units: Leveled[]; entries: Leveled[] }
+  const first = pack.units[0]!.unit_id
+  for (const unit of pack.units) if (unit.unit_id !== first) unit.level = 'A2'
+  for (const entry of pack.entries) if (entry.unit_id !== first) entry.level = 'A2'
+  const body = Buffer.from(JSON.stringify(pack))
+  const manifest = JSON.parse(readFileSync(join(SAMPLE_DIR, 'manifest.json'), 'utf8')) as { packs: { pack_id: string; sha256: string; bytes: number }[] }
+  for (const p of manifest.packs) {
+    if (p.pack_id !== 'corpus-bg') continue
+    p.sha256 = createHash('sha256').update(body).digest('hex')
+    p.bytes = body.length
+  }
+  await context.route('**/content/sample/manifest.json', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify(manifest) }))
+  await context.route('**/content/sample/corpus-v0-bg.pack', (route) => route.fulfill({ contentType: 'application/json', body }))
+}
+
+/** Through the setup of a sample with more than one level (`serveTwoLevelSample`), declaring `level` on its Level step. */
+export async function finishSetupAt(page: Page, level: string): Promise<void> {
+  await page.getByRole('radio', { name: 'Български' }).check()
+  await page.getByRole('button', { name: en['setup.continue'] }).click()
+  await expect(page.getByRole('heading', { name: en['setup.level.title'] })).toBeVisible()
+  // The radio is checked once the level is saved, a moment after the click: `check()` would not wait for it.
+  await page.getByRole('radio', { name: level }).click()
+  await expect(page.getByRole('radio', { name: level })).toBeChecked()
+  await page.getByRole('button', { name: en['setup.start'] }).click()
+  await expect(today(page)).toBeVisible()
 }

@@ -150,6 +150,37 @@ describe('Path', () => {
     expect(within(unit('People and greetings')).getByText('Open')).toBeTruthy()
   })
 
+  it('offers to practise every unit of a skipped level, though none of its words is started, and never Start studying (spec §7.2)', async () => {
+    const ctx = await setup()
+    await ctx.client.updateSettings({ declaredLevel: 'A2' })
+    renderWith(<Path />, ctx)
+    const units = ctx.client.snapshot.corpus!.units
+    expect(ctx.client.snapshot.states.size).toBe(0)
+    expect(screen.getAllByRole('link', { name: /^Practise this unit/ }).map((a) => [a.textContent, a.getAttribute('aria-label'), a.getAttribute('href')])).toEqual([
+      ['Practise this unit', 'Practise this unit: People and greetings', `/practice?unit=${units[0]!.unitId}`],
+      ['Practise this unit', 'Practise this unit: Food and drink', `/practice?unit=${units[1]!.unitId}`],
+      ['Practise this unit', 'Practise this unit: Home and every day', `/practice?unit=${units[2]!.unitId}`],
+    ])
+    expect(screen.queryByRole('link', { name: 'Start studying' })).toBeNull()
+    expect(screen.queryByText('Nothing left for today.')).toBeNull()
+    // The units are drawn as before: open, with their count and their words.
+    const food = unit('Food and drink')
+    expect(within(food).getByText('Open')).toBeTruthy()
+    expect(within(food).getByText('0 of 20 started')).toBeTruthy()
+    expect(within(food).getByText('20 words')).toBeTruthy()
+  })
+
+  it('does not offer practice on a skipped level’s unit whose words are all set aside', async () => {
+    const ctx = await setup()
+    await ctx.client.updateSettings({ declaredLevel: 'A2' })
+    for (const wordId of ctx.client.snapshot.corpus!.units[1]!.wordIds) await ctx.client.setFlag(wordId, 'known')
+    renderWith(<Path />, ctx)
+    expect(screen.getAllByRole('link', { name: /^Practise this unit/ }).map((a) => a.getAttribute('aria-label'))).toEqual([
+      'Practise this unit: People and greetings',
+      'Practise this unit: Home and every day',
+    ])
+  })
+
   it('names a folded level’s status in a form that agrees with “level”, not “unit” (plan 12, review)', async () => {
     const ctx = await setup()
     renderWith(<Path />, { ...ctx, locale: 'bg' })

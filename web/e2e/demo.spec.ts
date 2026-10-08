@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { answer, expectAccessible, finishSetup, forwardConsole, heading, SETTLE_MS, studyNew, today } from './helpers'
+import { answer, expectAccessible, finishSetup, finishSetupAt, forwardConsole, heading, serveTwoLevelSample, SETTLE_MS, studyNew, today } from './helpers'
 
 test.beforeEach(async ({ context }) => {
   forwardConsole(context)
@@ -103,6 +103,51 @@ test('practises one unit from the path, finishes, and comes back to the path', a
   await expect(heading(page)).toHaveText('Your path')
   // Five of the day's ten new words are still to come, so the path still offers the session.
   await expect(page.getByRole('link', { name: 'Start studying' })).toBeVisible()
+})
+
+test('practises a unit of a level the learner placed above, and the level stays skipped', async ({ browser }) => {
+  // The app's service worker would serve the bundled all-A1 sample; this one has an A2 to declare.
+  const context = await browser.newContext({ serviceWorkers: 'block' })
+  forwardConsole(context)
+  await context.addInitScript(() => localStorage.setItem('wordado.locale', 'en'))
+  await serveTwoLevelSample(context)
+  try {
+    const page = await context.newPage()
+    await page.goto('/')
+    await finishSetupAt(page, 'A2 · Elementary')
+    await expect(heading(page)).toHaveText('10 new words')
+    await page.goto('/path')
+    // A1 is folded: skipped, with nothing started in it.
+    const a1 = page.getByRole('button', { name: /^A1/ })
+    await expect(a1).toContainText('Skipped: you placed above this level.')
+    await expect(a1).toHaveAttribute('aria-expanded', 'false')
+    await a1.click()
+    const unit = page.locator('li.unit', { has: page.getByRole('heading', { name: 'People and greetings' }) })
+    await expect(unit.getByText('0 of 20 started')).toBeVisible()
+    await expect(unit.getByRole('link', { name: 'Start studying' })).toHaveCount(0)
+    await unit.getByRole('link', { name: 'Practise this unit: People and greetings' }).click()
+    await expect(heading(page)).toHaveText('Practice')
+    await expect(page.getByText('Unit: People and greetings')).toBeVisible()
+    await expect(page.getByText('From a level you skipped: these words may be new to you.')).toBeVisible()
+    await page.getByRole('link', { name: 'Flashcards' }).click()
+    // A full run, from words that were never started.
+    await expect(page.getByRole('progressbar', { name: 'Session progress' })).toHaveAttribute('aria-valuemax', '10')
+    for (let i = 0; i < 20 && !(await page.locator('.done').isVisible()); i += 1) await answer(page)
+    await expect(heading(page)).toHaveText('Practice complete')
+    await expect(page.getByText('You answered 10 words.')).toBeVisible()
+    await expect(page.getByText(/^New unit open/)).toHaveCount(0)
+    await page.getByRole('link', { name: 'Back to the path' }).click()
+    await expect(heading(page)).toHaveText('Your path')
+    // Nothing was started: the level reads as skipped, the unit as untouched, and the day's new words are all still to come.
+    await expect(a1).toContainText('Skipped: you placed above this level.')
+    await a1.click()
+    await expect(unit.getByText('0 of 20 started')).toBeVisible()
+    await expect(unit.getByRole('link', { name: 'Practise this unit: People and greetings' })).toBeVisible()
+    await page.goto('/')
+    await expect(heading(page)).toHaveText('10 new words')
+  } finally {
+    await context.close()
+  }
 })
 
 test('practises one theme from Themes, and comes back with the study theme as it was', async ({ page }) => {

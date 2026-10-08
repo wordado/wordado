@@ -1,5 +1,5 @@
 import { useClientSnapshot, type PracticeScope } from '@wordado/client-data'
-import { corpusWordId, offeredThemes, practisable, themeEntries, type Corpus, type LocalizedText, type PracticeContext, type WordId } from '@wordado/core'
+import { corpusWordId, offeredThemes, practisable, themeEntries, unitPractisable, type Corpus, type LocalizedText, type PracticeContext, type WordId } from '@wordado/core'
 import { useMemo } from 'react'
 import type { MessageKey } from '../i18n/i18n'
 import type { Route } from '../router'
@@ -16,8 +16,10 @@ export interface PracticeScopeView {
   /** What the practice routes carry on, so the learner stays in the scope. */
   readonly params: ScopeParams
   readonly title: LocalizedText
-  /** Started words that are not set aside: what practice draws on. */
-  readonly started: number
+  /** How many words practice draws on: the started ones that are not set aside, or every live word of a skipped level's unit. */
+  readonly words: number
+  /** A unit of a level the learner skipped (spec §7.2): its practice shows words that were never started, and says so. */
+  readonly skipped: boolean
   /** "Unit: {title}" or "Theme: {title}". */
   readonly label: MessageKey
   /** The mixed run's button. */
@@ -41,12 +43,15 @@ export function usePracticeScope(params: ScopeParams): PracticeScopeView | null 
     if (unitId !== undefined) {
       const unit = path?.unlocked.has(unitId) ? corpus.units.find((u) => u.unitId === unitId) : undefined
       if (!unit) return null
+      const skipped = progress?.levels[unit.level]?.kind === 'skipped'
+      const unitProgress = progress?.units.get(unitId)
       return {
         scope: { kind: 'unit', id: unitId },
         params: { unit: unitId },
         title: unit.title,
-        // The path's own count, by the same rule as `practisable`: live words of the unit with a review state.
-        started: progress?.units.get(unitId)?.introduced ?? 0,
+        // The path's own count, by the same rule as `practisable`.
+        words: unitProgress ? unitPractisable(unitProgress, skipped) : 0,
+        skipped,
         label: 'practice.unit',
         start: 'path.practiseUnit',
         needWords: 'practice.needWordsUnit',
@@ -60,7 +65,8 @@ export function usePracticeScope(params: ScopeParams): PracticeScopeView | null 
       scope: { kind: 'theme', id: theme.themeId },
       params: { theme: theme.themeId },
       title: theme.name,
-      started: themePractisable(corpus, theme.themeId, { states, flags }),
+      words: themePractisable(corpus, theme.themeId, { states, flags }),
+      skipped: false,
       label: 'practice.theme',
       start: 'themes.practise',
       needWords: 'practice.needWordsTheme',

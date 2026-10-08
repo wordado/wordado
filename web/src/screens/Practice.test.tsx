@@ -74,6 +74,36 @@ describe('Practice', () => {
     expect(screen.getByRole('link', { name: 'Back to the path' }).getAttribute('href')).toBe('/path')
   })
 
+  it('practises a unit of a skipped level with nothing started, and says where its words are from (spec §7.2, §7.4)', async () => {
+    const ctx = await setup()
+    await ctx.client.updateSettings({ declaredLevel: 'A2' })
+    const second = ctx.client.snapshot.corpus!.units[1]!
+    renderWith(<Practice unit={second.unitId} />, ctx)
+    expect(screen.getByText('Unit: Food and drink')).toBeTruthy()
+    const line = screen.getByText('From a level you skipped: these words may be new to you.')
+    expect(line.previousElementSibling?.textContent).toBe('Unit: Food and drink')
+    expect(screen.queryByText('Nothing to practise yet. Study a few new words first.')).toBeNull()
+    expect(screen.getByRole('link', { name: 'Practise this unit' }).getAttribute('href')).toBe(`/practice/words?unit=${second.unitId}`)
+    expect(screen.getByRole('link', { name: 'Matching' }).getAttribute('href')).toBe(`/practice/matching?unit=${second.unitId}`)
+    cleanup()
+    // Practice over everything still has nothing, and says nothing of skipped levels.
+    renderWith(<Practice />, ctx)
+    expect(screen.getByText('Nothing to practise yet. Study a few new words first.')).toBeTruthy()
+    expect(screen.queryByText('From a level you skipped: these words may be new to you.')).toBeNull()
+  })
+
+  it('does not speak of a skipped level on a unit of the learner’s own level, or on a theme', async () => {
+    const ctx = await setup()
+    await answerNew(ctx.client, ctx.env, 5)
+    renderWith(<Practice unit={ctx.client.snapshot.corpus!.units[0]!.unitId} />, ctx)
+    expect(screen.queryByText('From a level you skipped: these words may be new to you.')).toBeNull()
+    cleanup()
+    await ctx.client.updateSettings({ declaredLevel: 'A2' })
+    renderWith(<Practice theme="daily-life" />, ctx)
+    expect(screen.getByText(/^Theme:/)).toBeTruthy()
+    expect(screen.queryByText('From a level you skipped: these words may be new to you.')).toBeNull()
+  })
+
   it('practises one theme: names it, carries it in every way to practise, and leads back to the themes', async () => {
     const ctx = await setup()
     await ctx.client.updateSettings({ activeTheme: 'daily-life' })
