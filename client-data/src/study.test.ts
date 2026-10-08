@@ -28,6 +28,7 @@ async function setup(env: TestEnv = testEnv()) {
     settings: DEFAULT_SETTINGS,
     flags: new Map<WordId, WordFlag>(),
     unlocked: new Set<string>(),
+    toLearn: new Map<WordId, number>(),
     now: env.now(),
     tzOffsetMin: env.tzOffsetMin(),
     ...over,

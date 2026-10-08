@@ -224,6 +224,44 @@ describe('StudyRun', () => {
     expect(client.snapshot.states.size).toBe(0)
   })
 
+  it('marks the word on screen to learn after its answer, takes it back, and counts what the run added (spec §7.4)', async () => {
+    const env = testEnv()
+    const client = await openSampleClient(env)
+    await client.updateSettings({ declaredLevel: 'A2' })
+    const unit = client.snapshot.corpus!.units[0]!
+    const run = await StudyRun.start(client, env, options({ kind: 'practice', mode: 'multiple_choice', scope: { kind: 'unit', id: unit.unitId } }))
+    const first = run.snapshot.item!
+    if (first.mode === 'flashcard') throw new Error('expected a choice item')
+    env.advance(ITEM_SETTLE_MS)
+    await run.choose((first.answerIndex + 1) % first.options.length)
+    expect(run.snapshot.phase).toBe('feedback')
+    await run.setLearn(true)
+    expect(run.snapshot).toMatchObject({ phase: 'feedback', toLearn: 1, error: null })
+    expect(client.snapshot.toLearn).toEqual([first.wordId])
+    // The practice answer started nothing; the session will: the word is today's first new word.
+    expect(client.snapshot.states.size).toBe(0)
+    expect(client.snapshot.plan!.newWords).toEqual([first.wordId])
+    expect(client.snapshot.progress!.levels.A1).toEqual({ kind: 'skipped' })
+    await run.setLearn(false)
+    expect(run.snapshot.toLearn).toBe(0)
+    expect(client.snapshot.toLearn).toEqual([])
+    await run.setLearn(true)
+    env.advance(ITEM_SETTLE_MS)
+    run.next()
+    // The next word, chosen before it is answered.
+    const second = run.snapshot.item!
+    expect(second.wordId).not.toBe(first.wordId)
+    env.advance(1_000)
+    await run.setLearn(true)
+    expect(run.snapshot.toLearn).toBe(2)
+    run.finish()
+    expect(run.snapshot).toMatchObject({ phase: 'done', toLearn: 2 })
+    expect(client.snapshot.toLearn).toEqual([first.wordId, second.wordId])
+    // With no word on screen there is nothing to mark.
+    await run.setLearn(true)
+    expect(run.snapshot.toLearn).toBe(2)
+  })
+
   it('never starts empty while the scope has started words: when all are due today, practice uses them and leaves the schedule alone', async () => {
     const env = testEnv()
     const client = await openSampleClient(env)

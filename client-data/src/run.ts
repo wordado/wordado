@@ -50,6 +50,8 @@ export interface RunSnapshot {
   readonly answered: number
   /** Words set aside ("I know this", "Not now") in this run (spec §7.4). */
   readonly setAside: number
+  /** Words chosen with "Learn this word" in this run and still chosen (spec §7.4). */
+  readonly toLearn: number
   /** Items left as of now. A word answered Again comes back after the relearn delay and raises it. */
   readonly remaining: number
   /** True once an answer in this run completed the day (spec §8.4). */
@@ -66,6 +68,7 @@ const INITIAL: RunSnapshot = {
   feedback: null,
   answered: 0,
   setAside: 0,
+  toLearn: 0,
   remaining: 0,
   dayCompleted: false,
   unlocked: [],
@@ -124,8 +127,12 @@ export class StudyRun {
   /** Total time paused for the current item so far; subtracted from latency only. */
   private pausedMs = 0
   private busy = false
+  /** A "Learn this word" change is being saved: a second press waits its turn by being ignored. */
+  private marking = false
   private finished = false
   private readonly skipped = new Set<WordId>()
+  /** Words this run marked to learn; one unmarked again leaves. */
+  private readonly chosen = new Set<WordId>()
   private practiceQueue: WordId[] = []
 
   private constructor(
@@ -282,6 +289,28 @@ export class StudyRun {
     this.practiceQueue = this.practiceQueue.filter((w) => w !== item.wordId)
     this.set({ setAside: this.snapshot.setAside + 1, error: null })
     if (!this.finished) this.advance()
+  }
+
+  /**
+   * "Learn this word" for the word on screen, or taking it back (spec §7.4): the daily session will serve it as a
+   * new word. Offered in practice of a skipped level's unit, on a word that was never started; allowed at any
+   * point of the item, the feedback after an answer included. The run itself goes on as it was.
+   */
+  async setLearn(on: boolean): Promise<void> {
+    const { item } = this.snapshot
+    if (!item || this.marking) return
+    this.marking = true
+    try {
+      await this.client.setToLearn(item.wordId, on)
+    } catch (err) {
+      this.set({ error: messageOf(err) })
+      return
+    } finally {
+      this.marking = false
+    }
+    if (on) this.chosen.add(item.wordId)
+    else this.chosen.delete(item.wordId)
+    this.set({ toLearn: this.chosen.size, error: null })
   }
 
   /**

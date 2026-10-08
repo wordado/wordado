@@ -163,6 +163,129 @@ function failingDayComplete(driver: SqlDriver): { driver: SqlDriver; fail: { on:
   }
 }
 
+describe('Learn this word (spec §7.4)', () => {
+  it('marks a word offline, serves it first within the daily limit, and takes the mark back', async () => {
+    const env = testEnv()
+    const driver = nodeSqliteDriver()
+    const client = await Client.open({ driver, env, l1: 'bg' })
+    await client.installPacks(manifest, fromDisk)
+    await client.startSession()
+    await client.updateSettings({ newWordLimit: 3 })
+    expect(client.snapshot.toLearn).toEqual([])
+    expect(client.snapshot.plan!.newWords).toEqual(['c:hello-1', 'c:goodbye-1', 'c:please-1'])
+    // No transport: the mark is the device's own until an account syncs it.
+    await client.setToLearn('c:bread-1', true)
+    env.advance(1_000)
+    await client.setToLearn('c:apple-1', true)
+    expect(client.snapshot.toLearn).toEqual(['c:bread-1', 'c:apple-1'])
+    // Still three new words today: the two chosen ones, then the path.
+    expect(client.snapshot.plan!.newWords).toEqual(['c:bread-1', 'c:apple-1', 'c:hello-1'])
+    // A chosen word stays practisable and unflagged.
+    expect(client.snapshot.flags.size).toBe(0)
+    expect(await client.hasUnsynced()).toBe(true)
+    // It is on disk: a second open of the same database reads it.
+    const again = await Client.open({ driver, env, l1: 'bg' })
+    expect(again.snapshot.toLearn).toEqual(['c:bread-1', 'c:apple-1'])
+    await client.setToLearn('c:bread-1', false)
+    expect(client.snapshot.toLearn).toEqual(['c:apple-1'])
+    expect(client.snapshot.plan!.newWords).toEqual(['c:apple-1', 'c:hello-1', 'c:goodbye-1'])
+    // Chosen again, it goes to the back of the line.
+    env.advance(1_000)
+    await client.setToLearn('c:bread-1', true)
+    expect(client.snapshot.toLearn).toEqual(['c:apple-1', 'c:bread-1'])
+  })
+
+  it('spends the mark once the word is started, counts it as one of the day’s new words, and leaves a skipped level skipped', async () => {
+    const env = testEnv()
+    const client = await openClient(env)
+    await client.updateSettings({ declaredLevel: 'A2', newWordLimit: 3 })
+    // The whole sample is below A2: the path has nothing to teach, and the chosen word is the day's one new word.
+    expect(client.snapshot.plan!.newWords).toEqual([])
+    await client.setToLearn('c:bread-1', true)
+    expect(client.snapshot.plan!.newWords).toEqual(['c:bread-1'])
+    await client.answer(answer('c:bread-1'))
+    expect(client.snapshot.states.has('c:bread-1')).toBe(true)
+    expect(client.snapshot.toLearn).toEqual([])
+    expect(client.snapshot.plan!.newWords).toEqual([])
+    expect(client.snapshot.progress!.levels.A1).toEqual({ kind: 'skipped' })
+    // The limit counts it: two more chosen words fit today, a third waits.
+    for (const wordId of ['c:apple-1', 'c:milk-1', 'c:water-1'] as const) {
+      env.advance(1_000)
+      await client.setToLearn(wordId, true)
+    }
+    expect(client.snapshot.plan!.newWords).toEqual(['c:apple-1', 'c:milk-1'])
+    // Taking back a spent mark changes nothing.
+    await client.setToLearn('c:bread-1', false)
+    expect(client.snapshot.states.has('c:bread-1')).toBe(true)
+  })
+
+  it('does not serve a chosen word that is set aside, or one the corpus does not hold', async () => {
+    const client = await openClient()
+    await client.updateSettings({ newWordLimit: 2 })
+    await client.setToLearn('c:bread-1', true)
+    await client.setToLearn('c:nowhere-1', true)
+    expect(client.snapshot.toLearn).toEqual(['c:bread-1'])
+    await client.setFlag('c:bread-1', 'known')
+    expect(client.snapshot.plan!.newWords).toEqual(['c:hello-1', 'c:goodbye-1'])
+    await client.setFlag('c:bread-1', null)
+    expect(client.snapshot.plan!.newWords).toEqual(['c:bread-1', 'c:hello-1'])
+  })
+
+  it('syncs the marks to the account and to a second device, and merges what two devices chose', async () => {
+    const env = testEnv()
+    const server = new FakeServer({ now: () => env.now(), accountCreatedAt: env.now() - 60_000 })
+    const a = await openClient(env, server)
+    const b = await openClient(env, server)
+    await a.setToLearn('c:bread-1', true)
+    env.advance(1_000)
+    await b.setToLearn('c:apple-1', true)
+    expect(await a.sync()).toBe('synced')
+    expect(await b.sync()).toBe('synced')
+    expect(await a.sync()).toBe('synced')
+    expect(a.snapshot.toLearn).toEqual(['c:bread-1', 'c:apple-1'])
+    expect(b.snapshot.toLearn).toEqual(['c:bread-1', 'c:apple-1'])
+    expect(b.snapshot.plan!.newWords.slice(0, 3)).toEqual(['c:bread-1', 'c:apple-1', 'c:hello-1'])
+    expect(await a.hasUnsynced()).toBe(false)
+    expect(server.documents.get('word_learn/c:bread-1')).toMatchObject({ class: 'versioned', deleted: false, fields: { at: expect.any(Number) } })
+    // One device takes a mark back; the other starts the other word.
+    await a.setToLearn('c:bread-1', false)
+    await b.answer(answer('c:apple-1'))
+    await a.sync()
+    await b.sync()
+    await a.sync()
+    expect(a.snapshot.toLearn).toEqual([])
+    expect(b.snapshot.toLearn).toEqual([])
+    expect(a.snapshot.states.has('c:apple-1')).toBe(true)
+    expect(server.documents.get('word_learn/c:bread-1')).toMatchObject({ deleted: true })
+    // A fresh install of the account gets what is left: nothing to learn, and no crash on the spent mark.
+    await b.setToLearn('c:milk-1', true)
+    await b.sync()
+    const c = await openClient(env, server)
+    await c.sync()
+    expect(c.snapshot.toLearn).toEqual(['c:milk-1'])
+  })
+
+  it('reads documents of other shapes without harm: a mark with no time, with fields it does not know, and a type it does not know', async () => {
+    const env = testEnv()
+    const server = new FakeServer({ now: () => env.now(), accountCreatedAt: env.now() - 60_000 })
+    server.putDocument('word_learn', 'c:bread-1', {})
+    server.putDocument('word_learn', 'c:apple-1', { at: 'yesterday', by: 'a later build' })
+    server.putDocument('word_learn', 'not a word', { at: 5 })
+    server.putDocument('word_plan', 'c:milk-1', { when: 'later' })
+    server.putDocument('word_flag', 'c:hello-1', { flag: 'known' })
+    const client = await openClient(env, server)
+    expect(await client.sync()).toBe('synced')
+    // Both readable marks count as chosen at the earliest time, in a stable order; the rest is kept and ignored.
+    expect(client.snapshot.toLearn).toEqual(['c:apple-1', 'c:bread-1'])
+    expect([...client.snapshot.flags]).toEqual([['c:hello-1', 'known']])
+    expect(client.snapshot.plan!.newWords.slice(0, 3)).toEqual(['c:apple-1', 'c:bread-1', 'c:goodbye-1'])
+    // And a payload with no mark at all is what every account has today.
+    const plain = await openClient(env, new FakeServer({ now: () => env.now(), accountCreatedAt: env.now() - 60_000 }))
+    expect(await plain.sync()).toBe('synced')
+    expect(plain.snapshot.toLearn).toEqual([])
+  })
+})
+
 describe('Client hand-over (spec §9.1)', () => {
   it('never throws once the answer is saved, so a retry cannot record it twice', async () => {
     const { driver, fail } = failingDocuments(nodeSqliteDriver())

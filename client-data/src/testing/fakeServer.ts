@@ -196,4 +196,12 @@ export class FakeServer implements SyncTransport {
     this.documents.set(`${type}/${key}`, doc)
     return doc
   }
+
+  /** Stores a versioned document as it stands, unchecked: what another build of the app, or of the server, may have left. */
+  putDocument(type: string, key: string, fields: Record<string, unknown>): WireDocument {
+    this.documentVersion += 1
+    const doc: WireDocument = { type, key, class: 'versioned', version: this.documentVersion, fields, fieldVersions: {}, deleted: false, staleAfter: null }
+    this.documents.set(`${type}/${key}`, doc)
+    return doc
+  }
 }
