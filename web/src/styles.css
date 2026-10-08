@@ -921,6 +921,20 @@ main:focus,
   margin: 0;
 }
 
+/* "Learn this word", under the answer on the card: quiet until it is on. */
+.learn-toggle {
+  margin-top: var(--space-2);
+  font-size: var(--step--1);
+  color: var(--ink-soft);
+  border-radius: 999px;
+}
+
+.learn-toggle.is-on {
+  color: var(--leaf-ink);
+  background: var(--leaf-soft);
+  border-color: transparent;
+}
+
 /* The actions under the card: at the bottom on a phone, near the thumb */
 
 .study-actions {
@@ -2987,6 +3001,11 @@ ul.unit-words {
 .word-status[data-status='known'] {
   color: var(--blue);
   background: var(--blue-soft);
+}
+
+.word-status[data-status='to-learn'] {
+  color: var(--rose);
+  background: var(--rose-soft);
 }
 
 .word-status[data-status='suspended'] {

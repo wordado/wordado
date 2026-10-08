@@ -365,3 +365,104 @@ describe('setting a word aside (spec §7.4)', () => {
     expect(screen.getByText('1 word set aside. You can bring it back in settings.')).toBeTruthy()
   })
 })
+
+describe('Learn this word (spec §7.4)', () => {
+  async function practiseSkipped(mode: RunOptions['mode']) {
+    const ctx = await setup()
+    await ctx.client.updateSettings({ declaredLevel: 'A2' })
+    const unit = ctx.client.snapshot.corpus!.units[0]!
+    const run = await StudyRun.start(ctx.client, ctx.env, { kind: 'practice', mode, scope: { kind: 'unit', id: unit.unitId }, cachedClips: () => new Set(), online: () => false })
+    renderWith(<RunView run={run} kind="practice" />, ctx)
+    return { ...ctx, run }
+  }
+
+  it('offers it on the feedback after an answer, named with the word; pressed it reads Will be learned, and can be switched off', async () => {
+    const { run, env, client } = await practiseSkipped('multiple_choice')
+    const item = run.snapshot.item!
+    if (item.mode === 'flashcard') throw new Error('expected a choice item')
+    const word = item.entry.headword
+    // Not before the answer: the prompt is for answering.
+    expect(screen.queryByRole('button', { name: `Learn this word: ${word}` })).toBeNull()
+    env.advance(ITEM_SETTLE_MS)
+    await press(String(((item.answerIndex + 1) % 4) + 1))
+    const off = screen.getByRole('button', { name: `Learn this word: ${word}` })
+    expect(off.textContent).toBe('Learn this word')
+    expect(off.getAttribute('aria-pressed')).toBe('false')
+    expect(document.activeElement?.textContent).toBe('Continue')
+    await act(async () => fireEvent.click(off))
+    const on = screen.getByRole('button', { name: `Will be learned: ${word}` })
+    expect(on.textContent).toBe('Will be learned')
+    expect(on.getAttribute('aria-pressed')).toBe('true')
+    expect(client.snapshot.toLearn).toEqual([item.wordId])
+    expect(client.snapshot.plan!.newWords).toEqual([item.wordId])
+    expect(client.snapshot.states.size).toBe(0)
+    await act(async () => fireEvent.click(on))
+    expect(screen.getByRole('button', { name: `Learn this word: ${word}` }).getAttribute('aria-pressed')).toBe('false')
+    expect(client.snapshot.toLearn).toEqual([])
+    // The run goes on as it was.
+    env.advance(ITEM_SETTLE_MS)
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue' })))
+    expect(run.snapshot.phase).toBe('prompt')
+    expect(screen.queryByRole('button', { name: /^Learn this word/ })).toBeNull()
+  })
+
+  it('offers it on a flashcard once the answer is shown, and the done screen says how many words were added', async () => {
+    const { run, env, client } = await practiseSkipped('flashcard')
+    const chosen: string[] = []
+    for (let i = 0; i < 3; i += 1) {
+      const item = run.snapshot.item!
+      expect(screen.queryByRole('button', { name: /^Learn this word/ })).toBeNull()
+      env.advance(ITEM_SETTLE_MS)
+      fireEvent.click(screen.getByRole('button', { name: 'Show answer' }))
+      if (i < 2) {
+        env.advance(1_000)
+        await act(async () => fireEvent.click(screen.getByRole('button', { name: `Learn this word: ${item.entry.headword}` })))
+        expect(screen.getByRole('button', { name: `Will be learned: ${item.entry.headword}` })).toBeTruthy()
+        chosen.push(item.wordId)
+      }
+      env.advance(ITEM_SETTLE_MS)
+      await act(async () => fireEvent.click(screen.getByRole('button', { name: /Hard/ })))
+    }
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Stop for now' })))
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Practice complete')
+    expect(screen.getByText('2 words will come up in your next sessions.')).toBeTruthy()
+    expect(client.snapshot.toLearn).toEqual(chosen)
+    expect(client.snapshot.plan!.newWords).toEqual(chosen)
+  })
+
+  it('says one word in the singular, and nothing when none was added', async () => {
+    const { run, env } = await practiseSkipped('flashcard')
+    env.advance(ITEM_SETTLE_MS)
+    fireEvent.click(screen.getByRole('button', { name: 'Show answer' }))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: /^Learn this word/ })))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Stop for now' })))
+    expect(screen.getByText('1 word will come up in your next sessions.')).toBeTruthy()
+    cleanup()
+    const again = await practiseSkipped('flashcard')
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Stop for now' })))
+    expect(again.run.snapshot.toLearn).toBe(0)
+    expect(screen.queryByText(/will come up in your next sessions/)).toBeNull()
+    expect(run.snapshot.toLearn).toBe(1)
+  })
+
+  it('is not offered in a session, or in practice of a word that is already started', async () => {
+    const { run, env } = await start('flashcard')
+    env.advance(ITEM_SETTLE_MS)
+    fireEvent.click(screen.getByRole('button', { name: 'Show answer' }))
+    expect(screen.queryByRole('button', { name: /^Learn this word/ })).toBeNull()
+    env.advance(ITEM_SETTLE_MS)
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: /Good/ })))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Stop for now' })))
+    cleanup()
+    const ctx = await setup()
+    await ctx.client.answer({ wordId: ctx.client.snapshot.plan!.newWords[0]!, mode: 'flashcard', direction: 'en_to_l1', grade: Grade.Good, latencyMs: 2_000, practice: false })
+    ctx.env.advance(3_600_000)
+    const practice = await StudyRun.start(ctx.client, ctx.env, { kind: 'practice', mode: 'flashcard', cachedClips: () => new Set(), online: () => false })
+    renderWith(<RunView run={practice} kind="practice" />, ctx)
+    ctx.env.advance(ITEM_SETTLE_MS)
+    fireEvent.click(screen.getByRole('button', { name: 'Show answer' }))
+    expect(screen.getByRole('group', { name: /./ })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /^Learn this word/ })).toBeNull()
+    expect(run.snapshot.toLearn).toBe(0)
+  })
+})

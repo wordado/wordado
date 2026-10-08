@@ -150,6 +150,58 @@ test('practises a unit of a level the learner placed above, and the level stays 
   }
 })
 
+test('chooses Learn this word while practising a skipped unit, and the next session starts with that word', async ({ browser }) => {
+  const context = await browser.newContext({ serviceWorkers: 'block' })
+  forwardConsole(context)
+  await context.addInitScript(() => localStorage.setItem('wordado.locale', 'en'))
+  await serveTwoLevelSample(context)
+  try {
+    const page = await context.newPage()
+    await page.goto('/')
+    await finishSetupAt(page, 'A2 · Elementary')
+    await page.goto('/path')
+    await page.getByRole('button', { name: /^A1/ }).click()
+    await page.getByRole('link', { name: 'Practise this unit: People and greetings' }).click()
+    await page.getByRole('link', { name: 'Multiple choice' }).click()
+    await expect(page.locator('.card[data-phase="prompt"]')).toBeVisible()
+    await page.waitForTimeout(SETTLE_MS)
+    await page.keyboard.press('1')
+    // The feedback step offers the word; its name says which one.
+    const learn = page.getByRole('button', { name: /^Learn this word: / })
+    await expect(learn).toHaveAttribute('aria-pressed', 'false')
+    const word = (await learn.getAttribute('aria-label'))!.replace('Learn this word: ', '')
+    await learn.click()
+    await expect(page.getByRole('button', { name: `Will be learned: ${word}` })).toHaveAttribute('aria-pressed', 'true')
+    await page.waitForTimeout(SETTLE_MS)
+    await page.getByRole('button', { name: 'Continue' }).click()
+    await expect(page.locator('.card[data-phase="prompt"]')).toBeVisible()
+    await page.getByRole('button', { name: 'Stop for now' }).click()
+    await expect(heading(page)).toHaveText('Practice complete')
+    await expect(page.getByText('1 word will come up in your next sessions.')).toBeVisible()
+    // On the path the word is marked, and its level is still skipped.
+    await page.getByRole('link', { name: 'Back to the path' }).click()
+    const a1 = page.getByRole('button', { name: /^A1/ })
+    await expect(a1).toContainText('Skipped: you placed above this level.')
+    await a1.click()
+    const unit = page.locator('li.unit', { has: page.getByRole('heading', { name: 'People and greetings' }) })
+    await unit.getByText('20 words').click()
+    await expect(unit.locator('li', { has: page.getByText(word, { exact: true }) }).getByText('To learn')).toBeVisible()
+    // Still ten new words today: the chosen one first, then the path's.
+    await page.goto('/')
+    await expect(heading(page)).toHaveText('10 new words')
+    await page.goto('/study?mode=flashcard')
+    await expect(page.locator('.card[data-mode="flashcard"] .hw-word')).toHaveText(word)
+    await answer(page)
+    await page.getByRole('button', { name: 'Stop for now' }).click()
+    await page.goto('/path')
+    await a1.click()
+    await expect(a1).toContainText('Skipped: you placed above this level.')
+    await expect(unit.getByText('1 of 20 started')).toBeVisible()
+  } finally {
+    await context.close()
+  }
+})
+
 test('practises one theme from Themes, and comes back with the study theme as it was', async ({ page }) => {
   await page.goto('/')
   await finishSetup(page)

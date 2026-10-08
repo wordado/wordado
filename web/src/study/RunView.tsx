@@ -1,6 +1,6 @@
 import { useClientSnapshot, type RunKind, type RunSnapshot, type StudyRun } from '@wordado/client-data'
 import { entryClips, Grade, isAboveLevel, type ChoiceItem, type CorpusEntry } from '@wordado/core'
-import { Check, Clock, Ellipsis, Flag, Flame, LockOpen, Play, Volume2, X } from 'lucide-react'
+import { BookPlus, Check, Clock, Ellipsis, Flag, Flame, LockOpen, Play, Volume2, X } from 'lucide-react'
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { useApp } from '../app/context'
 import { usePopover } from '../app/usePopover'
@@ -21,7 +21,7 @@ export function RunView(props: { readonly run: StudyRun; readonly kind: RunKind;
   const { run } = props
   const { t } = useT()
   const snapshot = useStore(run.store)
-  const { settings } = useClientSnapshot()
+  const { settings, states, toLearn } = useClientSnapshot()
   const [reporting, setReporting] = useState(false)
   const card = useRef<HTMLDivElement>(null)
 
@@ -70,6 +70,8 @@ export function RunView(props: { readonly run: StudyRun; readonly kind: RunKind;
 
   const total = snapshot.answered + snapshot.remaining
   const settingAside = snapshot.phase === 'prompt' || snapshot.phase === 'revealed'
+  // "Learn this word" (spec §7.4): on a practised word that was never started, once its answer is on screen.
+  const canLearn = props.kind === 'practice' && !states.has(item.wordId) && (snapshot.phase === 'feedback' || snapshot.phase === 'revealed')
   /** The card: the prompt's frame, with its ⋯ menu; each mode fills it and adds its actions below. */
   const frame = (children: ReactNode) => (
     <div className="card" ref={card} tabIndex={-1} data-mode={item.mode} data-phase={snapshot.phase}>
@@ -80,6 +82,7 @@ export function RunView(props: { readonly run: StudyRun; readonly kind: RunKind;
       />
       {isAboveLevel(item.entry.level, settings.declaredLevel) && <p className="note above-level">{t('study.aboveLevel', { level: item.entry.level })}</p>}
       {children}
+      {canLearn && <LearnToggle headword={item.entry.headword} on={toLearn.includes(item.wordId)} onChange={(on) => void run.setLearn(on)} />}
       {snapshot.error !== null && <p role="alert">{t('study.error', { message: snapshot.error })}</p>}
     </div>
   )
@@ -109,6 +112,28 @@ export function RunView(props: { readonly run: StudyRun; readonly kind: RunKind;
       <p className="note keys-hint">{t('study.keysHint')}</p>
       {reporting && <ReportDialog wordId={item.wordId} entry={item.entry} onClose={() => setReporting(false)} />}
     </section>
+  )
+}
+
+/**
+ * "Learn this word" (spec §7.4): a switch on the card, beside the word's other controls. On, it reads "Will be
+ * learned" and the daily session serves the word as a new one; pressing it again takes that back. Its name says
+ * which word, beginning with its visible text (WCAG 2.5.3).
+ */
+function LearnToggle(props: { readonly headword: string; readonly on: boolean; onChange(on: boolean): void }) {
+  const { t } = useT()
+  const label = t(props.on ? 'study.willLearn' : 'study.learn')
+  return (
+    <button
+      type="button"
+      className={`button learn-toggle${props.on ? ' is-on' : ''}`}
+      aria-pressed={props.on}
+      aria-label={t('flag.action', { action: label, word: props.headword })}
+      onClick={() => props.onChange(!props.on)}
+    >
+      {props.on ? <Check aria-hidden="true" size={18} /> : <BookPlus aria-hidden="true" size={18} />}
+      {label}
+    </button>
   )
 }
 
@@ -406,6 +431,7 @@ function Done(props: { readonly snapshot: RunSnapshot; readonly kind: RunKind; r
           {t('done.unlocked', { title: unitTitle(unitId) })}
         </p>
       ))}
+      {snapshot.toLearn > 0 && <p className="done-line done-note">{t('done.toLearn', { count: snapshot.toLearn })}</p>}
       {snapshot.setAside > 0 && <p className="done-line done-note">{t('done.setAside', { count: snapshot.setAside })}</p>}
       <div className="done-actions">
         {/* A unit's or a theme's practice began on the path or the themes, so that is the way back; its "Practise more" stays in the scope. */}

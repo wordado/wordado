@@ -181,6 +181,31 @@ describe('Path', () => {
     ])
   })
 
+  it('labels a word chosen with Learn this word in a skipped level’s unit, until it is started (spec §7.4)', async () => {
+    const ctx = await setup()
+    await ctx.client.updateSettings({ declaredLevel: 'A2' })
+    await ctx.client.setToLearn('c:bread-1', true)
+    renderWith(<Path />, ctx)
+    const food = unit('Food and drink')
+    fireEvent.click(within(food).getByText('20 words'))
+    const row = (headword: string) => within(food).getByText(headword).closest('li')!
+    const bread = row('bread')
+    expect(within(bread).getByText('To learn').getAttribute('data-status')).toBe('to-learn')
+    expect(within(row('cheese')).getByText('Not started')).toBeTruthy()
+    expect(within(food).getAllByText('To learn')).toHaveLength(1)
+    // Started by the session, it is a word like any other; the level stays skipped.
+    await act(() => ctx.client.answer({ wordId: 'c:bread-1', mode: 'flashcard', direction: 'en_to_l1', grade: Grade.Good, latencyMs: 2_000, practice: false }))
+    expect(within(bread).queryByText('To learn')).toBeNull()
+    expect(within(bread).getByText('Learning')).toBeTruthy()
+    expect(within(food).getByText('1 of 20 started')).toBeTruthy()
+    expect(screen.getByText('Skipped: you placed above this level.')).toBeTruthy()
+    // Set aside instead, a chosen word reads as set aside.
+    await act(() => ctx.client.setToLearn('c:cheese-1', true))
+    expect(within(row('cheese')).getByText('To learn')).toBeTruthy()
+    await act(() => ctx.client.setFlag('c:cheese-1', 'suspended'))
+    expect(within(row('cheese')).queryByText('To learn')).toBeNull()
+  })
+
   it('names a folded level’s status in a form that agrees with “level”, not “unit” (plan 12, review)', async () => {
     const ctx = await setup()
     renderWith(<Path />, { ...ctx, locale: 'bg' })

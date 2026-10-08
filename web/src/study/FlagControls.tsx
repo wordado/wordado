@@ -27,16 +27,18 @@ export function FlagControls(props: {
 }) {
   const { t } = useT()
   const client = useClient()
-  const { flags, states } = useClientSnapshot()
+  const { flags, states, toLearn } = useClientSnapshot()
   const [error, setError] = useState<string | null>(null)
   const actions = useRef<HTMLSpanElement>(null)
   const changed = useRef(false)
   const flag = flags.get(props.wordId)
   const state = states.get(props.wordId)
   const tier = state ? masteryTier(state) : null
-  const status = flag === 'known' ? t('flag.known') : flag === 'suspended' ? t('flag.suspended') : tier ? t(TIER_LABEL[tier]) : t('path.wordNew')
-  /** For the status's colour: set aside, not started, or the tier of a word being learned. */
-  const kind = flag ?? tier ?? 'new'
+  // Chosen with "Learn this word" and not yet started (spec §7.4): the daily session will bring it.
+  const chosen = !flag && !tier && toLearn.includes(props.wordId)
+  const status = flag === 'known' ? t('flag.known') : flag === 'suspended' ? t('flag.suspended') : tier ? t(TIER_LABEL[tier]) : chosen ? t('path.wordToLearn') : t('path.wordNew')
+  /** For the status's colour: set aside, to learn, not started, or the tier of a word being learned. */
+  const kind = flag ?? tier ?? (chosen ? 'to-learn' : 'new')
   // The pressed button is gone once the flag changes: its replacement takes focus (spec §11.1).
   useEffect(() => {
     if (!changed.current) return
