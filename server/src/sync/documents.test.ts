@@ -156,12 +156,17 @@ describe('document writes (spec §9.2)', () => {
       write('word_learn', 'hello', { at: 1 }),
       write('word_learn', 'c:hello-1', { at: 'now' }),
       write('word_learn', 'c:hello-1', { at: 1, flag: 'known' }),
+      // A mark must say when it was made; only taking one back may go without.
+      write('word_learn', 'c:milk-1', {}),
+      write('word_learn', 'c:milk-1', {}, 0, false),
       write('word_learn', 'c:bread-1', { at: 1 }),
     ])
     expect(reply.rejected).toEqual([
       { type: 'word_learn', key: 'hello', reason: 'invalid' },
       { type: 'word_learn', key: 'c:hello-1', reason: 'invalid' },
       { type: 'word_learn', key: 'c:hello-1', reason: 'invalid' },
+      { type: 'word_learn', key: 'c:milk-1', reason: 'invalid' },
+      { type: 'word_learn', key: 'c:milk-1', reason: 'invalid' },
     ])
     expect(reply.documents.map((d: { key: string; version: number }) => [d.key, d.version])).toEqual([['c:bread-1', 2]])
     expect(await counter(h, s)).toBe(2)
