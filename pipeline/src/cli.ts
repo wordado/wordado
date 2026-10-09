@@ -21,7 +21,7 @@ import { openRouterLlm, type Llm } from './llm'
 import { countParquet, sumGoogleBooks, writeCounts } from './prepare'
 import { publishProblems } from './publishable'
 import { reopenReviewed } from './reopen'
-import { exportQueues, importQueues, pendingItems, queueSpecs } from './queues'
+import { aliveKeys, exportQueues, importQueues, pendingItems, queueSpecs } from './queues'
 import { adoptRelease, planRelease, writeRelease } from './release'
 import { pgQuery, pullReports, triage } from './reports'
 import { readClearedSources } from './sources'
@@ -216,9 +216,10 @@ async function audio(dir: string): Promise<void> {
 function queues(dir: string): void {
   const config = readConfig(dir)
   const decisions = Decisions.read(dir)
-  const items = pendingItems(readDraft(dir), decisions, config.l1s)
+  const draft = readDraft(dir)
+  const items = pendingItems(draft, decisions, config.l1s)
   items.set(QUEUES.audio, audioQueueItems(readAudioRecords(dir), decisions))
-  const files = exportQueues(dir, items, queueSpecs(config.l1s), { stamp: now().slice(0, 10) })
+  const files = exportQueues(dir, items, queueSpecs(config.l1s), { stamp: now().slice(0, 10), alive: aliveKeys(draft, config.l1s) })
   console.log(files.length > 0 ? files.join('\n') : 'no new review items')
 }
 
