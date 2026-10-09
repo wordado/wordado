@@ -160,26 +160,49 @@ function openFiles(dir: string, queue: string): string[] {
 const sidecarOf = (csv: string) => csv.replace(/\.csv$/, '.json')
 
 /**
- * Takes out of the queue's open files the rows whose proposal the draft has since changed, and returns the keys still
- * open. Such a row can no longer be decided where it is: a verdict binds to the proposal in the sidecar (Decision 5),
- * so it would not settle the current one, and the reviewer would be judging a value that is gone (unit titles after
- * the levels were rebuilt, 2026-10-08). A row that already has a verdict stays for `import`.
+ * The keys a queue's rows may be about: live entries for the entry queues, units with a live word for the title
+ * queues. A row about anything else needs no decision. Audio is left out: its rows are clips, judged on their own.
  */
-function retireStale(dir: string, queue: string, current: ReadonlyMap<string, string>): Set<string> {
+export function aliveKeys(draft: Draft, l1s: readonly string[]): Map<string, Set<string>> {
+  const live = new Set(draft.live)
+  const units = new Set(draft.units.filter((u) => u.entry_ids.some((id) => live.has(id))).map((u) => u.unit_id))
+  const out = new Map<string, Set<string>>([[QUEUES.english, live], [QUEUES.level, live]])
+  for (const l1 of l1s) {
+    out.set(QUEUES.translation(l1), live)
+    out.set(QUEUES.title(l1), units)
+  }
+  return out
+}
+
+/**
+ * Takes out of the queue's open files the rows that can no longer be decided where they are, and returns the keys
+ * still open.
+ * - The draft has since changed the proposal (`current` is every pending item's): a verdict binds to the proposal in
+ *   the sidecar (Decision 5), so it would not settle the current one, and the reviewer would be judging a value that
+ *   is gone (unit titles after the levels were rebuilt, 2026-10-08). `exportQueues` writes the row again.
+ * - The row's subject is not in `alive`: its entry left the course, or its unit has no live words. Left in the file
+ *   it would be listed, and even flagged, for a decision that changes nothing (about 360 title rows per language
+ *   after the same rebuild).
+ * A row that already has a verdict stays for `import`. So does a row that is merely no longer pending: the level
+ * rows a `--rebuild` queued are not pending in a later plain draft, and are still to be reviewed.
+ */
+function retireOutdated(dir: string, queue: string, current: ReadonlyMap<string, string>, alive: ReadonlySet<string> | undefined): Set<string> {
   const open = new Set<string>()
   for (const file of openFiles(dir, queue)) {
     const sidecar = readJson<Sidecar>(sidecarOf(file))
     const { header: cols, rows } = csvRecords(readFileSync(file, 'utf8'))
     const decided = new Set(rows.filter((r) => (r['verdict'] ?? '').trim() !== '').map((r) => (r['key'] ?? '').trim()))
-    const stale = new Set(sidecar.items.filter((i) => !decided.has(i.key) && current.has(i.key) && current.get(i.key) !== canonicalJson(i.proposed)).map((i) => i.key))
-    const items = sidecar.items.filter((i) => !stale.has(i.key))
+    const gone = (key: string) => alive !== undefined && !alive.has(key)
+    const changed = (i: Sidecar['items'][number]) => current.has(i.key) && current.get(i.key) !== canonicalJson(i.proposed)
+    const outdated = new Set(sidecar.items.filter((i) => !decided.has(i.key) && (gone(i.key) || changed(i))).map((i) => i.key))
+    const items = sidecar.items.filter((i) => !outdated.has(i.key))
     for (const i of items) open.add(i.key)
-    if (stale.size === 0) continue
+    if (outdated.size === 0) continue
     if (items.length === 0) {
       rmSync(file)
       rmSync(sidecarOf(file))
     } else {
-      writeFileSync(file, formatCsv([cols, ...rows.filter((r) => !stale.has((r['key'] ?? '').trim())).map((r) => cols.map((c) => r[c] ?? ''))]))
+      writeFileSync(file, formatCsv([cols, ...rows.filter((r) => !outdated.has((r['key'] ?? '').trim())).map((r) => cols.map((c) => r[c] ?? ''))]))
       writeJson(sidecarOf(file), { queue, items } satisfies Sidecar)
     }
   }
@@ -187,21 +210,22 @@ function retireStale(dir: string, queue: string, current: ReadonlyMap<string, st
 }
 
 /**
- * Writes pending items not already in an open file, `batchSize` rows per file. Returns the files written. An open
- * row with an outdated proposal is written again, with the current one (`retireStale`).
+ * Writes pending items not already in an open file, `batchSize` rows per file. Returns the files written. First an
+ * open row without a verdict is taken out of its file when its proposal is outdated, or when `opts.alive` names its
+ * queue and not its key (`retireOutdated`); the first kind is written again, with the current proposal.
  */
 export function exportQueues(
   dir: string,
   items: ReadonlyMap<string, readonly QueueItem[]>,
   specs: ReadonlyMap<string, QueueSpec>,
-  opts: { stamp: string; batchSize?: number },
+  opts: { stamp: string; batchSize?: number; alive?: ReadonlyMap<string, ReadonlySet<string>> },
 ): string[] {
   const batchSize = opts.batchSize ?? 200
   const written: string[] = []
   for (const [queue, all] of [...items].sort(([a], [b]) => (a < b ? -1 : 1))) {
     const spec = specs.get(queue)
     if (!spec) throw new Error(`no queue ${queue}`)
-    const open = retireStale(dir, queue, new Map(all.map((i) => [i.key, canonicalJson(i.proposed)])))
+    const open = retireOutdated(dir, queue, new Map(all.map((i) => [i.key, canonicalJson(i.proposed)])), opts.alive?.get(queue))
     const fresh = all.filter((i) => !open.has(i.key))
     const qdir = contentPaths(dir).queueDir(queue)
     let n = 0
