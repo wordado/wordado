@@ -1282,10 +1282,11 @@ enriched words, as a re-enrichment (§8.2). The reporter is told, in the app,
 when something they reported has been fixed — it is the cheapest way to make
 learners feel the corpus is alive.
 
-During the beta the app says plainly that its translations were checked by AI
-and are being reviewed by native speakers, beside the report action and on
-the About page, and asks learners to report anything odd. Saying so sets the
-right expectation and makes reports more likely.
+The app says plainly that its translations were checked by AI, in the report
+dialog and on the About page, and asks learners to report anything that looks
+wrong; the About page also says where the report action is. It makes no
+promise about who reads a report, and does not call itself a beta. Saying so
+sets the right expectation and makes reports more likely.
 
 ### 8.11 Reminders
 
@@ -2160,6 +2161,14 @@ to leave the row's room to the translation, above all on a phone.
 - **Word list (§7.4):** a word's standing in the path's list is a small mark,
   a shape and a colour, where it was a text label; the words are the mark's
   name and the first line of the word's menu.
+
+**2026-10-09 — the notice about AI-checked translations.** Decided by the
+product owner.
+
+- **Notice (§8.10):** "Translations are checked by AI. If something looks
+  wrong, tell us: it takes one tap." on the About page, with where the report
+  action is, and a short form of it in the report dialog. It replaces the
+  beta notice that named a native-speaker review.
 
 ### Approval status
 
