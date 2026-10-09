@@ -233,6 +233,17 @@ describe('spot checks', () => {
     expect((await rowsOf(third.assignment.id)).map((r) => r.key)).not.toEqual(keys)
   })
 
+  it('takes no sample from a request: the assignment route ignores one, and stays an assignment of files', async () => {
+    const f = index.queues.find((q) => q.queue === QUEUE)!.files[0]!.file
+    const res = await admin('POST', '/api/admin/assignments', { reviewer: 'ivan@example.com', queue: QUEUE, files: [f], flaggedOnly: false, spotCheck: { seed: 1, sample: 5 } })
+    expect(res.status).toBe(201)
+    const view = (await res.json()) as { id: number; spotCheck: unknown }
+    expect(view.spotCheck).toBeNull()
+    expect((await getAssignment(env.DB, view.id))!.spotCheck).toBeNull()
+    // and the lists still load
+    expect((await admin('GET', '/api/admin/assignments')).status).toBe(200)
+  })
+
   it('makes up a seed when none is given', async () => {
     const { assignment } = await made({ seed: undefined })
     expect(Number.isInteger((await getAssignment(env.DB, assignment.id))!.spotCheck!.seed)).toBe(true)

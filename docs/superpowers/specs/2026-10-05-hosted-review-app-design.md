@@ -372,7 +372,8 @@ most 500). The Worker draws from the queue's open files the rows that
 - the AI review passed with **no objection at all** (`ai = passed`, no severity, an empty `objections` list: a row
   under the flagging threshold with a minor objection is left out, its objection would steer the reviewer),
 - no learner reported (`reports` empty),
-- are not stale (spec 2026-10-04: the file is older than the draft), and
+- are not stale (spec 2026-10-04: the file is older than the draft),
+- hold no verdict yet (one written into the file outside this app), and
 - no open or merged submission has decided already, for the row as it is now (one query over `decisions` and
   `submissions`).
 

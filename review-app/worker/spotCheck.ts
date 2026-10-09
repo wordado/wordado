@@ -4,9 +4,10 @@ import type { DecisionRow } from './db'
 
 /**
  * What a spot check may draw (spec §15): a row the AI review passed with no objection at all (a minor one would
- * steer the reviewer), that no learner reported and whose file is not older than the draft.
+ * steer the reviewer), that no learner reported, whose file is not older than the draft, and that holds no verdict
+ * yet (one written into the file outside this app: the sample measures rows nobody has judged).
  */
-export const eligible = (r: RowView): boolean => r.ai === 'passed' && r.severity === null && r.objections.length === 0 && r.reports === '' && !r.stale
+export const eligible = (r: RowView): boolean => r.ai === 'passed' && r.severity === null && r.objections.length === 0 && r.reports === '' && !r.stale && r.decided === null
 
 /** The level a row is counted under, as the row list shows it; '' for a row without one. */
 export const levelOf = (r: RowView): string => r.context['level'] ?? ''
@@ -91,9 +92,10 @@ export function spotCheckResult(sample: readonly SampleRef[], rows: readonly Row
     const now = hash.get(key)
     if (now === undefined ? d.submission === null : now !== d.rowHash) continue
     checked += 1
+    // A change always carries a severity (the decision route sees to it); one without is counted as minor, not lost.
     if (d.severity === 'major') seriousKeys.push(key)
-    else if (d.severity === 'minor') minor += 1
-    else if (d.action === 'keep') fine += 1
+    else if (d.severity === 'minor' || d.action !== 'keep') minor += 1
+    else fine += 1
   }
   return { checked, fine, minor, serious: seriousKeys.length, seriousKeys }
 }

@@ -380,8 +380,12 @@ describe('RowCard', () => {
       swipe(screen.getByRole('article'), 80, 300)
       expect(onSkip).not.toHaveBeenCalled()
       expect(onPrev).not.toHaveBeenCalled()
+      // the Skip and Previous buttons are off like their keys: leaving the row would drop the answer in progress
+      expect((button('Skip') as HTMLButtonElement).disabled).toBe(true)
+      expect((button('Previous') as HTMLButtonElement).disabled).toBe(true)
       fireEvent.keyDown(window, { key: 'Escape' })
       expect(onEditing).toHaveBeenLastCalledWith(false)
+      expect((button('Skip') as HTMLButtonElement).disabled).toBe(false)
       swipe(screen.getByRole('article'), 320, 120)
       expect(onSkip).toHaveBeenCalledTimes(1)
     })

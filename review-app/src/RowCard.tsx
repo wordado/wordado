@@ -219,11 +219,12 @@ export function RowCard(props: {
           </div>
         )}
         <div className="card-nav">
-          <button className="button small ghost" onClick={onSkip} disabled={saving}>
+          {/* Off like their keys while the row is being edited or asked about: leaving would drop what was typed. */}
+          <button className="button small ghost" onClick={onSkip} disabled={still}>
             Skip<kbd aria-hidden="true">S</kbd>
             <kbd aria-hidden="true">↓</kbd>
           </button>
-          <button className="button small ghost" onClick={onPrev} disabled={saving}>
+          <button className="button small ghost" onClick={onPrev} disabled={still}>
             Previous<kbd aria-hidden="true">↑</kbd>
           </button>
         </div>

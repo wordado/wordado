@@ -28,6 +28,8 @@ describe('eligible', () => {
     expect(eligible(row('a', 'A1', { objections: [objection] }))).toBe(false)
     expect(eligible(row('a', 'A1', { reports: '1 report (translation): odd word' }))).toBe(false)
     expect(eligible(row('a', 'A1', { stale: true }))).toBe(false)
+    // a verdict already in the file, written outside the hosted app
+    expect(eligible(row('a', 'A1', { decided: { verdict: 'drop', note: '' } }))).toBe(false)
   })
 })
 

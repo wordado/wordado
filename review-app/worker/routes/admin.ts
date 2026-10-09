@@ -113,7 +113,8 @@ export function adminRoutes(app: Hono<AppEnv>, deps: Deps): void {
 
   app.post('/api/admin/assignments', async (c) => {
     const body = await jsonBody<{ reviewer: string; queue: string; files: string[] | '*'; flaggedOnly: boolean }>(c)
-    const made = await createAssignment(deps, body)
+    // Field by field: a sample is drawn by the app (the spot-check route below), never taken from a request.
+    const made = await createAssignment(deps, { reviewer: body.reviewer, queue: body.queue, files: body.files, flaggedOnly: body.flaggedOnly })
     if ('status' in made) return apiError(c, made.status, made.message)
     return c.json(await view(made.id), 201)
   })
