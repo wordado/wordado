@@ -359,6 +359,9 @@ sense; a hard-to-translate word gets the best translation and a note. Until repo
   changes a translation. `queues` (so every `draft`) takes such a row out of its open file and writes it to a new
   one with the current proposal, because a verdict on the old one would settle nothing. A row that already has a
   verdict stays for `import`. Edits typed into a row without a verdict are lost with it.
+- **A row nobody needs to decide any more.** Its entry left the course, or its unit has no live words (every old
+  unit after a `--rebuild`). `queues` takes it out of its open file, and removes a file left empty. If the entry
+  becomes live again, its row is written again. Audio rows are never taken out this way.
 - **The budget stopped a draft.** Run `draft` again: everything already paid for is in `cache/`.
 - **`live` fails before a release.** `last-published/` is behind the CDN, or ahead of it: pull `main` of the
   content repository. If a publish failed after uploading the manifest, restore `last-published/` from the CDN's

@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { csvRecords, formatCsv, parseCsv } from './csv'
 import { Decisions, QUEUES } from './decisions'
 import type { Draft, DraftEntry } from './draft'
-import { exportQueues, importQueues, levelSampled, pendingItems, queueSpecs, splitList } from './queues'
+import { aliveKeys, exportQueues, importQueues, levelSampled, pendingItems, queueSpecs, splitList } from './queues'
 import { makeContent } from './testing/fixture'
 
 const entry = (entry_id: string, extra: Partial<DraftEntry> = {}): DraftEntry => ({
@@ -35,7 +35,7 @@ const specs = queueSpecs(['bg'])
 const NOW = '2026-10-01T10:00:00Z'
 
 function exportAll(dir: string, d: Draft): string[] {
-  return exportQueues(dir, pendingItems(d, Decisions.read(dir), ['bg']), specs, { stamp: '2026-10-01' })
+  return exportQueues(dir, pendingItems(d, Decisions.read(dir), ['bg']), specs, { stamp: '2026-10-01', alive: aliveKeys(d, ['bg']) })
 }
 
 function editRow(dir: string, file: string, key: string, cells: Record<string, string>): void {
@@ -112,6 +112,43 @@ describe('exportQueues and importQueues', () => {
     expect(readdirSync(join(dir, 'review/translation-bg'))).toEqual(['2026-10-01-01.csv', '2026-10-01-01.json'])
     expect(csvRecords(readFileSync(join(dir, 'review/translation-bg/2026-10-01-01.csv'), 'utf8')).rows).toMatchObject([{ key: 'water-1', translation: 'водата' }])
     expect(csvRecords(readFileSync(join(dir, 'review/english/2026-10-01-01.csv'), 'utf8')).rows).toMatchObject([{ key: 'water-1', verdict: 'ok', ipa: 'ˈwɔːtə' }])
+  })
+
+  it('takes out a row whose entry left the course, or whose unit has no words', () => {
+    const dir = makeContent()
+    exportAll(dir, draft([entry('water-1'), entry('bread-1')]))
+    // bread-1 is no longer live: its english and translation rows go; the title row stays, the unit still has water-1.
+    expect(exportAll(dir, draft([entry('water-1'), entry('bread-1')], ['water-1']))).toEqual([])
+    for (const queue of ['english', 'translation-bg']) {
+      expect(csvRecords(readFileSync(join(dir, `review/${queue}/2026-10-01-01.csv`), 'utf8')).rows.map((r) => r['key'])).toEqual(['water-1'])
+      expect(JSON.parse(readFileSync(join(dir, `review/${queue}/2026-10-01-01.json`), 'utf8')).items.map((i: { key: string }) => i.key)).toEqual(['water-1'])
+    }
+    expect(csvRecords(readFileSync(join(dir, 'review/title-bg/2026-10-01-01.csv'), 'utf8')).rows.map((r) => r['key'])).toEqual(['a1-01'])
+    // No live word is left: the unit's title row goes too, and its file with it.
+    expect(exportAll(dir, draft([entry('water-1'), entry('bread-1')], []))).toEqual([])
+    expect(existsSync(join(dir, 'review/title-bg/2026-10-01-01.csv'))).toBe(false)
+    expect(existsSync(join(dir, 'review/title-bg/2026-10-01-01.json'))).toBe(false)
+    // Live again: the row is written again.
+    expect(exportAll(dir, draft([entry('water-1'), entry('bread-1')], ['water-1']))).toEqual(['review/english/2026-10-01-01.csv', 'review/title-bg/2026-10-01-01.csv', 'review/translation-bg/2026-10-01-01.csv'])
+  })
+
+  it('keeps a row that is no longer pending while its entry is live', () => {
+    const dir = makeContent()
+    const flagged = entry('water-1', { level_flagged: true })
+    exportAll(dir, draft([flagged]))
+    expect(readdirSync(join(dir, 'review/level'))).toEqual(['2026-10-01-01.csv', '2026-10-01-01.json'])
+    // A later draft no longer flags the level (after `--rebuild`): the row waits for its review all the same.
+    expect(exportAll(dir, draft([entry('water-1')]))).toEqual([])
+    expect(csvRecords(readFileSync(join(dir, 'review/level/2026-10-01-01.csv'), 'utf8')).rows.map((r) => r['key'])).toEqual(['water-1'])
+  })
+
+  it('keeps a row of an entry that left the course when it has a verdict waiting for import', () => {
+    const dir = makeContent()
+    exportAll(dir, draft([entry('water-1'), entry('bread-1')]))
+    editRow(dir, 'review/translation-bg/2026-10-01-01.csv', 'bread-1', { verdict: 'drop', note: 'not a word' })
+    exportAll(dir, draft([entry('water-1'), entry('bread-1')], ['water-1']))
+    expect(csvRecords(readFileSync(join(dir, 'review/translation-bg/2026-10-01-01.csv'), 'utf8')).rows.map((r) => r['key'])).toEqual(['water-1', 'bread-1'])
+    expect(importQueues(dir, specs, { by: 'Мария', now: NOW }).applied).toBe(1)
   })
 
   it('ok on an untouched row is ok; ok on edited cells is a fix; drop is a drop', () => {
