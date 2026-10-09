@@ -36,6 +36,12 @@ describe('overviewOf', () => {
     expect(spanish).toEqual({ language: 'es', label: 'Spanish', parts: '4 translations', reviewers: [], flagged: 4, decided: 0, submitted: 0, state: 'unassigned' })
   })
 
+  it('does not take a spot check for someone working on the language’s flagged rows', () => {
+    const spot = assignment({ id: 2, reviewer: 'hans@example.com', reviewerName: 'Hans', queue: 'translation-es', files: ['review/translation-es/a.csv'], flaggedOnly: false, spotCheck: { sample: 50, result: null } })
+    const spanish = overviewOf({ snapshot, assignments: [assignment(), spot], submissions: [], reviewers }).languages[1]!
+    expect(spanish).toMatchObject({ language: 'es', reviewers: [], decided: 0, state: 'unassigned' })
+  })
+
   it('says one of a kind in the singular, and counts the levels as rows', () => {
     const one = overviewOf({
       snapshot: { ...snapshot, queues: [{ queue: 'translation-bg', language: 'bg', files: [file('translation-bg', 'a', 1, 0)] }, { queue: 'title-bg', language: 'bg', files: [file('title-bg', 'a', 0, 1)] }, { queue: 'level', language: 'en', files: [file('level', 'a', 21, 0)] }] },

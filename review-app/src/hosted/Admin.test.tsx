@@ -212,6 +212,91 @@ describe('Admin', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
   })
 
+  describe('a spot check', () => {
+    const result = { checked: 12, fine: 9, minor: 2, serious: 1, seriousKeys: ['bank-2'] }
+    const annasSpot = { ...annasGerman, id: 5, files: ['review/translation-de/a.csv'], flaggedOnly: false, spotCheck: { sample: 50, result }, progress: { inScope: 50, decided: 8, changed: 0, submitted: 4, merged: 0, remaining: 38 } }
+    const form = async () => within(await openDialog('Assignments', 'Spot check')).getByRole('form', { name: 'Spot check' })
+
+    it('asks for a reviewer, a queue in their language and the number of rows, 50 unless changed', async () => {
+      vi.spyOn(hostedApi.admin, 'reviewers').mockResolvedValue([anna, carmen, { ...carmen, email: 'old@example.com', name: 'Old', disabledAt: 't' }])
+      const make = vi.spyOn(hostedApi.admin, 'spotCheck').mockResolvedValue({ assignment: annasSpot, asked: 50, drawn: 50 })
+      render(<Admin />)
+      const f = await form()
+      const draw = within(f).getByRole<HTMLButtonElement>('button', { name: 'Draw the sample' })
+      expect(within(f).getByLabelText<HTMLInputElement>('Rows in the sample').value).toBe('50')
+      expect(within(f).getByLabelText<HTMLSelectElement>('Queue').disabled).toBe(true)
+      expect(draw.disabled).toBe(true)
+      // active reviewers only; the queues are the ones in the chosen reviewer's languages
+      expect([...within(f).getByLabelText<HTMLSelectElement>('Reviewer').options].map((o) => o.value)).toEqual(['', anna.email, carmen.email])
+      fireEvent.change(within(f).getByLabelText('Reviewer'), { target: { value: anna.email } })
+      expect([...within(f).getByLabelText<HTMLSelectElement>('Queue').options].map((o) => o.value)).toEqual(['', 'translation-de'])
+      fireEvent.change(within(f).getByLabelText('Queue'), { target: { value: 'translation-de' } })
+      expect(draw.disabled).toBe(false)
+      // a queue chosen for one reviewer does not stay for another without its language
+      fireEvent.change(within(f).getByLabelText('Reviewer'), { target: { value: carmen.email } })
+      expect(within(f).getByLabelText<HTMLSelectElement>('Queue').value).toBe('')
+      expect(draw.disabled).toBe(true)
+      fireEvent.change(within(f).getByLabelText('Reviewer'), { target: { value: anna.email } })
+      fireEvent.change(within(f).getByLabelText('Queue'), { target: { value: 'translation-de' } })
+      for (const bad of ['', '0', '2.5', '501']) {
+        fireEvent.change(within(f).getByLabelText('Rows in the sample'), { target: { value: bad } })
+        expect(draw.disabled).toBe(true)
+      }
+      fireEvent.change(within(f).getByLabelText('Rows in the sample'), { target: { value: '30' } })
+      fireEvent.click(draw)
+      await waitFor(() => expect(make).toHaveBeenCalledWith({ reviewer: anna.email, queue: 'translation-de', rows: 30 }))
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    })
+
+    it('stays to say how many rows it took when the queue had fewer than asked for', async () => {
+      vi.spyOn(hostedApi.admin, 'spotCheck').mockResolvedValue({ assignment: annasSpot, asked: 50, drawn: 37 })
+      render(<Admin />)
+      const f = await form()
+      fireEvent.change(within(f).getByLabelText('Reviewer'), { target: { value: anna.email } })
+      fireEvent.change(within(f).getByLabelText('Queue'), { target: { value: 'translation-de' } })
+      fireEvent.click(within(f).getByRole('button', { name: 'Draw the sample' }))
+      const dialog = screen.getByRole('dialog', { name: 'Spot check' })
+      expect((await within(dialog).findByRole('status')).textContent).toBe('Only 37 rows of this queue passed the AI review with no objection and are free to check, not the 50 asked for. The spot check has all 37.')
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Done' }))
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    })
+
+    it('says in the dialog why the server refused: the overlap rule in words', async () => {
+      vi.spyOn(hostedApi.admin, 'spotCheck').mockRejectedValue(new Error('This queue already has an open spot check, with Hans'))
+      render(<Admin />)
+      const f = await form()
+      fireEvent.change(within(f).getByLabelText('Reviewer'), { target: { value: anna.email } })
+      fireEvent.change(within(f).getByLabelText('Queue'), { target: { value: 'translation-de' } })
+      fireEvent.click(within(f).getByRole('button', { name: 'Draw the sample' }))
+      const dialog = screen.getByRole('dialog', { name: 'Spot check' })
+      expect((await within(dialog).findByRole('alert')).textContent).toBe('This queue already has an open spot check, with Hans')
+      expect(within(dialog).getByRole('form', { name: 'Spot check' })).toBeTruthy()
+    })
+
+    it('shows the result on its row: the sample, checked, fine, minor, serious, and the serious rows', async () => {
+      vi.spyOn(hostedApi.admin, 'assignments').mockResolvedValue([annasSpot, annasGerman])
+      render(<Admin />)
+      await openTab('Assignments')
+      const row = (await screen.findByText('German translations · spot check')).closest('li')!
+      expect(within(row).getByText('Anna · 50 in the sample · checked 12 · fine 9 · minor 2 · serious 1')).toBeTruthy()
+      expect(within(row).getByText('Serious: bank-2')).toBeTruthy()
+      expect(within(row).getByRole('button', { name: 'Reassign…' })).toBeTruthy()
+      // the other assignments keep their counts, and name no serious rows
+      const other = screen.getByText('German translations · flagged rows').closest('li')!
+      expect(within(other).getByText('Anna · 14 rows · 3 decided · 2 submitted · 9 to go')).toBeTruthy()
+      expect(within(other).queryByText(/^Serious:/)).toBeNull()
+    })
+
+    it('names no serious rows when there are none', async () => {
+      vi.spyOn(hostedApi.admin, 'assignments').mockResolvedValue([{ ...annasSpot, spotCheck: { sample: 50, result: { checked: 2, fine: 2, minor: 0, serious: 0, seriousKeys: [] } } }])
+      render(<Admin />)
+      await openTab('Assignments')
+      const row = (await screen.findByText('German translations · spot check')).closest('li')!
+      expect(within(row).getByText('Anna · 50 in the sample · checked 2 · fine 2 · minor 0 · serious 0')).toBeTruthy()
+      expect(within(row).queryByText(/^Serious:/)).toBeNull()
+    })
+  })
+
   it('lists an open assignment by its plain name, with who has it and how far it is', async () => {
     vi.spyOn(hostedApi.admin, 'assignments').mockResolvedValue([annasGerman])
     render(<Admin />)

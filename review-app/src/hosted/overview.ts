@@ -58,7 +58,8 @@ export function overviewOf(data: {
   const languages = LANGUAGES.flatMap((language): LanguageOverview[] => {
     const mine = queues.filter((q) => q.language === language)
     if (mine.length === 0) return []
-    const held = open.filter((a) => mine.some((q) => q.queue === a.queue))
+    // A spot check is on rows the AI review passed, not on what is left to decide: it does not hold the language.
+    const held = open.filter((a) => a.spotCheck === null && mine.some((q) => q.queue === a.queue))
     const flagged = mine.reduce((n, q) => n + openRows(q), 0)
     return [
       {
