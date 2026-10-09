@@ -3126,6 +3126,29 @@ ul.unit-words {
   font-weight: 500;
 }
 
+/* The path's row: the word and, more quietly, its translation; side by side where there is room. */
+.word-text {
+  display: flex;
+  flex-grow: 1;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--space-3);
+  min-width: 0;
+}
+
+.word-text .word-head {
+  flex-grow: 0;
+}
+
+.word-text .translation {
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
+
+.word-text .sense {
+  font-size: 0.85em;
+}
+
 .word-status {
   padding: 0.125rem 0.625rem;
   font-size: 0.75rem;
@@ -3201,14 +3224,16 @@ ul.unit-words {
   margin: 0;
 }
 
-/* On a phone the path's row has no room for a word, its standing and its menu side by side once the listen button
-   leads it: the standing goes under the word, and the menu stays at the right edge of every row. */
+/* On a phone the path's row has no room for a word, its translation, its standing and its menu side by side once
+   the listen button leads it: the translation goes under the word, a standing beside the translation, and the
+   menu stays at the right edge of every row. */
 @media (max-width: 39.99rem) {
   .unit-words li:has(> .word-menu) {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
     gap: 0;
     align-content: center;
+    padding-block: var(--space-2);
   }
 
   .unit-words li:has(> .word-menu) > .play-word {
@@ -3216,20 +3241,29 @@ ul.unit-words {
     margin-inline: -0.75rem -0.25rem;
   }
 
-  .unit-words li:has(> .word-menu) > .word-head {
-    grid-area: 1 / 2;
+  /* The word and its translation take their own places in the row's grid. */
+  .unit-words li:has(> .word-menu) > .word-text {
+    display: contents;
+  }
+
+  .unit-words li:has(> .word-menu) .word-head {
+    grid-area: 1 / 2 / auto / span 2;
     overflow-wrap: anywhere;
   }
 
-  .unit-words li:has(> .word-menu) > .word-status {
+  .unit-words li:has(> .word-menu) .word-text .translation {
     grid-area: 2 / 2;
-    justify-self: start;
-    margin-bottom: var(--space-1);
+  }
+
+  .unit-words li:has(> .word-menu) > .word-status {
+    grid-area: 2 / 3;
+    align-self: center;
+    margin-left: var(--space-2);
   }
 
   .unit-words li:has(> .word-menu) > .word-menu {
     position: static;
-    grid-area: 1 / 3 / span 2;
+    grid-area: 1 / 4 / span 2;
   }
 
   /* The open menu is laid out against the row, not its button: it starts after the listen buttons' column, so it
