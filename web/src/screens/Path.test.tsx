@@ -181,18 +181,27 @@ describe('Path', () => {
     ])
   })
 
-  it('calls a never-started word of a skipped level’s unit Skipped, and one of any other level Not started (spec §7.4)', async () => {
+  it('shows each word’s translation in a unit’s list, and a label only for a word’s own standing (spec §7.4)', async () => {
     const ctx = await setup()
     renderWith(<Path />, ctx)
     const food = unit('Food and drink')
     fireEvent.click(within(food).getByText('20 words'))
-    const status = () => within(within(food).getByText('bread').closest('li')!).getByText(/^(Skipped|Not started)$/)
-    expect(status().textContent).toBe('Not started')
-    expect(status().getAttribute('data-status')).toBe('new')
-    // No session will bring the word once its level is skipped: the label says so.
+    const bread = within(food).getByText('bread').closest('li')!
+    const entry = ctx.client.entry('c:bread-1')!
+    const translation = bread.querySelector('.translation')!
+    expect(translation.textContent).toBe(entry.sense === '' ? entry.translations[0] : `${entry.translations[0]} (${entry.sense})`)
+    expect(translation.getAttribute('lang')).toBe('bg')
+    // Never started: the unit says so for all its words, the row does not repeat it.
+    expect(bread.querySelector('.word-status')).toBeNull()
+    expect(within(food).queryByText('Not started')).toBeNull()
+    // Nor in a skipped level.
     await act(() => ctx.client.updateSettings({ declaredLevel: 'A2' }))
-    expect(status().textContent).toBe('Skipped')
-    expect(status().getAttribute('data-status')).toBe('skipped')
+    expect(bread.querySelector('.word-status')).toBeNull()
+    // Started, set aside or marked, the word has a standing of its own, and the row shows it.
+    await act(() => ctx.client.answer({ wordId: 'c:bread-1', mode: 'flashcard', direction: 'en_to_l1', grade: Grade.Good, latencyMs: 2_000, practice: false }))
+    expect(bread.querySelector('.word-status')!.textContent).toBe('Learning')
+    await act(() => ctx.client.setFlag('c:cheese-1', 'known'))
+    expect(within(food).getByText('cheese').closest('li')!.querySelector('.word-status')!.textContent).toBe('Known')
   })
 
   it('offers to play each word of a unit’s list, by name, when its clip can play; not otherwise (spec §11.1)', async () => {
@@ -224,7 +233,7 @@ describe('Path', () => {
     const row = (headword: string) => within(food).getByText(headword).closest('li')!
     const bread = row('bread')
     expect(within(bread).getByText('To learn').getAttribute('data-status')).toBe('to-learn')
-    expect(within(row('cheese')).getByText('Skipped')).toBeTruthy()
+    expect(row('cheese').querySelector('.word-status')).toBeNull()
     expect(within(food).getAllByText('To learn')).toHaveLength(1)
     // Started by the session, it is a word like any other; the level stays skipped.
     await act(() => ctx.client.answer({ wordId: 'c:bread-1', mode: 'flashcard', direction: 'en_to_l1', grade: Grade.Good, latencyMs: 2_000, practice: false }))
@@ -238,7 +247,7 @@ describe('Path', () => {
     await act(() => ctx.client.setFlag('c:cheese-1', 'suspended'))
     expect(within(row('cheese')).queryByText('To learn')).toBeNull()
     await act(() => ctx.client.setFlag('c:cheese-1', null))
-    expect(within(row('cheese')).getByText('Skipped')).toBeTruthy()
+    expect(row('cheese').querySelector('.word-status')).toBeNull()
   })
 
   it('marks a word to learn from a skipped unit’s word list, and takes the mark back there (spec §7.4)', async () => {
@@ -260,7 +269,7 @@ describe('Path', () => {
     expect(within(bread).getAllByRole('button').map((b) => b.textContent)).toEqual(['', 'Don’t learn this word', 'I know it', 'Not now'])
     await act(async () => fireEvent.click(within(bread).getByRole('button', { name: 'Don’t learn this word: bread' })))
     expect(ctx.client.snapshot.toLearn).toEqual([])
-    expect(within(bread).getByText('Skipped')).toBeTruthy()
+    expect(bread.querySelector('.word-status')).toBeNull()
     expect(document.activeElement?.getAttribute('aria-label')).toBe('Word actions: bread')
     // Set aside, a marked word loses its mark, and brought back it is an ordinary unstarted word again.
     await act(() => ctx.client.setToLearn('c:bread-1', true))
@@ -328,7 +337,7 @@ describe('Path', () => {
     expect(words).toHaveLength(20)
     const first = words[0]!
     const headword = first.querySelector('[lang="en"]')!.textContent!
-    expect(within(first).getByText('Not started')).toBeTruthy()
+    expect(first.querySelector('.word-status')).toBeNull()
     // The actions sit behind the word's ⋯ button, which takes focus back once a choice is made (spec §11.1).
     expect(within(first).queryByRole('button', { name: `I know it: ${headword}` })).toBeNull()
     wordMenu(first, headword)
@@ -339,7 +348,7 @@ describe('Path', () => {
     wordMenu(first, headword)
     await act(async () => fireEvent.click(within(first).getByRole('button', { name: `Bring back: ${headword}` })))
     expect(ctx.client.snapshot.flags.size).toBe(0)
-    expect(within(first).getByText('Not started')).toBeTruthy()
+    expect(first.querySelector('.word-status')).toBeNull()
   })
 
   it('shows a saved-failed alert beside the word when setting it aside fails (spec §11.1)', async () => {
