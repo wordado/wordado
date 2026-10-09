@@ -14,7 +14,7 @@ const snapshot: SnapshotStatus = {
 const reviewer = (name: string, over: Partial<ReviewerView> = {}): ReviewerView => ({ email: `${name.toLowerCase()}@example.com`, name, role: 'reviewer', languages: ['de'], invitedAt: 't', inviteSentAt: 't', disabledAt: null, ...over })
 const reviewers = [reviewer('Anna'), reviewer('Hans'), reviewer('Carmen', { languages: ['es'], disabledAt: 't' })]
 const assignment = (over: Partial<AssignmentView> = {}): AssignmentView => ({
-  id: 1, reviewer: 'anna@example.com', reviewerName: 'Anna', queue: 'translation-de', files: '*', flaggedOnly: true, createdAt: 't', closedAt: null,
+  id: 1, reviewer: 'anna@example.com', reviewerName: 'Anna', queue: 'translation-de', files: '*', flaggedOnly: true, spotCheck: null, createdAt: 't', closedAt: null,
   progress: { inScope: 9, decided: 2, changed: 0, submitted: 1, merged: 0, remaining: 6 }, ...over,
 })
 const submission = (over: Partial<SubmissionView> = {}): SubmissionView => ({ id: 1, assignment: 1, reviewer: 'anna@example.com', reviewerName: 'Anna', queue: 'translation-de', branch: 'b', pr: 3, url: 'https://github.com/x/pull/3', count: 1, leftOut: 0, status: 'open', createdAt: 't', ...over })

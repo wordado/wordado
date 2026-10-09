@@ -5,7 +5,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import type { RowsResponse, SubmissionView, SubmitResult } from '../../shared/hosted'
 import { createApp, type Deps } from '../app'
 import type { Env } from '../bindings'
-import { insertAssignment, insertReviewer, insertSubmission, listDecisions, listSubmissions, markSubmitted } from '../db'
+import { insertAssignment, insertReviewer, insertSubmission, listDecisions, listSubmissions, markSubmitted, upsertDecision } from '../db'
 import { resetGitHubTokens } from '../github'
 import { resetSnapshotCache } from '../snapshotStore'
 import { branchSlug } from '../submit'
@@ -164,6 +164,52 @@ describe('POST /api/submit', () => {
     expect((await as('ivan@example.com', 'POST', '/api/submit', { assignment: id })).status).toBe(502)
     expect(await listSubmissions(env.DB)).toHaveLength(0)
     expect((await listDecisions(env.DB, id)).every((d) => d.submission === null)).toBe(true)
+  })
+})
+
+describe('POST /api/submit for a spot check', () => {
+  it('sends the decided rows of the sample and nothing else, and keeps the severity out of the files', async () => {
+    const everything = await insertAssignment(env.DB, { reviewer: 'admin@example.com', queue: 'translation-bg', files: '*', flaggedOnly: false, createdAt: 't' })
+    const passed = ((await (await as('admin@example.com', 'GET', `/api/rows?assignment=${everything}`)).json()) as RowsResponse).rows.filter((r) => r.ai === 'passed' && r.reports === '')
+    const [kept, edited, dropped, undecided, stray] = passed
+    const file = kept!.file
+    const before = fake.files.get(file)!
+    const sample = [kept!, edited!, dropped!, undecided!].map((r) => ({ file: r.file, key: r.key }))
+    const spot = await insertAssignment(env.DB, { reviewer: 'ivan@example.com', queue: 'translation-bg', files: [file], flaggedOnly: false, spotCheck: { seed: 1, sample }, createdAt: 't' })
+    const decide = (r: RowsResponse['rows'][number], body: Record<string, unknown>) =>
+      as('ivan@example.com', 'POST', '/api/decision', { assignment: spot, queue: r.queue, file: r.file, key: r.key, rowHash: r.rowHash, ...body })
+    expect((await decide(kept!, { action: 'keep' })).status).toBe(200)
+    expect((await decide(edited!, { action: 'edit', cells: { translation: 'поправка' }, severity: 'minor' })).status).toBe(200)
+    expect((await decide(dropped!, { action: 'drop', severity: 'major' })).status).toBe(200)
+    // a decision on a row outside the sample, which the decision route would never store
+    await upsertDecision(env.DB, { assignment: spot, queue: 'translation-bg', file, key: stray!.key, rowHash: stray!.rowHash, action: 'drop', cells: {}, note: '', severity: 'major', decidedAt: 't', submission: null })
+
+    const res = await as('ivan@example.com', 'POST', '/api/submit', { assignment: spot })
+    expect(res.status).toBe(200)
+    expect((await res.json()) as SubmitResult).toMatchObject({ count: 3, leftOut: [] })
+    const pr = fake.pulls[0]!
+    expect(pr.title).toBe('translation-bg: 3 decisions by Ivan')
+    expect(pr.body).toContain('Spot check of rows the AI review passed: 1 serious, 1 minor.')
+    const commit = fake.commits.get(fake.branches.get(pr.head)!)!
+    expect([...commit.files.keys()].filter((path) => commit.files.get(path) !== fake.files.get(path))).toEqual([file])
+    const after = csvRecords(commit.files.get(file)!)
+    const was = new Map(csvRecords(before).rows.map((r) => [r['key'], r]))
+    const changed = after.rows.filter((r) => JSON.stringify(r) !== JSON.stringify(was.get(r['key']))).map((r) => r['key'])
+    expect(changed.sort()).toEqual([kept!.key, edited!.key, dropped!.key].sort())
+    const verdict = (key: string) => after.rows.find((r) => r['key'] === key)!['verdict']
+    expect([verdict(kept!.key), verdict(edited!.key), verdict(dropped!.key), verdict(undecided!.key), verdict(stray!.key)]).toEqual(['ok', 'ok', 'drop', '', ''])
+    expect(after.rows.find((r) => r['key'] === edited!.key)!['translation']).toBe('поправка')
+    expect(after.header).toEqual(csvRecords(before).header)
+    expect(commit.files.get(file)).not.toMatch(/major|minor|serious/)
+    const decisions = await listDecisions(env.DB, spot)
+    expect(decisions.filter((d) => d.submission !== null).map((d) => d.key).sort()).toEqual([kept!.key, edited!.key, dropped!.key].sort())
+    expect(decisions.find((d) => d.key === stray!.key)!.submission).toBeNull()
+  })
+
+  it('says nothing about a spot check in the pull request of another assignment', async () => {
+    await decideFirst(1)
+    await as('ivan@example.com', 'POST', '/api/submit', { assignment: id })
+    expect(fake.pulls[0]!.body).not.toMatch(/Spot check/)
   })
 })
 

@@ -3,6 +3,7 @@ import type { RowsResponse } from '../../shared/hosted'
 import { createApp } from '../app'
 import type { Env } from '../bindings'
 import { insertAssignment, insertReviewer, insertSubmission, listDecisions, markSubmitted, upsertDecision } from '../db'
+import { severityOf } from './decision'
 import { resetSnapshotCache } from '../snapshotStore'
 import { testKeys } from '../test/jwt'
 import { resetDb, startPlatform, testDeps } from '../test/platform'
@@ -113,6 +114,89 @@ describe('POST /api/decision', () => {
     const sub = await insertSubmission(env.DB, { assignment: id, branch: 'b', pr: 1, url: null, count: 1, leftOut: 0, status: 'open', createdAt: 't' })
     await markSubmitted(env.DB, id, [row.key], sub)
     expect((await post('POST', { assignment: id, queue: row.queue, file: row.file, key: row.key, rowHash: row.rowHash, action: 'drop' })).status).toBe(409)
+  })
+})
+
+describe('severityOf', () => {
+  it('asks a spot check for a severity with every action but keep', () => {
+    expect(severityOf(true, 'keep', undefined)).toBeNull()
+    expect(severityOf(true, 'edit', 'minor')).toBe('minor')
+    expect(severityOf(true, 'drop', 'major')).toBe('major')
+    expect(severityOf(true, 'accept', 'minor')).toBe('minor')
+    for (const action of ['edit', 'drop', 'accept'] as const) expect(severityOf(true, action, undefined)).toMatchObject({ invalid: expect.stringMatching(/how serious/) })
+    expect(severityOf(true, 'edit', 'grave')).toMatchObject({ invalid: expect.any(String) })
+    expect(severityOf(true, 'keep', 'minor')).toMatchObject({ invalid: expect.stringMatching(/kept/) })
+  })
+
+  it('refuses a severity outside a spot check', () => {
+    expect(severityOf(false, 'edit', undefined)).toBeNull()
+    expect(severityOf(false, 'edit', null)).toBeNull()
+    expect(severityOf(false, 'edit', 'minor')).toMatchObject({ invalid: expect.stringMatching(/only a spot check/) })
+  })
+})
+
+describe('POST /api/decision in a spot check', () => {
+  let spot: number
+  let rows: RowsResponse['rows']
+  let outside: RowsResponse['rows'][number]
+  const decide = (r: RowsResponse['rows'][number], body: Record<string, unknown>, assignment = spot) =>
+    post('POST', { assignment, queue: r.queue, file: r.file, key: r.key, rowHash: r.rowHash, ...body })
+
+  beforeEach(async () => {
+    const everything = await insertAssignment(env.DB, { reviewer: 'eve@example.com', queue: 'translation-bg', files: '*', flaggedOnly: false, createdAt: 't' })
+    const all = ((await (await get(`/api/rows?assignment=${everything}`, 'eve@example.com')).json()) as RowsResponse).rows
+    const passed = all.filter((r) => r.ai === 'passed' && r.reports === '')
+    const sample = passed.slice(0, 3).map((r) => ({ file: r.file, key: r.key }))
+    outside = passed[3]!
+    spot = await insertAssignment(env.DB, { reviewer: 'ivan@example.com', queue: 'translation-bg', files: [passed[0]!.file], flaggedOnly: false, spotCheck: { seed: 1, sample }, createdAt: 't' })
+    rows = ((await (await get(`/api/rows?assignment=${spot}`)).json()) as RowsResponse).rows
+  })
+
+  it('serves the sample only, and refuses a row of the same file that is not in it', async () => {
+    expect(rows).toHaveLength(3)
+    expect(rows.map((r) => r.key)).not.toContain(outside.key)
+    expect(outside.file).toBe(rows[0]!.file)
+    const res = await decide(outside, { action: 'keep' })
+    expect(res.status).toBe(403)
+    expect(await listDecisions(env.DB, spot)).toEqual([])
+  })
+
+  it('keeps a row without a severity', async () => {
+    expect((await decide(rows[0]!, { action: 'keep' })).status).toBe(200)
+    expect(await listDecisions(env.DB, spot)).toMatchObject([{ action: 'keep', severity: null }])
+  })
+
+  it('needs a severity to edit or drop, and stores it', async () => {
+    for (const body of [{ action: 'edit', cells: { translation: 'x' } }, { action: 'drop' }, { action: 'drop', severity: 'grave' }, { action: 'accept' }]) {
+      const res = await decide(rows[0]!, body)
+      expect(res.status).toBe(400)
+      expect(await res.json()).toMatchObject({ ok: false, reason: 'invalid', message: expect.stringMatching(/major or minor/) })
+    }
+    expect(await listDecisions(env.DB, spot)).toEqual([])
+    expect((await decide(rows[0]!, { action: 'edit', cells: { translation: 'x' }, severity: 'minor' })).status).toBe(200)
+    expect((await decide(rows[1]!, { action: 'drop', severity: 'major' })).status).toBe(200)
+    expect((await listDecisions(env.DB, spot)).map((d) => [d.action, d.severity]).sort()).toEqual([['drop', 'major'], ['edit', 'minor']])
+    const shown = ((await (await get(`/api/rows?assignment=${spot}`)).json()) as RowsResponse).rows
+    expect(shown.map((r) => r.decision?.severity ?? null)).toEqual(['minor', 'major', null])
+  })
+
+  it('takes an accept with a severity without falling over, though a sampled row has nothing to accept', async () => {
+    expect((await decide(rows[0]!, { action: 'accept', severity: 'minor' })).status).toBe(200)
+  })
+
+  it('forgets the severity when the reviewer changes their mind to keep, and refuses one sent with keep', async () => {
+    await decide(rows[0]!, { action: 'drop', severity: 'major' })
+    expect((await decide(rows[0]!, { action: 'keep', severity: 'major' })).status).toBe(400)
+    expect((await decide(rows[0]!, { action: 'keep' })).status).toBe(200)
+    expect(await listDecisions(env.DB, spot)).toMatchObject([{ action: 'keep', severity: null }])
+  })
+
+  it('refuses a severity on an assignment that is not a spot check', async () => {
+    const res = await decide(row, { action: 'edit', cells: { translation: 'x' }, severity: 'minor' }, id)
+    expect(res.status).toBe(400)
+    expect(await res.json()).toMatchObject({ reason: 'invalid', message: expect.stringMatching(/only a spot check/) })
+    expect((await decide(row, { action: 'edit', cells: { translation: 'x' } }, id)).status).toBe(200)
+    expect(await listDecisions(env.DB, id)).toMatchObject([{ action: 'edit', severity: null }])
   })
 })
 

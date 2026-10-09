@@ -21,7 +21,7 @@ const snapshot = {
 }
 const anna = { email: 'anna@example.com', name: 'Anna', role: 'reviewer' as const, languages: ['de' as const], invitedAt: 't', inviteSentAt: null, disabledAt: null }
 const carmen = { ...anna, email: 'carmen@example.com', name: 'Carmen', languages: ['es' as const], inviteSentAt: '2026-10-02T09:00:00Z' }
-const annasGerman = { id: 3, reviewer: anna.email, reviewerName: 'Anna', queue: 'translation-de', files: '*' as const, flaggedOnly: true, createdAt: 't', closedAt: null, progress: { inScope: 14, decided: 3, changed: 0, submitted: 2, merged: 0, remaining: 9 } }
+const annasGerman = { id: 3, reviewer: anna.email, reviewerName: 'Anna', queue: 'translation-de', files: '*' as const, flaggedOnly: true, spotCheck: null, createdAt: 't', closedAt: null, progress: { inScope: 14, decided: 3, changed: 0, submitted: 2, merged: 0, remaining: 9 } }
 const submission = { id: 1, assignment: 3, reviewer: anna.email, reviewerName: 'Anna', queue: 'translation-de', branch: 'b', pr: 31, url: 'https://github.com/x/pull/31', count: 2, leftOut: 0, status: 'open' as const, createdAt: '2026-10-05T12:00:00Z' }
 
 beforeEach(() => {
@@ -129,7 +129,7 @@ describe('Admin', () => {
   })
 
   it('assigns free files of a queue in the reviewer’s language, and shows who holds the others', async () => {
-    const assign = vi.spyOn(hostedApi.admin, 'assign').mockResolvedValue({ id: 1, reviewer: anna.email, reviewerName: 'Anna', queue: 'translation-de', files: ['review/translation-de/a.csv'], flaggedOnly: false, createdAt: 't', closedAt: null, progress: null })
+    const assign = vi.spyOn(hostedApi.admin, 'assign').mockResolvedValue({ id: 1, reviewer: anna.email, reviewerName: 'Anna', queue: 'translation-de', files: ['review/translation-de/a.csv'], flaggedOnly: false, spotCheck: null, createdAt: 't', closedAt: null, progress: null })
     render(<Admin />)
     const dialog = await openDialog('Assignments', 'Assign work')
     const form = within(dialog).getByRole('form', { name: 'Assign' })
@@ -223,7 +223,7 @@ describe('Admin', () => {
   })
 
   it('reassigns a closed assignment so its unsubmitted decisions are not stranded', async () => {
-    const closedOne = { id: 7, reviewer: anna.email, reviewerName: 'Anna', queue: 'translation-de', files: '*' as const, flaggedOnly: false, createdAt: 't', closedAt: '2026-10-05T11:00:00Z', progress: { inScope: 13, decided: 3, changed: 0, submitted: 0, merged: 0, remaining: 10 } }
+    const closedOne = { id: 7, reviewer: anna.email, reviewerName: 'Anna', queue: 'translation-de', files: '*' as const, flaggedOnly: false, spotCheck: null, createdAt: 't', closedAt: '2026-10-05T11:00:00Z', progress: { inScope: 13, decided: 3, changed: 0, submitted: 0, merged: 0, remaining: 10 } }
     vi.spyOn(hostedApi.admin, 'assignments').mockResolvedValue([closedOne])
     vi.spyOn(hostedApi.admin, 'reviewers').mockResolvedValue([anna, { ...anna, email: 'hans@example.com', name: 'Hans' }])
     const reassign = vi.spyOn(hostedApi.admin, 'reassign').mockResolvedValue({ ...closedOne, id: 8, reviewer: 'hans@example.com', reviewerName: 'Hans', closedAt: null })

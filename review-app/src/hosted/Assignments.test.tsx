@@ -8,7 +8,7 @@ afterEach(() => (cleanup(), vi.restoreAllMocks()))
 
 const progress = (over: Partial<Progress> = {}): Progress => ({ inScope: 741, decided: 212, changed: 0, submitted: 60, merged: 0, remaining: 469, ...over })
 const assignment = (over: Partial<AssignmentView> = {}): AssignmentView => ({
-  id: 7, reviewer: 'anna@example.com', reviewerName: 'Anna', queue: 'translation-de', files: '*', flaggedOnly: true, createdAt: 't', closedAt: null, progress: progress(), ...over,
+  id: 7, reviewer: 'anna@example.com', reviewerName: 'Anna', queue: 'translation-de', files: '*', flaggedOnly: true, spotCheck: null, createdAt: 't', closedAt: null, progress: progress(), ...over,
 })
 const untouched = assignment({ id: 8, queue: 'title-de', progress: progress({ inScope: 8, decided: 0, submitted: 0, remaining: 8 }) })
 

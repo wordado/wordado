@@ -116,7 +116,9 @@ export async function submit(deps: Deps, me: ReviewerRow, a: AssignmentRow, gh: 
     if (settled.state === 'completed') return { pr: settled.pr, url: settled.url, count: earlier.count, leftOut: [] }
     if (settled.state === 'running') return { status: 409, message: IN_PROGRESS }
   }
-  const pending = (await listDecisions(deps.env.DB, a.id)).filter((d) => d.submission === null)
+  // A spot check sends decisions on the rows of its sample and no others (spec §15); the decision route stores no others.
+  const sampled = a.spotCheck ? new Set(a.spotCheck.sample.map((s) => `${s.file}\n${s.key}`)) : null
+  const pending = (await listDecisions(deps.env.DB, a.id)).filter((d) => d.submission === null && (sampled === null || sampled.has(`${d.file}\n${d.key}`)))
   if (pending.length === 0) return { status: 400, message: 'nothing to submit' }
   const head = await gh.headSha()
   const byFile = new Map<string, DecisionRow[]>()
@@ -177,7 +179,10 @@ export async function submit(deps: Deps, me: ReviewerRow, a: AssignmentRow, gh: 
     const counts = (['accept', 'keep', 'edit', 'drop'] as const).map((k) => `${k} ${sent.filter((d) => d.action === k).length}`).join(', ')
     const perFile = files.map((f) => `- ${f.path}: ${sent.filter((d) => d.file === f.path).length}`).join('\n')
     const notes = sent.filter((d) => d.note !== '').map((d) => `- ${d.key}: ${d.note}`).join('\n')
-    const body = `Submitted by ${me.name} in the review app.\n\n${counts}\n\n${perFile}${notes ? `\n\nNotes:\n${notes}` : ''}${leftOut.length ? `\n\nLeft out (changed or gone since decided): ${leftOut.map((l) => l.key).join(', ')}` : ''}`
+    // How serious the faults were stays in the review app and in these words; it is not written into the files.
+    const rated = (severity: 'major' | 'minor') => sent.filter((d) => d.severity === severity).length
+    const spot = a.spotCheck ? `\n\nSpot check of rows the AI review passed: ${rated('major')} serious, ${rated('minor')} minor.` : ''
+    const body = `Submitted by ${me.name} in the review app.\n\n${counts}${spot}\n\n${perFile}${notes ? `\n\nNotes:\n${notes}` : ''}${leftOut.length ? `\n\nLeft out (changed or gone since decided): ${leftOut.map((l) => l.key).join(', ')}` : ''}`
     pr = await openPr(deps, gh, { title: `${a.queue}: ${sent.length} decisions by ${me.name}`, head: branch, body })
   } catch (err) {
     const cause = err instanceof PrUnconfirmed ? err.cause : err
