@@ -290,6 +290,13 @@ not business or the economy in general"). Changing the list asks the themes stag
 (about $3 for 3,100), and nothing else: the senses question keeps the 24 ids it was first asked with.
 
 Units are sticky: a word keeps its unit from draft to draft, so new themes only group words not yet in a unit.
+
+A new word joins an existing unit when it can: a unit of its level and theme with room (up to one and a half
+times `unit_size`), the one whose words are closest to it in frequency. This applies only while its theme has too
+few new words at that level for a unit of their own (under half a unit); a larger batch gets new units, as do words
+without a theme. So a single late word sits in a unit of its theme, not alone. The unit it joins has its title
+asked again, and that title goes back to review. A learner who had finished that unit keeps everything it
+unlocked and meets the new word next.
 To regroup, run `corpus draft "$PWD/content" --regroup` locally: every unit no published pack carries is rebuilt
 from the current themes, and its title is asked again. A published unit keeps its words; a learner's path does
 not change under them.
