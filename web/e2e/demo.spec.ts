@@ -347,7 +347,7 @@ test('chooses Learn this word while practising a skipped unit, and the next sess
     const unit = page.locator('li.unit', { has: page.getByRole('heading', { name: 'People and greetings' }) })
     await unit.getByText('20 words').click()
     const row = unit.locator('.unit-words li', { has: page.getByText(word, { exact: true }) })
-    await expect(row.getByText('To learn')).toBeVisible()
+    await expect(row.locator('.word-status')).toHaveText('To learn')
     await expectAccessible(page, { dark: true })
     // The word list takes the mark back and makes it again, without a round of practice.
     await row.getByRole('button', { name: `Word actions: ${word}` }).click()
@@ -356,7 +356,7 @@ test('chooses Learn this word while practising a skipped unit, and the next sess
     await expect(row.locator('.word-status')).toHaveCount(0)
     await row.getByRole('button', { name: `Word actions: ${word}` }).click()
     await row.getByRole('button', { name: `Learn this word: ${word}` }).click()
-    await expect(row.getByText('To learn')).toBeVisible()
+    await expect(row.locator('.word-status')).toHaveText('To learn')
     // Still ten new words today: the chosen one first, then the path's.
     await page.goto('/')
     await expect(heading(page)).toHaveText('10 new words')
