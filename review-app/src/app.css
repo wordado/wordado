@@ -1113,7 +1113,7 @@ kbd {
 }
 
 /* A spot check's question, in the place of the decisions: the two answers side by side, each with what it means
-   under its word, and the way back under both. */
+   under its word, and Cancel under both. */
 .decisions.severity-ask {
   grid-auto-flow: row;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1150,7 +1150,7 @@ kbd {
   color: var(--ink-soft);
 }
 
-.ask-back {
+.ask-cancel {
   grid-column: 1 / -1;
   justify-self: center;
 }
@@ -1523,6 +1523,13 @@ kbd {
 
   .row-card.editing :is(.progress-line, .card-nav, .example) {
     display: none;
+  }
+
+  /* A spot check's question is a taller bar than the decisions: room under the card (and under an edit) to
+     scroll its end clear of it. */
+  .review.page:has(.severity-ask),
+  .row-card.editing:has(.severity-ask) {
+    padding-bottom: calc(16rem + env(safe-area-inset-bottom, 0px));
   }
 
   /* The notices above the review screen keep to the page's narrower gutter. */

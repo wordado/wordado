@@ -28,8 +28,8 @@ const SEVERITY_ANSWERS = [
 /** One row to decide: where it is among the shown rows, the word, "Now" beside "AI suggests", the objections, and
  * the decisions with their keys (1 accept, 2 keep, 3 edit and save, 4 drop). On a touch screen a swipe to the left
  * skips to the next row and one to the right goes back. In a spot check (`askSeverity`) a decision that changes
- * the row is followed by one question, "How serious was it?" (1 serious, 2 minor, Escape to go back), and only
- * its answer sends the decision. */
+ * the row is followed by one question, "How serious was it?" (1 serious, 2 minor, Escape to cancel), and only
+ * its answer sends the decision; Cancel there throws nothing away, an edit is as it was. */
 export function RowCard(props: {
   row: RowView
   /** the row's place among the shown rows; `index` counts from 0 */
@@ -93,7 +93,7 @@ export function RowCard(props: {
   }, [asking])
 
   // While editing, only Save (3) and Cancel (Escape) are on offer, as buttons and as keys; while the question is
-  // open, only its two answers (1, 2) and the way back (Escape).
+  // open, only its two answers (1, 2) and Cancel (Escape).
   const keys = useMemo((): Record<string, () => void> => {
     if (saving) return {}
     if (asking) return { '1': serious, '2': minor, Escape: back }
@@ -187,8 +187,8 @@ export function RowCard(props: {
                 <span className="ask-meaning">{meaning}</span>
               </button>
             ))}
-            <button className="button small ghost ask-back" onClick={back} disabled={saving}>
-              Back<kbd aria-hidden="true">Esc</kbd>
+            <button className="button small ghost ask-cancel" onClick={back} disabled={saving}>
+              Cancel<kbd aria-hidden="true">Esc</kbd>
             </button>
           </div>
         ) : editing ? (

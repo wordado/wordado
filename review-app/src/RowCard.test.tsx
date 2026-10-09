@@ -351,7 +351,7 @@ describe('RowCard', () => {
       expect(second.onDecide).toHaveBeenCalledWith('edit', bankClean.cells, '', 'minor')
     })
 
-    it('goes back from the question with Escape or Back: to the decisions after Drop, to the edit as it was after Save', () => {
+    it('cancels the question with Escape or Cancel: to the decisions after Drop, to the edit as it was after Save', () => {
       const { onDecide } = show(bankClean, { askSeverity: true })
       fireEvent.click(button('Drop'))
       fireEvent.keyDown(window, { key: 'Escape' })
@@ -360,7 +360,7 @@ describe('RowCard', () => {
       fireEvent.click(button('Edit'))
       fireEvent.change(screen.getByLabelText('Translation'), { target: { value: 'x' } })
       fireEvent.keyDown(window, { key: '3' })
-      fireEvent.click(within(ask()!).getByRole('button', { name: 'Back' }))
+      fireEvent.click(within(ask()!).getByRole('button', { name: 'Cancel' }))
       expect(ask()).toBeNull()
       const field = screen.getByLabelText('Translation') as HTMLInputElement
       expect([field.value, field.disabled]).toEqual(['x', false])
