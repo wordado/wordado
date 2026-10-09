@@ -2,6 +2,8 @@
 
 Date: 2026-10-05. Status: draft for the product owner's review.
 Builds on: `2026-10-04-ai-review-and-review-app-design.md` (the local review app, §5; "Remote reviewers later", §8).
+Revised 2026-10-09: §15 added, the spot check (issue #129): an assignment over a random sample of the rows the AI
+review passed, with the reviewer's word on how serious each fault was. §5's *No overlap* and §12 point to it.
 Revised 2026-10-08: §7.2 and §11, after a Submit failed three times at the pull request on 2026-10-07 with nothing
 to say why: the error carries GitHub's own explanation, opening the pull request is tried once more, and a branch
 left by a failed submit is used again when it holds the same commit. Checked read-only against wordado-content:
@@ -126,7 +128,8 @@ submissions (id INTEGER PRIMARY KEY, assignment INTEGER NOT NULL REFERENCES assi
 - **Languages:** a reviewer can be assigned a queue only in one of their languages. `en` covers `level`.
 - **No overlap:** creating an assignment fails when another open assignment on the same queue shares a file; `"*"`
   shares every file. So a row has at most one reviewer. A flagged-only assignment takes a file list too, so the
-  flagged rows of one queue can be shared out as well.
+  flagged rows of one queue can be shared out as well. A spot check (§15) is the one exception: it stands beside
+  a flagged-only assignment of the same files.
 - **Splitting a queue:** the admin page's *Split* picks a queue, *all rows* or *flagged rows only*, and two or more
   reviewers with that language, and creates one assignment per reviewer, dealing out the queue's files that no
   open assignment holds so each gets about the same number of rows (whole files, never a file cut in two). The
@@ -324,6 +327,7 @@ the link to copy), and a submission is still recorded.
 - Audio review in the browser, and the `english` queue (both stay on files).
 - Polishing the layout for phones (it must work, not shine).
 - Learner reports as an assignment source of their own (reported rows already come first in a queue).
+- For a spot check (§15): choosing its rows by hand, and comparing two AI reviewers.
 
 ## 13. Testing
 
@@ -352,3 +356,115 @@ the link to copy), and a submission is still recorded.
   on wordado-content), the Resend key, the R2 keys in wordado-content, and the variables of §10.
 - The steps that change wordado-content (`corpus.yml` snapshot job, `review-import.yml`) go in as a pull request
   there, with the product owner's go-ahead, and `PIPELINE_REF` moves to a commit that has `review-app snapshot`.
+
+## 15. Spot check
+
+The assignments of §5 hand out the rows the AI review flagged, or whole files. Neither says how much the AI review
+lets through. A **spot check** does: an assignment over a random sample of the rows the AI review *passed*, which a
+reviewer works through like any other. What they change is a real correction, submitted as §7 has it; what they
+answer about each change is the measure.
+
+### 15.1 The sample
+
+The coordinator picks a reviewer, a queue in one of their languages and a number of rows (50 unless changed, at
+most 500). The Worker draws from the queue's open files the rows that
+
+- the AI review passed with **no objection at all** (`ai = passed`, no severity, an empty `objections` list: a row
+  under the flagging threshold with a minor objection is left out, its objection would steer the reviewer),
+- no learner reported (`reports` empty),
+- are not stale (spec 2026-10-04: the file is older than the draft), and
+- no open or merged submission has decided already, for the row as it is now (one query over `decisions` and
+  `submissions`).
+
+The sample is spread evenly over the levels found on the rows (`context.level`): the number is divided as equally
+as possible, the remainder goes to the levels in their order, and what a level is too small to take is shared out
+among the others the same way. Within a level the rows are drawn at random, and the whole sample is then mixed, so
+the reviewer does not meet the levels in blocks. The generator is seeded (mulberry32) and the **seed is stored**
+with the sample: the same rows and seed give the same sample in the same order, so a draw can be made again and
+explained. When fewer rows qualify than were asked for, all of them are taken and the answer says how many; when
+none does, the request is refused.
+
+The sample is fixed when the assignment is made: `GET /api/rows` returns exactly its rows, in the stored order
+(never worst first), on every load. A sampled row that has since been flagged or reported stays in the sample; one
+that changed stays too, and its row hash does what it does for any decision (§11); one that has left the snapshot
+drops out, and an unsubmitted decision on it is discarded as usual.
+
+### 15.2 Storage
+
+Migration `0003_spot_check.sql` (forward-only, every column nullable or defaulted, so the rows there and the
+previous Worker are unaffected):
+
+```sql
+assignments ADD spot_check INTEGER NOT NULL DEFAULT 0,   -- 1 for a spot check
+            ADD seed INTEGER,                            -- what the sample was drawn with
+            ADD sample TEXT                              -- JSON list of { file, key }, in the order shown
+decisions   ADD severity TEXT CHECK (severity IN ('major','minor'))
+```
+
+A spot check's `files` are the files its sample came from, and `flagged_only` is 0.
+
+### 15.3 Overlap, reassign, split
+
+- A spot check **stands beside flagged-only assignments** of the same files: at the draw they share no row.
+- It is **refused beside an open all-rows assignment** that shares a file with it (before the draw: any file of the
+  queue), and creating an all-rows assignment over a file a spot check sampled from is refused the same way. The
+  message names who has the other one.
+- **One open spot check per queue.**
+- Everything else keeps §5's rule. The snapshot status's *assigned to* names who holds a file's rows to decide,
+  not a spot check on some of them.
+- **Reassign** moves a spot check as §5.1 moves any assignment: the new one has the same seed and sample. A spot
+  check is never part of a **split**; its files count as taken there only for an all-rows split.
+
+### 15.4 The severity question
+
+In a spot check, **Keep** means the row is fine and is stored as it always was. A decision that changes the row
+(**Edit**, **Drop**; **Accept fix** too, should a sampled row have gained an objection since) is followed by one
+question in the card, in the place of the decisions:
+
+> **How serious was it?**
+> **Serious** — a learner would be taught something wrong, or marked wrong for a right answer.
+> **Minor** — right, but could be better.
+
+Keys `1` and `2` answer, `Esc` (Cancel) goes back with nothing lost: an edit is as it was typed. While the question
+is open the other keys, the swipe and the row list are off, as during an edit. The decision is sent only with the
+answer. A decided row shows it (*rated serious*, *rated minor*); deciding the row again before Submit replaces it.
+
+`POST /api/decision` takes `severity: 'major' | 'minor'` (*serious* is stored as `major`, the word the AI review
+uses): required in a spot check with every action but `keep`, refused with `keep`, and refused outside a spot check,
+each a 400 `invalid` in words. A row of the sample's files that is not in the sample is outside the assignment (403).
+
+The severity is the app's own record. It is **not written into the review files**: Submit writes a spot check's
+decisions like any others (only the decided rows of the sample; the rest of each file is untouched), and adds one
+line to the pull request's description with the counts.
+
+### 15.5 The result
+
+`POST /api/admin/spot-checks` `{ reviewer, queue, rows }` makes one and answers `{ assignment, asked, drawn }`.
+Every assignment view carries `spotCheck: { sample, result }` (null for the others), and the admin page shows it
+on the spot check's row:
+
+*50 in the sample · checked 12 · fine 9 · minor 2 · serious 1*, and under it the keys of the serious rows.
+
+*Checked* counts the decisions on rows of the sample, submitted or not; a decision whose row changed since is left
+out, and so is an unsubmitted one whose row is gone. A submitted decision on a row that is gone counts: a merged row
+leaves the review files. *Fine* is a row kept as it is. The Overview's language rows do not count a spot check as
+someone working on the language's flagged rows.
+
+### 15.6 Left out
+
+- Choosing the rows by hand.
+- Comparing two AI reviewers.
+- A result across several spot checks, or over time: each row of the admin list stands for one sample. After a
+  reassignment that moves decisions, the ones already submitted stay with the closed assignment and its row.
+- The rating in the row list; it is on the card.
+
+### 15.7 Testing
+
+- **Unit:** the share-out (even, remainder in order, redistribution), the draw (same seed same sample, fewer
+  eligible than asked, ineligible rows never drawn), the overlap rule, the result's counting, its line of text.
+- **Worker:** making a spot check and its refusals both ways, the rows served and their order, 403 for a row of
+  the same file outside the sample, the severity required, refused and stored, a reassignment that keeps the
+  sample, a submit that writes only the decided rows of the sample.
+- **UI:** the question on Save and on Drop, both answers, Cancel, the keys; the admin form and the result.
+- **E2E:** an admin makes a spot check beside a flagged-only assignment and is refused a second one and one beside
+  an all-rows assignment; the reviewer drops, edits and keeps with the keys and submits; the admin reads the result.
