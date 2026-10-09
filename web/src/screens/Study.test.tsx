@@ -7,6 +7,16 @@ import { Study } from './Study'
 
 afterEach(cleanup)
 
+/**
+ * Shows a flashcard's answer and waits until it is on screen. The run arrives from a promise, so the screen's
+ * subscription to it (a passive effect) may start a moment after the card is drawn: an answer revealed in that
+ * moment reaches the screen one render later, and a lookup made at once would not find it (issue #112).
+ */
+async function showAnswer(): Promise<void> {
+  fireEvent.click(screen.getByRole('button', { name: 'Show answer' }))
+  await screen.findByRole('button', { name: /Again/ })
+}
+
 describe('Study', () => {
   it('starts a run in the chosen mode', async () => {
     const ctx = await setup()
@@ -35,7 +45,7 @@ describe('Study', () => {
     for (let i = 0; i < 3; i += 1) {
       expect(headwords).toContain(document.querySelector('.card [lang="en"]')!.textContent)
       ctx.env.advance(ITEM_SETTLE_MS)
-      fireEvent.click(screen.getByRole('button', { name: 'Show answer' }))
+      await showAnswer()
       ctx.env.advance(ITEM_SETTLE_MS)
       await act(async () => fireEvent.click(screen.getByRole('button', { name: /Again/ })))
     }
@@ -63,7 +73,7 @@ describe('Study', () => {
     for (let i = 0; i < 9; i += 1) {
       expect(headwords).toContain(document.querySelector('.card [lang="en"]')!.textContent)
       ctx.env.advance(ITEM_SETTLE_MS)
-      fireEvent.click(screen.getByRole('button', { name: 'Show answer' }))
+      await showAnswer()
       ctx.env.advance(ITEM_SETTLE_MS)
       await act(async () => fireEvent.click(screen.getByRole('button', { name: /Good/ })))
     }
@@ -103,7 +113,7 @@ describe('Study', () => {
       expect(screen.queryByText('New to you') !== null).toBe(!started)
       if (!started) fresh += 1
       ctx.env.advance(ITEM_SETTLE_MS)
-      fireEvent.click(screen.getByRole('button', { name: 'Show answer' }))
+      await showAnswer()
       expect(screen.queryByText('New to you') !== null).toBe(!started)
       // "Learn this word" goes with the label.
       expect(screen.queryByRole('button', { name: `Learn this word: ${entry.headword}` }) !== null).toBe(!started)
@@ -135,7 +145,7 @@ describe('Study', () => {
       // Mark the first word to learn on the way.
       const word = document.querySelector('.card [lang="en"]')!.textContent
       ctx.env.advance(ITEM_SETTLE_MS)
-      fireEvent.click(screen.getByRole('button', { name: 'Show answer' }))
+      await showAnswer()
       await act(async () => fireEvent.click(screen.getByRole('button', { name: `Learn this word: ${word}` })))
       await stop()
       expect(screen.getByText('1 word will come up in your next sessions.')).toBeTruthy()
