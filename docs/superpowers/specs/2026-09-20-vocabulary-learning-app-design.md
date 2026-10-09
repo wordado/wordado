@@ -750,10 +750,13 @@ device) is simply not served while the flag stands. The run's end says how
 many of the words it showed are marked to learn, whenever they were marked.
 The path's word list labels a chosen word "To learn" and can take the mark
 back; in a unit of a skipped level it can also mark a word that was never
-started, so the learner can pick words without playing a round. Such a word
-is labelled "Skipped" there, not "Not started": no session will bring it
-unless the learner marks it. Each row of the list has a listen button, where
-the word's clip can play (§11.1).
+started, so the learner can pick words without playing a round. Each row
+of the list shows the word, its translation and a listen button, where the
+word's clip can play (§11.1). A row carries a label only for the word's own
+standing, which the unit cannot say: its mastery tier once started, "Known"
+or "Not now" when set aside, "To learn" when marked. A word that was never
+started has none, in a skipped level or any other: the unit's count and the
+level's line already say it.
 
 Each mark is a `word_learn` versioned document keyed by the word (§6.2, §9.2),
 apart from the word's flag, holding the time it was chosen, which orders the
@@ -2140,6 +2143,13 @@ owner.
 - **Interface (§11.2, §14):** English, Bulgarian, German and Spanish.
 - **Mobile apps (§14):** postponed by the product owner on 2026-10-01. They
   stay in Phase 1b and have not started.
+
+**2026-10-09 — the path's word list shows translations.** Decided by the
+product owner.
+
+- **Word list (§7.4):** each row shows the word's translation. "Not started"
+  and "Skipped" (the latter added the day before) are no longer shown on a
+  row; a label stays for a started, set-aside or marked word.
 
 ### Approval status
 

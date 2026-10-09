@@ -394,7 +394,6 @@ export const es: Messages = {
   'path.open': 'Disponible',
   'path.words': { one: '{count} palabra', other: '{count} palabras' },
   'path.wordNew': 'Sin empezar',
-  'path.wordSkipped': 'Omitida',
   'path.wordToLearn': 'Por aprender',
   'path.wordActions': 'Acciones de la palabra: {word}',
   'path.levelSkipped': 'Omitido',
