@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { AssignmentView, Progress } from '../../shared/hosted'
 import { hostedApi } from '../hostedApi'
 import { assignmentLabel } from '../labels'
+import { SPOT_CHECK_PURPOSE } from './spotCheck'
 
 /** How far an assignment is: "741 rows · 212 decided · 60 submitted", "8 rows · none decided yet", "155 merged · nothing left to decide". */
 function countsOf(a: AssignmentView): string {
@@ -67,6 +68,7 @@ export function Assignments(props: { onOpen(a: AssignmentView): void }) {
                       {assignmentLabel(a)}
                     </span>
                     <span className="note">{countsOf(a)}</span>
+                    {a.spotCheck && <span className="note">{SPOT_CHECK_PURPOSE}</span>}
                   </span>
                   <ProgressBar progress={p} />
                   {/* without review data there are no rows to open; a finished assignment has none either */}

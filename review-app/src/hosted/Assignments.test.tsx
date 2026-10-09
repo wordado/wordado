@@ -74,6 +74,17 @@ describe('Assignments', () => {
     expect(screen.queryByText(/none decided yet/)).toBeNull()
   })
 
+  it('labels a spot check and says in one line what it is for', async () => {
+    await show([assignment(), assignment({ id: 9, files: ['review/translation-de/a.csv'], flaggedOnly: false, spotCheck: { sample: 50, result: null }, progress: progress({ inScope: 50, decided: 0, submitted: 0, remaining: 50 }) })])
+    const row = (await screen.findByText('German translations · spot check')).closest('li')!
+    expect(within(row).getByText('50 rows · none decided yet')).toBeTruthy()
+    expect(within(row).getByText('These rows passed the AI review. Keep what is right, change what is wrong.')).toBeTruthy()
+    expect(within(row).getByRole('button', { name: 'Start' })).toBeTruthy()
+    // the other assignments say nothing of the kind
+    const other = screen.getByText('German translations · flagged rows').closest('li')!
+    expect(within(other).queryByText(/passed the AI review/)).toBeNull()
+  })
+
   it('says so when nothing is assigned', async () => {
     await show([])
     expect(await screen.findByText('Nothing is assigned to you yet.')).toBeTruthy()
