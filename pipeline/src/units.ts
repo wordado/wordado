@@ -26,7 +26,15 @@ function groupOf(c: UnitCandidate, themeSize: ReadonlyMap<string, number>, posSi
  * stays too, retired. An entry that was never published and is no longer
  * live leaves.
  *
- * New live entries are grouped: by theme where a theme has at least half a
+ * A new live entry whose theme has too few new words at its level for a unit
+ * of their own (under half a unit) first looks for an existing unit of that
+ * level and theme (`joinThemeUnits`). A single late word then sits in a unit
+ * of its theme (a month's name in a unit about time), not in a unit of its
+ * own; the unit's title is asked again, as for any unit whose words change. A theme with
+ * enough new words still gets new units, so a large batch does not swell the
+ * units learners already have.
+ *
+ * The other new live entries are grouped: by theme where a theme has at least half a
  * unit of new words, else by part of speech where that has half a unit, else
  * together as `mixed`. Words no theme fits are the rule at B1, and grouping
  * them by theme alone made units of unrelated words under invented titles.
@@ -45,9 +53,9 @@ export function assignUnits(units: readonly RegistryUnit[], live: readonly UnitC
       return c ? c.level === u.level : published.has(id)
     }),
   }))
-  const placed = new Set(kept.flatMap((u) => u.entry_ids))
-  const out: RegistryUnit[] = [...kept]
   const min = Math.ceil(unitSize / 2)
+  const out: RegistryUnit[] = joinThemeUnits(kept, live, liveById, min, unitSize + min)
+  const placed = new Set(out.flatMap((u) => u.entry_ids))
   const levels = [...new Set(live.map((c) => c.level))].sort((a, b) => levelIndex(a) - levelIndex(b))
   for (const level of levels) {
     const fresh = live.filter((c) => c.level === level && !placed.has(c.entry_id))
@@ -81,6 +89,41 @@ export function assignUnits(units: readonly RegistryUnit[], live: readonly UnitC
         out.push({ unit_id: `${prefix}-${String(n).padStart(2, '0')}`, level, entry_ids, ...(labelled ? { group } : {}) })
       }
     }
+  }
+  return out
+}
+
+const median = (sorted: readonly number[]) => (sorted[(sorted.length - 1) >> 1]! + sorted[sorted.length >> 1]!) / 2
+
+/**
+ * Adds each new themed entry to an existing unit of its level and theme with fewer than `capacity` live words (the
+ * largest a unit can be when first cut), when its level has fewer than `min` new entries of that theme. A unit's theme is the first theme of most of its live words; a
+ * part-of-speech or mixed unit, and a unit with no live word, has none. Among several, the unit whose words are
+ * closest in frequency (by median rank) takes the entry, the later unit on a tie. Entries no unit takes are left.
+ */
+function joinThemeUnits(units: readonly RegistryUnit[], live: readonly UnitCandidate[], liveById: ReadonlyMap<string, UnitCandidate>, min: number, capacity: number): RegistryUnit[] {
+  const out = units.map((u) => ({ ...u, entry_ids: [...u.entry_ids] }))
+  const hosts = out.flatMap((u, index) => {
+    const members = u.entry_ids.flatMap((id) => liveById.get(id) ?? [])
+    if (u.group !== undefined || members.length === 0) return []
+    const count = new Map<string, number>()
+    for (const m of members) count.set(m.theme, (count.get(m.theme) ?? 0) + 1)
+    const [theme] = [...count].sort(([a, x], [b, y]) => y - x || (a < b ? -1 : 1))[0]!
+    return theme === '' ? [] : [{ index, level: u.level, theme, size: members.length, rank: median(members.map((m) => m.rank).sort((a, b) => a - b)) }]
+  })
+  const placed = new Set(out.flatMap((u) => u.entry_ids))
+  const fresh = live.filter((c) => c.theme !== '' && !placed.has(c.entry_id)).sort((a, b) => a.rank - b.rank || a.order - b.order || (a.entry_id < b.entry_id ? -1 : 1))
+  const groupOf = (c: UnitCandidate) => `${c.level}|${c.theme}`
+  const groupSize = new Map<string, number>()
+  for (const c of fresh) groupSize.set(groupOf(c), (groupSize.get(groupOf(c)) ?? 0) + 1)
+  for (const c of fresh) {
+    if (groupSize.get(groupOf(c))! >= min) continue
+    const host = hosts
+      .filter((h) => h.level === c.level && h.theme === c.theme && h.size < capacity)
+      .sort((a, b) => Math.abs(a.rank - c.rank) - Math.abs(b.rank - c.rank) || b.index - a.index)[0]
+    if (!host) continue
+    out[host.index]!.entry_ids.push(c.entry_id)
+    host.size += 1
   }
   return out
 }

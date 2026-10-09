@@ -9,7 +9,7 @@ const c = (entry_id: string, level: 'A1' | 'A2', theme: string, rank: number, po
 describe('assignUnits (spec §7.2, Decision 9)', () => {
   it('leaves placed entries where they are and appends new units after a level’s last', () => {
     const units = [{ unit_id: 'a1-01', level: 'A1' as const, entry_ids: ['a'] }]
-    const out = assignUnits(units, [c('a', 'A1', 'food', 1), c('b', 'A1', 'food', 2)], new Set(['a']), 20)
+    const out = assignUnits(units, [c('a', 'A1', 'food', 1), c('b', 'A1', 'home', 2)], new Set(['a']), 20)
     expect(out).toEqual([
       { unit_id: 'a1-01', level: 'A1', entry_ids: ['a'] },
       { unit_id: 'a1-02', level: 'A1', entry_ids: ['b'], group: 'mixed' },
@@ -52,6 +52,72 @@ describe('assignUnits (spec §7.2, Decision 9)', () => {
       { unit_id: 'a1-07', level: 'A1', entry_ids: [] },
       { unit_id: 'a1-08', level: 'A1', entry_ids: ['n'], group: 'mixed' },
     ])
+  })
+})
+
+describe('assignUnits: a new word joins a unit of its theme (issue 124)', () => {
+  const unit = (unit_id: string, entry_ids: string[], extra: { group?: string; level?: 'A1' | 'A2' } = {}) => ({ unit_id, level: extra.level ?? ('A1' as const), entry_ids, ...(extra.group ? { group: extra.group } : {}) })
+  const members = (prefix: string, n: number, theme: string, from: number) => Array.from({ length: n }, (_, i) => c(`${prefix}${i + 1}`, 'A1', theme, from + i))
+  const ids = (cs: UnitCandidate[]) => cs.map((x) => x.entry_id)
+
+  it('puts a lone new word in the existing unit of its level and theme, not in a unit of its own', () => {
+    const time = members('t', 4, 'time', 10)
+    const out = assignUnits([unit('a1-01', ids(time))], [...time, c('march', 'A1', 'time', 50)], new Set(), 4)
+    expect(out).toEqual([{ unit_id: 'a1-01', level: 'A1', entry_ids: ['t1', 't2', 't3', 't4', 'march'] }])
+  })
+
+  it('chooses, among the units of the theme, the one whose words are closest in frequency; the later one on a tie', () => {
+    const early = members('e', 4, 'time', 10)
+    const late = members('l', 4, 'time', 100)
+    const units = [unit('a1-01', ids(early)), unit('a1-02', ids(late))]
+    const place = (rank: number) => assignUnits(units, [...early, ...late, c('new', 'A1', 'time', rank)], new Set(), 4).find((u) => u.entry_ids.includes('new'))!.unit_id
+    expect(place(90)).toBe('a1-02')
+    expect(place(20)).toBe('a1-01')
+    // medians 11.5 and 101.5: rank 56.5 is as far from both
+    expect(place(56.5)).toBe('a1-02')
+  })
+
+  it('fills a unit only to one and a half times the unit size; the rest go to the groups as before', () => {
+    const time = Array.from({ length: 25 }, (_, i) => c(`t${i + 1}`, 'A1', 'time', 10 + i))
+    const fresh = Array.from({ length: 9 }, (_, i) => c(`n${i + 1}`, 'A1', 'time', 100 + i))
+    const out = assignUnits([unit('a1-01', ids(time))], [...time, ...fresh], new Set(), 20)
+    expect(out[0]!.entry_ids.slice(25)).toEqual(['n1', 'n2', 'n3', 'n4', 'n5'])
+    expect(out.slice(1)).toEqual([{ unit_id: 'a1-02', level: 'A1', entry_ids: ['n6', 'n7', 'n8', 'n9'], group: 'mixed' }])
+  })
+
+  it('gives a theme with half a unit of new words its own unit, and leaves the existing one alone', () => {
+    const time = members('t', 4, 'time', 10)
+    const fresh = members('n', 2, 'time', 20)
+    const out = assignUnits([unit('a1-01', ids(time))], [...time, ...fresh], new Set(), 4)
+    expect(out).toEqual([
+      { unit_id: 'a1-01', level: 'A1', entry_ids: ['t1', 't2', 't3', 't4'] },
+      { unit_id: 'a1-02', level: 'A1', entry_ids: ['n1', 'n2'] },
+    ])
+  })
+
+  it('takes a unit’s theme from most of its live words', () => {
+    const mostlyFood = [...members('f', 3, 'food', 10), c('h1', 'A1', 'home', 13)]
+    const units = [unit('a1-01', ids(mostlyFood))]
+    expect(assignUnits(units, [...mostlyFood, c('new', 'A1', 'food', 14)], new Set(), 4)[0]!.entry_ids).toContain('new')
+    expect(assignUnits(units, [...mostlyFood, c('new', 'A1', 'home', 14)], new Set(), 4)[0]!.entry_ids).not.toContain('new')
+  })
+
+  it('does not add to a unit of another level, a part-of-speech or mixed unit, or a unit with no live words', () => {
+    const food = members('f', 4, 'food', 10)
+    const a2 = [c('g1', 'A2', 'food', 30)]
+    const units = [
+      unit('a1-01', ids(food), { group: 'pos:noun' }),
+      unit('a1-02', ['gone1', 'gone2']),
+      unit('a2-01', ids(a2), { level: 'A2' }),
+    ]
+    const out = assignUnits(units, [...food, ...a2, c('new', 'A1', 'food', 14)], new Set(['gone1', 'gone2']), 4)
+    expect(out.find((u) => u.entry_ids.includes('new'))).toEqual({ unit_id: 'a1-03', level: 'A1', entry_ids: ['new'], group: 'mixed' })
+  })
+
+  it('leaves a new word without a theme to the groups', () => {
+    const food = members('f', 4, 'food', 10)
+    const out = assignUnits([unit('a1-01', ids(food))], [...food, c('new', 'A1', '', 14)], new Set(), 4)
+    expect(out[1]).toEqual({ unit_id: 'a1-02', level: 'A1', entry_ids: ['new'], group: 'mixed' })
   })
 })
 
