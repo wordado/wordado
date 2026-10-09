@@ -1,4 +1,4 @@
-import { useEffect, useRef, type RefObject } from 'react'
+import { useLayoutEffect, useRef, type RefObject } from 'react'
 
 /** A swipe counts from this much horizontal movement (px) on. */
 const MIN_DISTANCE = 60
@@ -12,12 +12,13 @@ const NOT_FROM = 'input, textarea, select, button, [role=dialog], dialog'
  * between renders: a swipe under way goes on, and ends with the handlers of the moment the finger lifts. */
 export function useSwipe(ref: RefObject<HTMLElement | null>, handlers: { onLeft(): void; onRight(): void }): void {
   // The listeners are attached once and read the handlers from here, so a render in the middle of a swipe does not
-  // take the listeners (and the swipe's start) away.
+  // take the listeners (and the swipe's start) away. Both in layout effects, like the keys (useKeys): they are there,
+  // with the handlers of this render, as soon as the element is on screen.
   const latest = useRef(handlers)
-  useEffect(() => {
+  useLayoutEffect(() => {
     latest.current = handlers
   })
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = ref.current
     if (!el) return
     let start: { id: number; x: number; y: number } | null = null
