@@ -2,9 +2,9 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { expect, test, type Browser, type Page } from '@playwright/test'
 
-const tokens = () => JSON.parse(readFileSync(join(import.meta.dirname, '..', '..', '.e2e', 'tokens.json'), 'utf8')) as { admin: string; reviewer: string; phone: string }
+const tokens = () => JSON.parse(readFileSync(join(import.meta.dirname, '..', '..', '.e2e', 'tokens.json'), 'utf8')) as { admin: string; reviewer: string; phone: string; hans: string }
 /** A page signed in as one of the fixture's people, with the running project's screen (a context made by hand does not get it by itself). */
-const as = async (browser: Browser, who: 'admin' | 'reviewer' | 'phone') => {
+const as = async (browser: Browser, who: 'admin' | 'reviewer' | 'phone' | 'hans') => {
   const { viewport, hasTouch } = test.info().project.use
   return (await browser.newContext({ extraHTTPHeaders: { 'cf-access-jwt-assertion': tokens()[who] }, ...(viewport ? { viewport } : {}), ...(hasTouch ? { hasTouch } : {}) })).newPage()
 }
@@ -272,6 +272,95 @@ test('an admin invites a reviewer and assigns files; an overlap is refused', asy
   await page.getByRole('button', { name: 'My work' }).click()
   await expect(page.getByRole('heading', { name: 'Your assignments' })).toBeVisible()
   await expect(page).not.toHaveURL(/#/)
+})
+
+// After the test above: its refusal names the assignment it meets first, and this one adds a spot check to the queue.
+test('an admin makes a spot check; its reviewer says how serious each fault was; the admin reads the result', async ({ browser }) => {
+  const admin = await as(browser, 'admin')
+  await admin.goto('/#assignments')
+  /** Fills the Spot check dialog and asks for the sample. */
+  const draw = async (reviewer: string, queue: string, rows: string) => {
+    await admin.getByRole('button', { name: 'Spot check' }).click()
+    const form = admin.getByRole('dialog', { name: 'Spot check' }).getByRole('form', { name: 'Spot check' })
+    await expect(form.getByLabel('Rows in the sample')).toHaveValue('50')
+    await form.getByLabel('Reviewer').selectOption(reviewer)
+    await form.getByLabel('Queue').selectOption(queue)
+    await form.getByLabel('Rows in the sample').fill(rows)
+    await form.getByRole('button', { name: 'Draw the sample' }).click()
+  }
+  const dialog = admin.getByRole('dialog', { name: 'Spot check' })
+  // Rita has the flagged rows of the Bulgarian translations: a spot check stands beside that.
+  await draw('hans@example.com', 'translation-bg', '4')
+  await expect(dialog).toBeHidden()
+  const spot = admin.getByRole('listitem').filter({ hasText: 'Bulgarian translations · spot check' })
+  await expect(spot).toContainText('Hans · 4 in the sample · checked 0 · fine 0 · minor 0 · serious 0')
+  // Not beside a second spot check of the queue, nor beside an assignment of every row (Petra has the levels).
+  await draw('reviewer@example.com', 'translation-bg', '4')
+  await expect(dialog.getByRole('alert')).toContainText('This queue already has an open spot check, with Hans')
+  await admin.keyboard.press('Escape')
+  await expect(dialog).toBeHidden()
+  await draw('reviewer@example.com', 'level', '2')
+  await expect(dialog.getByRole('alert')).toContainText('Petra is assigned every row')
+  await admin.keyboard.press('Escape')
+
+  const page = await as(browser, 'hans')
+  await page.goto('/')
+  const mine = page.getByRole('listitem').filter({ hasText: 'Bulgarian translations · spot check' })
+  await expect(mine).toContainText('4 rows · none decided yet')
+  await expect(mine).toContainText('These rows passed the AI review. Keep what is right, change what is wrong.')
+  await mine.getByRole('button', { name: 'Start' }).click()
+  await expect(page.getByText('1 of 4', { exact: true })).toBeVisible()
+  await expect(page.getByRole('banner').getByText('Bulgarian translations · spot check')).toBeVisible()
+  await expect(page.getByRole('main').getByText('Spot check. These rows passed the AI review.')).toBeVisible()
+  const article = page.getByRole('article')
+  const question = page.getByRole('group', { name: 'How serious was it?' })
+  /** The keys are off while a decision saves: waits for the next row to take them. */
+  const nextRow = async (after: string) => {
+    await expect(article).not.toHaveAttribute('aria-label', after)
+    await expect(page.getByRole('button', { name: /Keep/ })).toBeEnabled()
+    return (await article.getAttribute('aria-label'))!
+  }
+  // The rows passed the AI review: there is no fix to accept.
+  await expect(page.getByRole('button', { name: /Accept fix/ })).toBeDisabled()
+  const first = (await article.getAttribute('aria-label'))!
+  // Drop: the question, with what each answer means; Escape goes back, and nothing is decided.
+  await page.keyboard.press('4')
+  await expect(question).toBeVisible()
+  await expect(question.getByRole('button', { name: /Serious/ })).toContainText('a learner would be taught something wrong, or marked wrong for a right answer')
+  await expect(question.getByRole('button', { name: /Minor/ })).toContainText('right, but could be better')
+  await page.keyboard.press('Escape')
+  await expect(question).toBeHidden()
+  await expect(article).toHaveAttribute('aria-label', first)
+  await page.keyboard.press('4')
+  await page.keyboard.press('1')
+  const second = await nextRow(first)
+  // Edit: Enter in the field saves, the question follows, and 2 is Minor.
+  await page.keyboard.press('3')
+  await article.getByRole('textbox', { name: 'Translation' }).fill('поправка')
+  await page.keyboard.press('Enter')
+  await expect(question).toBeVisible()
+  await expect(article.getByRole('textbox', { name: 'Translation' })).toBeDisabled()
+  await page.keyboard.press('2')
+  const third = await nextRow(second)
+  // Keep means the row is fine: no question.
+  await page.keyboard.press('2')
+  await nextRow(third)
+  await expect(question).toBeHidden()
+  // A decided row shows what it was rated.
+  await page.getByRole('button', { name: 'All rows' }).click()
+  await expect(page.getByText('3 of 4 decided')).toBeVisible()
+  await page.getByRole('list', { name: 'Rows' }).getByRole('button', { name: first.replace(/^Row /, '') }).click()
+  await expect(article).toHaveAttribute('aria-label', first)
+  await expect(article.getByText('decided: drop')).toBeVisible()
+  await expect(article.getByText('rated serious')).toBeVisible()
+  await page.getByRole('button', { name: /Submit 3 decisions/ }).click()
+  await expect(page.getByRole('link', { name: /pull request \d+/ })).toBeVisible()
+  const state = (await (await fetch('http://127.0.0.1:4182/_state')).json()) as { pulls: { title: string }[] }
+  expect(state.pulls.at(-1)!.title).toBe('translation-bg: 3 decisions by Hans')
+
+  await admin.reload()
+  await expect(spot).toContainText('Hans · 4 in the sample · checked 3 · fine 1 · minor 1 · serious 1')
+  await expect(spot).toContainText(`Serious: ${first.replace(/^Row /, '')}`)
 })
 
 test('@phone an admin reads the Overview and moves between the tabs', async ({ browser }) => {
