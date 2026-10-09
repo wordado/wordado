@@ -204,6 +204,30 @@ describe('Path', () => {
     expect(within(food).getByText('cheese').closest('li')!.querySelector('.word-status')!.textContent).toBe('Known')
   })
 
+  it('shows a standing as a mark that is named in words, and says it in words at the top of the word’s menu (spec §7.4)', async () => {
+    const ctx = await setup()
+    renderWith(<Path />, ctx)
+    const food = unit('Food and drink')
+    fireEvent.click(within(food).getByText('20 words'))
+    const row = (headword: string) => within(food).getByText(headword).closest('li')!
+    await act(() => ctx.client.answer({ wordId: 'c:bread-1', mode: 'flashcard', direction: 'en_to_l1', grade: Grade.Good, latencyMs: 2_000, practice: false }))
+    await act(() => ctx.client.setFlag('c:cheese-1', 'suspended'))
+    for (const [headword, kind, words] of [['bread', 'learning', 'Learning'], ['cheese', 'suspended', 'Not now']] as const) {
+      const mark = row(headword).querySelector('.word-status')!
+      expect(mark.getAttribute('data-status')).toBe(kind)
+      // A shape, hidden from a screen reader, and the standing in words for it: never colour alone.
+      expect(mark.querySelector('svg')!.getAttribute('aria-hidden')).toBe('true')
+      expect(mark.querySelector('.visually-hidden')!.textContent).toBe(words)
+      wordMenu(row(headword), headword)
+      expect(row(headword).querySelector('.menu-standing')!.textContent).toBe(words)
+      fireEvent.keyDown(row(headword).querySelector('.word-menu')!, { key: 'Escape' })
+    }
+    // A word that was never started has neither.
+    wordMenu(row('milk'), 'milk')
+    expect(row('milk').querySelector('.word-status')).toBeNull()
+    expect(row('milk').querySelector('.menu-standing')).toBeNull()
+  })
+
   it('offers to play each word of a unit’s list, by name, when its clip can play; not otherwise (spec §11.1)', async () => {
     const ctx = await setup()
     const audio = fakeAudio({ streamable: () => true })
@@ -232,7 +256,7 @@ describe('Path', () => {
     fireEvent.click(within(food).getByText('20 words'))
     const row = (headword: string) => within(food).getByText(headword).closest('li')!
     const bread = row('bread')
-    expect(within(bread).getByText('To learn').getAttribute('data-status')).toBe('to-learn')
+    expect(within(bread).getByText('To learn').closest('.word-status')!.getAttribute('data-status')).toBe('to-learn')
     expect(row('cheese').querySelector('.word-status')).toBeNull()
     expect(within(food).getAllByText('To learn')).toHaveLength(1)
     // Started by the session, it is a word like any other; the level stays skipped.

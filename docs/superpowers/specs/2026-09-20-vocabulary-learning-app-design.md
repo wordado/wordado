@@ -752,11 +752,14 @@ The path's word list labels a chosen word "To learn" and can take the mark
 back; in a unit of a skipped level it can also mark a word that was never
 started, so the learner can pick words without playing a round. Each row
 of the list shows the word, its translation and a listen button, where the
-word's clip can play (§11.1). A row carries a label only for the word's own
-standing, which the unit cannot say: its mastery tier once started, "Known"
-or "Not now" when set aside, "To learn" when marked. A word that was never
-started has none, in a skipped level or any other: the unit's count and the
-level's line already say it.
+word's clip can play (§11.1). A row carries a mark only for the word's own
+standing, which the unit cannot say: a ring that fills with its mastery tier
+once started (a third, two thirds, whole), a check when "Known", a clock when
+"Not now", a book with a plus when marked "To learn". Each is a shape in the
+standing's colour, never colour alone; the standing in words is the mark's
+accessible name and the first line of the word's menu. A word that was never
+started has no mark, in a skipped level or any other: the unit's count and
+the level's line already say it.
 
 Each mark is a `word_learn` versioned document keyed by the word (§6.2, §9.2),
 apart from the word's flag, holding the time it was chosen, which orders the
@@ -2150,6 +2153,13 @@ product owner.
 - **Word list (§7.4):** each row shows the word's translation. "Not started"
   and "Skipped" (the latter added the day before) are no longer shown on a
   row; a label stays for a started, set-aside or marked word.
+
+**2026-10-09 — marks for a word's standing.** Decided by the product owner,
+to leave the row's room to the translation, above all on a phone.
+
+- **Word list (§7.4):** a word's standing in the path's list is a small mark,
+  a shape and a colour, where it was a text label; the words are the mark's
+  name and the first line of the word's menu.
 
 ### Approval status
 

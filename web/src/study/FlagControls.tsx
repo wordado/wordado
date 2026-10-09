@@ -91,9 +91,17 @@ export function FlagControls(props: {
     : canLearn
       ? action(t('study.learn'), { learn: true }, props.menu && <BookPlus aria-hidden="true" size={18} />)
       : null
-  // Behind a menu (the path's list) a word that was never started carries no label: its unit already says so, and
-  // the row keeps its room for the translation. A label there says what the unit cannot: this word's own standing.
-  const statusTag = props.menu && kind === 'new' ? null : (
+  // Behind a menu (the path's list) a word's own standing is a small mark, a shape and a colour, so the row keeps
+  // its room for the translation; its words are the mark's name, and the menu's first line. A word that was never
+  // started has none: its unit already says so.
+  const statusTag = props.menu ? (
+    kind === 'new' ? null : (
+      <span className="word-status is-mark" data-status={kind}>
+        <StandingMark kind={kind} />
+        <span className="visually-hidden">{status}</span>
+      </span>
+    )
+  ) : (
     <span className="word-status" data-status={kind}>
       {status}
     </span>
@@ -103,7 +111,7 @@ export function FlagControls(props: {
       {error}
     </p>
   )
-  if (props.menu) return <FlagMenu headword={props.headword} status={statusTag} error={errorLine} flagged={flag !== undefined} standing={`${flag ?? ''}:${chosen}`} learn={learnButton} button={button} />
+  if (props.menu) return <FlagMenu headword={props.headword} status={statusTag} standingLabel={kind === 'new' ? null : status} error={errorLine} flagged={flag !== undefined} standing={`${flag ?? ''}:${chosen}`} learn={learnButton} button={button} />
   return (
     <>
       {statusTag}
@@ -123,10 +131,28 @@ export function FlagControls(props: {
   )
 }
 
+/** A standing as a shape (spec §7.4): a ring that fills with the mastery tier, or the icon of the choice that set the word aside or marked it. */
+function StandingMark(props: { readonly kind: string }) {
+  const { kind } = props
+  if (kind === 'known') return <Check aria-hidden="true" size={20} strokeWidth={2.5} />
+  if (kind === 'suspended') return <Clock aria-hidden="true" size={20} />
+  if (kind === 'to-learn') return <BookPlus aria-hidden="true" size={20} />
+  // A third, two thirds, the whole ring: 2πr of r = 7 is about 44.
+  const share = kind === 'learning' ? 1 / 3 : kind === 'young' ? 2 / 3 : 1
+  return (
+    <svg aria-hidden="true" width="20" height="20" viewBox="0 0 20 20" fill="none" strokeWidth="3">
+      <circle className="mark-track" cx="10" cy="10" r="7" />
+      <circle cx="10" cy="10" r="7" stroke="currentColor" strokeLinecap="round" strokeDasharray={`${share * 43.98} 43.98`} transform="rotate(-90 10 10)" />
+    </svg>
+  )
+}
+
 /** The menu form: the status, then a ⋯ button naming the word, and the choices behind it. */
 function FlagMenu(props: {
   readonly headword: string
   readonly status: ReactNode
+  /** The standing in words, for the menu's first line; null for a word that has none. */
+  readonly standingLabel: string | null
   readonly error: ReactNode
   readonly flagged: boolean
   /** The word's flag and mark, as one value: when it changes, a choice was made. */
@@ -152,6 +178,7 @@ function FlagMenu(props: {
         </button>
         {open && (
           <div className="popover-panel menu-panel" id={panelId}>
+            {props.standingLabel !== null && <p className="menu-standing">{props.standingLabel}</p>}
             {props.flagged ? (
               props.button(t('flag.bringBack'), null, <Undo2 aria-hidden="true" size={18} />)
             ) : (
