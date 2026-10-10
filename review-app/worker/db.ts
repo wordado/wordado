@@ -453,7 +453,9 @@ export interface WeekCounts {
 /**
  * Counts the readings of the messages received from `since` up to, and not at, `until` (epoch ms): by category, with
  * the bugs that block; the `top` topics with the most messages; the bugs that block by topic, a row with no id for
- * those in none; and the topics made in the period. At most `listed` rows of each of the last two.
+ * those in none; and the new topics. At most `listed` rows of each of the last two. A topic is new in the period
+ * its first message came in, and not when it was made: the AI makes a topic when it reads a message, which for the
+ * weekly job is after the week has ended. A topic made before the period is not new, whatever is left of its messages.
  */
 export async function weekCounts(db: D1Database, period: { readonly since: number; readonly until: number }, top: number, listed: number): Promise<WeekCounts> {
   const { since, until } = period
@@ -468,7 +470,9 @@ export async function weekCounts(db: D1Database, period: { readonly since: numbe
          WHERE a.received_at >= ? AND a.received_at < ? AND a.category = 'bug' AND a.severity = 'blocks' GROUP BY t.id ORDER BY n DESC, t.id IS NULL, t.id DESC LIMIT ?`,
       )
       .bind(since, until, listed),
-    db.prepare('SELECT id, title FROM feedback_topics WHERE created_at >= ? AND created_at < ? ORDER BY id DESC LIMIT ?').bind(new Date(since).toISOString(), new Date(until).toISOString(), listed),
+    db
+      .prepare('SELECT t.id, t.title FROM feedback_topics t JOIN feedback_ai a ON a.topic_id = t.id WHERE t.created_at >= ? GROUP BY t.id HAVING MIN(a.received_at) >= ? AND MIN(a.received_at) < ? ORDER BY t.id DESC LIMIT ?')
+      .bind(new Date(since).toISOString(), since, until, listed),
   ])) as [{ results: WeekCounts['byCategory'] }, { results: WeekCounts['topTopics'] }, { results: WeekCounts['blocking'] }, { results: WeekCounts['newTopics'] }]
   return { byCategory: byCategory.results, topTopics: topTopics.results, blocking: blocking.results, newTopics: newTopics.results }
 }

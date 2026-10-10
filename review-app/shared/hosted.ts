@@ -273,7 +273,7 @@ export interface FeedbackWeek {
   readonly topTopics: readonly { readonly id: number; readonly title: string; readonly count: number }[]
   /** The blocking bugs by topic; `id` is null for those in no topic. */
   readonly blocking: readonly { readonly id: number | null; readonly title: string; readonly count: number }[]
-  /** The topics made in the period. */
+  /** The topics whose first message came in the period. */
   readonly newTopics: readonly FeedbackTopicRef[]
   /** A few sentences the AI wrote from the numbers and the titles alone, or null while there are none. */
   readonly paragraph: string | null

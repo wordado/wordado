@@ -89,6 +89,17 @@ describe('the week in numbers (spec 2026-10-10 §3.4)', () => {
     expect(week.newTopics.map((t) => t.title)).toEqual(['A dark theme'])
   })
 
+  it('takes a topic for new in the week its first message came, whenever the AI read that message', async () => {
+    // Made on the Monday after the week, when the weekly job read a message of the week: new in that week.
+    const late = (await insertTopicsIfAbsent(env.DB, ['Made by the weekly job'], '2026-10-12T06:00:00.000Z')).get('Made by the weekly job')!
+    // Made in the week, from a message that came before it: not new in it.
+    const early = (await insertTopicsIfAbsent(env.DB, ['Read late'], '2026-10-08T10:00:00.000Z')).get('Read late')!
+    // Made in the week, with no message left: not listed.
+    await insertTopicsIfAbsent(env.DB, ['Empty'], '2026-10-08T10:00:00.000Z')
+    await putFeedbackAi(env.DB, new Map([[40, aiRow({ topicId: late, receivedAt: inWeek(11) })], [41, aiRow({ topicId: early, receivedAt: inWeek(2) })], [42, aiRow({ topicId: early, receivedAt: inWeek(9) })]]))
+    expect((await weekNumbers(env.DB, period)).newTopics.map((t) => t.title)).toEqual(['Made by the weekly job', 'A dark theme'])
+  })
+
   it('names five topics at most', async () => {
     const more = await insertTopicsIfAbsent(env.DB, ['One', 'Two', 'Three', 'Four'].map((n) => `Topic ${n}`), '2026-09-01T00:00:00.000Z')
     await putFeedbackAi(env.DB, new Map([...more.values()].map((topicId, i) => [20 + i, aiRow({ topicId })])))
