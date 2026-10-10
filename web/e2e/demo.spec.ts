@@ -433,6 +433,48 @@ test('searches the themes for a word, and chooses a theme from what it finds', a
   await expect(page.getByRole('region', { name: 'Studying now' }).getByRole('heading', { name: 'Daily life' })).toBeVisible()
 })
 
+test('opens a theme’s page from Themes, reads its words, finds one and chooses the theme', async ({ page }) => {
+  await page.goto('/')
+  await finishSetup(page)
+  await page.goto('/themes')
+  await page.getByRole('link', { name: 'Daily life', exact: true }).click()
+  await expect(page).toHaveURL(/\/themes\/daily-life$/)
+  await expect(heading(page)).toHaveText('Daily life')
+  // Still under Themes in the menu.
+  await expect(page.getByRole('navigation').getByRole('link', { name: 'Themes' })).toHaveAttribute('aria-current', 'page')
+  const level = page.getByRole('button', { name: /^A1/ })
+  await expect(level).toHaveAttribute('aria-expanded', 'true')
+  await expect(level).toContainText('0 of 25 words started')
+  const rows = page.locator('.theme-words > li')
+  await expect(rows).toHaveCount(25)
+  await expect(rows.first()).toContainText('breakfast')
+  await expectAccessible(page, { dark: true })
+  // A word far along the path can be marked to learn from here.
+  const key = rows.filter({ hasText: 'ключ' })
+  await key.getByRole('button', { name: 'Word actions: key' }).click()
+  await key.getByRole('button', { name: 'Learn this word: key' }).click()
+  // The row's mark says so; the menu closes on the change, and names the standing too while it is still open.
+  await expect(key.locator('.word-status[data-status="to-learn"]')).toHaveText('To learn')
+  await expect(key.getByRole('button', { name: 'Learn this word: key' })).toHaveCount(0)
+  // The word search gives one list in place of the levels.
+  const search = page.getByRole('searchbox', { name: 'Find a word in this theme' })
+  await search.fill('маса')
+  await expect(page.getByRole('heading', { name: '1 word found' })).toBeVisible()
+  await expect(rows).toHaveCount(1)
+  await expect(rows).toContainText('table')
+  await expectAccessible(page, { dark: true })
+  await search.press('Escape')
+  await expect(rows).toHaveCount(25)
+  await page.getByRole('button', { name: 'Study this next' }).click()
+  await expect(heading(page)).toBeFocused()
+  await expect(page.locator('.theme-page [role="status"]')).toHaveText('Now studying: Daily life')
+  await page.getByRole('link', { name: 'Back to themes' }).click()
+  await expect(page.getByRole('region', { name: 'Studying now' }).getByRole('heading', { name: 'Daily life' })).toBeVisible()
+  // An address that names no theme on offer shows the themes.
+  await page.goto('/themes/nonsense')
+  await expect(heading(page)).toHaveText('Themes')
+})
+
 test('practises a whole theme that is not started, chooses a word to learn, and takes the theme up from the done screen', async ({ page }) => {
   await page.goto('/')
   await finishSetup(page)

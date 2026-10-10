@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { loadCorpus, MIN_THEME_SIZE } from './corpus'
 import type { Pack, PackEntry } from './pack'
-import { foldText, searchIndex, searchThemes, searchWords } from './search'
+import { foldText, searchEntries, searchIndex, searchThemes, searchWords } from './search'
 
 function entry(over: Partial<PackEntry> & Pick<PackEntry, 'entry_id'>): PackEntry {
   return {
@@ -140,5 +140,21 @@ describe('searchThemes', () => {
     // Level first, then the path.
     expect(result.unthemed.map((e) => e.entryId)).toEqual(['bank-2', 'banker-1', 'bank-3'])
     expect(searchThemes(searchIndex(pack), 'small')!.themes).toEqual([])
+  })
+})
+
+describe('searchEntries', () => {
+  const entries = [...corpus([...bank, entry({ entry_id: 'river-1', translation: 'река' })]).entries.values()]
+  const ids = (query: string) => searchEntries(entries, query)?.map((e) => e.entryId)
+
+  it('keeps the matching words of a list, in the list’s order', () => {
+    expect(ids('bank')).toEqual(['bank-1', 'bank-2'])
+    expect(ids('Река')).toEqual(['bank-2', 'river-1'])
+    expect(ids('bank река')).toEqual(['bank-2'])
+    expect(ids('qq')).toEqual([])
+  })
+
+  it('keeps every word without a query', () => {
+    expect(ids(' r ')).toBeUndefined()
   })
 })
