@@ -13,6 +13,9 @@ export interface WeekMail {
   readonly byKind: Readonly<Record<FeedbackKind, number>>
 }
 
+/** The mail service did not take a mail: `message` holds its status and nothing of the mail. */
+export class MailRefused extends Error {}
+
 export interface ReviewMailer {
   invite(to: string, name: string, languages: readonly Language[]): Promise<void>
   submitted(to: readonly string[], s: { name: string; count: number; queue: string; url: string }): Promise<void>
@@ -41,7 +44,7 @@ export function reviewMailer(deps: Pick<Deps, 'env' | 'fetch' | 'log'>): ReviewM
       headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, 'content-type': 'application/json' },
       body: JSON.stringify({ from: env.MAIL_FROM, to, subject, text }),
     })
-    if (!res.ok) throw new Error(`Resend refused the email: ${res.status}`)
+    if (!res.ok) throw new MailRefused(`Resend refused the email: ${res.status}`)
   }
   return {
     invite: (to, name, languages) =>
