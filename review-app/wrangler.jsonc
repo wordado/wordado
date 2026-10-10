@@ -13,6 +13,8 @@
     "ACCESS_TEAM_DOMAIN": "",
     "ACCESS_AUD": "",
     "CONTENT_REPO": "wordado/wordado-content",
+    // The public app repository: its open issues are read once a day, without a token (spec 2026-10-10 §3.3).
+    "APP_REPO": "wordado/wordado",
     "GITHUB_APP_ID": "",
     "GITHUB_INSTALLATION_ID": "",
     "MAIL_FROM": "Wordado Review <review@wordado.com>",
@@ -25,9 +27,10 @@
     "FEEDBACK_AI_DAILY_CALLS": "200",
     "FEEDBACK_READS": "en,bg"
   },
-  // The weekly feedback mail (spec 2026-10-10 §3.4): Monday 06:00 UTC, and its second try on Tuesday. Each line has
-  // its job in worker/index.ts. Written here and in env.production, so nothing depends on what an environment inherits.
-  "triggers": { "crons": ["0 6 * * 1", "0 6 * * 2"] },
+  // The weekly feedback mail (spec 2026-10-10 §3.4): Monday 06:00 UTC, and its second try on Tuesday. The open issues
+  // of the app's repository (§3.3): every day, 05:00 UTC. Each line has its job in worker/index.ts. Written here and
+  // in env.production, so nothing depends on what an environment inherits.
+  "triggers": { "crons": ["0 6 * * 1", "0 6 * * 2", "0 5 * * *"] },
   "observability": { "enabled": true },
   "env": {
     "production": {
@@ -37,13 +40,17 @@
       // a deploy while any is still the placeholder. ADMIN_EMAIL, FEEDBACK_READ_TOKEN, FEEDBACK_AI_KEY and the keys are secrets, not vars.
       "d1_databases": [{ "binding": "DB", "database_name": "wordado-review", "database_id": "b52cb790-18a9-485d-8e40-4d78af13e324", "migrations_dir": "migrations" }],
       "r2_buckets": [{ "binding": "SNAPSHOTS", "bucket_name": "wordado-review" }],
-      // The weekly feedback mail, Monday 06:00 UTC, and its second try on Tuesday (as at the top level).
-      "triggers": { "crons": ["0 6 * * 1", "0 6 * * 2"] },
+      // The weekly feedback mail, Monday 06:00 UTC, and its second try on Tuesday; the open issues, every day
+      // 05:00 UTC (as at the top level).
+      "triggers": { "crons": ["0 6 * * 1", "0 6 * * 2", "0 5 * * *"] },
       "vars": {
         "APP_ORIGIN": "https://review.wordado.com",
         "ACCESS_TEAM_DOMAIN": "wordado.cloudflareaccess.com",
         "ACCESS_AUD": "01070f9e8cb88c84b710cb53794ae60e5bb109c408fd474f679f571409b2125b",
         "CONTENT_REPO": "wordado/wordado-content",
+        // The public app repository, whose open issues the AI help matches topics against (spec 2026-10-10 §3.3).
+        // They are read from GitHub's public API with no token: the review app has no access to that repository.
+        "APP_REPO": "wordado/wordado",
         "GITHUB_APP_ID": "5208152",
         "GITHUB_INSTALLATION_ID": "168429558",
         "MAIL_FROM": "Wordado Review <review@wordado.com>",

@@ -29,15 +29,22 @@ function itemOf(raw: unknown): FeedbackItem | null {
   return { id, receivedAt, kind: kind as FeedbackKind, message, contactEmail, signedIn, appVersion, corpusVersion, language, screen, userAgent }
 }
 
-/** What is asked of the server: how many messages, and optionally of one kind, older than an id, received at or after a moment (epoch ms). */
-export interface FeedbackQuery { readonly limit: number; readonly kind?: FeedbackKind | null; readonly before?: number | null; readonly since?: number | null }
+/** What is asked of the server: how many messages, and optionally of one kind, older than an id, received at or after
+ * a moment (epoch ms), or the messages of some ids alone (1 to 100 of them). */
+export interface FeedbackQuery { readonly limit: number; readonly kind?: FeedbackKind | null; readonly before?: number | null; readonly since?: number | null; readonly ids?: readonly number[] | null }
 
-/** One page of feedback from the learner app's server, newest first: a single request, with the shared token. */
-export async function readFeedback(deps: Pick<Deps, 'fetch' | 'log'>, source: FeedbackSource, q: FeedbackQuery): Promise<{ items: FeedbackItem[]; nextBefore: number | null }> {
+/**
+ * One page of feedback from the learner app's server, newest first: a single request, with the shared token.
+ * Asked by `ids`, a message that was not asked for is dropped and counted in `others`: a server from before `ids`
+ * ignores the parameter and gives its newest page, so with `others` above 0 (or a `nextBefore`) what is missing
+ * from `items` may only be unread, not gone.
+ */
+export async function readFeedback(deps: Pick<Deps, 'fetch' | 'log'>, source: FeedbackSource, q: FeedbackQuery): Promise<{ items: FeedbackItem[]; nextBefore: number | null; others: number }> {
   const query = new URLSearchParams({ limit: String(q.limit) })
   if (q.kind) query.set('kind', q.kind)
   if (typeof q.before === 'number') query.set('before', String(q.before))
   if (typeof q.since === 'number') query.set('since', String(q.since))
+  if (q.ids) query.set('ids', q.ids.join(','))
   let res: Response
   try {
     // A redirect is not followed: the token goes to the server it was made for and nowhere else.
@@ -62,5 +69,8 @@ export async function readFeedback(deps: Pick<Deps, 'fetch' | 'log'>, source: Fe
     deps.log('feedback: the answer of the app’s server was not a page of feedback')
     throw new FeedbackUnread('The app’s server gave an answer the review app does not understand.')
   }
-  return { items: items as FeedbackItem[], nextBefore: next }
+  const given = items as FeedbackItem[]
+  const asked = q.ids ? new Set(q.ids) : null
+  const kept = asked ? given.filter((item) => asked.has(item.id)) : given
+  return { items: kept, nextBefore: next, others: given.length - kept.length }
 }

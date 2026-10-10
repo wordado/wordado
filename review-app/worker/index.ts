@@ -1,5 +1,6 @@
 import { createApp, type Deps } from './app'
 import type { Env, ScheduledController } from './bindings'
+import { refreshOpenIssues } from './openIssues'
 import { runWeekly } from './weekly'
 
 const depsOf = (env: Env): Deps => ({ env, fetch: (input, init) => fetch(input, init), now: () => new Date(), log: (line) => console.log(line), sleep: (ms) => new Promise((done) => setTimeout(done, ms)) })
@@ -9,6 +10,8 @@ export const JOBS: Readonly<Record<string, (deps: Deps) => Promise<unknown>>> = 
   // The weekly feedback mail (spec 2026-10-10 §3.4): Monday 06:00 UTC, and a second try on Tuesday that does nothing after a Monday that worked.
   '0 6 * * 1': runWeekly,
   '0 6 * * 2': runWeekly,
+  // The open issues of the app's repository (spec 2026-10-10 §3.3): once a day, 05:00 UTC.
+  '0 5 * * *': refreshOpenIssues,
 }
 
 export default {

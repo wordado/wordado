@@ -28,9 +28,12 @@ export interface Env {
   /** A secret; when unset no first admin is created (the Worker logs a warning). */
   readonly ADMIN_EMAIL?: string
   readonly CONTENT_REPO: string
+  /** The public app repository, `owner/name`: its open issues are read once a day, without a token, for the AI help on feedback to match topics against
+   * (spec 2026-10-10 §3.3). Unset, none are read and no match is proposed. */
+  readonly APP_REPO?: string
   readonly GITHUB_APP_ID: string
   readonly GITHUB_INSTALLATION_ID: string
-  /** Tests and e2e only: a fake GitHub API's base URL. */
+  /** Tests and e2e only: a fake GitHub API's base URL, for the content repository and for the read of the app repository's open issues. */
   readonly GITHUB_API_URL?: string
   readonly GITHUB_APP_PRIVATE_KEY?: string
   readonly GITHUB_WEBHOOK_SECRET?: string

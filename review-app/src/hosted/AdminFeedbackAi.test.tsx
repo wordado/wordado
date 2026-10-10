@@ -6,7 +6,7 @@ import { AdminFeedbackAi, AI_PRIVACY_NOTE } from './AdminFeedbackAi'
 
 afterEach(() => (cleanup(), vi.restoreAllMocks()))
 
-const status = (over: Partial<FeedbackAiStatus> = {}): FeedbackAiStatus => ({ setUp: true, needs: null, on: false, model: 'test/model', callsToday: 0, dailyCalls: 200, reads: ['en', 'bg'], ...over })
+const status = (over: Partial<FeedbackAiStatus> = {}): FeedbackAiStatus => ({ setUp: true, needs: null, on: false, model: 'test/model', callsToday: 0, dailyCalls: 200, reads: ['en', 'bg'], repo: 'wordado/wordado', ...over })
 
 function shown(first: FeedbackAiStatus | null | 'failed') {
   const onStatus = vi.fn()
@@ -100,7 +100,7 @@ describe('AdminFeedbackAi: the switch and what it says', () => {
     const { panel, onForgotten } = shown(status({ on: true }))
     fireEvent.click(within(panel).getByRole('button', { name: 'Forget the AI’s results' }))
     const dialog = await screen.findByRole('dialog', { name: 'Forget the AI’s results' })
-    expect(within(dialog).getByText('Everything the AI wrote about the feedback is removed. Your marks and notes stay. It is made again as pages are read.')).toBeTruthy()
+    expect(within(dialog).getByText('Everything the AI wrote about the feedback is removed, and with it the topics you have not worked on and where you moved messages. Your marks and notes stay. It is made again as pages are read.')).toBeTruthy()
     expect(forget).not.toHaveBeenCalled()
     fireEvent.click(within(dialog).getByRole('button', { name: 'Forget them' }))
     await waitFor(() => expect(onForgotten).toHaveBeenCalledTimes(1))

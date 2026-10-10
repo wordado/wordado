@@ -1,15 +1,19 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { FeedbackAi, FeedbackAiRead, FeedbackAiStatus, FeedbackList, FeedbackView } from '../../shared/hosted'
+import type { FeedbackAiRead, FeedbackAiView, FeedbackAiStatus, FeedbackList, FeedbackView } from '../../shared/hosted'
 import { hostedApi } from '../hostedApi'
 import { AdminFeedback } from './AdminFeedback'
 import { dateOf } from './adminUtil'
 
 afterEach(() => (cleanup(), vi.restoreAllMocks()))
 
-const aiStatus = (over: Partial<FeedbackAiStatus> = {}): FeedbackAiStatus => ({ setUp: true, needs: null, on: true, model: 'test/model', callsToday: 3, dailyCalls: 200, reads: ['en', 'bg'], ...over })
+const aiStatus = (over: Partial<FeedbackAiStatus> = {}): FeedbackAiStatus => ({ setUp: true, needs: null, on: true, model: 'test/model', callsToday: 3, dailyCalls: 200, reads: ['en', 'bg'], repo: 'wordado/wordado', ...over })
 // Without the key, as a deployment is before the owner sets it: the tab is what it was before there was any AI help.
-beforeEach(() => void vi.spyOn(hostedApi.admin, 'feedbackAi').mockResolvedValue(aiStatus({ setUp: false, needs: 'FEEDBACK_AI_KEY', on: false })))
+beforeEach(() => {
+  vi.spyOn(hostedApi.admin, 'feedbackAi').mockResolvedValue(aiStatus({ setUp: false, needs: 'FEEDBACK_AI_KEY', on: false }))
+  // No topics: a card then shows its message's topic, when it has one, and offers no other.
+  vi.spyOn(hostedApi.admin, 'feedbackTopics').mockResolvedValue([])
+})
 
 const item = (id: number, over: Partial<FeedbackView> = {}): FeedbackView => ({
   id,
@@ -274,7 +278,7 @@ describe('AdminFeedback', () => {
   })
 })
 
-const reading = (over: Partial<FeedbackAi> = {}): FeedbackAi => ({ language: 'en', translation: '', category: 'idea', severity: null, summary: 'Wants a dark theme.', ...over })
+const reading = (over: Partial<FeedbackAiView> = {}): FeedbackAiView => ({ language: 'en', translation: '', category: 'idea', severity: null, summary: 'Wants a dark theme.', topic: null, ...over })
 const german = item(7, { kind: 'other', language: 'de', message: 'Der Ton wird zweimal abgespielt.', ai: reading({ language: 'de', translation: 'The sound plays twice.', category: 'bug', severity: 'annoys', summary: 'The sound of a word plays twice.' }) })
 const thanks = item(6, { kind: 'other', message: 'Благодаря за приложението!', ai: reading({ language: 'bg', category: 'praise', summary: 'Thanks for the app.' }) })
 const advert = item(5, { kind: 'other', message: 'Cheap watches at example.com', ai: reading({ category: 'junk', summary: 'An advertisement.' }) })

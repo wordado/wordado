@@ -33,8 +33,41 @@ export const AI_ANSWERS: Readonly<Record<number, FeedbackAi>> = {
   15: { language: 'en', translation: '', category: 'praise', severity: null, summary: 'Thanks for the app.' },
 }
 
-/** The stand-in model's answer to a request: the reading written down for each message it was given, in the answer's own words ("none" for no severity). */
+/** The topics the stand-in model makes (spec 2026-10-10 §3.2). The desktop run works on the first, the phone run on the second, and nobody on the third. */
+export const SOUND_TOPIC = 'Sound plays twice on phones'
+export const WORDS_TOPIC = 'Choose the number of new words'
+export const PATH_TOPIC = 'Path stays white after a unit'
+
+/** The open issues of the app's repository, as the fake GitHub lists them and as the review app has them kept. */
+export const KNOWN_ISSUES: readonly { readonly number: number; readonly title: string }[] = [
+  { number: 94, title: 'The sound of a word plays twice on a phone' },
+  { number: 95, title: 'Let learners choose how many new words a day' },
+]
+
+/** The topic the stand-in model puts a message in, by the message's id, and the known issue it names with it: the
+ * German and the English message about the sound share one, the Spanish and the English one about the number of
+ * words another. A message that is not here is put in none. */
+export const AI_TOPICS: Readonly<Record<number, { readonly title: string; readonly issue?: number }>> = {
+  8: { title: WORDS_TOPIC, issue: 95 },
+  9: { title: SOUND_TOPIC, issue: 94 },
+  12: { title: PATH_TOPIC },
+  13: { title: WORDS_TOPIC, issue: 95 },
+  14: { title: SOUND_TOPIC, issue: 94 },
+}
+
+/** The stand-in model's answer to a request: the reading written down for each message it was given, in the answer's
+ * own words ("none" for no severity, 0 for no topic and no issue). As a model is asked to, it names a topic it was
+ * given by its id, and gives a title only for one it was not given; it names an issue only when it was given it. */
 export function standInAnswer(_name: string, input: unknown): unknown {
-  const messages = (input as { messages?: { id: number }[] }).messages ?? []
-  return { results: messages.flatMap((m) => (AI_ANSWERS[m.id] ? [{ id: m.id, ...AI_ANSWERS[m.id], severity: AI_ANSWERS[m.id]!.severity ?? 'none' }] : [])) }
+  const { messages = [], topics = [], issues = [] } = input as { messages?: { id: number }[]; topics?: { id: number; title: string }[]; issues?: { number: number }[] }
+  return {
+    results: messages.flatMap((m) => {
+      const reading = AI_ANSWERS[m.id]
+      if (!reading) return []
+      const topic = AI_TOPICS[m.id]
+      const given = topic ? topics.find((t) => t.title === topic.title) : undefined
+      const issue = topic?.issue !== undefined && issues.some((i) => i.number === topic.issue) ? topic.issue : 0
+      return [{ id: m.id, ...reading, severity: reading.severity ?? 'none', topic_id: given?.id ?? 0, topic_new: topic && !given ? topic.title : '', issue }]
+    }),
+  }
 }

@@ -8,6 +8,9 @@ import type {
   FeedbackMark,
   FeedbackState,
   FeedbackStateFilter,
+  FeedbackTopicOpened,
+  FeedbackTopicRef,
+  FeedbackTopicView,
   HostedDecisionRequest,
   Language,
   Me,
@@ -92,5 +95,17 @@ export const hostedApi = {
     /** Has the AI read one page of the list, named as the list names it. No message goes from the browser: the Worker reads the page itself. */
     readFeedbackAi: (q: { kind: FeedbackKind | ''; before?: number }) => send<FeedbackAiRead>('POST', '/api/admin/feedback/ai/read', { kind: q.kind, before: q.before ?? null }),
     forgetFeedbackAi: () => send<{ forgotten: number }>('DELETE', '/api/admin/feedback/ai/results', {}),
+    /** The feedback by topic (spec 2026-10-10 §3.2): one line a topic, the one with the newest message first. */
+    feedbackTopics: () => get<FeedbackTopicView[]>('/api/admin/feedback/topics'),
+    /** A topic's newest messages, as the list of messages gives them. */
+    feedbackTopic: (id: number) => get<FeedbackTopicOpened>(`/api/admin/feedback/topics/${id}`),
+    /** A topic's title, state and note, all three each time; `marked` is how many of its messages were marked done with it. */
+    putFeedbackTopic: (id: number, topic: { title: string; state: FeedbackState; note: string }) => send<{ topic: FeedbackTopicView; marked: number }>('PUT', `/api/admin/feedback/topics/${id}`, topic),
+    /** Merges a topic into another, and answers that other one. */
+    mergeFeedbackTopic: (id: number, into: number) => send<FeedbackTopicView>('POST', `/api/admin/feedback/topics/${id}/merge`, { into }),
+    /** Moves a message to a topic: the coordinator's choice, which the AI does not change again. */
+    moveFeedback: (id: number, topic: number) => send<{ id: number; topic: FeedbackTopicRef | null }>('PUT', `/api/admin/feedback/${id}/topic`, { topic }),
+    /** A topic's match with a known issue: a number confirms it, null removes it. */
+    setFeedbackTopicIssue: (id: number, issue: number | null) => send<FeedbackTopicView>('PUT', `/api/admin/feedback/topics/${id}/issue`, { issue }),
   },
 }

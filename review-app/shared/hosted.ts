@@ -191,11 +191,51 @@ export interface FeedbackAi {
   readonly summary: string
 }
 
+/** A topic's title: one line, in our words. It is shown in the tab and may be named in a mail. */
+export const MIN_TOPIC_TITLE_LENGTH = 3
+export const MAX_TOPIC_TITLE_LENGTH = 80
+/** A topic's match with a known issue (spec 2026-10-10 §3.3): none, proposed by the AI, confirmed by the coordinator
+ * (or a number they typed), or removed by the coordinator, after which the AI proposes none for the topic again. */
+export type TopicIssueState = 'none' | 'proposed' | 'confirmed' | 'removed'
+
+/** The topic a message is in (spec 2026-10-10 §3.2). */
+export interface FeedbackTopicRef {
+  readonly id: number
+  readonly title: string
+}
+
+/** A topic as the By topic view lists it. `count`, `newestAt` and `worst` are of its messages that have a reading;
+ * the last two are null when it has none, or no bug. `issueTitle` is the issue's title while it is among the open ones last read. */
+export interface FeedbackTopicView extends FeedbackTopicRef {
+  readonly state: FeedbackState
+  readonly note: string
+  readonly issue: number | null
+  readonly issueState: TopicIssueState
+  readonly issueTitle: string | null
+  readonly count: number
+  readonly newestAt: number | null
+  readonly worst: FeedbackSeverity | null
+}
+
+/** `GET /api/admin/feedback/topics/:id`: the topic and its newest messages, as the list of messages gives them.
+ * `more` is how many older messages it has beside them. `incomplete`: the learner app's server did not answer by id
+ * (it is from before that), so messages may be missing from `items` that it still has. */
+export interface FeedbackTopicOpened {
+  readonly topic: FeedbackTopicView
+  readonly items: readonly FeedbackView[]
+  readonly more: number
+  readonly incomplete: boolean
+}
+
+/** The AI's reading of a message as the tab shows it: with the topic the message is in now, which the AI or the coordinator chose, or none. */
+export type FeedbackAiView = FeedbackAi & { readonly topic: FeedbackTopicRef | null }
+
 /** A message as the learner app's server gives it, with the coordinator's mark and, when there is one, the AI's reading. */
-export type FeedbackView = FeedbackItem & FeedbackMark & { readonly ai: FeedbackAi | null }
+export type FeedbackView = FeedbackItem & FeedbackMark & { readonly ai: FeedbackAiView | null }
 
 /** `GET /api/admin/feedback/ai`. `setUp`: the sign-in, the secret and the address are there. `needs`: the first setting that is missing or wrong while
- * it is not. `on`: an admin switched it on. `reads`: the languages that need no translation. */
+ * it is not. `on`: an admin switched it on. `reads`: the languages that need no translation. `repo`: the public app repository whose issues a topic's
+ * match links to, as owner/name, or empty when none is set. */
 export interface FeedbackAiStatus {
   readonly setUp: boolean
   readonly needs: 'FEEDBACK_AI_AUTH' | 'FEEDBACK_AI_KEY' | 'FEEDBACK_AI_URL' | null
@@ -204,14 +244,16 @@ export interface FeedbackAiStatus {
   readonly callsToday: number
   readonly dailyCalls: number
   readonly reads: readonly string[]
+  readonly repo: string
 }
 
 /** Why the AI gave nothing: switched off, no key, the day's limit, not reached, late, refused by the service, or an answer that did not fit. */
 export type FeedbackAiWhy = 'off' | 'not-set-up' | 'limit' | 'unreachable' | 'late' | 'refused' | 'unfit'
 
-/** `POST /api/admin/feedback/ai/read`: the new results by message id; how many messages were sent; how many still have none. */
+/** `POST /api/admin/feedback/ai/read`: the readings of the page's messages by message id, the new ones and those of this prompt version kept
+ * before (none when the AI gave nothing); how many messages were sent; how many still have none. */
 export interface FeedbackAiRead {
-  readonly results: Readonly<Record<number, FeedbackAi>>
+  readonly results: Readonly<Record<number, FeedbackAiView>>
   readonly asked: number
   readonly left: number
   readonly why: FeedbackAiWhy | null

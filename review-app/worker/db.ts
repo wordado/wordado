@@ -1,5 +1,5 @@
 import type { D1Database } from './bindings'
-import type { FeedbackAi, FeedbackCategory, FeedbackSeverity, FeedbackState, Language, ReviewerView, Role, SampleRef, Severity } from '../shared/hosted'
+import { MAX_FEEDBACK_NOTE_LENGTH, type FeedbackAi, type FeedbackCategory, type FeedbackSeverity, type FeedbackState, type FeedbackTopicRef, type FeedbackTopicView, type Language, type ReviewerView, type Role, type SampleRef, type Severity, type TopicIssueState } from '../shared/hosted'
 import type { Action } from '../server/types'
 
 export interface ReviewerRow {
@@ -253,37 +253,193 @@ export async function releaseWeeklyMail(db: D1Database, week: string): Promise<v
   await db.prepare('DELETE FROM weekly_mails WHERE week = ? AND messages IS NULL').bind(week).run()
 }
 
-/** The AI's reading of a message as it is kept (spec 2026-10-10 §4): with the message's own time, the model and the prompt version that made it. */
-export interface FeedbackAiRow extends FeedbackAi { readonly receivedAt: number; readonly model: string; readonly promptVersion: number; readonly createdAt: string }
-interface FeedbackAiRecord { feedback_id: number; received_at: number; language: string; translation: string; category: FeedbackCategory; severity: FeedbackSeverity | null; summary: string; model: string; prompt_version: number; created_at: string }
+/** The AI's reading of a message as it is kept (spec 2026-10-10 §4): with the message's own time, the model and the
+ * prompt version that made it, and the topic the reading puts it in (none when left out). */
+export interface FeedbackAiRow extends FeedbackAi { readonly receivedAt: number; readonly model: string; readonly promptVersion: number; readonly createdAt: string; readonly topicId?: number | null }
+/** A reading as it is read back: with the topic the message is in now, its title, and who put it there. */
+export interface FeedbackAiStored extends FeedbackAiRow { readonly topicId: number | null; readonly topicBy: 'ai' | 'coordinator'; readonly topicTitle: string | null }
+interface FeedbackAiRecord { feedback_id: number; received_at: number; language: string; translation: string; category: FeedbackCategory; severity: FeedbackSeverity | null; summary: string; model: string; prompt_version: number; created_at: string; topic_id: number | null; topic_by: 'ai' | 'coordinator'; topic_title: string | null }
 /** The AI's readings of these messages, by id; a message it has not read is not in it. At most a page of ids (D1 binds 100 values). */
-export async function feedbackAiRows(db: D1Database, ids: readonly number[]): Promise<Map<number, FeedbackAiRow>> {
-  const out = new Map<number, FeedbackAiRow>()
+export async function feedbackAiRows(db: D1Database, ids: readonly number[]): Promise<Map<number, FeedbackAiStored>> {
+  const out = new Map<number, FeedbackAiStored>()
   if (ids.length === 0) return out
-  const found = await db.prepare(`SELECT * FROM feedback_ai WHERE feedback_id IN (${ids.map(() => '?').join(', ')})`).bind(...ids).all<FeedbackAiRecord>()
+  const found = await db
+    .prepare(`SELECT a.*, t.title AS topic_title FROM feedback_ai a LEFT JOIN feedback_topics t ON t.id = a.topic_id WHERE a.feedback_id IN (${ids.map(() => '?').join(', ')})`)
+    .bind(...ids)
+    .all<FeedbackAiRecord>()
   for (const r of found.results) {
-    out.set(r.feedback_id, { language: r.language, translation: r.translation, category: r.category, severity: r.severity, summary: r.summary, receivedAt: r.received_at, model: r.model, promptVersion: r.prompt_version, createdAt: r.created_at })
+    out.set(r.feedback_id, {
+      language: r.language, translation: r.translation, category: r.category, severity: r.severity, summary: r.summary, receivedAt: r.received_at, model: r.model, promptVersion: r.prompt_version, createdAt: r.created_at,
+      topicId: r.topic_id, topicBy: r.topic_by, topicTitle: r.topic_title,
+    })
   }
   return out
 }
-/** Keeps these readings, each in place of the one its message had: one batch. */
+/**
+ * Keeps these readings, each in place of the one its message had: one batch. A reading brings its message's topic,
+ * except for a message the coordinator moved: that one keeps the coordinator's topic whatever the reading says
+ * (spec 2026-10-10 §3.2). A topic that is gone by now leaves the message with none.
+ */
 export async function putFeedbackAi(db: D1Database, rows: ReadonlyMap<number, FeedbackAiRow>): Promise<void> {
   if (rows.size === 0) return
   const put = db.prepare(
-    `INSERT INTO feedback_ai (feedback_id, received_at, language, translation, category, severity, summary, model, prompt_version, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO feedback_ai (feedback_id, received_at, language, translation, category, severity, summary, model, prompt_version, created_at, topic_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT id FROM feedback_topics WHERE id = ?))
      ON CONFLICT (feedback_id) DO UPDATE SET received_at = excluded.received_at, language = excluded.language, translation = excluded.translation, category = excluded.category,
-       severity = excluded.severity, summary = excluded.summary, model = excluded.model, prompt_version = excluded.prompt_version, created_at = excluded.created_at`,
+       severity = excluded.severity, summary = excluded.summary, model = excluded.model, prompt_version = excluded.prompt_version, created_at = excluded.created_at,
+       topic_id = CASE WHEN feedback_ai.topic_by = 'coordinator' THEN feedback_ai.topic_id ELSE excluded.topic_id END`,
   )
-  await db.batch([...rows].map(([id, r]) => put.bind(id, r.receivedAt, r.language, r.translation, r.category, r.severity, r.summary, r.model, r.promptVersion, r.createdAt)))
+  await db.batch([...rows].map(([id, r]) => put.bind(id, r.receivedAt, r.language, r.translation, r.category, r.severity, r.summary, r.model, r.promptVersion, r.createdAt, r.topicId ?? null)))
 }
 /** Drops the readings between two ids whose message the server no longer gives: how many. `kept` is at most a page of ids. */
 export async function dropFeedbackAiNotIn(db: D1Database, lowest: number, highest: number, kept: readonly number[]): Promise<number> {
   const not = kept.length > 0 ? ` AND feedback_id NOT IN (${kept.map(() => '?').join(', ')})` : ''
   return (await db.prepare(`DELETE FROM feedback_ai WHERE feedback_id BETWEEN ? AND ?${not}`).bind(lowest, highest, ...kept).run()).meta.changes
 }
-/** Drops every reading: how many. The marks and the count of calls stay. */
+/** Drops the readings of these messages: how many. At most a page of ids. */
+export async function dropFeedbackAi(db: D1Database, ids: readonly number[]): Promise<number> {
+  if (ids.length === 0) return 0
+  return (await db.prepare(`DELETE FROM feedback_ai WHERE feedback_id IN (${ids.map(() => '?').join(', ')})`).bind(...ids).run()).meta.changes
+}
+/** Drops every reading: how many. With them go the topics nobody has worked on, which the AI alone made; a topic the
+ * coordinator renamed, marked, noted or matched stays, empty. The marks and the count of calls stay. */
 export async function forgetFeedbackAi(db: D1Database): Promise<number> {
-  return (await db.prepare('DELETE FROM feedback_ai').run()).meta.changes
+  const [readings] = (await db.batch([db.prepare('DELETE FROM feedback_ai'), db.prepare('DELETE FROM feedback_topics WHERE updated_by IS NULL')])) as { meta: { changes: number } }[]
+  return readings?.meta.changes ?? 0
+}
+
+interface TopicRecord { id: number; title: string; state: FeedbackState; note: string; issue: number | null; issue_state: TopicIssueState; issue_title: string | null; n: number; newest: number | null; worst: number | null }
+const WORST: readonly (FeedbackSeverity | null)[] = [null, 'blocks', 'annoys', 'cosmetic']
+const topicView = (r: TopicRecord): FeedbackTopicView => ({
+  id: r.id, title: r.title, state: r.state, note: r.note, issue: r.issue, issueState: r.issue_state, issueTitle: r.issue_title, count: r.n, newestAt: r.newest, worst: WORST[r.worst ?? 0] ?? null,
+})
+/** A topic with what is counted of its messages: one query. The worst severity is the lowest of 1 (blocks) to 3 (cosmetic). */
+const TOPICS = `SELECT t.id, t.title, t.state, t.note, t.issue, t.issue_state, o.title AS issue_title, COUNT(a.feedback_id) AS n, MAX(a.received_at) AS newest,
+    MIN(CASE a.severity WHEN 'blocks' THEN 1 WHEN 'annoys' THEN 2 WHEN 'cosmetic' THEN 3 END) AS worst
+  FROM feedback_topics t LEFT JOIN feedback_ai a ON a.topic_id = t.id LEFT JOIN open_issues o ON o.number = t.issue`
+/** The most topics the By topic view lists. */
+export const TOPICS_LISTED = 500
+/** The topics, the one with the newest message first (spec 2026-10-10 §3.2). A topic with no message is listed only
+ * once the coordinator has worked on it, after the others. */
+export async function listTopics(db: D1Database): Promise<FeedbackTopicView[]> {
+  const found = await db.prepare(`${TOPICS} GROUP BY t.id HAVING n > 0 OR t.updated_by IS NOT NULL ORDER BY newest IS NULL, newest DESC, t.id DESC LIMIT ?`).bind(TOPICS_LISTED).all<TopicRecord>()
+  return found.results.map(topicView)
+}
+export async function getTopic(db: D1Database, id: number): Promise<FeedbackTopicView | null> {
+  const r = await db.prepare(`${TOPICS} WHERE t.id = ? GROUP BY t.id`).bind(id).first<TopicRecord>()
+  return r ? topicView(r) : null
+}
+/** The titles the model is given to choose from: of the topics whose messages are the newest, then of those with none. */
+export async function topicTitles(db: D1Database, limit: number): Promise<FeedbackTopicRef[]> {
+  const found = await db
+    .prepare('SELECT t.id, t.title FROM feedback_topics t LEFT JOIN feedback_ai a ON a.topic_id = t.id GROUP BY t.id ORDER BY MAX(a.received_at) IS NULL, MAX(a.received_at) DESC, t.id DESC LIMIT ?')
+    .bind(limit)
+    .all<FeedbackTopicRef>()
+  return found.results
+}
+/** As the database compares titles (COLLATE NOCASE): without regard to the case of A to Z. */
+const sameTitle = (title: string) => title.replace(/[A-Z]/g, (letter) => letter.toLowerCase())
+/** Makes a topic for each title that no topic has yet, and gives each title's topic: a title that differs from an
+ * existing one only in case is that topic. One batch and one read; at most a call's worth of titles. */
+export async function insertTopicsIfAbsent(db: D1Database, titles: readonly string[], at: string): Promise<Map<string, number>> {
+  const out = new Map<string, number>()
+  if (titles.length === 0) return out
+  const insert = db.prepare('INSERT INTO feedback_topics (title, created_at, updated_at) VALUES (?, ?, ?) ON CONFLICT (title) DO NOTHING')
+  await db.batch(titles.map((title) => insert.bind(title, at, at)))
+  const found = await db.prepare(`SELECT id, title FROM feedback_topics WHERE title IN (${titles.map(() => '?').join(', ')})`).bind(...titles).all<FeedbackTopicRef>()
+  const ids = new Map(found.results.map((r) => [sameTitle(r.title), r.id]))
+  for (const title of titles) {
+    const id = ids.get(sameTitle(title))
+    if (id !== undefined) out.set(title, id)
+  }
+  return out
+}
+/** Sets a topic's title, state and note, all three each time. A title that changed marks the topic as renamed; a
+ * title another topic has is refused, since two topics about one thing are to be merged. */
+export async function putTopic(db: D1Database, id: number, t: { readonly title: string; readonly state: FeedbackState; readonly note: string }, by: string, at: string): Promise<'ok' | 'missing' | 'title-taken'> {
+  if ((await db.prepare('SELECT id FROM feedback_topics WHERE title = ? AND id != ?').bind(t.title, id).first()) !== null) return 'title-taken'
+  try {
+    const set = await db
+      .prepare('UPDATE feedback_topics SET renamed = CASE WHEN title = ? COLLATE BINARY THEN renamed ELSE 1 END, title = ?, state = ?, note = ?, updated_at = ?, updated_by = ? WHERE id = ?')
+      .bind(t.title, t.title, t.state, t.note, at, by, id)
+      .run()
+    return set.meta.changes === 1 ? 'ok' : 'missing'
+  } catch (err) {
+    // Two renames at once to the same title: the second finds it taken.
+    if (/UNIQUE constraint failed/i.test(err instanceof Error ? err.message : String(err))) return 'title-taken'
+    throw err
+  }
+}
+/**
+ * Merges topic `from` into topic `into` (spec 2026-10-10 §3.2), in one batch: the messages go over, each keeping who
+ * put it in its topic; the note is put under the target's own; the match goes over when the target has none; the
+ * source is gone. The target keeps its title and its state.
+ */
+export async function mergeTopics(db: D1Database, from: number, into: number, by: string, at: string): Promise<'ok' | 'missing'> {
+  if (from === into) return 'missing'
+  const read = db.prepare('SELECT note, issue, issue_state FROM feedback_topics WHERE id = ?')
+  type Kept = { note: string; issue: number | null; issue_state: TopicIssueState }
+  const [source, target] = await Promise.all([read.bind(from).first<Kept>(), read.bind(into).first<Kept>()])
+  if (!source || !target) return 'missing'
+  const note = [target.note, source.note].filter((n) => n !== '').join('\n').slice(0, MAX_FEEDBACK_NOTE_LENGTH)
+  const match = target.issue_state === 'none' ? source : target
+  await db.batch([
+    db.prepare('UPDATE feedback_ai SET topic_id = ? WHERE topic_id = ?').bind(into, from),
+    db.prepare('UPDATE feedback_topics SET note = ?, issue = ?, issue_state = ?, updated_at = ?, updated_by = ? WHERE id = ?').bind(note, match.issue, match.issue_state, at, by, into),
+    db.prepare('DELETE FROM feedback_topics WHERE id = ?').bind(from),
+  ])
+  return 'ok'
+}
+/** The coordinator puts a message in a topic: no later reading moves it again. Missing: the message has no reading, or there is no such topic. */
+export async function moveFeedbackToTopic(db: D1Database, feedbackId: number, topic: number): Promise<'ok' | 'missing'> {
+  const moved = await db.prepare("UPDATE feedback_ai SET topic_id = ?, topic_by = 'coordinator' WHERE feedback_id = ? AND EXISTS (SELECT 1 FROM feedback_topics WHERE id = ?)").bind(topic, feedbackId, topic).run()
+  return moved.meta.changes === 1 ? 'ok' : 'missing'
+}
+/** The coordinator's answer on a topic's match: a number they confirmed or typed, or none and `removed`. False when there is no such topic. */
+export async function setTopicIssue(db: D1Database, id: number, issue: number | null, state: TopicIssueState, by: string | null, at: string): Promise<boolean> {
+  return (await db.prepare('UPDATE feedback_topics SET issue = ?, issue_state = ?, updated_at = ?, updated_by = COALESCE(?, updated_by) WHERE id = ?').bind(issue, state, at, by, id).run()).meta.changes === 1
+}
+/** The AI's proposals: each is kept only while its topic has no match at all, so never over one the coordinator
+ * confirmed or removed, and never over an earlier proposal. A proposal is not the coordinator's work on a topic. */
+export async function proposeTopicIssues(db: D1Database, proposals: readonly { readonly topic: number; readonly issue: number }[]): Promise<void> {
+  if (proposals.length === 0) return
+  const propose = db.prepare("UPDATE feedback_topics SET issue = ?, issue_state = 'proposed' WHERE id = ? AND issue_state = 'none'")
+  await db.batch(proposals.map((p) => propose.bind(p.issue, p.topic)))
+}
+/** The ids of a topic's messages, the newest first, at most `limit` of them, and how many it has in all. */
+export async function topicFeedbackIds(db: D1Database, topic: number, limit: number): Promise<{ ids: number[]; total: number }> {
+  const found = await db.prepare('SELECT feedback_id, COUNT(*) OVER () AS total FROM feedback_ai WHERE topic_id = ? ORDER BY feedback_id DESC LIMIT ?').bind(topic, limit).all<{ feedback_id: number; total: number }>()
+  return { ids: found.results.map((r) => r.feedback_id), total: found.results[0]?.total ?? 0 }
+}
+/** Marks every message of a topic done (spec 2026-10-10 §3.2): how many. A message keeps the note it has. */
+export async function markTopicMessagesDone(db: D1Database, topic: number, by: string, at: string): Promise<number> {
+  const marked = await db
+    .prepare(
+      `INSERT INTO feedback_marks (feedback_id, state, note, updated_at, updated_by) SELECT feedback_id, 'done', '', ?, ? FROM feedback_ai WHERE topic_id = ?
+       ON CONFLICT (feedback_id) DO UPDATE SET state = 'done', updated_at = excluded.updated_at, updated_by = excluded.updated_by`,
+    )
+    .bind(at, by, topic)
+    .run()
+  return marked.meta.changes
+}
+
+/** The open issues as last read, when that read is not older than `notOlderThan`: the newest issues first, at most `limit`. */
+export async function openIssues(db: D1Database, notOlderThan: string, limit: number): Promise<{ number: number; title: string }[]> {
+  return (await db.prepare('SELECT number, title FROM open_issues WHERE read_at >= ? ORDER BY number DESC LIMIT ?').bind(notOlderThan, limit).all<{ number: number; title: string }>()).results
+}
+/** Puts what a read gave in place of what was kept: one batch, so an issue that was closed is gone and a failed write keeps the old list. */
+export async function replaceOpenIssues(db: D1Database, issues: readonly { readonly number: number; readonly title: string }[], at: string): Promise<void> {
+  const insert = db.prepare('INSERT INTO open_issues (number, title, read_at) VALUES (?, ?, ?) ON CONFLICT (number) DO UPDATE SET title = excluded.title')
+  await db.batch([db.prepare('DELETE FROM open_issues'), ...issues.map((issue) => insert.bind(issue.number, issue.title, at))])
+}
+/** Takes the UTC day for a read of the open issues: true when no read has it yet. Taken before anything is asked, and
+ * never given back, so a read that fails is not tried again the same day. */
+export async function claimIssuesRead(db: D1Database, now: Date): Promise<boolean> {
+  return (await db.prepare('INSERT INTO open_issues_reads (day, at) VALUES (?, ?) ON CONFLICT (day) DO NOTHING').bind(utcDay(now), now.toISOString()).run()).meta.changes === 1
+}
+/** What came of the day's read, for whoever looks later. */
+export async function settleIssuesRead(db: D1Database, now: Date, outcome: string): Promise<void> {
+  await db.prepare('UPDATE open_issues_reads SET outcome = ? WHERE day = ?').bind(outcome, utcDay(now)).run()
 }
 
 const utcDay = (now: Date) => now.toISOString().slice(0, 10)

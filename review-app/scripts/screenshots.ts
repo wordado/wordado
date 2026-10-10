@@ -2,7 +2,7 @@ import { type ChildProcess, spawn } from 'node:child_process'
 import { mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { type Browser, chromium, type Page, type Route } from '@playwright/test'
-import { AI_ANSWERS } from '../e2e/hosted/feedbackFixture'
+import { AI_ANSWERS, AI_TOPICS, FEEDBACK, KNOWN_ISSUES, PATH_TOPIC, SOUND_TOPIC, WORDS_TOPIC } from '../e2e/hosted/feedbackFixture'
 
 /* Screenshots of every screen, for a pull request description and for a look at the whole app after a change to its
  * styles: `pnpm --filter @wordado/review-app screenshots`. It starts the two fixture servers the browser runs use
@@ -69,20 +69,65 @@ const PROPOSAL = answer(/\/api\/admin\/assignments\/split$/, {
 })
 
 /** The AI help's status as the Feedback tab gets it, without asking the server: its switch stays as it is. */
-const aiStatus = (over: Row): Api => answer(/\/api\/admin\/feedback\/ai$/, { setUp: true, needs: null, on: true, model: 'google/gemini-3.8-flash', callsToday: 12, dailyCalls: 200, reads: ['en', 'bg'], ...over })
+const aiStatus = (over: Row): Api => answer(/\/api\/admin\/feedback\/ai$/, { setUp: true, needs: null, on: true, model: 'google/gemini-3.8-flash', callsToday: 12, dailyCalls: 200, reads: ['en', 'bg'], repo: 'wordado/wordado', ...over })
+
+/** The topics as the By topic view gets them, without asking the server: a proposed match, a confirmed one, none, and a long title that is done. */
+const TOPIC_IDS: Readonly<Record<string, number>> = { [SOUND_TOPIC]: 1, [WORDS_TOPIC]: 2, [PATH_TOPIC]: 3 }
+const receivedAt = (id: number) => FEEDBACK.find((item) => item.id === id)?.receivedAt ?? 0
+const TOPICS: readonly Row[] = [
+  { id: 1, title: SOUND_TOPIC, state: 'new', note: '', issue: 94, issueState: 'proposed', issueTitle: KNOWN_ISSUES[0]!.title, count: 2, newestAt: receivedAt(14), worst: 'annoys' },
+  { id: 2, title: WORDS_TOPIC, state: 'seen', note: 'Planned with the settings.', issue: null, issueState: 'none', issueTitle: null, count: 2, newestAt: receivedAt(13), worst: null },
+  { id: 3, title: PATH_TOPIC, state: 'new', note: '', issue: 87, issueState: 'confirmed', issueTitle: null, count: 1, newestAt: receivedAt(12), worst: 'blocks' },
+  { id: 4, title: 'A title as long as a title may be, to see where it breaks on a narrow screen: 80', state: 'done', note: '', issue: null, issueState: 'none', issueTitle: null, count: 14, newestAt: receivedAt(7), worst: 'cosmetic' },
+]
+/** The stand-in model's reading of a message with the topic it put it in, as the list gives it. */
+const aiOf = (id: number): Row | null => {
+  const reading = AI_ANSWERS[id]
+  const topic = AI_TOPICS[id]
+  return reading ? { ...reading, topic: topic ? { id: TOPIC_IDS[topic.title], title: topic.title } : null } : null
+}
+/** A topic opened: its messages from the fixture, each with its reading, and more of them than are shown. */
+const topicOpened = (id: number, over: Row = {}): Row => ({
+  topic: TOPICS.find((t) => t['id'] === id),
+  items: FEEDBACK.filter((item) => TOPIC_IDS[AI_TOPICS[item.id]?.title ?? ''] === id)
+    .sort((a, b) => b.id - a.id)
+    .map((item) => ({ ...item, state: 'new', note: '', markedAt: null, ai: aiOf(item.id) })),
+  more: 0,
+  incomplete: false,
+  ...over,
+})
 
 /** The Feedback tab with the AI help on and every message read: the stand-in model's readings are put on the list's
- * answer, and the AI is told nothing is left to read, so nothing is kept on the server. `why` is what a reading answers. */
+ * answer, with the topics it made, and the AI is told nothing is left to read, so nothing is kept on the server.
+ * `why` is what a reading answers. */
 const aiRead = (why: string | null = null, left = 0): readonly Api[] => [
   aiStatus({}),
   (page) =>
     page.route(/\/api\/admin\/feedback\?/, async (route: Route) => {
       const response = await route.fetch()
       const body = (await response.json()) as { items: Row[] }
-      await route.fulfill({ response, json: { ...body, items: body.items.map((item) => ({ ...item, ai: left > 0 ? null : (AI_ANSWERS[item['id'] as number] ?? null) })) } })
+      await route.fulfill({ response, json: { ...body, items: body.items.map((item) => ({ ...item, ai: left > 0 ? null : aiOf(item['id'] as number) })) } })
     }),
   answer(/\/api\/admin\/feedback\/ai\/read$/, { results: {}, asked: 0, left, why }),
+  answer(/\/api\/admin\/feedback\/topics$/, left > 0 ? [] : TOPICS),
+  answer(/\/api\/admin\/feedback\/topics\/1$/, topicOpened(1)),
+  answer(/\/api\/admin\/feedback\/topics\/2$/, topicOpened(2, { more: 12, incomplete: true })),
 ]
+
+/** The Feedback tab By topic, every topic shown. */
+async function byTopic(page: Page): Promise<void> {
+  await page.getByLabel('View').selectOption({ label: 'By topic' })
+  await page.getByLabel('Show').selectOption({ label: 'All' })
+  await page.getByRole('list', { name: 'Topics' }).waitFor()
+}
+/** Opens a topic of the By topic view, and waits for its messages. */
+async function openTopic(page: Page, title: string) {
+  await byTopic(page)
+  await page.getByRole('button', { name: title }).click()
+  const topic = page.getByRole('list', { name: 'Topics' }).locator('> li').filter({ hasText: title })
+  await topic.getByRole('list', { name: 'Messages of the topic' }).waitFor()
+  return topic
+}
 
 interface Shot {
   readonly name: string
@@ -341,6 +386,34 @@ const SHOTS_ADMIN: readonly Shot[] = [
       await page.getByText('AI: Junk').waitFor()
     },
   },
+  // By topic (spec 2026-10-10 §3.2, §3.3): the list with a proposed match and a confirmed one, a topic opened with
+  // its tools and its messages, its title as a field, the question before a merge, and a topic with older messages.
+  { name: 'hosted-admin-feedback-topics', who: 'admin', path: '/#feedback', api: aiRead(), steps: byTopic },
+  { name: 'hosted-admin-feedback-topics-open', who: 'admin', path: '/#feedback', api: aiRead(), steps: async (page) => void (await openTopic(page, SOUND_TOPIC)) },
+  {
+    name: 'hosted-admin-feedback-topics-rename',
+    who: 'admin',
+    path: '/#feedback',
+    api: aiRead(),
+    steps: async (page) => {
+      const topic = await openTopic(page, SOUND_TOPIC)
+      await topic.getByRole('button', { name: 'Rename' }).click()
+      await topic.getByRole('textbox', { name: 'Title' }).waitFor()
+    },
+  },
+  {
+    name: 'hosted-admin-feedback-topics-merge',
+    who: 'admin',
+    path: '/#feedback',
+    api: aiRead(),
+    steps: async (page) => {
+      const topic = await openTopic(page, SOUND_TOPIC)
+      await topic.getByLabel('Merge into…').selectOption({ label: WORDS_TOPIC })
+      await page.getByRole('dialog', { name: 'Merge topics' }).waitFor()
+    },
+  },
+  { name: 'hosted-admin-feedback-topics-older', who: 'admin', path: '/#feedback', api: aiRead(), steps: async (page) => void (await openTopic(page, WORDS_TOPIC)) },
+  { name: 'hosted-admin-feedback-topics-none', who: 'admin', path: '/#feedback', api: [aiStatus({ on: false }), answer(/\/api\/admin\/feedback\/topics$/, [])], steps: async (page) => (await page.getByLabel('View').selectOption({ label: 'By topic' }), void (await page.getByText(/Topics are made by the AI help/).waitFor())) },
   { name: 'hosted-admin-feedback-ai-limit', who: 'admin', path: '/#feedback', api: aiRead('limit', 9), steps: async (page) => void (await page.getByText(/Today’s limit of 200 AI calls is reached/).waitFor()) },
   { name: 'hosted-admin-feedback-ai-not-set-up', who: 'admin', path: '/#feedback', api: [aiStatus({ setUp: false, needs: 'FEEDBACK_AI_KEY', on: false })], steps: async (page) => void (await page.getByText(/AI help is not set up/).waitFor()) },
   {

@@ -15,7 +15,7 @@ export async function migrate(db: D1Database): Promise<void> {
 }
 
 export async function resetDb(db: D1Database): Promise<void> {
-  await db.batch(['DELETE FROM settings', 'DELETE FROM feedback_ai_calls', 'DELETE FROM feedback_ai', 'DELETE FROM weekly_mails', 'DELETE FROM feedback_marks', 'DELETE FROM decisions', 'DELETE FROM submissions', 'DELETE FROM assignments', 'DELETE FROM reviewers'].map((s) => db.prepare(s)))
+  await db.batch(['DELETE FROM settings', 'DELETE FROM feedback_ai_calls', 'DELETE FROM feedback_ai', 'DELETE FROM feedback_topics', 'DELETE FROM open_issues', 'DELETE FROM open_issues_reads', 'DELETE FROM weekly_mails', 'DELETE FROM feedback_marks', 'DELETE FROM decisions', 'DELETE FROM submissions', 'DELETE FROM assignments', 'DELETE FROM reviewers'].map((s) => db.prepare(s)))
 }
 
 /** Local D1 and R2 from wrangler.jsonc's top level, in memory, migrated. */
@@ -30,6 +30,7 @@ export async function startPlatform(): Promise<{ env: Env; dispose(): Promise<vo
     ACCESS_AUD: 'aud-test',
     ADMIN_EMAIL: 'admin@example.com',
     CONTENT_REPO: 'wordado/wordado-content',
+    APP_REPO: 'wordado/wordado',
     GITHUB_APP_ID: '1',
     GITHUB_INSTALLATION_ID: '2',
     MAIL_FROM: 'Wordado Review <review@wordado.com>',

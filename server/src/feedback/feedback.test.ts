@@ -303,6 +303,45 @@ describe('GET /v1/admin/feedback (spec §8.12)', () => {
     expect(await messages(`?since=${h.clock.now - 60_000}&kind=idea`)).toEqual(['A dark theme.'])
   })
 
+  it('gives the messages of the ids asked for, newest first, and simply leaves out an id it does not have', async () => {
+    const h = withToken()
+    await seedFeedback(h, 5, h.clock.now - HOUR)
+    const all = (await read(h)).body.items as { id: number; message: string }[]
+    const [five, four, three, , one] = all.map((item) => item.id)
+    const reply = await read(h, `?ids=${one},${five},${three},999999`)
+    expect(reply.status).toBe(200)
+    expect(reply.headers.get('cache-control')).toBe('no-store')
+    expect(reply.body.items.map((item: { message: string }) => item.message)).toEqual(['idea 5', 'idea 3', 'idea 1'])
+    expect(reply.body.items[0]).toEqual(all[0])
+    expect(reply.body.nextBefore).toBeNull()
+    // The other parameters keep their meaning beside it.
+    expect((await read(h, `?ids=${one},${five},${three}&before=${five}`)).body.items.map((item: { id: number }) => item.id)).toEqual([three, one])
+    expect((await read(h, `?ids=${one},${four}&kind=bug`)).body.items).toEqual([])
+    const short = await read(h, `?ids=${one},${four},${five}&limit=2`)
+    expect(short.body.items.map((item: { id: number }) => item.id)).toEqual([five, four])
+    expect(short.body.nextBefore).toBe(four)
+    expect((await read(h, '?ids=999999')).body).toEqual({ items: [], nextBefore: null })
+  })
+
+  it('refuses a list of ids that is not 1 to 100 ids, and is still a route that does not exist without the token', async () => {
+    const h = withToken()
+    await seedFeedback(h, 2, h.clock.now - HOUR)
+    const hundred = Array.from({ length: 100 }, (_, i) => i + 1).join(',')
+    for (const ids of ['', 'abc', '1,', ',1', '1,,2', '0', '-1', '1.5', '1;drop table feedback', '1 2', `${hundred},101`, '1234567890123456']) {
+      const reply = await read(h, `?ids=${encodeURIComponent(ids)}`)
+      expect(reply.status).toBe(400)
+      expect(reply.body.error).toBe('invalid')
+      expect(JSON.stringify(reply.body)).toContain('ids must be 1 to 100 message ids')
+    }
+    expect((await read(h, `?ids=${hundred}`)).status).toBe(200)
+    for (const query of ['?ids=1', '?ids=abc']) {
+      expect((await read(h, query, null)).status).toBe(404)
+      expect((await read(h, query, 'Bearer wrong')).status).toBe(404)
+    }
+    expect((await harness().request('/v1/admin/feedback?ids=1', { headers: { authorization: `Bearer ${token}` } })).status).toBe(404)
+    expect(await stored(h)).toHaveLength(2)
+  })
+
   it('refuses a query it does not understand, once the token is right', async () => {
     const h = withToken()
     for (const query of ['?limit=0', `?limit=${FEEDBACK_PAGE_MAX + 1}`, '?limit=ten', '?before=abc', '?before=-1', '?kind=praise', '?since=yesterday']) {

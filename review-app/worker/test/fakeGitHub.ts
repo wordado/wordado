@@ -13,6 +13,13 @@ export class FakeGitHub {
   readonly truncated = new Set<string>()
   /** Every request made, as `METHOD path`. */
   readonly requests: string[] = []
+  /** The public repository whose open issues anyone may list, and those issues (a pull request has the key `pull_request`). */
+  appRepo = 'wordado/wordado'
+  issues: { number: number; title: string; pull_request?: object }[] = []
+  /** Every request for the open issues: the authorization it came with (the real API needs none) and the page asked for. */
+  readonly issueRequests: { authorization: string | null; page: number }[] = []
+  /** Set, a request for the open issues gets this instead, from page `fromPage` on (the first when left out): a status with a body, or an error thrown as when GitHub is not reached. */
+  issuesFailure: { status: number; body: string; fromPage?: number } | Error | null = null
   private n = 0
   constructor(files: Record<string, string>, readonly repo = 'wordado/wordado-content') {
     this.files = new Map(Object.entries(files))
@@ -41,6 +48,16 @@ export class FakeGitHub {
     this.requests.push(`${method} ${p}`)
     const repo = `/repos/${this.repo}`
     if (method === 'POST' && /^\/app\/installations\/\d+\/access_tokens$/.test(p)) return json({ token: 'inst-token', expires_at: '2099-01-01T00:00:00Z' }, 201)
+    // A public repository's issues are listed for anyone, before any sign-in is looked at, a hundred a page at most.
+    if (method === 'GET' && p === `/repos/${this.appRepo}/issues`) {
+      const page = Number(url.searchParams.get('page') ?? '1')
+      const size = Math.min(Number(url.searchParams.get('per_page') ?? '30'), 100)
+      this.issueRequests.push({ authorization: new Headers(init.headers).get('authorization'), page })
+      const failure = this.issuesFailure
+      if (failure instanceof Error) throw failure
+      if (failure && page >= (failure.fromPage ?? 1)) return new Response([301, 302, 304].includes(failure.status) ? null : failure.body, { status: failure.status })
+      return json(this.issues.slice((page - 1) * size, page * size).map((issue) => ({ ...issue, state: 'open', user: { login: 'someone' } })))
+    }
     if (!(init.headers as Record<string, string> | undefined)?.['authorization']?.startsWith('Bearer ')) return json({ message: 'no auth' }, 401)
     let m: RegExpExecArray | null
     if (method === 'POST' && p === '/graphql') {

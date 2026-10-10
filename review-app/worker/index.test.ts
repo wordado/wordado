@@ -27,6 +27,14 @@ describe('the timed jobs', () => {
     expect(lines).toEqual(Array(2).fill('weekly mail: not connected, LEARNER_APP_URL and FEEDBACK_READ_TOKEN are not both set'))
   })
 
+  it('read the open issues on the daily line', async () => {
+    const lines: unknown[] = []
+    vi.spyOn(console, 'log').mockImplementation((line) => void lines.push(line))
+    // With no repository named the job stops at once, which is enough to see that it was the one called.
+    await worker.scheduled({ cron: '0 5 * * *', scheduledTime: 0 }, {} as Env)
+    expect(lines).toEqual(['open issues: not read, APP_REPO is not set to owner/name'])
+  })
+
   it('log a cron line they do not know, and do nothing', async () => {
     const lines: unknown[] = []
     vi.spyOn(console, 'log').mockImplementation((line) => void lines.push(line))
