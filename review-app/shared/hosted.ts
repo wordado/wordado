@@ -285,6 +285,16 @@ export interface FeedbackWeekParagraph {
   readonly why: FeedbackAiWhy | null
 }
 
+/** A drafted issue (spec 2026-10-10 §3.5): the longest title and the longest text that are taken from the AI. */
+export const MAX_DRAFT_TITLE = 120
+export const MAX_DRAFT_BODY = 4000
+/** Why there is no draft: the AI's own reasons, or the draft was dropped because it repeated a learner's words (`quoted`)
+ * or held an address, a link, a phone number or the name of an account (`personal`), or the topic has no message left to write from. */
+export type FeedbackDraftWhy = FeedbackAiWhy | 'quoted' | 'personal' | 'no-messages'
+/** `POST /api/admin/feedback/topics/:id/draft`: a draft of an issue for the topic, written from `messages` of its
+ * messages, or why there is none. It is kept nowhere: it is for the page that asked, to be read, changed and filed by the coordinator. */
+export type FeedbackDraft = { readonly ok: true; readonly title: string; readonly body: string; readonly messages: number } | { readonly ok: false; readonly why: FeedbackDraftWhy }
+
 /** `GET /api/admin/feedback`. Not connected: the token or the server's address is not set. `read` is how many
  * messages the server's page held, before the filter by state; `nextBefore` is the `before` of the next, older
  * page, or null on the last. A page filtered by state can be short, or empty, with older ones still to come. */
