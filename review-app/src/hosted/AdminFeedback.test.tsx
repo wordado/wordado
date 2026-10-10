@@ -1,11 +1,15 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { FeedbackList, FeedbackView } from '../../shared/hosted'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { FeedbackAi, FeedbackAiRead, FeedbackAiStatus, FeedbackList, FeedbackView } from '../../shared/hosted'
 import { hostedApi } from '../hostedApi'
 import { AdminFeedback } from './AdminFeedback'
 import { dateOf } from './adminUtil'
 
 afterEach(() => (cleanup(), vi.restoreAllMocks()))
+
+const aiStatus = (over: Partial<FeedbackAiStatus> = {}): FeedbackAiStatus => ({ setUp: true, on: true, model: 'test/model', callsToday: 3, dailyCalls: 200, reads: ['en', 'bg'], ...over })
+// Without the key, as a deployment is before the owner sets it: the tab is what it was before there was any AI help.
+beforeEach(() => void vi.spyOn(hostedApi.admin, 'feedbackAi').mockResolvedValue(aiStatus({ setUp: false, on: false })))
 
 const item = (id: number, over: Partial<FeedbackView> = {}): FeedbackView => ({
   id,
@@ -267,5 +271,247 @@ describe('AdminFeedback', () => {
     fireEvent.change(screen.getByRole('combobox', { name: 'Show' }), { target: { value: 'done' } })
     expect(await screen.findByText('Nothing here to show.')).toBeTruthy()
     expect(screen.queryByText('No feedback yet.')).toBeNull()
+  })
+})
+
+const reading = (over: Partial<FeedbackAi> = {}): FeedbackAi => ({ language: 'en', translation: '', category: 'idea', severity: null, summary: 'Wants a dark theme.', ...over })
+const german = item(7, { kind: 'other', language: 'de', message: 'Der Ton wird zweimal abgespielt.', ai: reading({ language: 'de', translation: 'The sound plays twice.', category: 'bug', severity: 'annoys', summary: 'The sound of a word plays twice.' }) })
+const thanks = item(6, { kind: 'other', message: 'Благодаря за приложението!', ai: reading({ language: 'bg', category: 'praise', summary: 'Thanks for the app.' }) })
+const advert = item(5, { kind: 'other', message: 'Cheap watches at example.com', ai: reading({ category: 'junk', summary: 'An advertisement.' }) })
+const aiRead = (over: Partial<FeedbackAiRead> = {}): FeedbackAiRead => ({ results: {}, asked: 0, left: 0, why: null, ...over })
+const aiOn = (over: Partial<FeedbackAiStatus> = {}) => vi.spyOn(hostedApi.admin, 'feedbackAi').mockResolvedValue(aiStatus(over))
+const notes = () => screen.queryAllByRole('status').filter((el) => el.classList.contains('feedback-ai-note')).map((el) => el.textContent)
+
+describe('AdminFeedback: what the AI reads in a message (spec 2026-10-10 §3.1)', () => {
+  it('shows a translation under the original, marked as the AI’s, and leaves the original as it was written', async () => {
+    listed([german, thanks])
+    render(<AdminFeedback />)
+    const [first, second] = await cards()
+    const original = within(first!).getByText('Der Ton wird zweimal abgespielt.')
+    expect(original.className).toBe('feedback-message')
+    const translation = within(first!).getByText('The sound plays twice.')
+    expect(translation.className).toBe('feedback-translation')
+    expect(original.compareDocumentPosition(translation) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(within(first!).getByText('Translation by the AI')).toBeTruthy()
+    // Bulgarian is read as it is: no translation, and no empty block for one.
+    expect(within(second!).queryByText('Translation by the AI')).toBeNull()
+    expect(second!.querySelector('.feedback-translation')).toBeNull()
+    expect(within(second!).getByText('Благодаря за приложението!')).toBeTruthy()
+  })
+
+  it('shows the AI’s category beside the learner’s own kind, a bug’s severity, and the summary', async () => {
+    listed([german, thanks])
+    render(<AdminFeedback />)
+    const [first, second] = await cards()
+    // The learner chose Other; the AI reads a bug. Both are there.
+    expect(within(first!).getByRole('heading', { level: 3 }).textContent).toContain('Other')
+    expect([...first!.querySelectorAll('.feedback-ai .chip')].map((el) => el.textContent)).toEqual(['AI: Bug', 'Annoys'])
+    expect(first!.querySelector('.feedback-ai-summary')?.textContent).toBe('AI summary: The sound of a word plays twice.')
+    expect([...second!.querySelectorAll('.feedback-ai .chip')].map((el) => el.textContent)).toEqual(['AI: Praise'])
+    expect(second!.querySelector('.feedback-ai-summary')?.textContent).toBe('AI summary: Thanks for the app.')
+  })
+
+  it('names each severity in words', async () => {
+    listed([item(3, { ai: reading({ category: 'bug', severity: 'blocks' }) }), item(2, { ai: reading({ category: 'bug', severity: 'cosmetic' }) }), item(1, { ai: reading({ category: 'question' }) })])
+    render(<AdminFeedback />)
+    expect((await cards()).map((card) => [...card.querySelectorAll('.feedback-ai .chip')].map((el) => el.textContent))).toEqual([['AI: Bug', 'Blocks study'], ['AI: Bug', 'Cosmetic'], ['AI: Question']])
+  })
+
+  it('shows nothing of the AI on a message it has not read', async () => {
+    listed()
+    render(<AdminFeedback />)
+    const [first] = await cards()
+    expect(first!.querySelector('.feedback-ai')).toBeNull()
+    expect(first!.querySelector('.feedback-translation')).toBeNull()
+    expect(first!.textContent).not.toContain('AI')
+  })
+
+  it('folds what the AI reads as junk away under Open, never out of reach, and lists it under All', async () => {
+    const feedback = listed([german, thanks, advert])
+    render(<AdminFeedback />)
+    expect((await cards()).length).toBe(2)
+    // The count is of the list; the fold says its own.
+    expect(screen.getByText('2 messages of 3 read')).toBeTruthy()
+    const fold = screen.getByText('1 message the AI reads as junk').closest('details')!
+    expect(fold.className).toBe('feedback-junk')
+    expect(fold.open).toBe(false)
+    expect(within(fold).getByText('Cheap watches at example.com')).toBeTruthy()
+    // Its mark is there as on any message.
+    expect(within(fold).getByRole('combobox', { name: 'State' })).toBeTruthy()
+    fireEvent.change(screen.getByRole('combobox', { name: 'Show' }), { target: { value: 'all' } })
+    await waitFor(() => expect(feedback).toHaveBeenLastCalledWith({ kind: '', state: 'all' }))
+    await waitFor(async () => expect((await cards()).length).toBe(3))
+    expect(screen.queryByText(/the AI reads as junk/)).toBeNull()
+  })
+
+  it('still shows the fold when everything open is junk', async () => {
+    listed([advert, item(4, { ai: reading({ category: 'junk' }) })])
+    render(<AdminFeedback />)
+    expect(await screen.findByText('2 messages the AI reads as junk')).toBeTruthy()
+    expect(screen.queryByRole('list', { name: 'Feedback' })).toBeNull()
+    expect(screen.getByText('Nothing here to show.')).toBeTruthy()
+  })
+})
+
+describe('AdminFeedback: asking the AI about a page', () => {
+  it('asks once after the list is shown, by the page’s kind and cursor, and puts the results on the cards without reading the list again', async () => {
+    aiOn()
+    const feedback = listed([item(7, { kind: 'other', message: 'Der Ton wird zweimal abgespielt.' }), bug])
+    const answer = pending<FeedbackAiRead>()
+    const read = vi.spyOn(hostedApi.admin, 'readFeedbackAi').mockReturnValue(answer.promise)
+    render(<AdminFeedback />)
+    const [first, second] = await cards()
+    // The messages are there at once; the AI's parts come when its answer does.
+    expect(first!.querySelector('.feedback-ai')).toBeNull()
+    await waitFor(() => expect(read).toHaveBeenCalledWith({ kind: '' }))
+    expect(await screen.findByText('The AI is reading the new messages…')).toBeTruthy()
+    expect(screen.queryByRole('progressbar')).toBeNull()
+    fireEvent.change(within(first!).getByRole('textbox', { name: 'Note' }), { target: { value: 'half a thought' } })
+    answer.resolve(aiRead({ results: { 7: german.ai! }, asked: 2, left: 0 }))
+    expect(await within(first!).findByText('The sound plays twice.')).toBeTruthy()
+    expect(first!.querySelector('.feedback-ai-summary')?.textContent).toBe('AI summary: The sound of a word plays twice.')
+    expect(second!.querySelector('.feedback-ai')).toBeNull()
+    expect(screen.queryByText('The AI is reading the new messages…')).toBeNull()
+    // The card is the same one: what was typed in it is still there.
+    expect((within(first!).getByRole('textbox', { name: 'Note' }) as HTMLTextAreaElement).value).toBe('half a thought')
+    expect(feedback).toHaveBeenCalledTimes(1)
+    expect(read).toHaveBeenCalledTimes(1)
+    expect(notes()).toEqual([])
+    // One more call was made today.
+    expect(screen.getByText('On: test/model. 4 of 200 calls used today.')).toBeTruthy()
+  })
+
+  it('does not ask while the AI help is off, not set up or out of reach', async () => {
+    const read = vi.spyOn(hostedApi.admin, 'readFeedbackAi').mockResolvedValue(aiRead())
+    for (const mock of [() => aiOn({ on: false }), () => aiOn({ setUp: false, on: true }), () => vi.spyOn(hostedApi.admin, 'feedbackAi').mockRejectedValue(new Error('internal error'))]) {
+      mock()
+      listed()
+      render(<AdminFeedback />)
+      expect((await cards()).length).toBe(2)
+      await screen.findByText(/^(Off\. No message|AI help is not set up|AI help could not be reached)/)
+      expect(read).not.toHaveBeenCalled()
+      expect(notes()).toEqual([])
+      expect(screen.queryByRole('alert')).toBeNull()
+      cleanup()
+    }
+  })
+
+  it('asks about the older page with that page’s cursor when Load more shows it', async () => {
+    aiOn()
+    vi.spyOn(hostedApi.admin, 'feedback').mockResolvedValueOnce(page([german], { nextBefore: 7 })).mockResolvedValueOnce(page([item(4)]))
+    const read = vi.spyOn(hostedApi.admin, 'readFeedbackAi').mockResolvedValueOnce(aiRead()).mockResolvedValueOnce(aiRead({ results: { 4: reading({ summary: 'An older idea.' }) }, asked: 1 }))
+    render(<AdminFeedback />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Load more' }))
+    await waitFor(() => expect(read).toHaveBeenCalledTimes(2))
+    expect(read.mock.calls).toEqual([[{ kind: '' }], [{ kind: '', before: 7 }]])
+    expect(await screen.findByText('AI summary: An older idea.')).toBeTruthy()
+    // The first page keeps what it had.
+    expect(screen.getByText('The sound plays twice.')).toBeTruthy()
+  })
+
+  it('keeps a result that arrives while an older page is on its way', async () => {
+    aiOn()
+    const older = pending<FeedbackList>()
+    vi.spyOn(hostedApi.admin, 'feedback').mockResolvedValueOnce(page([item(7, { kind: 'other' })], { nextBefore: 7 })).mockReturnValueOnce(older.promise)
+    const first = pending<FeedbackAiRead>()
+    vi.spyOn(hostedApi.admin, 'readFeedbackAi').mockReturnValueOnce(first.promise).mockResolvedValue(aiRead())
+    render(<AdminFeedback />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Load more' }))
+    first.resolve(aiRead({ results: { 7: german.ai! }, asked: 1 }))
+    expect(await screen.findByText('The sound plays twice.')).toBeTruthy()
+    older.resolve(page([item(4)]))
+    await waitFor(async () => expect((await cards()).length).toBe(2))
+    expect(screen.getByText('The sound plays twice.')).toBeTruthy()
+  })
+
+  it.each([
+    ['limit', 'Today’s limit of 200 AI calls is reached. Messages without AI results are read again tomorrow.'],
+    ['unreachable', 'The AI gave no results this time (it could not be reached). Messages without them are asked again the next time the page is read.'],
+    ['late', 'The AI gave no results this time (it took too long). Messages without them are asked again the next time the page is read.'],
+    ['refused', 'The AI gave no results this time (the service refused the request). Messages without them are asked again the next time the page is read.'],
+    ['unfit', 'The AI gave no results this time (its answer could not be used). Messages without them are asked again the next time the page is read.'],
+  ] as const)('says once, not on each message, why the AI gave nothing: %s', async (why, said) => {
+    aiOn()
+    listed([item(3), item(2), item(1)])
+    vi.spyOn(hostedApi.admin, 'readFeedbackAi').mockResolvedValue(aiRead({ asked: why === 'limit' ? 0 : 3, left: 3, why }))
+    render(<AdminFeedback />)
+    await waitFor(() => expect(notes()).toEqual([said]))
+    const cardsNow = await cards()
+    expect(cardsNow.length).toBe(3)
+    for (const card of cardsNow) expect(card.textContent).not.toContain('AI')
+    expect(screen.queryByRole('button', { name: 'Ask the AI' })).toBeNull()
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('says how many messages have no result yet, and Ask the AI asks about that page again', async () => {
+    aiOn()
+    listed([item(3), item(2), item(1)])
+    const read = vi.spyOn(hostedApi.admin, 'readFeedbackAi').mockResolvedValueOnce(aiRead({ results: { 3: reading() }, asked: 1, left: 2 })).mockResolvedValueOnce(aiRead({ results: { 2: reading(), 1: reading() }, asked: 2, left: 0 }))
+    render(<AdminFeedback />)
+    await waitFor(() => expect(notes()).toEqual(['2 messages have no AI result yet.']))
+    fireEvent.click(screen.getByRole('button', { name: 'Ask the AI' }))
+    await waitFor(() => expect(read).toHaveBeenCalledTimes(2))
+    expect(read).toHaveBeenLastCalledWith({ kind: '' })
+    await waitFor(() => expect(document.querySelectorAll('.feedback-ai-summary').length).toBe(3))
+    expect(notes()).toEqual([])
+    expect(screen.queryByRole('button', { name: 'Ask the AI' })).toBeNull()
+  })
+
+  it('leaves the list as it is when the AI’s own call fails, and says so in its panel', async () => {
+    aiOn()
+    listed()
+    vi.spyOn(hostedApi.admin, 'readFeedbackAi').mockRejectedValue(new Error('internal error'))
+    render(<AdminFeedback />)
+    expect((await cards()).length).toBe(2)
+    expect(await screen.findByText('AI help could not be reached.')).toBeTruthy()
+    expect((await cards()).length).toBe(2)
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(screen.getByText('2 messages')).toBeTruthy()
+  })
+
+  it('does not put the answer to an older filter on the messages of a newer one', async () => {
+    aiOn()
+    const feedback = vi.spyOn(hostedApi.admin, 'feedback').mockResolvedValueOnce(page([item(7, { kind: 'other' })])).mockResolvedValue(page([item(7, { kind: 'other' }), item(2)]))
+    const slow = pending<FeedbackAiRead>()
+    const read = vi.spyOn(hostedApi.admin, 'readFeedbackAi').mockReturnValueOnce(slow.promise).mockResolvedValue(aiRead({ left: 2, asked: 0, why: 'limit' }))
+    render(<AdminFeedback />)
+    await cards()
+    await waitFor(() => expect(read).toHaveBeenCalledTimes(1))
+    fireEvent.change(screen.getByRole('combobox', { name: 'Show' }), { target: { value: 'all' } })
+    await waitFor(() => expect(feedback).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(read).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(notes().length).toBe(1))
+    slow.resolve(aiRead({ results: { 7: german.ai! }, asked: 1, left: 0 }))
+    await new Promise((done) => setTimeout(done, 20))
+    expect(screen.queryByText('The sound plays twice.')).toBeNull()
+    expect(notes()).toEqual(['Today’s limit of 200 AI calls is reached. Messages without AI results are read again tomorrow.'])
+  })
+
+  it('reads the list again, and so asks the AI, when the help is switched on', async () => {
+    aiOn({ on: false })
+    const feedback = listed([item(7, { kind: 'other' })])
+    vi.spyOn(hostedApi.admin, 'setFeedbackAi').mockResolvedValue(aiStatus({ on: true }))
+    const read = vi.spyOn(hostedApi.admin, 'readFeedbackAi').mockResolvedValue(aiRead({ results: { 7: german.ai! }, asked: 1 }))
+    render(<AdminFeedback />)
+    await cards()
+    fireEvent.click(await screen.findByRole('switch', { name: 'AI help' }))
+    expect(await screen.findByText('The sound plays twice.')).toBeTruthy()
+    expect(read).toHaveBeenCalledTimes(1)
+    expect(feedback).toHaveBeenCalledTimes(2)
+  })
+
+  it('takes the AI’s parts off the cards when its results are forgotten, and leaves the marks', async () => {
+    aiOn({ on: false })
+    listed([german, { ...idea, ai: reading() }])
+    vi.spyOn(hostedApi.admin, 'forgetFeedbackAi').mockResolvedValue({ forgotten: 2 })
+    render(<AdminFeedback />)
+    const [first, second] = await cards()
+    expect(document.querySelectorAll('.feedback-ai').length).toBe(2)
+    fireEvent.click(screen.getByRole('button', { name: 'Forget the AI’s results' }))
+    fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Forget them' }))
+    await waitFor(() => expect(document.querySelectorAll('.feedback-ai').length).toBe(0))
+    expect(first!.querySelector('.feedback-translation')).toBeNull()
+    expect(within(first!).getByText('Der Ton wird zweimal abgespielt.')).toBeTruthy()
+    expect((within(second!).getByRole('textbox', { name: 'Note' }) as HTMLTextAreaElement).value).toBe('Asked the designer.')
   })
 })
