@@ -3,6 +3,7 @@ import type { AssignmentView, Language, ReviewerView, SnapshotStatus, Submission
 import { HeaderSlot } from '../AppHeader'
 import { hostedApi } from '../hostedApi'
 import { AdminAssignments } from './AdminAssignments'
+import { AdminFeedback } from './AdminFeedback'
 import { AdminOverview } from './AdminOverview'
 import { AdminReviewers } from './AdminReviewers'
 import { AdminSubmissions } from './AdminSubmissions'
@@ -13,6 +14,7 @@ const TABS = [
   ['reviewers', 'Reviewers'],
   ['assignments', 'Assignments'],
   ['submissions', 'Submissions'],
+  ['feedback', 'Feedback'],
 ] as const
 type Tab = (typeof TABS)[number][0]
 
@@ -21,8 +23,9 @@ export function adminTabOf(hash: string): Tab | null {
   return TABS.find(([id]) => `#${id}` === hash)?.[0] ?? null
 }
 
-/** The admin page: Overview, Reviewers, Assignments and Submissions as tabs in the header, one shown at a time. The
- * tab is kept in the address (`#reviewers`), so a reload stays put. */
+/** The admin page: Overview, Reviewers, Assignments, Submissions and Feedback as tabs in the header, one shown at a
+ * time. The tab is kept in the address (`#reviewers`), so a reload stays put. The Feedback tab reads what it shows
+ * itself, when it is opened: it comes from another server, a page at a time. */
 export function Admin() {
   const [snapshot, setSnapshot] = useState<SnapshotStatus | null | undefined>(undefined)
   const [reviewers, setReviewers] = useState<ReviewerView[] | undefined>(undefined)
@@ -110,12 +113,13 @@ export function Admin() {
           <AdminAssignments snapshot={snapshot} reviewers={reviewers} assignments={assignments} act={act} notice={notice} clearNotice={clearNotice} assigning={assigning} onAssigning={setAssigning} />
         )}
         {tab === 'submissions' && <AdminSubmissions submissions={submissions} />}
+        {tab === 'feedback' && <AdminFeedback />}
       </section>
     </div>
   )
 }
 
-/** The tabs, for the header: the four admin pages as a tablist.
+/** The tabs, for the header: the admin pages as a tablist.
  * On a phone they are a strip that slides sideways; the chosen tab is slid into view. */
 function AdminTabs(props: { tab: Tab; onGo(tab: Tab): void }) {
   const { tab } = props

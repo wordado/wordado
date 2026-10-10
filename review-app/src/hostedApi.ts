@@ -1,6 +1,11 @@
+import type { FeedbackKind } from '@wordado/core'
 import type { DecisionResult } from '../server/types'
 import type {
   AssignmentView,
+  FeedbackList,
+  FeedbackMark,
+  FeedbackState,
+  FeedbackStateFilter,
   HostedDecisionRequest,
   Language,
   Me,
@@ -75,5 +80,9 @@ export const hostedApi = {
       send<{ proposal?: SplitProposal[]; assignments?: AssignmentView[] }>('POST', '/api/admin/assignments/split', b),
     submissions: () => get<SubmissionView[]>('/api/admin/submissions'),
     snapshot: () => get<SnapshotStatus | null>('/api/admin/snapshot'),
+    /** One page of learners' feedback, newest first; `before` is the `nextBefore` of the page above it. */
+    feedback: (q: { kind: FeedbackKind | ''; state: FeedbackStateFilter; before?: number }) =>
+      get<FeedbackList>(`/api/admin/feedback?${new URLSearchParams({ kind: q.kind, state: q.state, ...(q.before !== undefined ? { before: String(q.before) } : {}) }).toString()}`),
+    markFeedback: (id: number, mark: { state: FeedbackState; note: string }) => send<FeedbackMark & { id: number }>('PUT', `/api/admin/feedback/${id}`, mark),
   },
 }
