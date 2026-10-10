@@ -13,6 +13,8 @@ export type Route =
   | { readonly name: 'matching'; readonly unit?: string | undefined; readonly theme?: string | undefined }
   | { readonly name: 'path' }
   | { readonly name: 'themes' }
+  /** One theme's words (`/themes/<themeId>`); `q` is what its word search starts with (`?q=`). */
+  | { readonly name: 'theme'; readonly themeId: string; readonly q?: string | undefined }
   | { readonly name: 'progress' }
   | { readonly name: 'signin' }
   | { readonly name: 'settings'; readonly section?: SettingsSection }
@@ -83,6 +85,11 @@ export function parseRoute(pathname: string, search: string): Route {
     case '/feedback':
       return { name: 'feedback', ...fromParam(search) }
     default: {
+      const theme = /^\/themes\/([^/]+)$/.exec(path)
+      if (theme) {
+        const q = new URLSearchParams(search).get('q')
+        return { name: 'theme', themeId: decodeURIComponent(theme[1]!), ...(q ? { q } : {}) }
+      }
       const section = SETTINGS_SECTIONS.find((s) => path === `/settings/${s}`)
       return section ? { name: 'settings', section } : { name: 'home' }
     }
@@ -119,6 +126,8 @@ export function routeHref(route: Route): string {
       return route.section ? `/settings/${route.section}` : '/settings'
     case 'feedback':
       return route.from ? `/feedback?${new URLSearchParams({ from: route.from }).toString()}` : '/feedback'
+    case 'theme':
+      return `/themes/${encodeURIComponent(route.themeId)}${route.q ? `?${new URLSearchParams({ q: route.q }).toString()}` : ''}`
     default:
       return `/${route.name}`
   }

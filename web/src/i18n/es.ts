@@ -438,6 +438,10 @@ export const es: Messages = {
   'themes.searchClear': 'Mostrar todos los temas',
   'themes.searchMore': '+{count} más',
   'themes.searchNoTheme': 'También en el curso, en ningún tema:',
+  'theme.find': 'Buscar una palabra en este tema',
+  'theme.findFound': { one: '{count} palabra encontrada', other: '{count} palabras encontradas' },
+  'theme.findNone': 'Ninguna palabra de este tema contiene «{query}».',
+  'theme.findClear': 'Mostrar todas las palabras',
 
   'progress.title': 'Progreso',
   'progress.tiers': 'Tus palabras',

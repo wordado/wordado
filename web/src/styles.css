@@ -1796,13 +1796,23 @@ dialog.report input[type='text'] {
   max-width: none;
 }
 
-/* The heading, and the search beside it; under it on a phone. */
+/* The heading with the search on its row, and what choosing a theme does under both. On a phone the search comes
+   last, next to what it finds. */
 .themes-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: var(--space-3) var(--space-4);
+  display: grid;
+  grid-template-areas:
+    'title'
+    'lede'
+    'search';
+  gap: var(--space-2);
+}
+
+.themes-head h1 {
+  grid-area: title;
+}
+
+.themes-head .lede {
+  grid-area: lede;
 }
 
 .themes-head h1 {
@@ -1811,7 +1821,8 @@ dialog.report input[type='text'] {
 
 .themes-search {
   position: relative;
-  flex: 1 1 16rem;
+  grid-area: search;
+  margin-top: var(--space-1);
 }
 
 .themes-search svg {
@@ -1833,6 +1844,90 @@ dialog.report input[type='text'] {
   background: var(--paper-raised);
   border: 1px solid var(--rule);
   border-radius: var(--radius);
+}
+
+/* A theme's name leads to its page of words: a link that reads as the heading it is. */
+.theme-text h3 a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.theme-text h3 a:hover {
+  text-decoration: underline;
+}
+
+.theme-matches a {
+  color: inherit;
+}
+
+/* A theme's own page: what the card says, across the page; the word search; then its words by level. */
+
+.app > main > .theme-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.theme-top {
+  display: grid;
+  grid-template-columns: 2.75rem minmax(0, 1fr);
+  grid-template-areas:
+    'icon text'
+    'progress progress'
+    'actions actions';
+  align-items: start;
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+
+.theme-top .theme-icon {
+  grid-area: icon;
+}
+
+.theme-top h1 {
+  margin: 0;
+  font: 600 var(--step-2) / 1.2 var(--font-entry);
+}
+
+.theme-top h1:focus {
+  outline: none;
+}
+
+.theme-top .theme-progress {
+  grid-area: progress;
+}
+
+.theme-top .theme-actions {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  grid-area: actions;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  width: auto;
+  margin: 0;
+}
+
+/* In the page's column the field keeps its own height: the Themes field's flex basis would be read as one. */
+.themes-search.theme-find {
+  flex: none;
+}
+
+.theme-found h2 {
+  margin: 0 0 var(--space-2) var(--space-1);
+  font: 600 var(--step-0) / 1.3 var(--font-ui);
+}
+
+ul.theme-words.panel {
+  padding: 0 1.25rem;
+}
+
+ul.theme-words > li:first-child {
+  border-top: 0;
+}
+
+.level-card > ul.theme-words > li:first-child {
+  border-top: 1px solid var(--rule);
 }
 
 /* What a search found in a theme: its matching words, under the description. */
@@ -1882,7 +1977,7 @@ dialog.report input[type='text'] {
 }
 
 .themes-head .lede {
-  margin: var(--space-2) 0 0;
+  margin: 0;
 }
 
 .theme-group h2 {
@@ -2053,8 +2148,17 @@ dialog.report input[type='text'] {
 }
 
 @media (min-width: 48rem) {
+  .themes-head {
+    grid-template-columns: minmax(0, 1fr) 20rem;
+    grid-template-areas:
+      'title search'
+      'lede lede';
+    align-items: center;
+    column-gap: var(--space-4);
+  }
+
   .themes-search {
-    flex: 0 1 20rem;
+    margin-top: 0;
   }
 
   .theme-grid {

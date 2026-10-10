@@ -67,6 +67,18 @@ describe('routes', () => {
     expect(parseRoute('/study', '?theme=daily-life')).toEqual({ name: 'study', mode: null })
   })
 
+  it('routes a theme’s page, with the word search it starts with', () => {
+    expect(parseRoute('/themes/daily-life', '')).toEqual({ name: 'theme', themeId: 'daily-life' })
+    expect(parseRoute('/themes/daily-life/', '?q=key')).toEqual({ name: 'theme', themeId: 'daily-life', q: 'key' })
+    expect('q' in parseRoute('/themes/daily-life', '?q=')).toBe(false)
+    expect(routeHref({ name: 'theme', themeId: 'daily-life' })).toBe('/themes/daily-life')
+    expect(routeHref({ name: 'theme', themeId: 'daily-life', q: 'река и бряг' })).toBe('/themes/daily-life?q=%D1%80%D0%B5%D0%BA%D0%B0+%D0%B8+%D0%B1%D1%80%D1%8F%D0%B3')
+    expect(parseRoute('/themes/daily-life', '?q=%D1%80%D0%B5%D0%BA%D0%B0+%D0%B8+%D0%B1%D1%80%D1%8F%D0%B3')).toEqual({ name: 'theme', themeId: 'daily-life', q: 'река и бряг' })
+    // Nothing deeper is a theme.
+    expect(parseRoute('/themes/daily-life/words', '')).toEqual({ name: 'home' })
+    expect(parseRoute('/themes', '')).toEqual({ name: 'themes' })
+  })
+
   it('routes feedback, keeping where it was opened from only as the path of a screen the app has', () => {
     expect(routeHref({ name: 'feedback', from: '/practice/words' })).toBe('/feedback?from=%2Fpractice%2Fwords')
     expect(parseRoute('/feedback', '?from=%2Fpractice%2Fwords%3Funit%3Da1-02')).toEqual({ name: 'feedback', from: '/practice/words' })

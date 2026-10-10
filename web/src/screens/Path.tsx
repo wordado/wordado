@@ -4,9 +4,7 @@ import { Check, ChevronDown, CircleDashed, Lock, Play, Star, type LucideIcon } f
 import { useState, type ReactNode } from 'react'
 import { localized, useT, type MessageKey } from '../i18n/i18n'
 import { Link } from '../router'
-import { FlagControls } from '../study/FlagControls'
-import { Translation } from '../study/Headword'
-import { PlayWord } from '../study/RunView'
+import { WordRow } from '../study/WordRow'
 import { levelStatus, levelToOpen, unitsAtFirst, type LevelStatus, type UnitStatus } from './pathFolding'
 import { todayCounts } from './today'
 
@@ -208,19 +206,7 @@ function UnitItem(props: {
       <ul>
         {unit.wordIds.map((wordId) => {
           const entry = client.entry(wordId)
-          if (!entry) return null
-          return (
-            <li key={wordId}>
-              <PlayWord entry={entry} inList />
-              <span className="word-text">
-                <span lang="en" className="word-head">
-                  {entry.headword}
-                </span>
-                <Translation entry={entry} lang={corpus?.l1 ?? ''} />
-              </span>
-              <FlagControls wordId={wordId} headword={entry.headword} menu learn={props.skipped} />
-            </li>
-          )
+          return entry ? <WordRow key={wordId} entry={entry} lang={corpus?.l1 ?? ''} learn={props.skipped} /> : null
         })}
       </ul>
     )

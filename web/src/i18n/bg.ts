@@ -420,6 +420,10 @@ export const bg: Messages = {
   'themes.searchClear': 'Покажете всички теми',
   'themes.searchMore': 'и още {count}',
   'themes.searchNoTheme': 'В курса, но извън темите:',
+  'theme.find': 'Намерете дума в тази тема',
+  'theme.findFound': { one: 'Намерена е {count} дума', other: 'Намерени са {count} думи' },
+  'theme.findNone': 'Няма дума в тази тема с „{query}“.',
+  'theme.findClear': 'Покажете всички думи',
 
   'progress.title': 'Напредък',
   'progress.tiers': 'Вашите думи',

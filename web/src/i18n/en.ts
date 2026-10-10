@@ -425,6 +425,10 @@ export const en = {
   'themes.searchClear': 'Show all themes',
   'themes.searchMore': '+{count} more',
   'themes.searchNoTheme': 'Also in the course, in no theme:',
+  'theme.find': 'Find a word in this theme',
+  'theme.findFound': { one: '{count} word found', other: '{count} words found' },
+  'theme.findNone': 'No word of this theme has “{query}”.',
+  'theme.findClear': 'Show all words',
 
   'progress.title': 'Progress',
   'progress.tiers': 'Your words',
