@@ -1,5 +1,5 @@
 import type { D1Database } from './bindings'
-import type { Language, ReviewerView, Role, SampleRef, Severity } from '../shared/hosted'
+import type { FeedbackState, Language, ReviewerView, Role, SampleRef, Severity } from '../shared/hosted'
 import type { Action } from '../server/types'
 
 export interface ReviewerRow {
@@ -211,4 +211,27 @@ export async function submissionByPr(db: D1Database, pr: number): Promise<Submis
 }
 export async function setSubmissionStatus(db: D1Database, id: number, status: SubmissionRow['status']): Promise<void> {
   await db.prepare('UPDATE submissions SET status = ? WHERE id = ?').bind(status, id).run()
+}
+
+/** The coordinator's mark on a learner's feedback (spec §16), by the message's id at the learner app's server. */
+export interface FeedbackMarkRow { readonly state: FeedbackState; readonly note: string; readonly updatedAt: string; readonly updatedBy: string }
+/** The marks of these messages, by id; a message nobody has marked is not in it. At most a page of ids (D1 binds 100 values). */
+export async function feedbackMarks(db: D1Database, ids: readonly number[]): Promise<Map<number, FeedbackMarkRow>> {
+  const out = new Map<number, FeedbackMarkRow>()
+  if (ids.length === 0) return out
+  const found = await db
+    .prepare(`SELECT feedback_id, state, note, updated_at, updated_by FROM feedback_marks WHERE feedback_id IN (${ids.map(() => '?').join(', ')})`)
+    .bind(...ids)
+    .all<{ feedback_id: number; state: FeedbackState; note: string; updated_at: string; updated_by: string }>()
+  for (const r of found.results) out.set(r.feedback_id, { state: r.state, note: r.note, updatedAt: r.updated_at, updatedBy: r.updated_by })
+  return out
+}
+export async function putFeedbackMark(db: D1Database, id: number, mark: FeedbackMarkRow): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO feedback_marks (feedback_id, state, note, updated_at, updated_by) VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT (feedback_id) DO UPDATE SET state = excluded.state, note = excluded.note, updated_at = excluded.updated_at, updated_by = excluded.updated_by`,
+    )
+    .bind(id, mark.state, mark.note, mark.updatedAt, mark.updatedBy)
+    .run()
 }

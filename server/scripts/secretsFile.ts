@@ -4,6 +4,7 @@ export const WORKER_SECRETS = [
   'RESEND_API_KEY',
   'EMAIL_FROM',
   'FEEDBACK_EMAIL',
+  'FEEDBACK_READ_TOKEN',
   'GOOGLE_CLIENT_ID',
   'GOOGLE_CLIENT_SECRET',
   'VAPID_PUBLIC_KEY',
@@ -36,6 +37,8 @@ export function workerSecrets(env: Readonly<Record<string, string | undefined>>)
   }
   const problems: string[] = []
   if ((out['BETTER_AUTH_SECRET'] ?? '').length < 32) problems.push('BETTER_AUTH_SECRET must be at least 32 characters')
+  // Optional, but the review app is given the same value: one a person could guess must not open learners' messages.
+  if ('FEEDBACK_READ_TOKEN' in out && out['FEEDBACK_READ_TOKEN'].length < 32) problems.push('FEEDBACK_READ_TOKEN must be at least 32 characters')
   for (const [a, b] of PAIRS) {
     if (a in out && !(b in out)) problems.push(`${a} is set without ${b}`)
     if (b in out && !(a in out)) problems.push(`${b} is set without ${a}`)

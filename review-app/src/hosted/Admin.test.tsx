@@ -29,6 +29,7 @@ beforeEach(() => {
   vi.spyOn(hostedApi.admin, 'reviewers').mockResolvedValue([anna])
   vi.spyOn(hostedApi.admin, 'assignments').mockResolvedValue([])
   vi.spyOn(hostedApi.admin, 'submissions').mockResolvedValue([])
+  vi.spyOn(hostedApi.admin, 'feedback').mockResolvedValue({ connected: true, items: [], read: 0, nextBefore: null })
 })
 
 const openTab = async (name: string) => fireEvent.click(await screen.findByRole('tab', { name }))
@@ -71,10 +72,10 @@ describe('Admin', () => {
     expect(await screen.findByText(/No review data yet/)).toBeTruthy()
   })
 
-  it('has four tabs; a click or the arrow keys change the tab, and it is kept in the address', async () => {
+  it('has five tabs; a click or the arrow keys change the tab, and it is kept in the address', async () => {
     render(<Admin />)
     const tablist = await screen.findByRole('tablist')
-    expect(within(tablist).getAllByRole('tab').map((t) => t.textContent)).toEqual(['Overview', 'Reviewers', 'Assignments', 'Submissions'])
+    expect(within(tablist).getAllByRole('tab').map((t) => t.textContent)).toEqual(['Overview', 'Reviewers', 'Assignments', 'Submissions', 'Feedback'])
     await openTab('Reviewers')
     expect(window.location.hash).toBe('#reviewers')
     expect(screen.getByRole('tab', { name: 'Reviewers' }).getAttribute('aria-selected')).toBe('true')
@@ -94,9 +95,23 @@ describe('Admin', () => {
     fireEvent.keyDown(assignments, { key: 'ArrowLeft' })
     fireEvent.keyDown(screen.getByRole('tab', { name: 'Reviewers' }), { key: 'ArrowLeft' })
     fireEvent.keyDown(screen.getByRole('tab', { name: 'Overview' }), { key: 'ArrowLeft' })
-    expect(screen.getByRole('tab', { name: 'Submissions' }).getAttribute('aria-selected')).toBe('true')
-    fireEvent.keyDown(screen.getByRole('tab', { name: 'Submissions' }), { key: 'Home' })
+    expect(screen.getByRole('tab', { name: 'Feedback' }).getAttribute('aria-selected')).toBe('true')
+    expect(window.location.hash).toBe('#feedback')
+    fireEvent.keyDown(screen.getByRole('tab', { name: 'Feedback' }), { key: 'Home' })
     expect(screen.getByRole('tabpanel', { name: 'Overview' })).toBeTruthy()
+  })
+
+  it('reads the feedback when the Feedback tab is opened, not before, and keeps the tab in the address', async () => {
+    const first = render(<Admin />)
+    await screen.findByRole('tabpanel', { name: 'Overview' })
+    expect(hostedApi.admin.feedback).not.toHaveBeenCalled()
+    await openTab('Feedback')
+    expect(window.location.hash).toBe('#feedback')
+    expect(await within(screen.getByRole('tabpanel', { name: 'Feedback' })).findByText('No feedback yet.')).toBeTruthy()
+    expect(hostedApi.admin.feedback).toHaveBeenCalledWith({ kind: '', state: 'open' })
+    first.unmount()
+    render(<Admin />)
+    expect((await screen.findByRole('tab', { name: 'Feedback' })).getAttribute('aria-selected')).toBe('true')
   })
 
   it('opens on the tab in the address, so a reload stays put', async () => {

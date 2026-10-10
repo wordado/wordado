@@ -406,3 +406,75 @@ test('@phone an admin reads the Overview and moves between the tabs', async ({ b
   await expect(page.getByRole('tab', { name: 'Submissions' })).toBeInViewport({ ratio: 1 })
   await expectFits(page, '.admin *')
 })
+
+/** The Feedback tab, with the messages of one kind: the desktop run marks the bugs, the phone run the ideas. */
+async function readsFeedback(browser: Browser, kind: 'Bug' | 'Idea', newest: string, older: string) {
+  const page = await as(browser, 'admin')
+  await page.goto('/#feedback')
+  const panel = page.getByRole('tabpanel', { name: 'Feedback' })
+  const items = panel.getByRole('list', { name: 'Feedback' }).getByRole('listitem')
+  // Everything open, newest first: what the fake learner app server holds, read through the Worker with the token.
+  await expect(items.first()).toContainText('Thank you for the app.')
+  await panel.getByLabel('Kind').selectOption({ label: kind })
+  await expect(items).toHaveCount(2)
+  await expect(items.nth(0)).toContainText(newest)
+  await expect(items.nth(1)).toContainText(older)
+  await expect(items.nth(0).getByRole('heading', { level: 3 })).toContainText(kind)
+  await expect(items.nth(0).getByText('not signed in')).toBeVisible()
+  // The older one came with an address and an account: the address is text, and a link to write to it.
+  const address = kind === 'Bug' ? 'learner@example.com' : 'ideas@example.com'
+  await expect(items.nth(1).getByText(address, { exact: true })).toBeVisible()
+  await expect(items.nth(1).getByRole('link', { name: 'Write a mail' })).toHaveAttribute('href', `mailto:${address}`)
+  await expect(items.nth(1).getByText('signed in', { exact: true })).toBeVisible()
+  // The technical details are folded away.
+  await expect(items.nth(0).getByText('App version')).toBeHidden()
+  await items.nth(0).getByText('Details').click()
+  await expect(items.nth(0).getByText('App version')).toBeVisible()
+  await expect(items.nth(0).getByText('Mozilla/5.0 (X11; Linux x86_64)')).toBeVisible()
+  await expectFits(page, '.admin *')
+
+  // Done saves as it is chosen; the note on Save note.
+  await items.nth(0).getByLabel('State').selectOption({ label: 'Done' })
+  await expect(items.nth(0).getByRole('status').filter({ hasText: 'Saved' })).toBeVisible()
+  const note = items.nth(1).getByLabel('Note')
+  await note.fill('Asked for the browser and the unit.')
+  await items.nth(1).getByRole('button', { name: 'Save note' }).click()
+  await expect(items.nth(1).getByRole('status').filter({ hasText: 'Saved' })).toBeVisible()
+  await expect(items.nth(1).getByRole('button', { name: 'Save note' })).toBeDisabled()
+  await items.nth(1).getByLabel('State').selectOption({ label: 'Looked at' })
+  await expect(items.nth(1).getByRole('status').filter({ hasText: 'Saved' })).toHaveCount(2)
+
+  // The filters read the list again: Done has the one, Open the other, All both.
+  const show = panel.getByLabel('Show')
+  await show.selectOption({ label: 'Done' })
+  await expect(items).toHaveCount(1)
+  await expect(items.first()).toContainText(newest)
+  await show.selectOption({ label: 'Not doing' })
+  await expect(panel.getByText('Nothing here to show.')).toBeVisible()
+  await show.selectOption({ label: 'All' })
+  await expect(items).toHaveCount(2)
+
+  // A reload stays on the tab, and the marks are still there.
+  await page.reload()
+  await expect(page).toHaveURL(/#feedback$/)
+  await expect(page.getByRole('tab', { name: 'Feedback' })).toHaveAttribute('aria-selected', 'true')
+  await expect(page.getByRole('tab', { name: 'Feedback' })).toBeInViewport({ ratio: 1 })
+  await panel.getByLabel('Kind').selectOption({ label: kind })
+  await expect(items).toHaveCount(1)
+  await expect(items.first()).toContainText(older)
+  await expect(items.first().getByLabel('State')).toHaveValue('seen')
+  await expect(items.first().getByLabel('Note')).toHaveValue('Asked for the browser and the unit.')
+  await show.selectOption({ label: 'Done' })
+  await expect(items).toHaveCount(1)
+  await expect(items.first()).toContainText(newest)
+  await expect(items.first().getByLabel('State')).toHaveValue('done')
+  await expectFits(page, '.admin *')
+}
+
+test('an admin reads the feedback, marks one message done, writes a note on another, filters, and finds the marks after a reload', async ({ browser }) => {
+  await readsFeedback(browser, 'Bug', 'The sound of a word plays twice on my phone.', 'The path does not open after I finish a unit.')
+})
+
+test('@phone an admin reads and marks the feedback on a phone', async ({ browser }) => {
+  await readsFeedback(browser, 'Idea', 'Let me choose how many new words a day.', 'A dark theme would be easier in the evening.')
+})

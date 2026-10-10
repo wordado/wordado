@@ -25,6 +25,10 @@ export interface ServerConfig {
   readonly vapid: VapidKeys | null
   /** Where the daily feedback mail goes (spec §8.12). Null keeps the feedback and mails nothing. */
   readonly feedbackEmail: string | null
+  /** What a request to `GET /v1/admin/feedback` must carry (spec §8.12). Null closes the route. */
+  readonly feedbackReadToken: string | null
+  /** The review app's origin, for the link in the feedback mail. Null leaves the link out. */
+  readonly reviewAppUrl: string | null
 }
 
 export interface Mailer {

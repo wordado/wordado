@@ -87,6 +87,8 @@ export function harness(options: HarnessOptions = {}): Harness {
       google: null,
       vapid: null,
       feedbackEmail: null,
+      feedbackReadToken: null,
+      reviewAppUrl: null,
       ...options.config,
     },
     now: options.now ?? (() => clock.now),

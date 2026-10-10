@@ -307,9 +307,10 @@ the link to copy), and a submission is still recorded.
   `pull_request` webhook. The Worker signs its own JWT with the app's private key (WebCrypto) and exchanges it
   for an installation token.
 - **Secrets**, all set in the Cloudflare or GitHub UI, never in chat: `GITHUB_APP_PRIVATE_KEY`,
-  `GITHUB_WEBHOOK_SECRET`, `RESEND_API_KEY` (Worker); `R2_REVIEW_ACCESS_KEY_ID`, `R2_REVIEW_SECRET_ACCESS_KEY`
-  (wordado-content). Variables: `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD`, `ADMIN_EMAIL`, `GITHUB_APP_ID`,
-  `GITHUB_INSTALLATION_ID`, `CONTENT_REPO`, `APP_ORIGIN`.
+  `GITHUB_WEBHOOK_SECRET`, `RESEND_API_KEY`, `FEEDBACK_READ_TOKEN` (Worker; the last is §16's and optional);
+  `R2_REVIEW_ACCESS_KEY_ID`, `R2_REVIEW_SECRET_ACCESS_KEY` (wordado-content). Variables: `ACCESS_TEAM_DOMAIN`,
+  `ACCESS_AUD`, `ADMIN_EMAIL`, `GITHUB_APP_ID`, `GITHUB_INSTALLATION_ID`, `CONTENT_REPO`, `APP_ORIGIN`,
+  `LEARNER_APP_URL`.
 - **Private content stays private:** the R2 bucket has no public access; the app repository holds code and test
   fixtures only, never corpus rows.
 
@@ -472,3 +473,113 @@ someone working on the language's flagged rows.
 - **UI:** the question on Save and on Drop, both answers, Cancel, the keys; the admin form and the result.
 - **E2E:** an admin makes a spot check beside a flagged-only assignment and is refused a second one and one beside
   an all-rows assignment; the reviewer drops, edits and keeps with the keys and submits; the admin reads the result.
+
+## 16. Feedback
+
+Decided by the product owner on 2026-10-10. Learners send feedback about the app itself to the learner app's server
+(the learner app's design, §8.12). The coordinator reads it and works through it in the admin area's **Feedback**
+tab.
+
+### 16.1 Read live, keep only our own marks
+
+The review app does not copy feedback. When the tab is opened, the Worker asks the learner app's server for the
+messages and shows them. What the review app keeps is only what the coordinator adds: where a message stands and a
+note, by the message's id.
+
+A copy of learners' messages and contact addresses in a second database would have to be kept in step with account
+deletion and export for ever. Read live, the address of a deleted account is gone from the tab the moment it is
+gone from the server.
+
+### 16.2 The link between the two services
+
+`GET /v1/admin/feedback` on the learner app's server gives the messages newest first, in pages of at most 100
+(`limit`, 50 when not named), older ones with `before=<id>`, filtered with `kind` and `since`. It answers
+`{ items, nextBefore }`; an item has the message, its kind, when it was received, the address given for an answer
+(or none), whether the sender was signed in (never who), and the technical details the form showed. The route is
+read-only.
+
+It answers only to a request that carries the shared token (`authorization: Bearer …`), compared in constant time.
+Without the token, with a wrong one, or while the server has none, it answers 404 with the body of a route that
+does not exist. It is registered ahead of the browser guard on `/v1/*`, because its caller is a server and sends
+no Origin; it reads no cookie, and the guard is unchanged for every other route and method.
+
+The token is one random value of at least 32 characters, a secret named `FEEDBACK_READ_TOKEN` in both deployments,
+set by the owner and never in the repository. The review app also needs the server's address, the variable
+`LEARNER_APP_URL`. The Worker sends the token to that address alone and follows no redirect.
+
+### 16.3 Storage
+
+Migration `0004_feedback_marks.sql`:
+
+```sql
+CREATE TABLE feedback_marks (
+  feedback_id INTEGER PRIMARY KEY,
+  state TEXT NOT NULL CHECK (state IN ('new', 'seen', 'done', 'declined')),
+  note TEXT NOT NULL DEFAULT '',
+  updated_at TEXT NOT NULL,
+  updated_by TEXT NOT NULL REFERENCES reviewers(email)
+);
+```
+
+A message with no row is new and has no note. Nothing a learner sent is in the table.
+
+### 16.4 API
+
+Both routes are for admins only, behind the same check as the rest of `/api/admin/*`.
+
+- `GET /api/admin/feedback?kind=&state=&before=` makes one request to the learner app's server for a page of 50,
+  joins each message with its mark and answers `{ connected: true, items, read, nextBefore }`. `kind` is `bug`,
+  `idea` or `other`, and is filtered by that server. `state` is `open` (new or looked at), `all`, `done` or
+  `declined`, and is filtered by the Worker after the page is read, because only the review app knows the marks.
+  A filtered page can therefore be shorter than 50, or empty, while older messages remain: `read` says how many
+  messages the page held before the filter, and `nextBefore` always leads on to the older ones.
+- `PUT /api/admin/feedback/:id` takes exactly `{ state, note }`, with a note of at most 2,000 characters, and
+  stores the mark with the admin and the time. Anything else is a 400. It sends nothing to the learner app's
+  server, and it does not check that the server still has the message.
+
+### 16.5 Not connected, or down
+
+- **Not connected.** While `FEEDBACK_READ_TOKEN` or `LEARNER_APP_URL` is not set for the review app, the list
+  answers `{ connected: false }` and the tab says, in one sentence, that feedback is not connected and names the
+  two settings. Everything else in the app works.
+- **Down.** When the learner app's server cannot be reached, answers anything but 200, or answers something that
+  is not a page of feedback, the list answers 502 with a short message: that it could not be reached, or the
+  status it answered. A 404 adds a reminder that the token must be the same in both deployments. Neither the token
+  nor the server's own answer is passed on or logged. The tab says so and offers **Try again**; the marks already
+  made stay in D1.
+
+### 16.6 The tab
+
+Newest first. Each message is a card: its kind as a chip (*Bug*, *Idea*, *Other*), when it was received in local
+time, *signed in* or *not signed in*, the message with the learner's own line breaks, the address for an answer
+as text with a link that opens a mail to it, and the technical details behind **Details** (app version, word list
+version, language, screen, browser).
+
+Under them is the coordinator's mark. **State** (*New*, *Looked at*, *Done*, *Not doing*) saves as soon as it is
+chosen, and says *Saving…*, then *Saved*; when the save fails the control goes back to what it was and says why.
+**Note** is saved with **Save note**; when that fails, what was typed stays. A message marked done stays on the
+page until the list is read again.
+
+Two filters: **Kind** (*All*, *Bug*, *Idea*, *Other*) and **Show** (*Open*, *All*, *Done*, *Not doing*), with
+*Open* first. **Load more** reads the next, older page. With nothing at all the tab says *No feedback yet.* The
+tab is in the address (`#feedback`), like the others, and the learner app server's daily mail links to it.
+
+### 16.7 Left out
+
+- Searching old feedback, and a count of open messages on the tab.
+- More than one coordinator working at once: the last mark saved wins.
+- Answering from the app: the address opens the coordinator's own mail program.
+- Removing the mark of a message the server no longer has.
+
+### 16.8 Testing
+
+- **Server:** the page and its order, the cursor, the filters, 404 with the body of an unknown route for every
+  wrong or missing token and while no token is set, a request with no Origin, the guard unchanged for the other
+  routes, nothing changed and the token never logged; both forms of the daily mail.
+- **Worker:** admins only, one request a page with the token in a header, the join, each state filter, a short and
+  an empty page that still lead on, not connected, unreachable, an error status, an answer that is not a page,
+  the strict `PUT`; no table holds anything a learner sent.
+- **UI:** the card and its details, a state saved and one refused, a note saved and one refused, the filters, Load
+  more, not connected, unreachable with Try again, empty.
+- **E2E:** against a fake learner app server, on a desktop screen and a phone: an admin opens the tab, sees two
+  messages, marks one done, writes a note, filters, and finds the marks after a reload.

@@ -291,6 +291,25 @@ const SHOTS_ADMIN: readonly Shot[] = [
   { name: 'hosted-admin-reviewers', who: 'admin', path: '/#reviewers', steps: async (page) => void (await page.getByText('reviewer@example.com', { exact: true }).waitFor()) },
   { name: 'hosted-admin-assignments', who: 'admin', path: '/#assignments', steps: async (page) => void (await page.getByRole('button', { name: 'Reassign…' }).first().waitFor()) },
   { name: 'hosted-admin-submissions', who: 'admin', path: '/#submissions', steps: async (page) => void (await page.getByRole('link', { name: /pull request/ }).first().waitFor()) },
+  { name: 'hosted-admin-feedback', who: 'admin', path: '/#feedback', steps: async (page) => void (await page.getByText('Thank you for the app.').waitFor()) },
+  {
+    name: 'hosted-admin-feedback-details',
+    who: 'admin',
+    path: '/#feedback',
+    steps: async (page) => {
+      const first = page.getByRole('list', { name: 'Feedback' }).getByRole('listitem').first()
+      await first.getByText('Details').click()
+      await first.getByText('App version').waitFor()
+    },
+  },
+  { name: 'hosted-admin-feedback-unconnected', who: 'admin', path: '/#feedback', api: [answer(/\/api\/admin\/feedback/, { connected: false })], steps: async (page) => void (await page.getByText(/Feedback is not connected/).waitFor()) },
+  {
+    name: 'hosted-admin-feedback-unread',
+    who: 'admin',
+    path: '/#feedback',
+    api: [(page) => page.route(/\/api\/admin\/feedback/, (route: Route) => route.fulfill({ status: 502, json: { message: 'The app’s server could not be reached.' } }))],
+    steps: async (page) => void (await page.getByRole('button', { name: 'Try again' }).waitFor()),
+  },
   {
     name: 'hosted-admin-dialog-invite',
     who: 'admin',

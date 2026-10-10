@@ -6,6 +6,7 @@ import { HTTPException } from 'hono/http-exception'
 import { accountRoutes } from './account/routes'
 import { createAuth } from './auth'
 import type { ServerDeps } from './deps'
+import { feedbackAdminRoutes } from './feedback/admin'
 import { feedbackRoutes } from './feedback/routes'
 import { checkUpdateUser, optionalUser, requireUser, sameUser, type AppEnv } from './http'
 import { reminderRoutes } from './reminders/routes'
@@ -33,6 +34,11 @@ export function createApp(deps: ServerDeps): Hono<AppEnv> {
   app.post('/api/auth/email-otp/send-verification-otp', signInEmailLimit(deps))
   app.post('/api/auth/update-user', checkUpdateUser())
   app.on(['GET', 'POST'], '/api/auth/*', (c) => auth.handler(c.req.raw))
+
+  // Before the /v1 guard, which is made for browsers: the review app's server calls this one route, with a token
+  // and no Origin. It is a GET that reads no cookie, so there is nothing of a learner's for another site to ride on,
+  // and every other method on its path still meets the guard below.
+  feedbackAdminRoutes(app, deps)
 
   // JSON bodies already need a CORS preflight cross-site, which this app never
   // grants; csrf() closes the form-post route that needs none.

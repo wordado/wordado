@@ -1428,6 +1428,142 @@ kbd {
   min-width: 5.5rem;
 }
 
+/* The Feedback tab: the two filters side by side, then a card for each message: what the learner wrote, as they
+   wrote it, and under a rule the coordinator's own mark. */
+.feedback-filters > .field {
+  flex: 0 1 11rem;
+}
+
+.feedback-failed > p {
+  margin: 0 0 var(--space-2);
+}
+
+.feedback-list {
+  display: grid;
+  gap: var(--space-3);
+  padding: 0;
+  list-style: none;
+}
+
+.feedback-item > article {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--paper-raised);
+  border: 1px solid var(--rule);
+  border-radius: 1.125rem;
+  box-shadow: var(--lift);
+}
+
+.feedback-item > article > * {
+  min-width: 0;
+  margin: 0;
+}
+
+.feedback-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  font-size: var(--step--1);
+  font-weight: 600;
+}
+
+.feedback-head .note {
+  font-weight: 400;
+}
+
+/* The learner's own line breaks; a long word or address breaks rather than widening the page. */
+.feedback-message {
+  max-width: 44rem;
+  font-family: var(--font-entry);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.feedback-contact,
+.feedback-details {
+  font-size: var(--step--1);
+}
+
+.feedback-contact .row-link {
+  margin-left: var(--space-2);
+  white-space: nowrap;
+}
+
+.feedback-details > summary {
+  width: fit-content;
+  padding: var(--space-1) 0;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.feedback-details > dl {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--space-1) var(--space-3);
+  margin: var(--space-2) 0 0;
+}
+
+.feedback-details dt {
+  color: var(--ink-soft);
+}
+
+.feedback-details dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.feedback-mark {
+  display: grid;
+  grid-template-columns: 11rem minmax(0, 1fr);
+  gap: var(--space-2) var(--space-4);
+  align-items: start;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--rule);
+}
+
+.feedback-state {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.feedback-mark > .form-actions {
+  grid-column: 2;
+  align-items: center;
+}
+
+.feedback-note textarea {
+  width: 100%;
+  min-height: 2.75rem;
+  padding: var(--space-2) var(--space-3);
+  font: 400 var(--step-0) / 1.4 var(--font-ui);
+  color: var(--ink);
+  background: var(--paper-inset);
+  border: 1px solid var(--rule);
+  border-radius: 0.625rem;
+  resize: vertical;
+}
+
+.feedback-note textarea:hover {
+  border-color: var(--ink-soft);
+}
+
+.feedback-status {
+  font-size: var(--step--1);
+  font-weight: 400;
+  color: var(--ink-soft);
+}
+
+.feedback-status.failed {
+  color: var(--rose);
+}
+
+.feedback-status:empty {
+  display: none;
+}
+
 /* Phones: one column, the decisions in a bar at the bottom of the screen, edit and the row list full-screen. */
 @media (max-width: 40rem) {
   .page {
@@ -1671,6 +1807,27 @@ kbd {
 
   .row-state {
     min-width: 0;
+  }
+
+  /* A message's mark: the state, then the note and its button, each the card's whole width. */
+  .feedback-filters > .field {
+    flex: 1;
+  }
+
+  .feedback-item > article {
+    padding: var(--space-3);
+  }
+
+  .feedback-mark {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .feedback-mark > .form-actions {
+    grid-column: 1;
+  }
+
+  .feedback-mark .button {
+    min-height: 2.75rem;
   }
 
   .dialog {

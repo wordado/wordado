@@ -1,7 +1,7 @@
-import { utcDay, type FeedbackKind } from '@wordado/core'
+import { FEEDBACK_KINDS, utcDay, type FeedbackKind } from '@wordado/core'
 import type { ServerDeps } from '../deps'
 
-/** The most messages one mail lists; the rest are counted in its last line and come the next day. */
+/** The most messages one mail lists in full; the rest are counted in its last line and come the next day. */
 export const FEEDBACK_MAIL_MAX = 50
 /** Serialises the day's claim, so two runs of the cron cannot both send. */
 const FEEDBACK_MAIL_LOCK = 7274
@@ -44,13 +44,38 @@ export function feedbackMail(rows: readonly FeedbackRow[], waiting: number): { r
   return { subject: `Wordado feedback: ${waiting} new`, text: items.join('\n\n----\n\n') }
 }
 
+/** The address of the review app's Feedback tab: an admin tab in the address opens the admin page there. */
+export const feedbackTabUrl = (reviewAppUrl: string): string => `${reviewAppUrl}/#feedback`
+
+const NOTICE_KIND: Readonly<Record<FeedbackKind, string>> = { bug: 'Something isn’t working', idea: 'Ideas', other: 'Something else' }
+
 /**
- * The cron's step (spec §8.12): one mail a day, at most, with the feedback
- * no mail has carried yet. The day is claimed before the mail is sent, so a
- * send that fails is not tried again until the next UTC day, when the same
- * messages are still waiting: the mail allowance is shared with sign-in
- * codes (spec §17.2). Without `FEEDBACK_EMAIL` nothing is sent or marked,
- * and one line says how many are waiting. Returns how many were mailed.
+ * The notice's text, for when the review app can show the messages: how
+ * many are new, by kind, and where to read them. Nothing a learner wrote
+ * and no address is in it.
+ */
+export function feedbackNotice(counts: Readonly<Record<FeedbackKind, number>>, reviewAppUrl: string | null): { readonly subject: string; readonly text: string } {
+  const total = FEEDBACK_KINDS.reduce((sum, kind) => sum + counts[kind], 0)
+  const lines = [
+    `${total} new ${total === 1 ? 'message' : 'messages'} about the app.`,
+    '',
+    ...FEEDBACK_KINDS.filter((kind) => counts[kind] > 0).map((kind) => `${NOTICE_KIND[kind]}: ${counts[kind]}`),
+    '',
+    reviewAppUrl === null ? 'Read them in the review app: Admin, then Feedback.' : `Read them in the review app: ${feedbackTabUrl(reviewAppUrl)}`,
+  ]
+  return { subject: `Wordado feedback: ${total} new`, text: lines.join('\n') }
+}
+
+/**
+ * The cron's step (spec §8.12): one mail a day, at most, about the feedback
+ * no mail has told of yet. With `FEEDBACK_READ_TOKEN` the review app shows
+ * the messages, and the mail is a notice: a count by kind and a link.
+ * Without it the mail carries the messages themselves, since nothing else
+ * would. The day is claimed before the mail is sent, so a send that fails
+ * is not tried again until the next UTC day, when the same messages are
+ * still waiting: the mail allowance is shared with sign-in codes (spec
+ * §17.2). Without `FEEDBACK_EMAIL` nothing is sent or marked, and one line
+ * says how many are waiting. Returns how many the mail covered.
  */
 export async function mailNewFeedback(deps: ServerDeps): Promise<number> {
   const to = deps.config.feedbackEmail
@@ -59,6 +84,7 @@ export async function mailNewFeedback(deps: ServerDeps): Promise<number> {
     if (row && row.n > 0) console.log(`feedback: ${row.n} waiting, FEEDBACK_EMAIL is not set`)
     return 0
   }
+  const notice = deps.config.feedbackReadToken !== null
   const now = deps.now()
   const today = utcDay(now)
   const claimed = await deps.db.transaction(async (tx) => {
@@ -68,15 +94,22 @@ export async function mailNewFeedback(deps: ServerDeps): Promise<number> {
     await tx.query('delete from feedback_mail where utc_day < $1', [today])
     const [day] = await tx.query('insert into feedback_mail (utc_day, attempted_at) values ($1, $2) on conflict do nothing returning utc_day', [today, now])
     if (!day) return null
+    if (notice) {
+      // Every waiting message is counted, so every one of them is told of: no limit, and nothing left for tomorrow.
+      const waiting = await tx.query<{ id: number; kind: FeedbackKind }>('select id, kind from feedback where mailed_at is null')
+      const counts: Record<FeedbackKind, number> = { bug: 0, idea: 0, other: 0 }
+      for (const row of waiting) counts[row.kind] += 1
+      return { ids: waiting.map((row) => row.id), mail: feedbackNotice(counts, deps.config.reviewAppUrl) }
+    }
     const rows = await tx.query<FeedbackRow>(
       `select id, user_id, kind, message, contact_email, app_version, corpus_version, user_agent, language, screen, received_at
        from feedback where mailed_at is null order by received_at, id limit $1`,
       [FEEDBACK_MAIL_MAX],
     )
-    return { rows, waiting: count.n }
+    return { ids: rows.map((row) => row.id), mail: feedbackMail(rows, count.n) }
   })
   if (claimed === null) return 0
-  await deps.mailer.sendFeedback(to, feedbackMail(claimed.rows, claimed.waiting))
-  await deps.db.query('update feedback set mailed_at = $1 where id = any($2::bigint[])', [now, claimed.rows.map((row) => row.id)])
-  return claimed.rows.length
+  await deps.mailer.sendFeedback(to, claimed.mail)
+  await deps.db.query('update feedback set mailed_at = $1 where id = any($2::bigint[])', [now, claimed.ids])
+  return claimed.ids.length
 }

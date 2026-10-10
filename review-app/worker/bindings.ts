@@ -34,4 +34,8 @@ export interface Env {
   readonly GITHUB_WEBHOOK_SECRET?: string
   readonly RESEND_API_KEY?: string
   readonly MAIL_FROM: string
+  /** The learner app's server, whose feedback the Feedback tab reads (spec §16); empty or unset leaves the tab unconnected. */
+  readonly LEARNER_APP_URL?: string
+  /** A secret, the same value as that server's: what it answers to. Unset leaves the tab unconnected. */
+  readonly FEEDBACK_READ_TOKEN?: string
 }
