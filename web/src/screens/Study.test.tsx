@@ -69,7 +69,9 @@ describe('Study', () => {
     const headwords = second.wordIds.map((wordId) => ctx.client.entry(wordId)!.headword)
     // Setting a word aside works with no review state: the flag is the learner's, not the schedule's.
     fireEvent.click(screen.getByRole('button', { name: 'More' }))
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Not now' })))
+    // The menu opens on a later render: wait for its button.
+    const notNow = await screen.findByRole('button', { name: 'Not now' })
+    await act(async () => fireEvent.click(notNow))
     for (let i = 0; i < 9; i += 1) {
       expect(headwords).toContain(document.querySelector('.card [lang="en"]')!.textContent)
       ctx.env.advance(ITEM_SETTLE_MS)
