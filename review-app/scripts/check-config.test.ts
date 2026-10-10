@@ -47,7 +47,15 @@ describe('checkProductionConfig', () => {
     expect(checkProductionConfig(config())).toEqual([])
     expect(checkProductionConfig(config({ vars: { ACCESS_JWKS: '{}' } })).join('\n')).toMatch(/ACCESS_JWKS/)
     expect(checkProductionConfig(config({ vars: { GITHUB_API_URL: 'http://127.0.0.1:4182' } })).join('\n')).toMatch(/GITHUB_API_URL/)
-    expect(checkProductionConfig(config({ vars: { ADMIN_EMAIL: 'admin@example.com' } })).join('\n')).toMatch(/ADMIN_EMAIL/)
+    expect(checkProductionConfig(config({ vars: { ADMIN_EMAIL: 'admin@example.com' } })).join('\n')).toMatch(/ADMIN_EMAIL must not be set: it is a secret/)
+    expect(checkProductionConfig(config({ vars: { FEEDBACK_READ_TOKEN: 't'.repeat(40) } })).join('\n')).toMatch(/FEEDBACK_READ_TOKEN must not be set: it is a secret/)
+  })
+  it('takes the learner app’s server as an https origin, or none at all', () => {
+    expect(checkProductionConfig(config({ vars: { LEARNER_APP_URL: 'https://app.example.com' } }))).toEqual([])
+    expect(checkProductionConfig(config({ vars: { LEARNER_APP_URL: '' } }))).toEqual([])
+    for (const bad of ['http://app.example.com', 'https://app.example.com/', 'https://app.example.com/v1', 'app.example.com']) {
+      expect(checkProductionConfig(config({ vars: { LEARNER_APP_URL: bad } })).join('\n')).toMatch(/LEARNER_APP_URL/)
+    }
   })
   it('refuses another origin', () => {
     expect(checkProductionConfig(config({ vars: { APP_ORIGIN: 'https://example.com' } })).join('\n')).toMatch(/APP_ORIGIN/)

@@ -15,7 +15,7 @@ export async function migrate(db: D1Database): Promise<void> {
 }
 
 export async function resetDb(db: D1Database): Promise<void> {
-  await db.batch(['DELETE FROM decisions', 'DELETE FROM submissions', 'DELETE FROM assignments', 'DELETE FROM reviewers'].map((s) => db.prepare(s)))
+  await db.batch(['DELETE FROM feedback_marks', 'DELETE FROM decisions', 'DELETE FROM submissions', 'DELETE FROM assignments', 'DELETE FROM reviewers'].map((s) => db.prepare(s)))
 }
 
 /** Local D1 and R2 from wrangler.jsonc's top level, in memory, migrated. */

@@ -1,3 +1,4 @@
+import type { FeedbackItem } from '@wordado/core'
 import type { Action, RowView } from '../server/types'
 
 export type Language = 'bg' | 'de' | 'es' | 'en'
@@ -158,3 +159,28 @@ export interface SnapshotStatus {
     readonly files: readonly { readonly file: string; readonly rows: number; readonly flagged: number; readonly reported: number; readonly assignedTo: string | null }[]
   }[]
 }
+
+/** Where a learner's feedback stands with the coordinator (spec §16): shown as New, Looked at, Done and Not doing. */
+export type FeedbackState = 'new' | 'seen' | 'done' | 'declined'
+export const FEEDBACK_STATES: readonly FeedbackState[] = ['new', 'seen', 'done', 'declined']
+/** What the Feedback tab can show: `open` is everything not done and not declined. */
+export type FeedbackStateFilter = 'open' | 'all' | 'done' | 'declined'
+export const FEEDBACK_STATE_FILTERS: readonly FeedbackStateFilter[] = ['open', 'all', 'done', 'declined']
+export const MAX_FEEDBACK_NOTE_LENGTH = 2000
+
+/** The coordinator's mark on a message. `markedAt` is null while nobody has marked it: it is new, with no note. */
+export interface FeedbackMark {
+  readonly state: FeedbackState
+  readonly note: string
+  readonly markedAt: string | null
+}
+
+/** A message as the learner app's server gives it, with the coordinator's mark. */
+export type FeedbackView = FeedbackItem & FeedbackMark
+
+/** `GET /api/admin/feedback`. Not connected: the token or the server's address is not set. `read` is how many
+ * messages the server's page held, before the filter by state; `nextBefore` is the `before` of the next, older
+ * page, or null on the last. A page filtered by state can be short, or empty, with older ones still to come. */
+export type FeedbackList =
+  | { readonly connected: false }
+  | { readonly connected: true; readonly items: readonly FeedbackView[]; readonly read: number; readonly nextBefore: number | null }

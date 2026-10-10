@@ -4,6 +4,7 @@ import type { Env } from './bindings'
 import { getReviewer, insertReviewerIfAbsent, type ReviewerRow } from './db'
 import { adminRoutes } from './routes/admin'
 import { decisionRoutes } from './routes/decision'
+import { feedbackRoutes } from './routes/feedback'
 import { meRoutes } from './routes/me'
 import { reviewerRoutes } from './routes/reviewer'
 import { reviewersRoutes } from './routes/reviewers'
@@ -33,7 +34,7 @@ export async function jsonBody<T>(c: Context): Promise<T> {
   return parsed as T
 }
 
-export const apiError = (c: Context, status: 400 | 401 | 403 | 404 | 409 | 410 | 415 | 503, message: string) => c.json({ message }, status)
+export const apiError = (c: Context, status: 400 | 401 | 403 | 404 | 409 | 410 | 415 | 502 | 503, message: string) => c.json({ message }, status)
 
 /** Paths that are not called by the browser and so carry no Origin or Access token (GitHub's webhook). */
 const MACHINE_PATHS = new Set(['/api/github/webhook'])
@@ -81,6 +82,7 @@ export function createApp(deps: Deps): Hono<AppEnv> {
   decisionRoutes(app, deps)
   adminRoutes(app, deps)
   reviewersRoutes(app, deps)
+  feedbackRoutes(app, deps)
   // After adminRoutes, so /api/admin/submissions is behind the admin-only middleware.
   submitRoutes(app, deps)
   // Routes added by later tasks are registered before this catch-all; keep the catch-all last.
