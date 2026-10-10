@@ -194,6 +194,19 @@ describe('document writes (spec §9.2)', () => {
     ])
   })
 
+  it('keeps the learner\'s suggestion on a report, or none when it is not given', async () => {
+    const h = harness()
+    const s = await h.signIn()
+    const report = { wordId: 'c:hello-1', field: 'translation', note: 'odd', packVersion: 0, createdAt: h.clock.now }
+    const reply = await push(h, s, [write('content_report', 'rep-1', { ...report, suggestion: 'здравей' }), write('content_report', 'rep-2', report)])
+    expect(reply.rejected).toEqual([])
+    const rows = await h.deps.db.query('select report_key, note, suggestion from content_report order by report_key')
+    expect(rows).toEqual([
+      { report_key: 'rep-1', note: 'odd', suggestion: 'здравей' },
+      { report_key: 'rep-2', note: 'odd', suggestion: '' },
+    ])
+  })
+
   it('marks the learner for a full re-derivation when an alias changes, and asks the queue (spec §6.1)', async () => {
     const h = harness()
     const s = await h.signIn()
