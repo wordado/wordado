@@ -378,7 +378,8 @@ sense; a hard-to-translate word gets the best translation and a note. Until repo
 
 ## Privacy
 
-`triage` reads report notes, which learners write, and puts up to 280 characters of them in the review files of
-the private content repository. Reporter IDs are hashed as they are read and never written. Deleting an account
-removes the reporter from `content_report` (spec §11). Notes already in the content repository's history stay
-there. Say so in the privacy policy's section on reports.
+`triage` reads report suggestions and notes, which learners write, and puts up to 280 characters of them (the
+suggestions first, each as `suggested: „…“`) in the review files of the private content repository. Reporter IDs
+are hashed as they are read and never written. Deleting an account removes the reporter from `content_report`
+(spec §11). Suggestions and notes already in the content repository's history stay there. Say so in the privacy
+policy's section on reports.
