@@ -32,7 +32,6 @@ async function busyLearner(h: Harness, s: Session): Promise<void> {
      values ($1, $2, 'key', 'auth', 540, 180, 'bg', $3)`,
     [`https://fcm.googleapis.com/fcm/send/${s.userId}`, s.userId, h.clock.now],
   )
-  await s.post('/api/auth/update-user', { country: 'BG' })
   const sent = await s.post('/v1/feedback', {
     kind: 'idea',
     message: 'A dark theme, please.',
@@ -71,9 +70,9 @@ describe('account deletion (spec §11)', () => {
     expect(await h.deps.db.query('select reporter_id, word_id, note, suggestion from content_report')).toEqual([
       { reporter_id: null, word_id: 'c:w-1', note: 'robotic', suggestion: 'human' },
     ])
-    // Feedback stays too (spec §8.12), without the account or the address given for an answer.
-    expect(await h.deps.db.query('select user_id, message, contact_email from feedback')).toEqual([
-      { user_id: null, message: 'A dark theme, please.', contact_email: '' },
+    // Feedback stays too (spec §8.12): it never named the account (#166), and the address given for an answer is removed.
+    expect(await h.deps.db.query('select signed_in, message, contact_email from feedback')).toEqual([
+      { signed_in: true, message: 'A dark theme, please.', contact_email: '' },
     ])
   })
 
@@ -99,8 +98,8 @@ describe('account deletion (spec §11)', () => {
     // Three words from dev-a and the one dev-b answered on its unfinished push.
     expect(pulled.body.reviewStates).toHaveLength(4)
     expect(await h.deps.db.query('select reporter_id from content_report where reporter_id is not null')).toEqual([{ reporter_id: staying.userId }])
-    expect(await h.deps.db.query(`select user_id, contact_email from feedback where contact_email <> ''`)).toEqual([
-      { user_id: staying.userId, contact_email: staying.email },
+    expect(await h.deps.db.query(`select signed_in, contact_email from feedback where contact_email <> ''`)).toEqual([
+      { signed_in: true, contact_email: staying.email },
     ])
   })
 
@@ -123,7 +122,8 @@ describe('data export (spec §11)', () => {
     expect(reply.headers.get('content-disposition')).toMatch(/^attachment; filename="wordado-export-\d{4}-\d{2}-\d{2}\.json"$/)
     const exported = reply.body
     expect(exported.format).toBe(EXPORT_FORMAT)
-    expect(exported.account).toEqual({ userId: s.userId, email: s.email, country: 'BG', createdAt: expect.any(Number) })
+    expect(exported.account).toEqual({ userId: s.userId, email: s.email, createdAt: expect.any(Number) })
+    expect(exported).not.toHaveProperty('feedback')
     const stored = (await loadEvents(h.deps.db, s.userId)).map(toStampedEvent)
     expect(exported.reviewEvents).toHaveLength(stored.length)
     expect(new Set(exported.reviewEvents.map((e: { reviewId: string }) => e.reviewId))).toEqual(new Set(stored.map((e) => e.reviewId)))
@@ -136,27 +136,6 @@ describe('data export (spec §11)', () => {
     expect(exported.dayComplete).toHaveLength(1)
   })
 
-  it('holds the feedback the learner sent while signed in, and nobody else’s', async () => {
-    const h = harness()
-    const s = await h.signIn()
-    const other = await h.signIn()
-    await busyLearner(h, s)
-    await busyLearner(h, other)
-    const exported = (await s.get('/v1/export')).body
-    expect(exported.feedback).toEqual([
-      {
-        kind: 'idea',
-        message: 'A dark theme, please.',
-        email: s.email,
-        receivedAt: h.clock.now,
-        appVersion: 'B3kq9xZa',
-        corpusVersion: 'bg 6',
-        userAgent: 'Mozilla/5.0',
-        language: 'bg',
-        screen: '/progress',
-      },
-    ])
-  })
 
   it('answers 401 without a session', async () => {
     expect((await harness().request('/v1/export')).status).toBe(401)

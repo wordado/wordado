@@ -122,10 +122,8 @@ export class Boot {
    * handed over only once this tab has let go of whatever it opened.
    */
   private opening: Promise<void> | null = null
-  /** Set by `suspend()` and `leave()`, so only a page that let go opens again on `resume()`. */
+  /** Set by `suspend()`, so only a page that let go opens again on `resume()`. */
   private suspended = false
-  /** Set while `leave()` lets go: the redirect follows, so `resume()` waits for nothing and does nothing. */
-  private leaving = false
   /** Counts lock requests, so only the latest one decides what a request answered after the page let go does with the lock. */
   private lockRequests = 0
 
@@ -175,7 +173,7 @@ export class Boot {
   }
 
   /**
-   * Whether the page let go (`suspend()`, `leave()`) while this lock request
+   * Whether the page let go (`suspend()`) while this lock request
    * was pending: nothing opens. The lock it got goes again, unless a newer
    * request is under way — `TabLock.takeOver()` hands the same grant to every
    * caller, and the newer one keeps it.
@@ -228,23 +226,6 @@ export class Boot {
   }
 
   /**
-   * This page is navigating away on purpose (Google's sign-in): flush and
-   * close as a hand-over does, then let go of the tab lock, so whichever
-   * page comes next finds the file and the lock free. `resume()` opens again
-   * if this page is shown once more.
-   */
-  async leave(): Promise<void> {
-    this.suspended = true
-    this.leaving = true
-    try {
-      const generation = await this.letGo({ status: 'starting' })
-      if (generation === this.generation) this.lock.drop()
-    } finally {
-      this.leaving = false
-    }
-  }
-
-  /**
    * The page is being hidden (`pagehide`) and may be frozen in the back-forward
    * cache, where it answers nobody (iOS): the database Worker and the locks it
    * and this tab hold must go now, synchronously. No flush: each answer is
@@ -265,15 +246,15 @@ export class Boot {
     void client?.close().catch(() => undefined)
   }
 
-  /** The page is shown again after `suspend()` or `leave()` (`pageshow` from the back-forward cache): open the ordinary way. */
+  /** The page is shown again after `suspend()` (`pageshow` from the back-forward cache): open the ordinary way. */
   async resume(): Promise<void> {
-    if (!this.suspended || this.leaving) return
+    if (!this.suspended) return
     this.suspended = false
     await this.start()
   }
 
   /**
-   * Gives the database up: what `release()` and `leave()` share. Resolves with the generation it started, once the file
+   * Gives the database up for `release()`. Resolves with the generation it started, once the file
    * is closed — or at once after waiting for an open, if the page let go and came back meanwhile: the Client open now
    * is a later one, not this call's to close.
    */

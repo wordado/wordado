@@ -3,7 +3,6 @@ import { useEffect, useId, useMemo, useRef, useState, type FormEvent, type React
 import { ApiError, OfflineError } from '../account/api'
 import { consentAge } from '../account/ageGate'
 import { countryOptions } from '../account/countries'
-import { pendingSignIn, type PendingSignIn } from '../account/storage'
 import { useApp } from '../app/context'
 import { privacyUrl } from '../app/site'
 import { ProgressBar } from '../app/ProgressBar'
@@ -55,27 +54,20 @@ function Field(props: {
   )
 }
 
-/** How long going to Google waits for the database to be let go before going anyway. Tuning (§15). */
-export const LEAVE_TIMEOUT_MS = 2_000
-
 /** The wizard's steps, as its counter numbers them. */
 const STEP_NUMBER = { gate: 1, method: 2, code: 3 } as const
 
 /**
  * Sign-in and sign-up are one flow (spec §8.6), as a wizard in the first-run
- * setup's look: the age gate (spec §11), then a code by email or Google, then
- * the code. The server creates the account at the first sign-in, so the gate
+ * setup's look: the age gate (spec §11), then an email address, then the
+ * code. The server creates the account at the first sign-in, so the gate
  * comes first every time. The gate asks where the learner lives and that they
- * are at least the age it sets; only the country is kept, and no birth date is
- * asked. The native language is asked by the first-run setup, right after
+ * are at least the age it sets; the country stays on this device and is not
+ * sent with the sign-in (#166), and no birth date is asked. The native
+ * language is asked by the first-run setup, right after
  * sign-up (plan 11), not here.
  */
-export function SignIn(props: {
-  readonly redirect?: (url: string) => void
-  readonly pending?: { save(p: PendingSignIn): void }
-  /** Tests shorten LEAVE_TIMEOUT_MS. */
-  readonly leaveWithinMs?: number
-}) {
+export function SignIn() {
   const { t, locale } = useT()
   const { api, accounts, account } = useApp()
   const client = useClient()
@@ -92,8 +84,6 @@ export function SignIn(props: {
   const [verifying, setVerifying] = useState(false)
   const heading = useRef<HTMLHeadingElement>(null)
   const countries = useMemo(() => countryOptions(locale), [locale])
-  const redirect = props.redirect ?? ((url: string) => window.location.assign(url))
-  const pending = props.pending ?? pendingSignIn()
   // A ref, not state: the pre-fill effect below must see the learner's own choice made after
   // this render started, not the `false` its closure was created with (fix round 1, #1).
   const countryTouched = useRef(false)
@@ -175,28 +165,6 @@ export function SignIn(props: {
     if (await requestCode(address)) setStep({ kind: 'code', email: address })
   }
 
-  const google = async () => {
-    reset()
-    setBusy(true)
-    try {
-      pending.save({ country })
-      const origin = window.location.origin
-      const url = await api.googleUrl(`${origin}/?signin=google`, `${origin}/?signin=google-error`)
-      // Let go of the database first: iOS keeps this page frozen while away, still holding the file the page Google
-      // returns to must open. A slow close never holds the sign-in up; `pagehide` lets go regardless (main.tsx).
-      let timer: ReturnType<typeof setTimeout> | undefined
-      const timeout = new Promise<void>((resolve) => {
-        timer = setTimeout(resolve, props.leaveWithinMs ?? LEAVE_TIMEOUT_MS)
-      })
-      await Promise.race([accounts.leavePage().catch(() => undefined), timeout])
-      clearTimeout(timer)
-      redirect(url)
-    } catch (err) {
-      setFormError(t(err instanceof OfflineError ? 'signin.offline' : 'signin.googleFailed'))
-      setBusy(false)
-    }
-  }
-
   const submitCode = async (event: FormEvent) => {
     event.preventDefault()
     if (step.kind !== 'code') return
@@ -224,7 +192,7 @@ export function SignIn(props: {
       return
     }
     try {
-      const outcome = await accounts.completeSignIn(country)
+      const outcome = await accounts.completeSignIn()
       if (outcome === 'other-account') {
         setFormError(t('signin.otherAccount', { email: account?.email ?? '' }))
         setBusy(false)
@@ -347,10 +315,6 @@ export function SignIn(props: {
                 {t('signin.sendCode')}
               </button>
             </form>
-            <p className="or">{t('signin.or')}</p>
-            <button type="button" className="button signin-wide" disabled={busy || !online} onClick={() => void google()}>
-              {t('signin.google')}
-            </button>
             <p className="privacy-link">
               <a href={privacyUrl(locale)}>{t('privacy.link')}</a>
             </p>

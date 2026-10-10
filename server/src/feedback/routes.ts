@@ -18,18 +18,19 @@ export function feedbackRoutes(app: Hono<AppEnv>, deps: ServerDeps, session: Mid
     const parsed = parseFeedback(body)
     if (!parsed.ok) return invalid(c, parsed.errors)
     const f = parsed.value
-    // A session that is not the learner the client names is someone else's: the message is kept without an account.
+    // Only whether the sender was signed in is kept, never who (#166). A session that is not the learner the
+    // client names is someone else's: the message counts as sent signed out.
     const sessionUser: string | undefined = c.get('userId')
     const expected = c.req.header(EXPECTED_USER_HEADER)
-    const userId = sessionUser !== undefined && (expected === undefined || expected === sessionUser) ? sessionUser : null
+    const signedIn = sessionUser !== undefined && (expected === undefined || expected === sessionUser)
     const client = await feedbackClient(deps.config.authSecret, c.req.header('cf-connecting-ip'))
     const now = deps.now()
     const kept = await deps.db.transaction(async (tx) => {
       if (!(await takeFeedbackPlace(tx, client, now))) return false
       await tx.query(
-        `insert into feedback (user_id, kind, message, contact_email, app_version, corpus_version, user_agent, language, screen, received_at)
+        `insert into feedback (signed_in, kind, message, contact_email, app_version, corpus_version, user_agent, language, screen, received_at)
          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-        [userId, f.kind, f.message, f.email, f.appVersion, f.corpusVersion, f.userAgent, f.language, f.screen, now],
+        [signedIn, f.kind, f.message, f.email, f.appVersion, f.corpusVersion, f.userAgent, f.language, f.screen, now],
       )
       return true
     })

@@ -3,10 +3,7 @@ export const WORKER_SECRETS = [
   'BETTER_AUTH_SECRET',
   'RESEND_API_KEY',
   'EMAIL_FROM',
-  'FEEDBACK_EMAIL',
   'FEEDBACK_READ_TOKEN',
-  'GOOGLE_CLIENT_ID',
-  'GOOGLE_CLIENT_SECRET',
   'VAPID_PUBLIC_KEY',
   'VAPID_PRIVATE_KEY',
   'VAPID_SUBJECT',
@@ -14,13 +11,12 @@ export const WORKER_SECRETS = [
 
 /** Secrets that mean nothing alone: the Worker would quietly run without the feature. */
 const PAIRS: readonly (readonly [string, string])[] = [
-  ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'],
   ['VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY'],
   ['RESEND_API_KEY', 'EMAIL_FROM'],
 ]
 
-/** Secrets that need another one, which is useful without them: the feedback mail needs the mailer. */
-const NEEDS: readonly (readonly [string, string])[] = [['FEEDBACK_EMAIL', 'RESEND_API_KEY']]
+/** Secrets that need another one, which is useful without them. None at present. */
+const NEEDS: readonly (readonly [string, string])[] = []
 
 /**
  * The secrets a deploy uploads with `wrangler deploy --secrets-file`, from

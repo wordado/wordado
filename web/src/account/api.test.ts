@@ -45,37 +45,22 @@ describe('httpApi (plan 5 contract)', () => {
   })
 
   it('reads the signed-in learner, and null without a session', async () => {
-    const me = { userId: 'u1', email: 'ana@example.com', country: 'BG', createdAt: 1 }
+    const me = { userId: 'u1', email: 'ana@example.com', createdAt: 1 }
     expect(await httpApi(fakeFetch({ 'GET /v1/me': [200, me] }).fetchFn).me()).toEqual(me)
     expect(await httpApi(fakeFetch({ 'GET /v1/me': [401, { error: 'unauthorized' }] }).fetchFn).me()).toBeNull()
   })
 
-  it('starts Google sign-in without following the redirect, returning where to go', async () => {
-    const { fetchFn, calls } = fakeFetch({ 'POST /api/auth/sign-in/social': [200, { url: 'https://accounts.google.com/o/oauth2/auth?x=1', redirect: true }] })
-    const url = await httpApi(fetchFn).googleUrl('http://localhost/?signin=google', 'http://localhost/?signin=google-error')
-    expect(url).toBe('https://accounts.google.com/o/oauth2/auth?x=1')
-    expect(bodyOf(calls[0]!)).toEqual({
-      provider: 'google',
-      callbackURL: 'http://localhost/?signin=google',
-      errorCallbackURL: 'http://localhost/?signin=google-error',
-      disableRedirect: true,
-    })
-  })
-
-  it('pre-fills the country, sets it, signs out, deletes with confirmation', async () => {
+  it('pre-fills the country, signs out, deletes with confirmation', async () => {
     const { fetchFn, calls } = fakeFetch({
       'GET /v1/country': [200, { country: 'BG' }],
-      'POST /api/auth/update-user': [200, { status: true }],
       'POST /api/auth/sign-out': [200, { success: true }],
       'DELETE /v1/account': [200, { deleted: true }],
     })
     const api = httpApi(fetchFn)
     expect(await api.requestCountry()).toBe('BG')
-    await api.setCountry('DE')
     await api.signOut()
     await api.deleteAccount()
-    expect(bodyOf(calls[1]!)).toEqual({ country: 'DE' })
-    expect(bodyOf(calls[3]!)).toEqual({ confirm: true })
+    expect(bodyOf(calls[2]!)).toEqual({ confirm: true })
   })
 
   it('names the learner a push subscription is for, when one is known', async () => {

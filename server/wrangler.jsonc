@@ -57,9 +57,8 @@
         "run_worker_first": ["/api/*", "/v1/*", "/health"]
       },
       // Empty on purpose: --var supplies both from APP_ORIGIN. An empty BASE_URL fails at configFromEnv;
-      // an empty TRUSTED_ORIGINS trusts no origin beyond BASE_URL. REVIEW_APP_URL is where the coordinator reads
-      // feedback: the daily feedback mail links to it (spec §8.12).
-      "vars": { "MIN_PROTOCOL_VERSION": "1", "BASE_URL": "", "TRUSTED_ORIGINS": "", "REVIEW_APP_URL": "https://review.wordado.com" },
+      // an empty TRUSTED_ORIGINS trusts no origin beyond BASE_URL.
+      "vars": { "MIN_PROTOCOL_VERSION": "1", "BASE_URL": "", "TRUSTED_ORIGINS": "" },
       "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "f6d2528bb07a410384c8f2ce75882e7c" }],
       "queues": {
         "producers": [{ "binding": "JOBS", "queue": "wordado-jobs" }],

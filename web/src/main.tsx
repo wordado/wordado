@@ -7,7 +7,7 @@ import { createStore } from '@wordado/client-data'
 import { dayToIsoDate, localDay, validateCredits, validateFixes } from '@wordado/core'
 import { httpApi } from './account/api'
 import { AccountController } from './account/controller'
-import { accountStorage, browserStorage, pendingSignIn } from './account/storage'
+import { accountStorage, browserStorage } from './account/storage'
 import { httpTransport } from './account/transport'
 import { Boot, defaultL1 } from './app/boot'
 import { noteInstallReport, refreshAudioOnActivation, startPackChecks } from './app/content'
@@ -192,20 +192,7 @@ const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform 
 const standalone = window.matchMedia?.('(display-mode: standalone)').matches || (navigator as { standalone?: boolean }).standalone === true
 if (ios && !standalone) lifecycle.iosInstallable()
 
-controller = new AccountController({ api, boot, accounts, pending: pendingSignIn(), transport: () => transport, reminders })
-
-// Back from Google (spec §8.6): finish the sign-in once the demo (or the learner's file) is open.
-const returnUrl = new URL(window.location.href)
-const signinResult = returnUrl.searchParams.get('signin')
-if (signinResult === 'google' || signinResult === 'google-error') {
-  returnUrl.searchParams.delete('signin')
-  window.history.replaceState(null, '', `${returnUrl.pathname}${returnUrl.search}${returnUrl.hash}`)
-  const unsubscribe = boot.store.subscribe(() => {
-    if (boot.store.get().status !== 'ready') return
-    unsubscribe()
-    void controller?.resumeGoogle(signinResult === 'google' ? 'ok' : 'error').catch(() => undefined)
-  })
-}
+controller = new AccountController({ api, boot, accounts, transport: () => transport, reminders })
 
 let persistenceAsked = false
 
@@ -254,7 +241,7 @@ createRoot(document.getElementById('root')!).render(
 
 void boot.start()
 
-// iOS keeps a page left for another (Google's sign-in) frozen in its back-forward cache, where its database Worker
+// iOS keeps a page left for another frozen in its back-forward cache, where its database Worker
 // would hold the file and its lock from the next page for good: let go as the page is hidden, open again if it returns
 // — from the cache, or because it never went (`resume()` does nothing unless the page let go).
 window.addEventListener('pagehide', () => boot.suspend())

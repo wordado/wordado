@@ -2765,7 +2765,7 @@ ul.theme-words > li:first-child {
   align-items: center;
 }
 
-/* The two ways in fill the card's width, with "or" between them. */
+/* The way in fills the card's width. */
 .signin .signin-wide {
   width: 100%;
   margin-top: var(--space-3);
@@ -2827,22 +2827,6 @@ ul.theme-words > li:first-child {
 .privacy-link {
   margin: var(--space-5) 0 0;
   font-size: var(--step--1);
-}
-
-.signin .or {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  margin: var(--space-4) 0 0;
-  color: var(--ink-soft);
-}
-
-.signin .or::before,
-.signin .or::after {
-  content: '';
-  flex-grow: 1;
-  height: 1px;
-  background: var(--rule);
 }
 
 .demo-note {

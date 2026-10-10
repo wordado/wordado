@@ -2,15 +2,11 @@ import type { Fetch, Mailer } from './deps'
 
 /**
  * Local development prints the code instead of sending it (spec §4.4). scripts/smoke.ts reads this line.
- * The feedback mail is printed whole, as it would have been sent.
  */
 export function consoleMailer(log: (line: string) => void = (line) => console.log(line)): Mailer {
   return {
     async sendSignInCode(email, code) {
       log(`Sign-in code for ${email}: ${code}`)
-    },
-    async sendFeedback(to, mail) {
-      log(`Feedback mail for ${to}: ${mail.subject}\n${mail.text}`)
     },
   }
 }
@@ -44,6 +40,5 @@ export function resendMailer(options: ResendOptions): Mailer {
         `Wordado: ${code}`,
         `Your Wordado sign-in code is ${code}. It expires in 5 minutes.\n\nВашият код за вход в Wordado е ${code}. Валиден е 5 минути.\n\nDein Wordado-Anmeldecode ist ${code}. Er ist 5 Minuten gültig.\n\nTu código de inicio de sesión en Wordado es ${code}. Caduca en 5 minutos.`,
       ),
-    sendFeedback: (to, mail) => send(to, mail.subject, mail.text),
   }
 }

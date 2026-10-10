@@ -54,7 +54,6 @@ describe('migrate', () => {
         'device',
         'document',
         'feedback',
-        'feedback_mail',
         'feedback_send',
         'learner',
         'push_subscription',
