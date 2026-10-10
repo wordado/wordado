@@ -4,6 +4,7 @@ import type {
   AssignmentView,
   FeedbackAiRead,
   FeedbackAiStatus,
+  FeedbackDraft,
   FeedbackList,
   FeedbackMark,
   FeedbackState,
@@ -112,5 +113,7 @@ export const hostedApi = {
     moveFeedback: (id: number, topic: number) => send<{ id: number; topic: FeedbackTopicRef | null }>('PUT', `/api/admin/feedback/${id}/topic`, { topic }),
     /** A topic's match with a known issue: a number confirms it, null removes it. */
     setFeedbackTopicIssue: (id: number, issue: number | null) => send<FeedbackTopicView>('PUT', `/api/admin/feedback/topics/${id}/issue`, { issue }),
+    /** Asks the AI to draft an issue for a topic (spec 2026-10-10 §3.5): one call, counted; the draft is for this page alone, and is kept nowhere. */
+    draftFeedbackTopic: (id: number) => send<FeedbackDraft>('POST', `/api/admin/feedback/topics/${id}/draft`, {}),
   },
 }

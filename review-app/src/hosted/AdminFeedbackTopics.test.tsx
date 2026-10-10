@@ -439,3 +439,36 @@ describe('a topic chosen in the week’s summary (spec 2026-10-10 §3.4)', () =>
     expect(chosen.getAttribute('aria-expanded')).toBe('true')
   })
 })
+
+describe('Draft an issue, on an opened topic (spec 2026-10-10 §3.5)', () => {
+  it('opens the draft’s dialog for that topic, and the filed issue’s number becomes the topic’s match', async () => {
+    const ask = vi.spyOn(hostedApi.admin, 'draftFeedbackTopic').mockResolvedValue({ ok: true, title: 'Audio is heard twice', body: 'In our words.', messages: 2 })
+    const save = vi.spyOn(hostedApi.admin, 'setFeedbackTopicIssue').mockResolvedValue({ ...words, issue: 95, issueState: 'confirmed' })
+    await byTopic()
+    const li = await open('Number of new words a day')
+    fireEvent.click(within(li).getByRole('button', { name: 'Draft an issue' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Draft an issue' })
+    await waitFor(() => expect((within(dialog).getByRole('textbox', { name: 'Title' }) as HTMLInputElement).value).toBe('Audio is heard twice'))
+    expect(ask).toHaveBeenCalledWith(words.id)
+    expect((within(dialog).getByRole('link', { name: 'Open on GitHub' }) as HTMLAnchorElement).href).toContain('https://github.com/wordado/wordado/issues/new?title=Audio+is+heard+twice')
+    listTopics.mockResolvedValue([{ ...words, issue: 95, issueState: 'confirmed' }, sound, theme])
+    fireEvent.change(within(dialog).getByRole('textbox', { name: /paste its number/ }), { target: { value: '#95' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(save).toHaveBeenCalledWith(words.id, 95)
+    expect((await within(line('Number of new words a day')).findByRole('link', { name: '#95' })).getAttribute('href')).toBe('https://github.com/wordado/wordado/issues/95')
+  })
+
+  it('cannot be asked for while the AI help is off, and says why', async () => {
+    vi.spyOn(hostedApi.admin, 'feedbackAi').mockResolvedValue(aiStatus({ on: false }))
+    const ask = vi.spyOn(hostedApi.admin, 'draftFeedbackTopic')
+    await byTopic()
+    const li = await open('Number of new words a day')
+    const button = within(li).getByRole('button', { name: 'Draft an issue' }) as HTMLButtonElement
+    await waitFor(() => expect(button.disabled).toBe(true))
+    expect(within(li).getByText('Needs the AI help, which is off or not set up.')).toBeTruthy()
+    fireEvent.click(button)
+    expect(ask).not.toHaveBeenCalled()
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+})

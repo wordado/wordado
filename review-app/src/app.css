@@ -1814,6 +1814,96 @@ kbd {
   min-width: 0;
 }
 
+/* Draft an issue (spec 2026-10-10 §3.5): a dialog wider than the others, since it holds a text to read. The two
+   fields, then the way to GitHub, then, set apart by a rule, where the filed issue's number is pasted. */
+.dialog:has(.draft) {
+  width: min(44rem, calc(100% - 2rem));
+}
+
+.draft {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.draft > * {
+  min-width: 0;
+  margin: 0;
+}
+
+.draft-none {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: start;
+}
+
+.draft-none > .dialog-error {
+  justify-self: stretch;
+  margin: 0;
+}
+
+.draft input[type='text'],
+.draft textarea {
+  width: 100%;
+  min-height: 2.75rem;
+  padding: var(--space-2) var(--space-3);
+  font: 400 var(--step-0) / 1.4 var(--font-ui);
+  color: var(--ink);
+  background: var(--paper-inset);
+  border: 1px solid var(--rule);
+  border-radius: 0.625rem;
+}
+
+.draft textarea {
+  font-size: var(--step--1);
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.draft input[type='text']:hover,
+.draft textarea:hover {
+  border-color: var(--ink-soft);
+}
+
+.draft input:disabled,
+.draft textarea:disabled {
+  opacity: 0.6;
+}
+
+.draft-open {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.draft-open > * {
+  margin: 0;
+}
+
+.draft-open > .form-actions {
+  align-items: center;
+}
+
+.draft-filed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-2) var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--rule);
+}
+
+.draft-filed > .field {
+  flex: 1 1 16rem;
+}
+
+.draft-filed > .feedback-status {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.topic-draft {
+  flex-wrap: wrap;
+}
+
 /* By topic (spec 2026-10-10 §3.2): a line for each topic, which opens to its tools and its messages. The line is
    the title, which is the button that opens it, then how many, when, how bad and where it stands, then the issue
    it looks like. */
@@ -2311,6 +2401,14 @@ kbd {
   .topic-line .button,
   .topic-tools .button {
     min-height: 2.75rem;
+  }
+
+  .draft .button {
+    min-height: 2.75rem;
+  }
+
+  .draft-filed > .button {
+    flex: 1 1 100%;
   }
 
   .dialog {

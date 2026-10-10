@@ -3,6 +3,7 @@ import { type FeedbackState, type FeedbackStateFilter, type FeedbackTopicOpened,
 import { Dialog } from '../Dialog'
 import { hostedApi } from '../hostedApi'
 import { count, dateOf, messageOf } from './adminUtil'
+import { FeedbackDraftDialog } from './FeedbackDraftDialog'
 import { FeedbackCard, IDLE, SaveStatus, type Saving, SEVERITY_CHIP, SEVERITY_LABEL, STATES } from './FeedbackCard'
 
 const SHOWN: Readonly<Record<FeedbackStateFilter, readonly FeedbackState[]>> = { open: ['new', 'seen'], all: ['new', 'seen', 'done', 'declined'], done: ['done'], declined: ['declined'] }
@@ -15,9 +16,10 @@ const STATE_CHIP: Readonly<Record<FeedbackState, string>> = { new: 'chip', seen:
  * makes the topics and proposes the matches; what is done with them here is the coordinator's. `topics` is null
  * while they are not known yet and 'failed' when they could not be read; `show` is the tab's filter by state, here
  * of the topics' own; `repo` is where an issue's number links to; `focus` is a topic chosen in the week's summary,
- * which is opened and brought into view. After every change `onChanged` reads them again.
+ * which is opened and brought into view; `dailyCalls` is the day's limit, for the line that says it is reached.
+ * After every change `onChanged` reads them again.
  */
-export function AdminFeedbackTopics(props: { topics: readonly FeedbackTopicView[] | null | 'failed'; show: FeedbackStateFilter; aiOn: boolean; repo: string; focus?: { readonly id: number; readonly n: number } | null; onChanged(): void | Promise<void> }) {
+export function AdminFeedbackTopics(props: { topics: readonly FeedbackTopicView[] | null | 'failed'; show: FeedbackStateFilter; aiOn: boolean; repo: string; dailyCalls?: number; focus?: { readonly id: number; readonly n: number } | null; onChanged(): void | Promise<void> }) {
   const { topics } = props
   if (topics === null) {
     return (
@@ -47,7 +49,7 @@ export function AdminFeedbackTopics(props: { topics: readonly FeedbackTopicView[
       </p>
       <ul className="topic-list" aria-label="Topics">
         {shown.map((topic) => (
-          <TopicLine key={topic.id} topic={topic} topics={topics} repo={props.repo} chosen={props.focus?.id === topic.id ? props.focus.n : 0} onChanged={props.onChanged} />
+          <TopicLine key={topic.id} topic={topic} topics={topics} repo={props.repo} aiOn={props.aiOn} dailyCalls={props.dailyCalls ?? 0} chosen={props.focus?.id === topic.id ? props.focus.n : 0} onChanged={props.onChanged} />
         ))}
       </ul>
     </>
@@ -69,7 +71,7 @@ function IssueLink(props: { repo: string; issue: number; title: string | null; c
 
 /** One topic: its line, and, opened, what the coordinator can do with it and its messages. `chosen` is above 0, and
  * new each time, when the topic was chosen in the week's summary: it is then opened and brought into view. */
-function TopicLine(props: { topic: FeedbackTopicView; topics: readonly FeedbackTopicView[]; repo: string; chosen: number; onChanged(): void | Promise<void> }) {
+function TopicLine(props: { topic: FeedbackTopicView; topics: readonly FeedbackTopicView[]; repo: string; aiOn: boolean; dailyCalls: number; chosen: number; onChanged(): void | Promise<void> }) {
   const { topic, chosen } = props
   const id = useId()
   const line = useRef<HTMLLIElement>(null)
@@ -180,7 +182,7 @@ function TopicLine(props: { topic: FeedbackTopicView; topics: readonly FeedbackT
           )}
           {opened.kind === 'read' && (
             <>
-              <TopicTools topic={topic} topics={props.topics} match={match} onChanged={props.onChanged} onMarked={() => void read(true)} />
+              <TopicTools topic={topic} topics={props.topics} repo={props.repo} aiOn={props.aiOn} dailyCalls={props.dailyCalls} match={match} onChanged={props.onChanged} onMarked={() => void read(true)} />
               {opened.topic.incomplete && <p className="note">Some messages may be missing here: the app’s server does not give messages by their ids yet.</p>}
               {opened.topic.items.length === 0 && <p className="note">No messages to show.</p>}
               <ul className="feedback-list" aria-label="Messages of the topic">
@@ -198,9 +200,10 @@ function TopicLine(props: { topic: FeedbackTopicView; topics: readonly FeedbackT
 }
 
 /** What the coordinator does with an opened topic: rename it, merge it into another, mark it and note it as a
- * message is marked, and give it the number of a known issue. A save sends the title, the state and the note
- * together, each as it was last saved but for the one that changed. */
-function TopicTools(props: { topic: FeedbackTopicView; topics: readonly FeedbackTopicView[]; match(issue: number | null): Promise<boolean>; onChanged(): void | Promise<void>; onMarked(): void }) {
+ * message is marked, give it the number of a known issue, and have the AI draft an issue for it (spec 2026-10-10
+ * §3.5), which needs the AI help on. A save sends the title, the state and the note together, each as it was last
+ * saved but for the one that changed. */
+function TopicTools(props: { topic: FeedbackTopicView; topics: readonly FeedbackTopicView[]; repo: string; aiOn: boolean; dailyCalls: number; match(issue: number | null): Promise<boolean>; onChanged(): void | Promise<void>; onMarked(): void }) {
   const { topic } = props
   // The topic as the server last confirmed it; the saves go one after another, each building on the answer before.
   const saved = useRef<{ readonly title: string; readonly state: FeedbackState; readonly note: string }>({ title: topic.title, state: topic.state, note: topic.note })
@@ -222,6 +225,7 @@ function TopicTools(props: { topic: FeedbackTopicView; topics: readonly Feedback
   const [issue, setIssue] = useState(topic.issue === null ? '' : String(topic.issue))
   const [issueOf, setIssueOf] = useState(topic.issue)
   const [issueWrong, setIssueWrong] = useState(false)
+  const [drafting, setDrafting] = useState(false)
   if (issueOf !== topic.issue) {
     setIssueOf(topic.issue)
     setIssue(topic.issue === null ? '' : String(topic.issue))
@@ -372,6 +376,12 @@ function TopicTools(props: { topic: FeedbackTopicView; topics: readonly Feedback
           </p>
         )}
       </form>
+      <div className="topic-tool topic-draft">
+        <button type="button" className="button small" disabled={!props.aiOn} onClick={() => setDrafting(true)}>
+          Draft an issue
+        </button>
+        {!props.aiOn && <span className="feedback-status">Needs the AI help, which is off or not set up.</span>}
+      </div>
       <form className="feedback-mark topic-mark" aria-label="The topic’s mark" onSubmit={saveNote}>
         <div className="feedback-state">
           <label className="field">
@@ -410,6 +420,7 @@ function TopicTools(props: { topic: FeedbackTopicView; topics: readonly Feedback
           <SaveStatus saving={noteSaving} what="Note" />
         </span>
       </form>
+      <FeedbackDraftDialog open={drafting} topic={topic} repo={props.repo} dailyCalls={props.dailyCalls} onClose={() => setDrafting(false)} onFiled={props.onChanged} />
       <Dialog open={into !== null} title="Merge topics" onClose={() => setInto(null)} error={mergeFailed}>
         <p>
           The {count(topic.count, 'message')} of “{topic.title}” go to “{into?.title}”, with its note. “{topic.title}” is then gone. This cannot be undone.

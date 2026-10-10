@@ -242,7 +242,7 @@ export function AdminFeedback() {
           </select>
         </label>
       </div>
-      {view === 'topics' && <AdminFeedbackTopics topics={topics} show={state} aiOn={known !== null && known.setUp && known.on} repo={known?.repo ?? ''} focus={focus} onChanged={loadTopics} />}
+      {view === 'topics' && <AdminFeedbackTopics topics={topics} show={state} aiOn={known !== null && known.setUp && known.on} repo={known?.repo ?? ''} dailyCalls={known?.dailyCalls ?? 0} focus={focus} onChanged={loadTopics} />}
       {view === 'messages' && busy && (
         <div className="busy-bar" role="progressbar" aria-label="Loading feedback">
           <span />
