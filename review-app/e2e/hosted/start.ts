@@ -9,6 +9,7 @@ import { buildSnapshot } from '../../server/snapshot'
 import { CURRENT_KEY } from '../../shared/snapshot'
 import type { D1Database, R2Bucket } from '../../worker/bindings'
 import { FakeGitHub, testAppKey } from '../../worker/test/fakeGitHub'
+import { FakeLearnerApp, feedbackItem } from '../../worker/test/fakeLearnerApp'
 import { testKeys } from '../../worker/test/jwt'
 import { migrate } from '../../worker/test/platform'
 
@@ -55,6 +56,25 @@ createServer((req, res) => {
   })()
 }).listen(4182, '127.0.0.1')
 
+// The fake learner app server: the feedback the Feedback tab reads. The bugs are the desktop run's and the ideas the
+// phone run's, so the two browser projects can mark theirs side by side.
+const FEEDBACK_TOKEN = 'e2e-feedback-read-token-0123456789abcdef'
+const learnerApp = new FakeLearnerApp(FEEDBACK_TOKEN, [
+  feedbackItem(1, { kind: 'idea', message: 'A dark theme would be easier in the evening.', contactEmail: 'ideas@example.com', signedIn: true }),
+  feedbackItem(2, { message: 'The path does not open after I finish a unit.\nI see a white screen until I reload.', contactEmail: 'learner@example.com', signedIn: true }),
+  feedbackItem(3, { kind: 'idea', message: 'Let me choose how many new words a day.', corpusVersion: '' }),
+  feedbackItem(4, { message: 'The sound of a word plays twice on my phone.' }),
+  feedbackItem(5, { kind: 'other', message: 'Thank you for the app. A-very-long-word-without-any-spaces-in-it-that-has-to-break-somewhere-on-a-narrow-screen-' + 'x'.repeat(60) }),
+])
+createServer((req, res) => {
+  void (async () => {
+    const headers = Object.fromEntries(Object.entries(req.headers).map(([k, v]) => [k, String(v)]))
+    const out = await learnerApp.fetch(`http://127.0.0.1:4183${req.url}`, { method: req.method ?? 'GET', headers })
+    res.writeHead(out.status, { 'content-type': out.headers.get('content-type') ?? 'text/plain' })
+    res.end(await out.text())
+  })()
+}).listen(4183, '127.0.0.1')
+
 const keys = await testKeys()
 const env = { ACCESS_AUD: AUD, ACCESS_TEAM_DOMAIN: TEAM }
 mkdirSync(join(root, '.e2e'), { recursive: true })
@@ -67,5 +87,6 @@ const vars = {
   ACCESS_JWKS: keys.jwks, ACCESS_TEAM_DOMAIN: TEAM, ACCESS_AUD: AUD, ADMIN_EMAIL: 'admin@example.com',
   GITHUB_API_URL: 'http://127.0.0.1:4182', GITHUB_APP_ID: '1', GITHUB_INSTALLATION_ID: '1', GITHUB_APP_PRIVATE_KEY: (await testAppKey()).pem,
   APP_ORIGIN: 'http://127.0.0.1:4181',
+  LEARNER_APP_URL: 'http://127.0.0.1:4183', FEEDBACK_READ_TOKEN: FEEDBACK_TOKEN,
 }
 spawn('pnpm', ['exec', 'wrangler', 'dev', '--port', '4181', '--ip', '127.0.0.1', '--persist-to', state, ...Object.entries(vars).flatMap(([k, v]) => ['--var', `${k}:${v}`])], { cwd: root, stdio: 'inherit' })
