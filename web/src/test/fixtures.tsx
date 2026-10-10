@@ -130,11 +130,10 @@ export function fakeAccounts(over: Partial<AccountActions> = {}): AccountActions
   return {
     calls,
     store: createStore<AccountState>({ expired: false, notice: null }),
-    completeSignIn: async (country) => {
-      calls.push(`completeSignIn ${country}`)
+    completeSignIn: async () => {
+      calls.push('completeSignIn')
       return 'signed-in'
     },
-    resumeGoogle: async () => null,
     signOut: async (options) => {
       calls.push(`signOut${options?.force ? ' force' : ''}`)
       return 'signed-out'
@@ -147,9 +146,6 @@ export function fakeAccounts(over: Partial<AccountActions> = {}): AccountActions
     },
     dismissNotice: () => {
       calls.push('dismissNotice')
-    },
-    leavePage: async () => {
-      calls.push('leavePage')
     },
     ...over,
   }

@@ -14,7 +14,7 @@ describe('sign-in (spec §8.6)', () => {
     expect(h.codes).toEqual([{ email: 'ana@example.com', code: expect.stringMatching(/^\d{6}$/) }])
     const me = await session.get('/v1/me')
     expect(me.status).toBe(200)
-    expect(me.body).toEqual({ userId: session.userId, email: 'ana@example.com', country: null, createdAt: expect.any(Number) })
+    expect(me.body).toEqual({ userId: session.userId, email: 'ana@example.com', createdAt: expect.any(Number) })
   })
 
   it('creates the user on the first sign-in and finds the same user on the next', async () => {
@@ -103,35 +103,41 @@ describe('sign-in (spec §8.6)', () => {
     expect(reply.status).toBe(403)
   })
 
-  it('stores the self-declared country through update-user (spec §11)', async () => {
+  it('keeps nothing of the age gate: a country sent to update-user is refused, and the table has no column for it (#166)', async () => {
     const h = harness()
     const session = await h.signIn()
-    const update = await session.post('/api/auth/update-user', { country: 'BG' })
-    expect(update.status).toBe(200)
-    expect((await session.get('/v1/me')).body.country).toBe('BG')
+    expect((await session.post('/api/auth/update-user', { country: 'BG' })).status).toBe(400)
+    expect((await session.get('/v1/me')).body).toEqual({ userId: session.userId, email: session.email, createdAt: expect.any(Number) })
+    expect(await h.deps.db.query(`select column_name from information_schema.columns where table_name = 'user' and column_name = 'country'`)).toEqual([])
   })
 
-  it.each([['a name', 'Bulgaria'], ['lower case', 'bg'], ['a number', 359], ['a list', ['BG']]])(
-    'refuses a country given as %s, and changes nothing',
-    async (_, country) => {
-      const h = harness()
-      const session = await h.signIn()
-      await session.post('/api/auth/update-user', { country: 'BG' })
-      const update = await session.post('/api/auth/update-user', { country })
-      expect(update.status).toBe(400)
-      expect(update.body).toEqual({ error: 'invalid', errors: ['country is invalid'] })
-      expect((await session.get('/v1/me')).body.country).toBe('BG')
-    },
-  )
-
-  it('clears the country with null, and leaves it alone when update-user does not name it', async () => {
+  it('keeps no address and no browser with a session (#166)', async () => {
     const h = harness()
     const session = await h.signIn()
-    await session.post('/api/auth/update-user', { country: 'BG' })
-    expect((await session.post('/api/auth/update-user', { name: 'Ana' })).status).toBe(200)
-    expect((await session.get('/v1/me')).body.country).toBe('BG')
-    expect((await session.post('/api/auth/update-user', { country: null })).status).toBe(200)
-    expect((await session.get('/v1/me')).body.country).toBe(null)
+    const reply = await h.request('/v1/me', { headers: { cookie: session.cookie, 'cf-connecting-ip': '203.0.113.7', 'user-agent': 'Mozilla/5.0 (X11; Linux x86_64)' } })
+    expect(reply.status).toBe(200)
+    expect(await h.deps.db.query('select "ipAddress", "userAgent" from session where "userId" = $1', [session.userId])).toEqual([{ ipAddress: null, userAgent: null }])
+  })
+
+  it('keys the request limits by a hash, never by the address (#166)', async () => {
+    const h = harness()
+    await h.signIn()
+    const keys = await h.deps.db.query<{ key: string }>('select key from "rateLimit"')
+    expect(keys.length).toBeGreaterThan(0)
+    for (const { key } of keys) expect(key).toMatch(/^[0-9a-f]{64}$/)
+  })
+
+  it('refuses the request that fills a limit window, and lets the next window through (#166)', async () => {
+    const h = harness()
+    const headers = { ...json, 'cf-connecting-ip': '198.51.100.9' }
+    // A fresh address each time: the limit per address (src/signInLimit.ts) must not be the one that answers.
+    let n = 0
+    const send = () => h.request('/api/auth/email-otp/send-verification-otp', { method: 'POST', headers, body: JSON.stringify({ email: `ana-${++n}@example.com`, type: 'sign-in' }) })
+    const statuses: number[] = []
+    for (let i = 0; i < OTP_SENDS_PER_MINUTE + 1; i++) statuses.push((await send()).status)
+    expect(statuses).toEqual([...Array<number>(OTP_SENDS_PER_MINUTE).fill(200), 429])
+    h.clock.advance(60_000)
+    expect((await send()).status).toBe(200)
   })
 
   it('keeps no name and no picture, whatever update-user sends (#163)', async () => {
@@ -141,14 +147,14 @@ describe('sign-in (spec §8.6)', () => {
     expect(await h.deps.db.query('select name, image from "user" where id = $1', [session.userId])).toEqual([{ name: '', image: null }])
   })
 
-  it('keeps no tokens of a linked Google account, when it is created and when it is updated (#163)', async () => {
+  it('keeps no tokens of a linked account, when it is created and when it is updated (#163)', async () => {
     const h = harness()
     const session = await h.signIn()
     const ctx = await createAuth(h.deps).$context
     const tokens = { accessToken: 'ya29.access', refreshToken: '1//refresh', idToken: 'eyJ.id', accessTokenExpiresAt: new Date(), scope: 'openid email' }
-    const account = await ctx.internalAdapter.createAccount({ accountId: 'google-sub', providerId: 'google', userId: session.userId, ...tokens })
+    const account = await ctx.internalAdapter.createAccount({ accountId: 'provider-sub', providerId: 'provider', userId: session.userId, ...tokens })
     const stored = () =>
-      h.deps.db.query('select "accessToken", "refreshToken", "idToken", "accessTokenExpiresAt", "refreshTokenExpiresAt", scope from account where "providerId" = $1', ['google'])
+      h.deps.db.query('select "accessToken", "refreshToken", "idToken", "accessTokenExpiresAt", "refreshTokenExpiresAt", scope from account where "providerId" = $1', ['provider'])
     const blank = { accessToken: null, refreshToken: null, idToken: null, accessTokenExpiresAt: null, refreshTokenExpiresAt: null, scope: null }
     expect(await stored()).toEqual([blank])
     await ctx.internalAdapter.updateAccount(account.id, tokens)
@@ -166,18 +172,6 @@ describe('sign-in (spec §8.6)', () => {
     expect(reply.body).toEqual({ error: 'too_large' })
   })
 
-  it("offers Google sign-in when it is configured, redirecting back to this server", async () => {
-    const h = harness({ config: { google: { clientId: 'client-id.apps.googleusercontent.com', clientSecret: 'secret' } } })
-    const reply = await h.request('/api/auth/sign-in/social', {
-      method: 'POST',
-      headers: json,
-      body: JSON.stringify({ provider: 'google', callbackURL: '/' }),
-    })
-    expect(reply.status).toBe(200)
-    const url = new URL(reply.body.url)
-    expect(url.origin).toBe('https://accounts.google.com')
-    expect(url.searchParams.get('redirect_uri')).toBe(`${BASE_URL}/api/auth/callback/google`)
-  })
 })
 
 describe('the country pre-fill (spec §11)', () => {

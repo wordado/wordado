@@ -1,7 +1,6 @@
 import { act, cleanup, fireEvent, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { ApiError, OfflineError } from '../account/api'
-import type { PendingSignIn } from '../account/storage'
 import { fakeApi } from '../test/fakeApi'
 import { answerNew, fakeAccounts, renderWith, setup } from '../test/fixtures'
 import { SignIn } from './SignIn'
@@ -13,12 +12,10 @@ async function render(options: Parameters<typeof fakeAccounts>[0] = {}, apiOver:
   const ctx = await setup()
   const api = fakeApi(apiOver)
   const accounts = fakeAccounts(options)
-  const redirects: string[] = []
-  const pending: PendingSignIn[] = []
-  renderWith(<SignIn redirect={(url) => redirects.push(url)} pending={{ save: (p) => pending.push(p) }} />, { ...ctx, api, accounts })
+  renderWith(<SignIn />, { ...ctx, api, accounts })
   // The country pre-fill arrives from the server.
   await act(async () => undefined)
-  return { ...ctx, api, accounts, redirects, pending }
+  return { ...ctx, api, accounts }
 }
 
 /** Step 1: the country, then the age it sets, confirmed. */
@@ -51,14 +48,13 @@ describe('SignIn: the age gate (spec §11)', () => {
   })
 
   it('turns away a learner below their country’s age before anything is sent or stored', async () => {
-    const { api, pending } = await render()
+    const { api } = await render()
     fireEvent.change(screen.getByLabelText('Country where you live'), { target: { value: 'DE' } })
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'I’m younger than 16' })))
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Sorry, you can’t create an account yet')
     expect(screen.getByText(/at least 16/)).toBeTruthy()
     expect(screen.queryByLabelText('Email')).toBeNull()
     expect(api.calls).toEqual(['requestCountry'])
-    expect(pending).toEqual([])
   })
 
   it('uses 16 when the learner would rather not say where they live', async () => {
@@ -75,7 +71,7 @@ describe('SignIn: the age gate (spec §11)', () => {
     })
     const api = fakeApi({ requestCountry: () => countryPromise })
     const accounts = fakeAccounts()
-    renderWith(<SignIn redirect={() => undefined} pending={{ save: () => undefined }} />, { ...ctx, api, accounts })
+    renderWith(<SignIn />, { ...ctx, api, accounts })
     fireEvent.change(screen.getByLabelText('Country where you live'), { target: { value: 'DE' } })
     await act(async () => resolveCountry('BG'))
     expect((screen.getByLabelText('Country where you live') as HTMLSelectElement).value).toBe('DE')
@@ -89,7 +85,7 @@ describe('SignIn: the age gate (spec §11)', () => {
     })
     const api = fakeApi({ requestCountry: () => countryPromise })
     const accounts = fakeAccounts()
-    renderWith(<SignIn redirect={() => undefined} pending={{ save: () => undefined }} />, { ...ctx, api, accounts })
+    renderWith(<SignIn />, { ...ctx, api, accounts })
     fireEvent.change(screen.getByLabelText('Country where you live'), { target: { value: '' } })
     await act(async () => resolveCountry('BG'))
     expect((screen.getByLabelText('Country where you live') as HTMLSelectElement).value).toBe('')
@@ -97,7 +93,7 @@ describe('SignIn: the age gate (spec §11)', () => {
 })
 
 describe('SignIn: a code by email (spec §8.6)', () => {
-  it('sends a code, verifies it, and completes the sign-in with the gate’s country', async () => {
+  it('sends a code, verifies it, and completes the sign-in', async () => {
     const { api, accounts } = await render()
     await passGate('BG')
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'ana@example.com' } })
@@ -110,14 +106,24 @@ describe('SignIn: a code by email (spec §8.6)', () => {
     fireEvent.change(screen.getByLabelText('Code'), { target: { value: '123456' } })
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Sign in' })))
     expect(api.calls).toContain('verifyCode ana@example.com 123456')
-    expect(accounts.calls).toEqual(['completeSignIn BG'])
+    expect(accounts.calls).toEqual(['completeSignIn'])
     expect(window.location.pathname).toBe('/')
+  })
+
+  it('keeps the gate’s country on this device: signing in sends it nowhere (#166)', async () => {
+    const { api } = await render()
+    await passGate('DE')
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'ana@example.com' } })
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Email me a code' })))
+    fireEvent.change(screen.getByLabelText('Code'), { target: { value: '123456' } })
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Sign in' })))
+    expect(api.calls).toEqual(['requestCountry', 'sendCode ana@example.com', 'verifyCode ana@example.com 123456'])
   })
 
   it('says what signing in does to the demo before a code is asked for', async () => {
     const ctx = await setup()
     await answerNew(ctx.client, ctx.env, 1)
-    renderWith(<SignIn redirect={() => undefined} pending={{ save: () => undefined }} />, { ...ctx, api: fakeApi(), accounts: fakeAccounts() })
+    renderWith(<SignIn />, { ...ctx, api: fakeApi(), accounts: fakeAccounts() })
     await act(async () => undefined)
     await passGate('BG')
     expect(screen.getByText(/the words you studied in the demo are deleted. A new account keeps them/)).toBeTruthy()
@@ -125,7 +131,7 @@ describe('SignIn: a code by email (spec §8.6)', () => {
 
   it('warns whenever the demo holds anything unsynced, not only answers, and not when it holds nothing', async () => {
     const ctx = await setup()
-    renderWith(<SignIn redirect={() => undefined} pending={{ save: () => undefined }} />, { ...ctx, api: fakeApi(), accounts: fakeAccounts() })
+    renderWith(<SignIn />, { ...ctx, api: fakeApi(), accounts: fakeAccounts() })
     await act(async () => undefined)
     await passGate('BG')
     expect(screen.queryByText(/the words you studied in the demo are deleted/)).toBeNull()
@@ -133,7 +139,7 @@ describe('SignIn: a code by email (spec §8.6)', () => {
     const withSettings = await setup()
     await withSettings.client.updateSettings({ activeTheme: 'daily-life' })
     expect(withSettings.client.snapshot.states.size).toBe(0)
-    renderWith(<SignIn redirect={() => undefined} pending={{ save: () => undefined }} />, { ...withSettings, api: fakeApi(), accounts: fakeAccounts() })
+    renderWith(<SignIn />, { ...withSettings, api: fakeApi(), accounts: fakeAccounts() })
     await act(async () => undefined)
     await passGate('BG')
     expect(screen.getByText(/the words you studied in the demo are deleted/)).toBeTruthy()
@@ -198,7 +204,7 @@ describe('SignIn: a code by email (spec §8.6)', () => {
     })
     const api = fakeApi({ verifyCode: () => verifyPromise })
     const accounts = fakeAccounts()
-    renderWith(<SignIn redirect={() => undefined} pending={{ save: () => undefined }} />, { ...ctx, api, accounts })
+    renderWith(<SignIn />, { ...ctx, api, accounts })
     await act(async () => undefined)
     await passGate('BG')
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'ana@example.com' } })
@@ -227,7 +233,7 @@ describe('SignIn: a code by email (spec §8.6)', () => {
       },
     })
     const accounts = fakeAccounts()
-    renderWith(<SignIn redirect={() => undefined} pending={{ save: () => undefined }} />, { ...ctx, api, accounts })
+    renderWith(<SignIn />, { ...ctx, api, accounts })
     await act(async () => undefined)
     await passGate('BG')
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'ana@example.com' } })
@@ -240,7 +246,7 @@ describe('SignIn: a code by email (spec §8.6)', () => {
 
   it('refuses a second account on a device that holds a learner’s progress', async () => {
     const ctx = await setup()
-    renderWith(<SignIn redirect={() => undefined} pending={{ save: () => undefined }} />, {
+    renderWith(<SignIn />, {
       ...ctx,
       api: fakeApi(),
       accounts: fakeAccounts({ completeSignIn: async () => 'other-account' }),
@@ -254,71 +260,6 @@ describe('SignIn: a code by email (spec §8.6)', () => {
     fireEvent.change(screen.getByLabelText('Code'), { target: { value: '123456' } })
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Sign in' })))
     expect(screen.getByRole('alert').textContent).toContain('This device holds the progress of ana@example.com')
-  })
-})
-
-describe('SignIn: Google (spec §8.6)', () => {
-  it('keeps the gate’s country for the return, then goes to Google', async () => {
-    const { redirects, pending } = await render()
-    await passGate('BG')
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue with Google' })))
-    expect(pending).toEqual([{ country: 'BG' }])
-    expect(redirects).toEqual(['https://accounts.google.com/o/oauth2/auth'])
-  })
-
-  it('lets go of the database before going to Google, so the page Google returns to can open it (iOS)', async () => {
-    const ctx = await setup()
-    const log: string[] = []
-    let leave: () => void = () => undefined
-    const left = new Promise<void>((resolve) => {
-      leave = resolve
-    })
-    const accounts = fakeAccounts({
-      leavePage: async () => {
-        log.push('leaving')
-        await left
-        log.push('left')
-      },
-    })
-    renderWith(<SignIn redirect={(url) => log.push(`redirect ${url}`)} pending={{ save: () => undefined }} />, { ...ctx, api: fakeApi(), accounts })
-    await act(async () => undefined)
-    await passGate('BG')
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue with Google' })))
-    expect(log).toEqual(['leaving'])
-    await act(async () => leave())
-    expect(log).toEqual(['leaving', 'left', 'redirect https://accounts.google.com/o/oauth2/auth'])
-  })
-
-  it('goes to Google anyway when letting go of the database takes too long', async () => {
-    const ctx = await setup()
-    const redirects: string[] = []
-    const accounts = fakeAccounts({ leavePage: () => new Promise<void>(() => undefined) })
-    renderWith(<SignIn redirect={(url) => redirects.push(url)} pending={{ save: () => undefined }} leaveWithinMs={20} />, {
-      ...ctx,
-      api: fakeApi(),
-      accounts,
-    })
-    await act(async () => undefined)
-    await passGate('BG')
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue with Google' })))
-    expect(redirects).toEqual([])
-    await act(() => new Promise((resolve) => setTimeout(resolve, 40)))
-    expect(redirects).toEqual(['https://accounts.google.com/o/oauth2/auth'])
-  })
-
-  it('keeps the database open when the Google address cannot be had', async () => {
-    const { accounts } = await render({}, { googleUrl: async () => Promise.reject(new ApiError(404, 'PROVIDER_NOT_FOUND')) })
-    await passGate('BG')
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue with Google' })))
-    expect(accounts.calls).not.toContain('leavePage')
-  })
-
-  it('says so when Google is not available', async () => {
-    const { redirects } = await render({}, { googleUrl: async () => Promise.reject(new ApiError(404, 'PROVIDER_NOT_FOUND')) })
-    await passGate('BG')
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue with Google' })))
-    expect(screen.getByRole('alert').textContent).toBe('Google sign-in isn’t available right now. Use a code by email.')
-    expect(redirects).toEqual([])
   })
 })
 

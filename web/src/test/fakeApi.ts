@@ -23,10 +23,6 @@ export function fakeApi(over: Partial<Api> = {}, session: Me | null = null): Fak
     verifyCode: async (email, code) => {
       calls.push(`verifyCode ${email} ${code}`)
     },
-    googleUrl: async () => {
-      calls.push('googleUrl')
-      return 'https://accounts.google.com/o/oauth2/auth'
-    },
     me: async () => {
       calls.push('me')
       return api.session
@@ -34,9 +30,6 @@ export function fakeApi(over: Partial<Api> = {}, session: Me | null = null): Fak
     requestCountry: async () => {
       calls.push('requestCountry')
       return 'BG'
-    },
-    setCountry: async (country) => {
-      calls.push(`setCountry ${country}`)
     },
     signOut: async () => {
       calls.push('signOut')

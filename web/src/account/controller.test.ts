@@ -8,20 +8,19 @@ import { describe, expect, it, vi } from 'vitest'
 import { Boot, type LockPort } from '../app/boot'
 import { answerTo, disk, flaky } from '../test/disk'
 import { fakeApi } from '../test/fakeApi'
-import { OfflineError, type Me } from './api'
+import { httpApi, OfflineError, type Api, type Me } from './api'
 import { AccountController, NotReady, SignOutOffline } from './controller'
-import { accountStorage, DEMO_FILE, learnerFile, memoryStorage, pendingSignIn, SIGNIN_KEY } from './storage'
+import { accountStorage, DEMO_FILE, learnerFile, memoryStorage } from './storage'
 
-const ANA: Me = { userId: 'u1', email: 'ana@example.com', country: null, createdAt: 0 }
+const ANA: Me = { userId: 'u1', email: 'ana@example.com', createdAt: 0 }
 
 /** A booted app on disk over a fake server, and its controller. */
-async function app(options: { env?: TestEnv; server?: FakeServer; transport?: SyncTransport; session?: Me | null } = {}) {
+async function app(options: { env?: TestEnv; server?: FakeServer; transport?: SyncTransport; session?: Me | null; api?: Api } = {}) {
   const env = options.env ?? testEnv()
   const server = options.server ?? new FakeServer({ now: env.now })
   const transport = options.transport ?? server
   const d = disk()
   const accounts = accountStorage(memoryStorage())
-  const pending = pendingSignIn(memoryStorage())
   const api = fakeApi({}, options.session === undefined ? ANA : options.session)
   const stops: boolean[] = []
   const locks: string[] = []
@@ -42,10 +41,9 @@ async function app(options: { env?: TestEnv; server?: FakeServer; transport?: Sy
   )
   await boot.start()
   const controller = new AccountController({
-    api,
+    api: options.api ?? api,
     boot,
     accounts,
-    pending,
     transport: () => transport,
     reminders: {
       stop: async ({ server: s }) => {
@@ -58,7 +56,7 @@ async function app(options: { env?: TestEnv; server?: FakeServer; transport?: Sy
     if (state.status !== 'ready') throw new Error(`not ready: ${state.status}`)
     return state.client
   }
-  return { env, server, d, accounts, pending, api, boot, controller, client, stops, locks }
+  return { env, server, d, accounts, api, boot, controller, client, stops, locks }
 }
 
 /** Another device of the same account, with progress on the server. */
@@ -71,23 +69,12 @@ async function progressElsewhere(env: TestEnv, server: FakeServer): Promise<void
   await other.close()
 }
 
-describe('leaving the page for Google (iOS keeps it frozen, holding the file)', () => {
-  it('closes the database and lets go of the lock', async () => {
-    const a = await app()
-    const client = a.client()
-    await a.controller.leavePage()
-    expect(a.boot.store.get().status).toBe('starting')
-    expect(a.locks).toEqual(['drop'])
-    await expect(client.updateSettings({ newWordLimit: 5 })).rejects.toThrow()
-  })
-})
-
 describe('signing in from the demo (spec §8.6)', () => {
   it('carries the demo over into a new account, from the demo’s own device, and deletes the demo', async () => {
     const a = await app()
     const demoDevice = a.client().snapshot.deviceId
     await a.client().answer(answerTo('c:hello-1'))
-    expect(await a.controller.completeSignIn('BG')).toBe('carried-over')
+    expect(await a.controller.completeSignIn()).toBe('carried-over')
     expect([...a.server.events.values()].map((e) => [e.wordId, e.deviceId])).toEqual([['c:hello-1', demoDevice]])
     expect(a.d.exists(DEMO_FILE)).toBe(false)
     expect(a.accounts.read()).toEqual({ userId: 'u1', email: 'ana@example.com', carryOver: false })
@@ -95,7 +82,17 @@ describe('signing in from the demo (spec §8.6)', () => {
     expect(await a.client().sync()).toBe('synced')
     expect(a.client().snapshot.states.get('c:hello-1' as WordId)?.reps).toBe(1)
     expect(a.controller.store.get()).toEqual({ expired: false, notice: 'carried-over' })
-    expect(a.api.calls).toContain('setCountry BG')
+  })
+
+  it('sends the server no country: the age gate’s stays on this device (#166)', async () => {
+    const requests: string[] = []
+    const fetchFn = async (url: string, init?: RequestInit) => {
+      requests.push(`${init?.method ?? 'GET'} ${url}`)
+      return new Response(JSON.stringify(ANA), { status: 200, headers: { 'content-type': 'application/json' } })
+    }
+    const a = await app({ api: httpApi(fetchFn) })
+    expect(await a.controller.completeSignIn()).toBe('signed-in')
+    expect(requests).toEqual(['GET /v1/me'])
   })
 
   it('discards the demo when the account already has progress, and merges nothing', async () => {
@@ -104,17 +101,16 @@ describe('signing in from the demo (spec §8.6)', () => {
     await progressElsewhere(env, server)
     const a = await app({ env, server })
     await a.client().answer(answerTo('c:hello-1'))
-    expect(await a.controller.completeSignIn(null)).toBe('demo-discarded')
+    expect(await a.controller.completeSignIn()).toBe('demo-discarded')
     expect([...server.events.values()].map((e) => e.wordId)).toEqual(['c:goodbye-1'])
     expect(a.d.exists(DEMO_FILE)).toBe(false)
     expect(await a.client().sync()).toBe('synced')
     expect([...a.client().snapshot.states.keys()]).toEqual(['c:goodbye-1'])
-    expect(a.api.calls).not.toContain('setCountry null')
   })
 
   it('deletes an untouched demo and simply signs in', async () => {
     const a = await app()
-    expect(await a.controller.completeSignIn('BG')).toBe('signed-in')
+    expect(await a.controller.completeSignIn()).toBe('signed-in')
     expect(a.d.exists(DEMO_FILE)).toBe(false)
     expect(a.server.events.size).toBe(0)
   })
@@ -129,7 +125,7 @@ describe('signing in from the demo (spec §8.6)', () => {
     transport.online = true
     const push = transport.push
     transport.push = () => Promise.reject(new Error('offline'))
-    expect(await a.controller.completeSignIn('BG')).toBe('carried-over')
+    expect(await a.controller.completeSignIn()).toBe('carried-over')
     expect(a.accounts.read()?.carryOver).toBe(true)
     expect(a.d.exists(DEMO_FILE)).toBe(true)
     transport.push = push
@@ -146,7 +142,7 @@ describe('signing in from the demo (spec §8.6)', () => {
     await a.client().answer(answerTo('c:hello-1'))
     // The demo already carries u1's unpushed answer (an interrupted carry-over), with no account record left.
     await a.client().attachUser('u1')
-    expect(await a.controller.completeSignIn('BG')).toBe('carried-over')
+    expect(await a.controller.completeSignIn()).toBe('carried-over')
     expect([...a.server.events.values()].map((e) => e.wordId).sort()).toEqual(['c:goodbye-1', 'c:hello-1'])
     expect(a.accounts.read()).toEqual({ userId: 'u1', email: 'ana@example.com', carryOver: false })
     expect(a.d.exists(DEMO_FILE)).toBe(false)
@@ -160,7 +156,7 @@ describe('signing in from the demo (spec §8.6)', () => {
     const a = await app({ env, server, transport })
     await a.client().answer(answerTo('c:hello-1'))
     transport.push = () => new Promise(() => undefined)
-    void a.controller.completeSignIn('BG')
+    void a.controller.completeSignIn()
     await vi.waitFor(() => expect(a.accounts.read()).toEqual({ userId: 'u1', email: 'ana@example.com', carryOver: true }))
     expect(a.client().snapshot.userId).toBe('u1')
   })
@@ -174,7 +170,7 @@ describe('signing in from the demo (spec §8.6)', () => {
     await a.client().answer(answerTo('c:hello-1'))
     await a.client().attachUser('u1')
     transport.push = () => new Promise(() => undefined)
-    void a.controller.completeSignIn('BG')
+    void a.controller.completeSignIn()
     await vi.waitFor(() => expect(a.accounts.read()).toEqual({ userId: 'u1', email: 'ana@example.com', carryOver: true }))
   })
 
@@ -183,14 +179,14 @@ describe('signing in from the demo (spec §8.6)', () => {
     const server = new FakeServer({ now: env.now })
     const a = await app({ env, server, transport: flaky(server) })
     await a.client().answer(answerTo('c:hello-1'))
-    await expect(a.controller.completeSignIn('BG')).rejects.toThrow('offline')
+    await expect(a.controller.completeSignIn()).rejects.toThrow('offline')
     expect(a.accounts.read()).toBeNull()
     expect(a.boot.store.get()).toMatchObject({ status: 'ready', account: null })
   })
 
   it('does nothing without a session', async () => {
     const a = await app({ session: null })
-    await expect(a.controller.completeSignIn('BG')).rejects.toThrow()
+    await expect(a.controller.completeSignIn()).rejects.toThrow()
     expect(a.accounts.read()).toBeNull()
   })
 })
@@ -198,11 +194,11 @@ describe('signing in from the demo (spec §8.6)', () => {
 describe('signing in again (spec §8.6)', () => {
   it('clears an expired sign-in for the same learner and syncs at once', async () => {
     const a = await app()
-    await a.controller.completeSignIn('BG')
+    await a.controller.completeSignIn()
     a.controller.sessionExpired()
     expect(a.controller.store.get().expired).toBe(true)
     await a.client().answer(answerTo('c:hello-1'))
-    expect(await a.controller.completeSignIn(null)).toBe('signed-in')
+    expect(await a.controller.completeSignIn()).toBe('signed-in')
     expect(a.controller.store.get()).toEqual({ expired: false, notice: 'signed-in' })
     await a.client().idle()
     await a.client().sync()
@@ -211,9 +207,9 @@ describe('signing in again (spec §8.6)', () => {
 
   it('refuses another account on a device that holds a learner’s progress, and signs that session out', async () => {
     const a = await app()
-    await a.controller.completeSignIn('BG')
+    await a.controller.completeSignIn()
     a.api.session = { ...ANA, userId: 'u2', email: 'bo@example.com' }
-    expect(await a.controller.completeSignIn('BG')).toBe('other-account')
+    expect(await a.controller.completeSignIn()).toBe('other-account')
     expect(a.api.calls.at(-1)).toBe('signOut')
     expect(a.accounts.read()?.userId).toBe('u1')
     expect(a.boot.store.get()).toMatchObject({ status: 'ready', account: { userId: 'u1' } })
@@ -226,31 +222,6 @@ describe('signing in again (spec §8.6)', () => {
   })
 })
 
-describe('Google’s return (spec §8.6)', () => {
-  it('completes with the age gate’s country carried across the redirect', async () => {
-    const a = await app()
-    a.pending.save({ country: 'DE' })
-    expect(await a.controller.resumeGoogle('ok')).toBe('signed-in')
-    expect(a.api.calls).toContain('setCountry DE')
-    expect(a.pending.read()).toBeNull()
-  })
-
-  it('does not complete a sign-in whose age gate was not passed in this tab', async () => {
-    const a = await app()
-    expect(await a.controller.resumeGoogle('ok')).toBeNull()
-    expect(a.api.calls).toContain('signOut')
-    expect(a.accounts.read()).toBeNull()
-    expect(a.controller.store.get().notice).toBe('google-failed')
-  })
-
-  it('says so when Google sent the learner back with an error', async () => {
-    const a = await app()
-    a.pending.save({ country: 'BG' })
-    expect(await a.controller.resumeGoogle('error')).toBeNull()
-    expect(a.controller.store.get().notice).toBe('google-failed')
-  })
-})
-
 describe('signing out, deleting, leaving the demo (spec §8.6, §11)', () => {
   it('asks before losing answers that could not be flushed, then signs out and deletes the learner’s file', async () => {
     const env = testEnv()
@@ -258,7 +229,7 @@ describe('signing out, deleting, leaving the demo (spec §8.6, §11)', () => {
     const transport = flaky(server)
     transport.online = true
     const a = await app({ env, server, transport })
-    await a.controller.completeSignIn('BG')
+    await a.controller.completeSignIn()
     transport.online = false
     await a.client().answer(answerTo('c:hello-1'))
     expect(await a.controller.signOut()).toBe('unsynced')
@@ -275,7 +246,7 @@ describe('signing out, deleting, leaving the demo (spec §8.6, §11)', () => {
 
   it('needs the server to sign out: offline, it throws and changes nothing here', async () => {
     const a = await app()
-    await a.controller.completeSignIn('BG')
+    await a.controller.completeSignIn()
     a.api.signOut = async () => Promise.reject(new OfflineError(new TypeError('Failed to fetch')))
     await expect(a.controller.signOut()).rejects.toBeInstanceOf(SignOutOffline)
     await expect(a.controller.signOut({ force: true })).rejects.toBeInstanceOf(SignOutOffline)
@@ -288,13 +259,12 @@ describe('signing out, deleting, leaving the demo (spec §8.6, §11)', () => {
 
   it('announces no change when the switch did not run (another tab has the database)', async () => {
     const a = await app()
-    await a.controller.completeSignIn('BG')
+    await a.controller.completeSignIn()
     a.controller.dismissNotice()
     const controller = new AccountController({
       api: a.api,
-      boot: { store: a.boot.store, switchTo: async () => false, leave: async () => undefined },
+      boot: { store: a.boot.store, switchTo: async () => false },
       accounts: a.accounts,
-      pending: a.pending,
       transport: () => a.server,
     })
     expect(await controller.signOut()).toBe('signed-out')
@@ -309,7 +279,7 @@ describe('signing out, deleting, leaving the demo (spec §8.6, §11)', () => {
 
   it('signs out without asking when everything is synced', async () => {
     const a = await app()
-    await a.controller.completeSignIn('BG')
+    await a.controller.completeSignIn()
     await a.client().answer(answerTo('c:hello-1'))
     expect(await a.controller.signOut()).toBe('signed-out')
     expect(a.server.events.size).toBe(1)
@@ -317,7 +287,7 @@ describe('signing out, deleting, leaving the demo (spec §8.6, §11)', () => {
 
   it('deletes the account on the server first, and changes nothing here when that fails', async () => {
     const a = await app()
-    await a.controller.completeSignIn('BG')
+    await a.controller.completeSignIn()
     a.api.deleteAccount = async () => Promise.reject(new Error('offline'))
     await expect(a.controller.deleteAccount()).rejects.toThrow('offline')
     expect(a.accounts.read()?.userId).toBe('u1')
@@ -326,7 +296,7 @@ describe('signing out, deleting, leaving the demo (spec §8.6, §11)', () => {
 
   it('deletes the account, then the learner’s file, and opens a fresh demo', async () => {
     const a = await app()
-    await a.controller.completeSignIn('BG')
+    await a.controller.completeSignIn()
     await a.controller.deleteAccount()
     expect(a.accounts.read()).toBeNull()
     expect(a.d.exists(learnerFile('u1'))).toBe(false)
@@ -353,7 +323,7 @@ describe('signing out, deleting, leaving the demo (spec §8.6, §11)', () => {
     transport.online = true
     const push = transport.push
     transport.push = () => Promise.reject(new Error('offline'))
-    expect(await a.controller.completeSignIn('BG')).toBe('carried-over')
+    expect(await a.controller.completeSignIn()).toBe('carried-over')
     expect(a.accounts.read()?.carryOver).toBe(true)
     transport.push = push
 
@@ -379,7 +349,7 @@ describe('signing out, deleting, leaving the demo (spec §8.6, §11)', () => {
     transport.online = true
     const push = transport.push
     transport.push = () => Promise.reject(new Error('offline'))
-    expect(await a.controller.completeSignIn('BG')).toBe('carried-over')
+    expect(await a.controller.completeSignIn()).toBe('carried-over')
     transport.push = push
 
     await a.controller.deleteAccount()
@@ -395,24 +365,12 @@ describe('signing out, deleting, leaving the demo (spec §8.6, §11)', () => {
     await a.client().answer(answerTo('c:hello-1'))
     // Simulates a stuck carry-over: the demo is attached to u1 on disk, but no account record points to it.
     await a.client().attachUser('u1')
-    expect(await a.controller.completeSignIn('BG')).toBe('signed-in')
+    expect(await a.controller.completeSignIn()).toBe('signed-in')
     expect(a.server.events.size).toBe(0)
     // Not u2's: the sweep before u2's file opens deletes it (a device keeps one learner's data).
     expect(a.d.exists(DEMO_FILE)).toBe(false)
     expect(a.accounts.read()?.userId).toBe('u2')
     expect(a.client().snapshot.states.size).toBe(0)
-  })
-})
-
-describe('resumeGoogle reports a failed completion (spec §8.6)', () => {
-  it('sets the notice to google-failed, and rethrows, when completeSignIn fails', async () => {
-    const env = testEnv()
-    const server = new FakeServer({ now: env.now })
-    const a = await app({ env, server, transport: flaky(server) })
-    await a.client().answer(answerTo('c:hello-1'))
-    a.pending.save({ country: 'BG' })
-    await expect(a.controller.resumeGoogle('ok')).rejects.toThrow('offline')
-    expect(a.controller.store.get().notice).toBe('google-failed')
   })
 })
 
@@ -423,7 +381,6 @@ describe('Boot must be ready before an account changes (spec §9.1)', () => {
     const server = new FakeServer({ now: env.now })
     const d = disk()
     const accounts = options.accounts ?? accountStorage(memoryStorage())
-    const pending = pendingSignIn(memoryStorage())
     const api = fakeApi({}, ANA)
     const deletes: string[] = []
     const lock: LockPort = { acquire: async () => true, takeOver: async () => undefined, drop: () => undefined }
@@ -443,13 +400,13 @@ describe('Boot must be ready before an account changes (spec §9.1)', () => {
       },
       () => lock,
     )
-    const controller = new AccountController({ api, boot, accounts, pending, transport: () => server })
+    const controller = new AccountController({ api, boot, accounts, transport: () => server })
     return { controller, accounts, deletes }
   }
 
   it('completeSignIn rejects and saves no record while Boot is not ready', async () => {
     const { controller, accounts } = notReady()
-    await expect(controller.completeSignIn('BG')).rejects.toBeInstanceOf(NotReady)
+    await expect(controller.completeSignIn()).rejects.toBeInstanceOf(NotReady)
     expect(accounts.read()).toBeNull()
   })
 
@@ -466,16 +423,7 @@ describe('Boot must be ready before an account changes (spec §9.1)', () => {
 describe('the native language is no longer completeSignIn’s to save (plan 11, fix round 1)', () => {
   it('writes no settings.l1 on an ordinary sign-in', async () => {
     const a = await app()
-    expect(await a.controller.completeSignIn('BG')).toBe('signed-in')
-    expect(a.client().snapshot.settings.l1).toBeNull()
-  })
-
-  it('writes no settings.l1 resuming Google from a record stored before plan 11, which could carry an l1', async () => {
-    const a = await app()
-    const raw = memoryStorage()
-    raw.setItem(SIGNIN_KEY, JSON.stringify({ country: 'DE', l1: 'de' }))
-    const controller = new AccountController({ api: a.api, boot: a.boot, accounts: a.accounts, pending: pendingSignIn(raw), transport: () => a.server })
-    expect(await controller.resumeGoogle('ok')).toBe('signed-in')
+    expect(await a.controller.completeSignIn()).toBe('signed-in')
     expect(a.client().snapshot.settings.l1).toBeNull()
   })
 })

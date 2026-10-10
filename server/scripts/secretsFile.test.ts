@@ -9,10 +9,7 @@ describe('workerSecrets: what a deploy uploads (spec §4.4: secrets from the Git
       'BETTER_AUTH_SECRET',
       'RESEND_API_KEY',
       'EMAIL_FROM',
-      'FEEDBACK_EMAIL',
       'FEEDBACK_READ_TOKEN',
-      'GOOGLE_CLIENT_ID',
-      'GOOGLE_CLIENT_SECRET',
       'VAPID_PUBLIC_KEY',
       'VAPID_PRIVATE_KEY',
       'VAPID_SUBJECT',
@@ -20,7 +17,7 @@ describe('workerSecrets: what a deploy uploads (spec §4.4: secrets from the Git
   })
 
   it('keeps only the secrets that are set, and nothing else from the environment', () => {
-    expect(workerSecrets({ BETTER_AUTH_SECRET: secret, VAPID_PUBLIC_KEY: 'pub', VAPID_PRIVATE_KEY: 'priv', GOOGLE_CLIENT_ID: '', PATH: '/usr/bin' })).toEqual({
+    expect(workerSecrets({ BETTER_AUTH_SECRET: secret, VAPID_PUBLIC_KEY: 'pub', VAPID_PRIVATE_KEY: 'priv', EMAIL_FROM: '', PATH: '/usr/bin' })).toEqual({
       BETTER_AUTH_SECRET: secret,
       VAPID_PUBLIC_KEY: 'pub',
       VAPID_PRIVATE_KEY: 'priv',
@@ -33,18 +30,12 @@ describe('workerSecrets: what a deploy uploads (spec §4.4: secrets from the Git
   })
 
   it('refuses half of a pair, naming every problem at once', () => {
-    expect(() => workerSecrets({ BETTER_AUTH_SECRET: secret, GOOGLE_CLIENT_ID: 'id', VAPID_PRIVATE_KEY: 'priv' })).toThrow(
-      'GOOGLE_CLIENT_ID is set without GOOGLE_CLIENT_SECRET; VAPID_PRIVATE_KEY is set without VAPID_PUBLIC_KEY',
+    expect(() => workerSecrets({ BETTER_AUTH_SECRET: secret, EMAIL_FROM: 'x@example.com', VAPID_PRIVATE_KEY: 'priv' })).toThrow(
+      'VAPID_PRIVATE_KEY is set without VAPID_PUBLIC_KEY; EMAIL_FROM is set without RESEND_API_KEY',
     )
     expect(() => workerSecrets({ BETTER_AUTH_SECRET: secret, RESEND_API_KEY: 're_x' })).toThrow('RESEND_API_KEY is set without EMAIL_FROM')
   })
 
-  it('refuses the feedback address without the mailer that would use it, and takes the mailer without the address', () => {
-    expect(() => workerSecrets({ BETTER_AUTH_SECRET: secret, FEEDBACK_EMAIL: 'feedback@example.com' })).toThrow('FEEDBACK_EMAIL is set without RESEND_API_KEY')
-    const mailer = { BETTER_AUTH_SECRET: secret, RESEND_API_KEY: 're_x', EMAIL_FROM: 'Wordado <codes@example.com>' }
-    expect(workerSecrets(mailer)).toEqual(mailer)
-    expect(workerSecrets({ ...mailer, FEEDBACK_EMAIL: 'feedback@example.com' })).toEqual({ ...mailer, FEEDBACK_EMAIL: 'feedback@example.com' })
-  })
 
   it('refuses a FEEDBACK_READ_TOKEN under 32 characters, and takes a deploy without one', () => {
     expect(() => workerSecrets({ BETTER_AUTH_SECRET: secret, FEEDBACK_READ_TOKEN: 't'.repeat(31) })).toThrow('FEEDBACK_READ_TOKEN must be at least 32 characters')

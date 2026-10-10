@@ -4,7 +4,6 @@ import { BASE_URL, harness, type Harness, type Reply } from '../../test/harness'
 import { runScheduled } from '../jobs/scheduled'
 import { FEEDBACK_PAGE_DEFAULT, FEEDBACK_PAGE_MAX, hasReadToken } from './admin'
 import { FEEDBACK_PER_CLIENT_PER_HOUR, FEEDBACK_PER_DAY, FEEDBACK_SEND_RETENTION_MS, feedbackClient, pruneFeedbackSends } from './limit'
-import { FEEDBACK_MAIL_MAX, feedbackNotice, mailNewFeedback } from './mail'
 
 const HOUR = 3_600_000
 const DAY = 86_400_000
@@ -31,10 +30,11 @@ function send(h: Harness, body: unknown, ip = '10.30.0.1', headers: Record<strin
 
 const stored = (h: Harness) =>
   h.deps.db.query<Record<string, unknown>>(
-    'select user_id, kind, message, contact_email, app_version, corpus_version, user_agent, language, screen, received_at, mailed_at from feedback order by id',
+    'select signed_in, kind, message, contact_email, app_version, corpus_version, user_agent, language, screen, received_at from feedback order by id',
   )
 
-/** `count` messages waiting for the mail, received a minute apart from `from`. */
+
+/** `count` messages, received a minute apart from `from`. */
 async function seedFeedback(h: Harness, count: number, from: number): Promise<void> {
   await h.deps.db.query(
     `insert into feedback (kind, message, app_version, corpus_version, user_agent, language, screen, received_at)
@@ -51,7 +51,7 @@ describe('POST /v1/feedback (spec §8.12)', () => {
     expect(reply.body).toEqual({ ok: true })
     expect(await stored(h)).toEqual([
       {
-        user_id: null,
+        signed_in: false,
         kind: 'bug',
         message: 'The path does not open.',
         contact_email: 'ana@example.com',
@@ -61,18 +61,17 @@ describe('POST /v1/feedback (spec §8.12)', () => {
         language: 'bg',
         screen: '/path',
         received_at: h.clock.now,
-        mailed_at: null,
       },
     ])
   })
 
-  it('attaches the account of a signed-in sender, unless the client names another learner', async () => {
+  it('records that a signed-in sender was signed in, never who, unless the client names another learner (#166)', async () => {
     const h = harness()
     const s = await h.signIn()
     expect((await s.post('/v1/feedback', { ...feedback, kind: 'idea' })).status).toBe(200)
     expect((await s.post('/v1/feedback', feedback, { 'x-wordado-user': s.userId })).status).toBe(200)
     expect((await s.post('/v1/feedback', feedback, { 'x-wordado-user': 'someone-else' })).status).toBe(200)
-    expect((await stored(h)).map((row) => row['user_id'])).toEqual([s.userId, s.userId, null])
+    expect((await stored(h)).map((row) => row['signed_in'])).toEqual([true, true, false])
   })
 
   it('refuses a body that breaks a rule, and one that is not JSON', async () => {
@@ -331,183 +330,17 @@ describe('GET /v1/admin/feedback (spec §8.12)', () => {
     expect(await stored(h)).toEqual(before)
   })
 
-  it('no longer gives the address of a deleted account', async () => {
+  it('no longer gives the address of a deleted account, and keeps another address the learner chose to give (#166)', async () => {
     const h = withToken()
     const s = await h.signIn()
-    await s.post('/v1/feedback', { ...feedback, email: 'ana@example.com' })
-    expect((await read(h)).body.items[0].contactEmail).toBe('ana@example.com')
+    await s.post('/v1/feedback', { ...feedback, email: s.email.toUpperCase() })
+    await s.post('/v1/feedback', { ...feedback, kind: 'idea', email: 'other@example.com' })
+    expect((await read(h)).body.items.map((item: { contactEmail: string }) => item.contactEmail)).toEqual(['other@example.com', s.email.toUpperCase()])
     expect((await s.del('/v1/account', { confirm: true })).status).toBe(200)
-    const [item] = (await read(h)).body.items
-    expect(item.message).toBe('The path does not open.')
-    expect(item.contactEmail).toBe('')
-    expect(item.signedIn).toBe(false)
+    // No row names the account, so only the account's own address can be found and removed; an address the
+    // learner typed on purpose is theirs to give, and stays with the message.
+    const items = (await read(h)).body.items
+    expect(items.map((item: { contactEmail: string; signedIn: boolean }) => [item.contactEmail, item.signedIn])).toEqual([['other@example.com', true], ['', true]])
   })
 })
 
-describe('the daily feedback mail (spec §8.12)', () => {
-  const to = 'coordinator@example.com'
-  const withMail = () => harness({ config: { feedbackEmail: to } })
-
-  it('sends one mail with the new feedback and marks it mailed', async () => {
-    const h = withMail()
-    const s = await h.signIn()
-    await s.post('/v1/feedback', { ...feedback, email: 'ana@example.com' })
-    h.clock.advance(60_000)
-    await send(h, { ...feedback, kind: 'idea', message: 'A dark theme.', corpusVersion: '' })
-    await runScheduled(h.deps)
-    expect(h.feedbackMails).toHaveLength(1)
-    const mail = h.feedbackMails[0]!
-    expect(mail.to).toBe(to)
-    expect(mail.subject).toBe('Wordado feedback: 2 new')
-    expect(mail.text).toContain('1. Something isn’t working · ')
-    expect(mail.text).toMatch(/· \d{4}-\d{2}-\d{2} \d{2}:\d{2} UTC\n\nThe path does not open\.\n\nAnswer to: ana@example\.com\nSigned in: yes\n/)
-    expect(mail.text).toContain('App: B3kq9xZa · Words: bg 6 · Language: bg · Screen: /path\nBrowser: Mozilla/5.0 (X11; Linux x86_64)')
-    expect(mail.text).toContain('2. An idea · ')
-    expect(mail.text).toContain('A dark theme.\n\nSigned in: no\nApp: B3kq9xZa · Words: none · ')
-    expect(mail.text).not.toContain(s.userId)
-    expect(mail.text).not.toContain('more')
-    expect((await stored(h)).map((row) => row['mailed_at'])).toEqual([h.clock.now, h.clock.now])
-  })
-
-  it('sends at most one mail a UTC day, however often the cron runs', async () => {
-    const h = withMail()
-    h.clock.now = Math.floor(h.clock.now / DAY) * DAY + HOUR
-    await send(h, feedback)
-    await runScheduled(h.deps)
-    h.clock.advance(15 * 60_000)
-    await send(h, { ...feedback, message: 'Later the same day.' })
-    await runScheduled(h.deps)
-    expect(h.feedbackMails).toHaveLength(1)
-    h.clock.advance(DAY)
-    await runScheduled(h.deps)
-    await runScheduled(h.deps)
-    expect(h.feedbackMails).toHaveLength(2)
-    expect(h.feedbackMails[1]!.text).toContain('Later the same day.')
-    expect(h.feedbackMails[1]!.text).not.toContain('The path does not open.')
-    expect(await h.deps.db.query('select count(*)::int as n from feedback_mail')).toEqual([{ n: 1 }])
-  })
-
-  it('sends nothing, and uses up no day, while there is nothing new', async () => {
-    const h = withMail()
-    await runScheduled(h.deps)
-    expect(h.feedbackMails).toEqual([])
-    expect(await h.deps.db.query('select utc_day from feedback_mail')).toEqual([])
-    await send(h, feedback)
-    await runScheduled(h.deps)
-    expect(h.feedbackMails).toHaveLength(1)
-  })
-
-  it(`lists at most ${FEEDBACK_MAIL_MAX}, oldest first, says how many more, and sends those the next day`, async () => {
-    const h = withMail()
-    await seedFeedback(h, FEEDBACK_MAIL_MAX + 3, h.clock.now - HOUR)
-    expect(await mailNewFeedback(h.deps)).toBe(FEEDBACK_MAIL_MAX)
-    const first = h.feedbackMails[0]!
-    expect(first.subject).toBe(`Wordado feedback: ${FEEDBACK_MAIL_MAX + 3} new`)
-    expect(first.text).toContain('\n\nidea 1\n')
-    expect(first.text).toContain(`\n\nidea ${FEEDBACK_MAIL_MAX}\n`)
-    expect(first.text).not.toContain(`idea ${FEEDBACK_MAIL_MAX + 1}\n`)
-    expect(first.text.endsWith('and 3 more')).toBe(true)
-    h.clock.advance(DAY)
-    expect(await mailNewFeedback(h.deps)).toBe(3)
-    expect(h.feedbackMails[1]!.text).toContain(`idea ${FEEDBACK_MAIL_MAX + 1}\n`)
-    expect(await h.deps.db.query('select id from feedback where mailed_at is null')).toEqual([])
-  })
-
-  it('leaves the feedback waiting when the send fails, and tries again only the next day', async () => {
-    const h = withMail()
-    await send(h, feedback)
-    const failing = vi.spyOn(h.deps.mailer, 'sendFeedback').mockRejectedValueOnce(new Error('Resend refused the email: 500'))
-    await expect(runScheduled(h.deps)).rejects.toThrow(AggregateError)
-    expect((await stored(h))[0]!['mailed_at']).toBeNull()
-    await runScheduled(h.deps)
-    expect(failing).toHaveBeenCalledTimes(1)
-    expect(h.feedbackMails).toEqual([])
-    h.clock.advance(DAY)
-    await runScheduled(h.deps)
-    expect(h.feedbackMails).toHaveLength(1)
-    expect((await stored(h))[0]!['mailed_at']).toBe(h.clock.now)
-  })
-
-  it('without FEEDBACK_EMAIL keeps the feedback, mails and marks nothing, and says so in one line', async () => {
-    const h = harness()
-    const logged = vi.spyOn(console, 'log').mockImplementation(() => {})
-    try {
-      await runScheduled(h.deps)
-      expect(logged).not.toHaveBeenCalled()
-      await send(h, feedback)
-      await send(h, feedback)
-      await runScheduled(h.deps)
-      expect(logged).toHaveBeenCalledTimes(1)
-      expect(logged).toHaveBeenCalledWith('feedback: 2 waiting, FEEDBACK_EMAIL is not set')
-    } finally {
-      logged.mockRestore()
-    }
-    expect(h.feedbackMails).toEqual([])
-    expect((await stored(h)).map((row) => row['mailed_at'])).toEqual([null, null])
-    expect(await h.deps.db.query('select utc_day from feedback_mail')).toEqual([])
-  })
-
-  describe('when the review app shows the feedback (FEEDBACK_READ_TOKEN is set)', () => {
-    const review = 'https://review.example.com'
-    const withTab = (reviewAppUrl: string | null = review) => harness({ config: { feedbackEmail: to, feedbackReadToken: 'r'.repeat(40), reviewAppUrl } })
-
-    it('is a notice: how many are new, by kind, and a link to the Feedback tab, with no message or address in it', async () => {
-      const h = withTab()
-      const s = await h.signIn()
-      await s.post('/v1/feedback', { ...feedback, email: 'ana@example.com' })
-      await send(h, { ...feedback, message: 'It also crashes.' })
-      await send(h, { ...feedback, kind: 'idea', message: 'A dark theme.' }, '10.30.0.2')
-      await runScheduled(h.deps)
-      expect(h.feedbackMails).toEqual([
-        {
-          to,
-          subject: 'Wordado feedback: 3 new',
-          text: '3 new messages about the app.\n\nSomething isn’t working: 2\nIdeas: 1\n\nRead them in the review app: https://review.example.com/#feedback',
-        },
-      ])
-      const mail = h.feedbackMails[0]!
-      for (const kept of ['The path does not open.', 'It also crashes.', 'A dark theme.', 'ana@example.com', s.userId, 'Mozilla', 'B3kq9xZa']) expect(mail.text).not.toContain(kept)
-      expect((await stored(h)).map((row) => row['mailed_at'])).toEqual([h.clock.now, h.clock.now, h.clock.now])
-    })
-
-    it('says where to look when the review app’s address is not set', async () => {
-      const h = withTab(null)
-      await send(h, { ...feedback, kind: 'other' })
-      await runScheduled(h.deps)
-      expect(h.feedbackMails[0]!.text).toBe('1 new message about the app.\n\nSomething else: 1\n\nRead them in the review app: Admin, then Feedback.')
-    })
-
-    it(`counts every waiting message, more than ${FEEDBACK_MAIL_MAX} too, and leaves none for the next day`, async () => {
-      const h = withTab()
-      await seedFeedback(h, FEEDBACK_MAIL_MAX + 3, h.clock.now - HOUR)
-      expect(await mailNewFeedback(h.deps)).toBe(FEEDBACK_MAIL_MAX + 3)
-      expect(h.feedbackMails[0]!.subject).toBe(`Wordado feedback: ${FEEDBACK_MAIL_MAX + 3} new`)
-      expect(h.feedbackMails[0]!.text).toContain(`Ideas: ${FEEDBACK_MAIL_MAX + 3}\n`)
-      expect(await h.deps.db.query('select id from feedback where mailed_at is null')).toEqual([])
-      h.clock.advance(DAY)
-      expect(await mailNewFeedback(h.deps)).toBe(0)
-      expect(h.feedbackMails).toHaveLength(1)
-    })
-
-    it('is still one mail a UTC day, and a failed send waits for the next', async () => {
-      const h = withTab()
-      h.clock.now = Math.floor(h.clock.now / DAY) * DAY + HOUR
-      await send(h, feedback)
-      const failing = vi.spyOn(h.deps.mailer, 'sendFeedback').mockRejectedValueOnce(new Error('Resend refused the email: 500'))
-      await expect(runScheduled(h.deps)).rejects.toThrow(AggregateError)
-      await send(h, { ...feedback, kind: 'idea' })
-      await runScheduled(h.deps)
-      expect(failing).toHaveBeenCalledTimes(1)
-      expect((await stored(h)).map((row) => row['mailed_at'])).toEqual([null, null])
-      h.clock.advance(DAY)
-      await runScheduled(h.deps)
-      await runScheduled(h.deps)
-      expect(h.feedbackMails).toHaveLength(1)
-      expect(h.feedbackMails[0]!.subject).toBe('Wordado feedback: 2 new')
-    })
-
-    it('names only the kinds that have something new', () => {
-      expect(feedbackNotice({ bug: 0, idea: 0, other: 2 }, review).text).toBe('2 new messages about the app.\n\nSomething else: 2\n\nRead them in the review app: https://review.example.com/#feedback')
-    })
-  })
-})

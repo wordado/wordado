@@ -263,10 +263,11 @@ test('signs out leaving nothing behind, then deletes the account (spec §11)', a
   await ctx.close()
 })
 
-test('sends feedback from the account menu, and the export holds it (spec §8.12, §11)', async ({ browser }) => {
+test('sends feedback from the account menu; the export names neither it nor a country (spec §8.12, §11, #166)', async ({ browser }) => {
   const ctx = await context(browser)
   const page = await ctx.newPage()
-  await signIn(page, address('feedback'))
+  const email = address('feedback')
+  await signIn(page, email)
   await finishSetup(page)
   await page.goto('/path')
   await page.getByRole('button', { name: /^Account: / }).click()
@@ -278,9 +279,11 @@ test('sends feedback from the account menu, and the export holds it (spec §8.12
   await page.getByLabel('Your message', { exact: true }).fill('The path does not open.')
   await page.getByRole('button', { name: 'Send', exact: true }).click()
   await expect(page.locator('.feedback-form [role="status"]')).toHaveText('Thank you! We’ve got your message.')
-  const { feedback } = (await exported(page)) as unknown as { feedback: Record<string, unknown>[] }
-  expect(feedback).toHaveLength(1)
-  expect(feedback[0]).toMatchObject({ kind: 'bug', message: 'The path does not open.', email: '', language: 'en', screen: '/path' })
+  // Feedback names no account, so no export can hold it; the age gate's country never left this device.
+  const data = (await exported(page)) as unknown as { account: Record<string, unknown> }
+  expect(data).not.toHaveProperty('feedback')
+  expect(data.account).not.toHaveProperty('country')
+  expect(data.account).toMatchObject({ email })
   await ctx.close()
 })
 

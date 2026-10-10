@@ -67,7 +67,7 @@ export function feedbackAdminRoutes(app: Hono<AppEnv>, deps: ServerDeps): void {
     if (errors.length > 0 || limit === null || since === null) return invalid(c, errors)
     // One more than the page, to know whether an older one follows.
     const rows = await deps.db.query<FeedbackRow>(
-      `select id, user_id is not null as signed_in, kind, message, contact_email, app_version, corpus_version, user_agent, language, screen, received_at
+      `select id, signed_in, kind, message, contact_email, app_version, corpus_version, user_agent, language, screen, received_at
        from feedback
        where ($1::bigint is null or id < $1) and ($2::text is null or kind = $2) and received_at >= $3
        order by id desc limit $4`,

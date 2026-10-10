@@ -1,10 +1,10 @@
 import { accountIsEmpty, createStore, type Client, type Store, type SyncTransport } from '@wordado/client-data'
 import type { BootState, SwitchOptions } from '../app/boot'
 import type { Api } from './api'
-import { DEMO_FILE, learnerFile, type AccountRecord, type AccountStorage, type PendingSignIn } from './storage'
+import { DEMO_FILE, learnerFile, type AccountRecord, type AccountStorage } from './storage'
 
 /** What the shell tells the learner after an account change (spec §8.6: the demo's fate is stated plainly). */
-export type AccountNotice = 'carried-over' | 'demo-discarded' | 'signed-in' | 'signed-out' | 'deleted' | 'other-account' | 'google-failed' | 'demo-left'
+export type AccountNotice = 'carried-over' | 'demo-discarded' | 'signed-in' | 'signed-out' | 'deleted' | 'other-account' | 'demo-left'
 
 export interface AccountState {
   /** The server refused the session (a 401): syncing waits for the learner to sign in again. */
@@ -16,7 +16,6 @@ export interface AccountState {
 export interface BootPort {
   readonly store: Store<BootState>
   switchTo(options?: SwitchOptions): Promise<boolean>
-  leave(): Promise<void>
 }
 
 /** An account change asked for while `Boot` is not `'ready'` (spec §9.1). */
@@ -40,16 +39,10 @@ export interface ReminderPort {
   stop(options: { readonly server: boolean }): Promise<void>
 }
 
-export interface PendingStore {
-  read(): PendingSignIn | null
-  clear(): void
-}
-
 export interface AccountDeps {
   readonly api: Api
   readonly boot: BootPort
   readonly accounts: AccountStorage
-  readonly pending: PendingStore
   transport(): SyncTransport
   readonly reminders?: ReminderPort
 }
@@ -109,13 +102,13 @@ export class AccountController {
 
   /**
    * Runs once the server holds a session for this browser: after a verified
-   * code, or back from Google. `country` is the age gate's (spec §11), the
-   * only thing kept of it; the native language is asked by the first-run
-   * setup once the account is signed in, not here (plan 11).
+   * code. The age gate's country stays on this device and is not sent (#166);
+   * the native language is asked by the first-run setup once the account is
+   * signed in, not here (plan 11).
    *
    * - Signed in as someone else: refuse, and sign the new session out — this
    *   device's answers belong to its learner, and are neither pushed nor
-   *   deleted. Checked first, so a refused session's country is never saved.
+   *   deleted.
    * - Already signed in as the same learner (an expired sign-in): resume syncing.
    * - A demo already attached to this same learner (a carry-over this device
    *   started but never finished, e.g. an interrupted push, with no account
@@ -133,7 +126,7 @@ export class AccountController {
    * or while `Boot` is not `'ready'` (spec §9.1): a sign-in landing mid-open
    * must never guess whether the database it cannot yet see holds progress.
    */
-  async completeSignIn(country: string | null): Promise<SignInOutcome> {
+  async completeSignIn(): Promise<SignInOutcome> {
     const { api, accounts, boot } = this.deps
     const me = await api.me()
     if (!me) throw new Error('The sign-in did not complete')
@@ -145,8 +138,6 @@ export class AccountController {
       this.set({ notice: 'other-account' })
       return 'other-account'
     }
-
-    if (country !== null && me.country !== country) await api.setCountry(country).catch(() => undefined)
 
     if (current) {
       this.set({ expired: false, notice: 'signed-in' })
@@ -178,27 +169,6 @@ export class AccountController {
     const outcome: SignInOutcome = hasProgress ? 'demo-discarded' : 'signed-in'
     this.announce(await boot.switchTo({ deleteFiles: [DEMO_FILE] }), { expired: false, notice: outcome })
     return outcome
-  }
-
-  /**
-   * Back from Google (spec §8.6). The age gate's country crossed the
-   * redirect in this tab's session storage; without it the gate was not
-   * passed here, so the session is signed out rather than used.
-   */
-  async resumeGoogle(result: 'ok' | 'error'): Promise<SignInOutcome | null> {
-    const pending = this.deps.pending.read()
-    this.deps.pending.clear()
-    if (result === 'error' || pending === null) {
-      if (result === 'ok') await this.deps.api.signOut().catch(() => undefined)
-      this.set({ notice: 'google-failed' })
-      return null
-    }
-    try {
-      return await this.completeSignIn(pending.country)
-    } catch (err) {
-      this.set({ notice: 'google-failed' })
-      throw err
-    }
   }
 
   /**
@@ -253,14 +223,6 @@ export class AccountController {
     this.announce(await boot.switchTo({ deleteFiles: [learnerFile(account.userId), DEMO_FILE] }), { expired: false, notice: 'deleted' })
   }
 
-  /**
-   * The page is about to go to Google's sign-in: flush, close the database and let go of the tab lock, so the page
-   * Google returns to can open it. iOS keeps the page left frozen in its back-forward cache, file and all.
-   */
-  leavePage(): Promise<void> {
-    return this.deps.boot.leave()
-  }
-
   /** Leaving the demo deletes it (spec §8.6); a fresh one opens. */
   async leaveDemo(): Promise<void> {
     if (this.deps.accounts.read() !== null) return
@@ -269,4 +231,4 @@ export class AccountController {
 }
 
 /** What the screens use of the controller; their tests pass a fake. */
-export type AccountActions = Pick<AccountController, 'store' | 'completeSignIn' | 'resumeGoogle' | 'signOut' | 'deleteAccount' | 'leaveDemo' | 'dismissNotice' | 'leavePage'>
+export type AccountActions = Pick<AccountController, 'store' | 'completeSignIn' | 'signOut' | 'deleteAccount' | 'leaveDemo' | 'dismissNotice'>

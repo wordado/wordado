@@ -1369,30 +1369,6 @@ describe('Boot lets go when the page is hidden, and opens again when it is shown
     expect(ready(b).snapshot.corpus).not.toBeNull()
   })
 
-  it('resume() does nothing while leave() is still letting go; after it, the page reopens as usual', async () => {
-    const closing = deferred<void>()
-    let opens = 0
-    const { boot: b, locks } = boot({
-      openDriver: async () => {
-        opens += 1
-        const { driver } = await chosen()
-        if (opens > 1) return { driver, backend: 'opfs' }
-        return { driver: { ...driver, close: async () => (await closing.promise, driver.close()) }, backend: 'opfs' }
-      },
-    })
-    await b.start()
-    const leaving = b.leave()
-    await b.resume()
-    expect(locks).toEqual(['acquire'])
-    expect(b.store.get().status).toBe('starting')
-    closing.resolve()
-    await leaving
-    b.suspend()
-    await b.resume()
-    expect(opens).toBe(2)
-    expect(ready(b).snapshot.corpus).not.toBeNull()
-  })
-
   it('a hand-over that waited for an open does not close the Client a later resume() opened', async () => {
     const first = deferred<{ driver: SqlDriver; backend: 'opfs' }>()
     const entered = deferred<void>()
@@ -1430,39 +1406,5 @@ describe('Boot lets go when the page is hidden, and opens again when it is shown
     await b.resume()
     expect(opens).toBe(1)
     expect(ready(b)).toBe(client)
-  })
-
-  it('leave() flushes and closes as a hand-over does, then lets go of the lock; resume() opens again', async () => {
-    const d = disk()
-    const env = testEnv()
-    const server = new FakeServer({ now: env.now })
-    const accounts = accountStorage(memoryStorage())
-    accounts.save({ userId: 'u1', email: 'ana@example.com' })
-    const log: string[] = []
-    const { boot: b, locks } = boot({
-      env,
-      accounts,
-      openDriver: async (file) => {
-        const opened = await choosing(d.openDriver)(file)
-        return { ...opened, driver: { ...opened.driver, close: async () => (log.push('closed'), opened.driver.close()) } }
-      },
-      deleteDatabase: d.deleteDatabase,
-      transport: () => server,
-    })
-    await b.start()
-    const client = ready(b)
-    await client.answer(hello)
-    locks.length = 0
-    const leaving = b.leave()
-    expect(b.store.get().status).toBe('starting')
-    await leaving
-    expect(server.events.size).toBe(1)
-    expect(log).toEqual(['closed'])
-    expect(locks).toEqual(['drop'])
-    expect(b.store.get().status).toBe('starting')
-
-    await b.resume()
-    expect(ready(b)).not.toBe(client)
-    expect(ready(b).snapshot.states.size).toBe(1)
   })
 })

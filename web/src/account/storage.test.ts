@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { accountStorage, DEMO_FILE, learnerFile, memoryStorage, pendingSignIn } from './storage'
+import { accountStorage, DEMO_FILE, learnerFile, memoryStorage } from './storage'
 
 describe('the account record', () => {
   it('round-trips, and clears', () => {
@@ -36,22 +36,6 @@ describe('the account record', () => {
     const store = accountStorage(refusing)
     expect(store.read()).toBeNull()
     expect(() => store.save({ userId: 'u1', email: 'a@b.c' })).not.toThrow()
-  })
-})
-
-describe('the pending sign-in', () => {
-  it('carries the age gate’s country across a redirect', () => {
-    const pending = pendingSignIn(memoryStorage())
-    pending.save({ country: 'BG' })
-    expect(pending.read()).toEqual({ country: 'BG' })
-    pending.clear()
-    expect(pending.read()).toBeNull()
-  })
-
-  it('still parses one stored with a native language (plan 10), ignoring it', () => {
-    const storage = memoryStorage()
-    storage.setItem('wordado.signin', JSON.stringify({ country: 'BG', l1: 'de' }))
-    expect(pendingSignIn(storage).read()).toEqual({ country: 'BG' })
   })
 })
 

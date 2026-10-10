@@ -26,7 +26,6 @@ export class OfflineError extends Error {
 export interface Me {
   readonly userId: string
   readonly email: string
-  readonly country: string | null
   readonly createdAt: number
 }
 
@@ -57,13 +56,10 @@ export interface FeedbackBody extends FeedbackInput {
 export interface Api {
   sendCode(email: string): Promise<void>
   verifyCode(email: string, code: string): Promise<void>
-  /** Where to send the browser for Google sign-in; the server redirects back to one of the two URLs. */
-  googleUrl(callbackUrl: string, errorCallbackUrl: string): Promise<string>
   /** The signed-in learner, or null without a valid session. */
   me(): Promise<Me | null>
   /** The request's country as the host reads it, to pre-fill the age gate; null when unknown. */
   requestCountry(): Promise<string | null>
-  setCountry(country: string | null): Promise<void>
   signOut(): Promise<void>
   deleteAccount(): Promise<void>
   /** The data export, for the recorded learner only (409 when the session is someone else's). */
@@ -136,24 +132,10 @@ export function httpApi(fetchFn: Fetch = (input, init) => fetch(input, init), ex
     verifyCode: async (email, code) => {
       await call('POST', '/api/auth/sign-in/email-otp', { email, otp: code })
     },
-    googleUrl: async (callbackUrl, errorCallbackUrl) => {
-      const body = await call('POST', '/api/auth/sign-in/social', {
-        provider: 'google',
-        callbackURL: callbackUrl,
-        errorCallbackURL: errorCallbackUrl,
-        disableRedirect: true,
-      })
-      const url = (body as { url?: unknown } | null)?.url
-      if (typeof url !== 'string') throw new ApiError(502, 'no_redirect')
-      return url
-    },
     me: () => unauthorizedAsNull(call('GET', '/v1/me') as Promise<Me>),
     requestCountry: async () => {
       const country = ((await call('GET', '/v1/country')) as { country?: unknown } | null)?.country
       return typeof country === 'string' ? country : null
-    },
-    setCountry: async (country) => {
-      await call('POST', '/api/auth/update-user', { country })
     },
     signOut: async () => {
       await call('POST', '/api/auth/sign-out', {})

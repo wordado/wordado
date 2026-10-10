@@ -1,8 +1,5 @@
 # Copied to .dev.vars by `pnpm dev`. The Worker's secrets for local runs; never commit .dev.vars.
 BETTER_AUTH_SECRET=local-development-only-secret-0123456789abcdef
-# Optional: Google sign-in, with http://localhost:8787/api/auth/callback/google registered as a redirect (spec §4.4).
-# GOOGLE_CLIENT_ID=
-# GOOGLE_CLIENT_SECRET=
 # Optional: where the daily feedback mail goes; without it feedback is kept and nothing is mailed. Printed to the console locally.
 # FEEDBACK_EMAIL=you@example.com
 # Optional: lets the review app read feedback (GET /v1/admin/feedback); at least 32 characters, the same value as the

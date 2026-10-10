@@ -19,7 +19,6 @@ const NOTICE: Readonly<Record<AccountNotice, MessageKey>> = {
   'signed-out': 'notice.signed-out',
   deleted: 'notice.deleted',
   'other-account': 'notice.other-account',
-  'google-failed': 'notice.google-failed',
 }
 
 /** The shell's banners (spec §8.6, §9.1): the demo, storage, an expired sign-in, and the last account notice. */
