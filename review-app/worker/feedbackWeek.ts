@@ -16,6 +16,12 @@ export const MAX_WEEK_PARAGRAPH = 600
 /** What bugs in no topic are listed under. */
 const NO_TOPIC = 'No topic'
 
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000
+/** The period the tab shows: the seven days up to now. Its paragraph is kept by the UTC day, so it is asked for at most once a day. */
+export function tabWeek(now: Date): { readonly key: string; readonly since: number; readonly until: number } {
+  return { key: `d:${now.toISOString().slice(0, 10)}`, since: now.getTime() - WEEK_MS, until: now.getTime() }
+}
+
 /** A week's numbers, without the paragraph. */
 export type WeekNumbers = Omit<FeedbackWeek, 'paragraph'>
 

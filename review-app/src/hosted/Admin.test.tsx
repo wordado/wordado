@@ -31,6 +31,7 @@ beforeEach(() => {
   vi.spyOn(hostedApi.admin, 'submissions').mockResolvedValue([])
   vi.spyOn(hostedApi.admin, 'feedback').mockResolvedValue({ connected: true, items: [], read: 0, nextBefore: null })
   vi.spyOn(hostedApi.admin, 'feedbackTopics').mockResolvedValue([])
+  vi.spyOn(hostedApi.admin, 'feedbackWeek').mockResolvedValue({ since: 0, until: 1, read: 0, byCategory: { bug: 0, idea: 0, question: 0, praise: 0, junk: 0 }, blockingBugs: 0, topTopics: [], blocking: [], newTopics: [], paragraph: null })
   vi.spyOn(hostedApi.admin, 'feedbackAi').mockResolvedValue({ setUp: false, needs: 'FEEDBACK_AI_KEY', on: false, model: 'test/model', callsToday: 0, dailyCalls: 200, reads: ['en', 'bg'], repo: 'wordado/wordado' })
 })
 

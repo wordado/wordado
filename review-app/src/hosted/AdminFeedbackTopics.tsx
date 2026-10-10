@@ -1,4 +1,4 @@
-import { type FormEvent, useCallback, useId, useRef, useState } from 'react'
+import { type FormEvent, useCallback, useEffect, useId, useRef, useState } from 'react'
 import { type FeedbackState, type FeedbackStateFilter, type FeedbackTopicOpened, type FeedbackTopicView, MAX_FEEDBACK_NOTE_LENGTH, MAX_TOPIC_TITLE_LENGTH } from '../../shared/hosted'
 import { Dialog } from '../Dialog'
 import { hostedApi } from '../hostedApi'
@@ -14,9 +14,10 @@ const STATE_CHIP: Readonly<Record<FeedbackState, string>> = { new: 'chip', seen:
  * many messages it has, its newest one, its worst severity, its state, and the known issue it looks like. The AI
  * makes the topics and proposes the matches; what is done with them here is the coordinator's. `topics` is null
  * while they are not known yet and 'failed' when they could not be read; `show` is the tab's filter by state, here
- * of the topics' own; `repo` is where an issue's number links to. After every change `onChanged` reads them again.
+ * of the topics' own; `repo` is where an issue's number links to; `focus` is a topic chosen in the week's summary,
+ * which is opened and brought into view. After every change `onChanged` reads them again.
  */
-export function AdminFeedbackTopics(props: { topics: readonly FeedbackTopicView[] | null | 'failed'; show: FeedbackStateFilter; aiOn: boolean; repo: string; onChanged(): void | Promise<void> }) {
+export function AdminFeedbackTopics(props: { topics: readonly FeedbackTopicView[] | null | 'failed'; show: FeedbackStateFilter; aiOn: boolean; repo: string; focus?: { readonly id: number; readonly n: number } | null; onChanged(): void | Promise<void> }) {
   const { topics } = props
   if (topics === null) {
     return (
@@ -46,7 +47,7 @@ export function AdminFeedbackTopics(props: { topics: readonly FeedbackTopicView[
       </p>
       <ul className="topic-list" aria-label="Topics">
         {shown.map((topic) => (
-          <TopicLine key={topic.id} topic={topic} topics={topics} repo={props.repo} onChanged={props.onChanged} />
+          <TopicLine key={topic.id} topic={topic} topics={topics} repo={props.repo} chosen={props.focus?.id === topic.id ? props.focus.n : 0} onChanged={props.onChanged} />
         ))}
       </ul>
     </>
@@ -66,10 +67,12 @@ function IssueLink(props: { repo: string; issue: number; title: string | null; c
   )
 }
 
-/** One topic: its line, and, opened, what the coordinator can do with it and its messages. */
-function TopicLine(props: { topic: FeedbackTopicView; topics: readonly FeedbackTopicView[]; repo: string; onChanged(): void | Promise<void> }) {
-  const { topic } = props
+/** One topic: its line, and, opened, what the coordinator can do with it and its messages. `chosen` is above 0, and
+ * new each time, when the topic was chosen in the week's summary: it is then opened and brought into view. */
+function TopicLine(props: { topic: FeedbackTopicView; topics: readonly FeedbackTopicView[]; repo: string; chosen: number; onChanged(): void | Promise<void> }) {
+  const { topic, chosen } = props
   const id = useId()
+  const line = useRef<HTMLLIElement>(null)
   const [opened, setOpened] = useState<Opened>({ kind: 'closed' })
   // Only the answer to the latest read is shown.
   const asked = useRef(0)
@@ -90,6 +93,12 @@ function TopicLine(props: { topic: FeedbackTopicView; topics: readonly FeedbackT
     },
     [topic.id],
   )
+
+  useEffect(() => {
+    if (chosen === 0) return
+    void read()
+    line.current?.scrollIntoView?.({ block: 'start' })
+  }, [chosen, read])
 
   const toggle = () => {
     if (opened.kind === 'closed') return void read()
@@ -119,7 +128,7 @@ function TopicLine(props: { topic: FeedbackTopicView; topics: readonly FeedbackT
 
   const newest = topic.newestAt === null ? null : new Date(topic.newestAt).toISOString()
   return (
-    <li className="topic-item">
+    <li className="topic-item" ref={line}>
       <article aria-labelledby={`${id}-title`}>
         <div className="topic-line">
           <h3 id={`${id}-title`} className="topic-title">

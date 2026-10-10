@@ -4,6 +4,7 @@ import type { FeedbackAiStatus, FeedbackAiWhy, FeedbackStateFilter, FeedbackTopi
 import { hostedApi } from '../hostedApi'
 import { AdminFeedbackAi, aiFailureLine } from './AdminFeedbackAi'
 import { AdminFeedbackTopics } from './AdminFeedbackTopics'
+import { AdminFeedbackWeek } from './AdminFeedbackWeek'
 import { count, messageOf } from './adminUtil'
 import { FeedbackCard } from './FeedbackCard'
 
@@ -29,7 +30,8 @@ interface AiLeft { readonly before: number | undefined; readonly left: number }
  * and switched on (spec 2026-10-10), each page shown is then read by the AI, and what it says is put on the cards
  * as advice; without it, or when it fails, the tab is what it is without it and says so in one line.
  * By topic, the same feedback is one line for each thing it is about (AdminFeedbackTopics); the filter by state
- * is then of the topics' own state, and the view stays as it is when the filter changes. */
+ * is then of the topics' own state, and the view stays as it is when the filter changes. Above the filters stands
+ * the week (AdminFeedbackWeek, spec 2026-10-10 §3.4): what the AI read of the last seven days, in numbers. */
 export function AdminFeedback() {
   const [view, setView] = useState<View>('messages')
   const [kind, setKind] = useState<FeedbackKind | ''>('')
@@ -51,10 +53,15 @@ export function AdminFeedback() {
   // The topics: for the By topic view, and for a card to offer them to move its message to. Null: not known yet.
   const [topics, setTopics] = useState<readonly FeedbackTopicView[] | null | 'failed'>(null)
   const topicsAsked = useRef(0)
+  // The week's summary: counted again when `weekVersion` changes, and started anew (`weekVisit`) when the AI's
+  // results were forgotten. `focus` is the topic chosen in it, to open By topic at; `n` tells one choice from the next.
+  const [weekVersion, setWeekVersion] = useState(0)
+  const [weekVisit, setWeekVisit] = useState(0)
+  const [focus, setFocus] = useState<{ readonly id: number; readonly n: number } | null>(null)
 
   /** Reads the topics, from the review app's own database: nothing is asked of the AI or of the learner app's server.
    * A failure is not the list's: the messages stay as they are, and By topic says so. */
-  const loadTopics = useCallback(async () => {
+  const readTopics = useCallback(async () => {
     const mine = ++topicsAsked.current
     try {
       const found = await hostedApi.admin.feedbackTopics()
@@ -63,6 +70,12 @@ export function AdminFeedback() {
       if (mine === topicsAsked.current) setTopics('failed')
     }
   }, [])
+
+  /** The topics again after something changed them, or what the AI read: the week's numbers and titles changed with them. */
+  const loadTopics = useCallback(() => {
+    setWeekVersion((n) => n + 1)
+    return readTopics()
+  }, [readTopics])
 
   /** The AI help's status, asked for once. A failure is not the list's: the tab goes on without the AI. */
   const aiStatus = useCallback(() => {
@@ -138,12 +151,12 @@ export function AdminFeedback() {
 
   useEffect(() => void load({ kind, state }), [load, kind, state])
   useEffect(() => void aiStatus(), [aiStatus])
-  useEffect(() => void loadTopics(), [loadTopics])
+  useEffect(() => void readTopics(), [readTopics])
 
   /** Another view. By topic shows the topics as they are now. */
   const look = (next: View) => {
     setView(next)
-    if (next === 'topics') void loadTopics()
+    if (next === 'topics') void readTopics()
   }
 
   /** A message was moved from its card: the list shows where it is now, and the topics are counted again. */
@@ -170,7 +183,15 @@ export function AdminFeedback() {
     setLoaded((now) => (now.kind === 'list' ? { ...now, items: now.items.map((item) => (item.ai ? { ...item, ai: null } : item)) } : now))
     setAiWhy(null)
     setAiLeft([])
+    setWeekVisit((n) => n + 1)
     void loadTopics()
+  }
+
+  /** A topic was chosen in the week's summary: By topic, with every topic shown, opened at that one. */
+  const openTopic = (id: number) => {
+    setState('all')
+    setFocus((was) => ({ id, n: (was?.n ?? 0) + 1 }))
+    look('topics')
   }
 
   const filtered = kind !== '' || state !== 'all'
@@ -186,6 +207,7 @@ export function AdminFeedback() {
     <>
       <h2 className="visually-hidden">Feedback</h2>
       <AdminFeedbackAi status={ai} unreached={aiUnreached} onStatus={switched} onForgotten={forgotten} />
+      <AdminFeedbackWeek key={weekVisit} aiOn={known !== null && known.setUp && known.on} dailyCalls={known?.dailyCalls ?? 0} version={weekVersion} onTopic={openTopic} />
       <div className="tab-actions feedback-filters">
         <label className="field">
           View
@@ -220,7 +242,7 @@ export function AdminFeedback() {
           </select>
         </label>
       </div>
-      {view === 'topics' && <AdminFeedbackTopics topics={topics} show={state} aiOn={known !== null && known.setUp && known.on} repo={known?.repo ?? ''} onChanged={loadTopics} />}
+      {view === 'topics' && <AdminFeedbackTopics topics={topics} show={state} aiOn={known !== null && known.setUp && known.on} repo={known?.repo ?? ''} focus={focus} onChanged={loadTopics} />}
       {view === 'messages' && busy && (
         <div className="busy-bar" role="progressbar" aria-label="Loading feedback">
           <span />

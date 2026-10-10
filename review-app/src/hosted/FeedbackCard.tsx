@@ -7,7 +7,7 @@ import { dateOf, messageOf } from './adminUtil'
 const KIND_LABEL: Readonly<Record<FeedbackKind, string>> = { bug: 'Bug', idea: 'Idea', other: 'Other' }
 const KIND_CHIP: Readonly<Record<FeedbackKind, string>> = { bug: 'chip major', idea: 'chip', other: 'chip off' }
 export const STATES: readonly (readonly [FeedbackState, string])[] = [['new', 'New'], ['seen', 'Looked at'], ['done', 'Done'], ['declined', 'Not doing']]
-const CATEGORY_LABEL: Readonly<Record<FeedbackCategory, string>> = { bug: 'Bug', idea: 'Idea', question: 'Question', praise: 'Praise', junk: 'Junk' }
+export const CATEGORY_LABEL: Readonly<Record<FeedbackCategory, string>> = { bug: 'Bug', idea: 'Idea', question: 'Question', praise: 'Praise', junk: 'Junk' }
 export const SEVERITY_LABEL: Readonly<Record<FeedbackSeverity, string>> = { blocks: 'Blocks study', annoys: 'Annoys', cosmetic: 'Cosmetic' }
 export const SEVERITY_CHIP: Readonly<Record<FeedbackSeverity, string>> = { blocks: 'chip major', annoys: 'chip minor', cosmetic: 'chip off' }
 

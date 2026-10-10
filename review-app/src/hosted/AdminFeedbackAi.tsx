@@ -10,7 +10,7 @@ export const AI_PRIVACY_NOTE =
   'Before this is switched on for learners’ feedback, the privacy policy must name the AI service, and the transfer of the text to it must be covered: by the EU–US Data Privacy Framework or by standard contractual clauses.'
 
 /** Why the AI gave nothing, in words for the one line that says so. */
-const WHY: Readonly<Record<'unreachable' | 'late' | 'refused' | 'unfit', string>> = {
+export const AI_WHY: Readonly<Record<'unreachable' | 'late' | 'refused' | 'unfit', string>> = {
   unreachable: 'it could not be reached',
   late: 'it took too long',
   refused: 'the service refused the request',
@@ -20,7 +20,7 @@ const WHY: Readonly<Record<'unreachable' | 'late' | 'refused' | 'unfit', string>
 /** The one line for what went wrong with the AI on the pages shown: said once, never on each message. Nothing for a reason that is no failure. */
 export function aiFailureLine(why: FeedbackAiWhy | null, dailyCalls: number): string {
   if (why === 'limit') return `Today’s limit of ${dailyCalls.toLocaleString('en')} AI calls is reached. Messages without AI results are read again tomorrow.`
-  if (why === 'unreachable' || why === 'late' || why === 'refused' || why === 'unfit') return `The AI gave no results this time (${WHY[why]}). Messages without them are asked again the next time the page is read.`
+  if (why === 'unreachable' || why === 'late' || why === 'refused' || why === 'unfit') return `The AI gave no results this time (${AI_WHY[why]}). Messages without them are asked again the next time the page is read.`
   return ''
 }
 
