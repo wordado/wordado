@@ -447,6 +447,7 @@ export const en = {
   'report.audio': 'Bad audio',
   'report.level': 'Wrong level',
   'report.other': 'Something else',
+  'report.suggestion': 'What should it be? (optional)',
   'report.note': 'Details (optional)',
   'report.send': 'Send report',
   'report.cancel': 'Cancel',

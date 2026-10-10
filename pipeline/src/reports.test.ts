@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import type { AudioRecord } from './audio'
 import { Decisions, QUEUES } from './decisions'
-import { pullReports, triage, type ReportRow } from './reports'
+import { pullReports, REPORTS_SQL, triage, type ReportRow } from './reports'
 import { makeContent } from './testing/fixture'
 
 const NOW = '2026-10-10T00:00:00Z'
 const DAY = 86_400_000
 const t0 = Date.parse('2026-10-05T00:00:00Z')
 let nextId = 1
-const r = (extra: Partial<ReportRow>): ReportRow => ({ id: nextId++, word_id: 'c:go-1', field: 'translation', note: '', pack_version: 1, reporter: 'a', received_at: t0, l1: null, ...extra })
+const r = (extra: Partial<ReportRow>): ReportRow => ({ id: nextId++, word_id: 'c:go-1', field: 'translation', note: '', suggestion: '', pack_version: 1, reporter: 'a', received_at: t0, l1: null, ...extra })
 const input = (reports: ReportRow[], extra: Partial<Parameters<typeof triage>[0]> = {}) => ({
   reports,
   decisions: Decisions.read(makeContent()),
@@ -29,6 +29,16 @@ describe('triage (spec §8.10, Decision 13)', () => {
       { queue: 'translation-bg', event: { key: 'go-1', at: NOW, verdict: 'reopen', by: 'reports', note: '2 reports (other, translation): should be "ида"' } },
     ])
     expect(out.summary).toEqual(['go-1: translation-bg reopened (2 reports)'])
+  })
+
+  it('puts what the learners suggest before their notes, so a reviewer sees it and a long note cannot cut it', () => {
+    const one = triage(input([r({ note: 'means to walk here', suggestion: ' ида ' }), r({ reporter: 'b' })]))
+    expect(one.events[0]!.event.note).toBe('2 reports (translation): suggested: „ида“ / means to walk here')
+    const long = triage(input([r({ note: 'x'.repeat(400), suggestion: 'ида' }), r({ reporter: 'b', note: 'odd', suggestion: 'отивам' })]))
+    expect(long.events[0]!.event.note).toHaveLength(280)
+    expect(long.events[0]!.event.note).toMatch(/^2 reports \(translation\): suggested: „ида“ \/ suggested: „отивам“ \/ x+$/)
+    // No suggestion, no word about one.
+    expect(triage(input([r({ note: 'odd' }), r({ reporter: 'b' })])).events[0]!.event.note).toBe('2 reports (translation): odd')
   })
 
   it('counts one learner once, and each deleted account’s report on its own', () => {
@@ -106,6 +116,18 @@ describe('pullReports', () => {
     expect(JSON.stringify(rows)).not.toContain('user_123')
     expect(rows[0]).toMatchObject({ id: 7, received_at: 1760000000000, l1: 'de' })
     expect(rows[1]).toMatchObject({ l1: null })
+  })
+
+  it('reads the suggestion, and a row from before the column as having none', async () => {
+    const rows = await pullReports(async () => ({
+      rows: [
+        { id: 1, word_id: 'c:go-1', field: 'translation', note: '', suggestion: 'ида', pack_version: 1, reporter_id: 'u', received_at: 1, l1: 'bg' },
+        { id: 2, word_id: 'c:go-1', field: 'translation', note: 'x', pack_version: 1, reporter_id: 'u', received_at: 2, l1: 'bg' },
+        { id: 3, word_id: 'c:go-1', field: 'translation', note: 'x', suggestion: null, pack_version: 1, reporter_id: 'u', received_at: 3, l1: 'bg' },
+      ],
+    }))
+    expect(rows.map((x) => x.suggestion)).toEqual(['ида', '', ''])
+    expect(REPORTS_SQL).toContain('suggestion')
   })
 
   it('skips a row with a field this build does not know', async () => {

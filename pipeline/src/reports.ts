@@ -11,6 +11,8 @@ export interface ReportRow {
   readonly word_id: string
   readonly field: ReportField
   readonly note: string
+  /** What the learner says the text should be; empty when they said nothing, and for a report from before the column. */
+  readonly suggestion: string
   /** The corpus version the learner was looking at. */
   readonly pack_version: number
   /** A hash of the reporter, or `deleted:<report id>` once the account is gone (each counts once). */
@@ -21,8 +23,8 @@ export interface ReportRow {
   readonly l1: string | null
 }
 
-/** Plan 5's table (server/migrations/0001_init.sql), plan 10's l1 column. The role that runs this can select from it and nothing else. */
-export const REPORTS_SQL = 'select id, word_id, field, note, pack_version, reporter_id, received_at, l1 from content_report order by id'
+/** Plan 5's table (server/migrations/0001_init.sql), plan 10's l1 column, the suggestion column of 0005. The role that runs this can select from it and nothing else. */
+export const REPORTS_SQL = 'select id, word_id, field, note, suggestion, pack_version, reporter_id, received_at, l1 from content_report order by id'
 
 const hash = (s: string) => sha256Hex(new TextEncoder().encode(s)).slice(0, 16)
 
@@ -40,6 +42,7 @@ export async function pullReports(query: (sql: string) => Promise<{ rows: Record
         word_id: String(row['word_id']),
         field: field as ReportField,
         note: String(row['note'] ?? ''),
+        suggestion: String(row['suggestion'] ?? ''),
         pack_version: Number(row['pack_version']),
         reporter: typeof reporter === 'string' && reporter !== '' ? hash(reporter) : `deleted:${id}`,
         received_at: Number(row['received_at']),
@@ -113,7 +116,9 @@ export function triage(input: TriageInput): { events: { queue: string; event: De
     const reporters = new Set(fresh.map((x) => x.reporter))
     if (reporters.size < input.threshold) continue
     const fields = [...new Set(fresh.map((x) => x.field))].sort().join(', ')
-    const notes = fresh.map((x) => x.note.trim()).filter((n) => n !== '').join(' / ')
+    // Suggestions first: they are short and say what to change, so the limit cuts a long note before it cuts one.
+    const said = (texts: string[]) => texts.map((s) => s.trim()).filter((s) => s !== '')
+    const notes = [...said(fresh.map((x) => x.suggestion)).map((s) => `suggested: „${s}“`), ...said(fresh.map((x) => x.note))].join(' / ')
     const note = `${reporters.size} reports (${fields})${notes ? `: ${notes}` : ''}`.slice(0, NOTE_LIMIT)
     events.push({ queue: g.queue, event: { key: g.entryId, at: input.now, verdict: 'reopen', by: 'reports', note } })
     summary.push(`${g.entryId}: ${g.queue} reopened (${reporters.size} reports)`)

@@ -126,6 +126,8 @@ export interface ContentReportInput {
   readonly wordId: WordId
   readonly field: ReportField
   readonly note: string
+  /** What the learner says it should be (spec §8.10); none when empty. */
+  readonly suggestion?: string
   readonly packVersion: number
   /** The learner's L1 when reporting (spec §8.10, plan 10). */
   readonly l1?: string
@@ -134,7 +136,9 @@ export interface ContentReportInput {
 /** A report works offline and syncs like any document (spec §8.10). Returns its key. */
 export async function addContentReport(tx: SqlDriver, env: ClientEnv, report: ContentReportInput): Promise<string> {
   const key = env.uuid()
-  await writeLocalPatch(tx, DOC.contentReport, key, { ...report, createdAt: env.now() })
+  // No suggestion, no field: a report without one is the document every server accepts, also one from before the field.
+  const { suggestion, ...rest } = report
+  await writeLocalPatch(tx, DOC.contentReport, key, { ...rest, ...(suggestion ? { suggestion } : {}), createdAt: env.now() })
   return key
 }
 

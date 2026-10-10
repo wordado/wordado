@@ -1,5 +1,5 @@
 import { useClient, useClientSnapshot } from '@wordado/client-data'
-import { MAX_REPORT_NOTE_LENGTH, REPORT_FIELDS, type CorpusEntry, type ReportField, type WordId } from '@wordado/core'
+import { MAX_REPORT_NOTE_LENGTH, MAX_REPORT_SUGGESTION_LENGTH, REPORT_FIELDS, REPORT_SUGGESTION_FIELDS, type CorpusEntry, type ReportField, type WordId } from '@wordado/core'
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { errorMessageKey } from '../errors'
 import { useT, type MessageKey } from '../i18n/i18n'
@@ -21,6 +21,9 @@ export function ReportDialog(props: { readonly wordId: WordId; readonly entry: C
   const titleId = useId()
   const [field, setField] = useState<ReportField>('translation')
   const [note, setNote] = useState('')
+  const [suggestion, setSuggestion] = useState('')
+  // A clip or a level has no text to put right, so nothing is asked and nothing typed earlier is sent.
+  const suggests = REPORT_SUGGESTION_FIELDS.includes(field)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [sent, setSent] = useState(false)
@@ -48,7 +51,8 @@ export function ReportDialog(props: { readonly wordId: WordId; readonly entry: C
     setSending(true)
     setError(null)
     try {
-      await client.report({ wordId: props.wordId, field, note: note.trim(), packVersion: packVersion ?? 0 })
+      const suggested = suggests ? suggestion.trim() : ''
+      await client.report({ wordId: props.wordId, field, note: note.trim(), ...(suggested === '' ? {} : { suggestion: suggested }), packVersion: packVersion ?? 0 })
       setSent(true)
     } catch (err) {
       setError(t(errorMessageKey(err)))
@@ -80,6 +84,12 @@ export function ReportDialog(props: { readonly wordId: WordId; readonly entry: C
               </label>
             ))}
           </fieldset>
+          {suggests && (
+            <label>
+              {t('report.suggestion')}
+              <input type="text" value={suggestion} maxLength={MAX_REPORT_SUGGESTION_LENGTH} onChange={(event) => setSuggestion(event.target.value)} />
+            </label>
+          )}
           <label>
             {t('report.note')}
             <textarea value={note} maxLength={MAX_REPORT_NOTE_LENGTH} rows={3} onChange={(event) => setNote(event.target.value)} />

@@ -442,6 +442,7 @@ export const bg: Messages = {
   'report.audio': 'Лошо аудио',
   'report.level': 'Грешно ниво',
   'report.other': 'Нещо друго',
+  'report.suggestion': 'Как трябва да бъде? (по желание)',
   'report.note': 'Подробности (по желание)',
   'report.send': 'Изпратете',
   'report.cancel': 'Отказ',

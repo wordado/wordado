@@ -20,7 +20,7 @@ async function busyLearner(h: Harness, s: Session): Promise<void> {
         {
           type: 'content_report',
           key: 'rep-1',
-          patch: { baseVersion: 0, fields: { wordId: 'c:w-1', field: 'audio', note: 'robotic', packVersion: 0, createdAt: h.clock.now } },
+          patch: { baseVersion: 0, fields: { wordId: 'c:w-1', field: 'translation', note: 'robotic', suggestion: 'human', packVersion: 0, createdAt: h.clock.now } },
         },
       ],
     }),
@@ -57,8 +57,8 @@ describe('account deletion (spec §11)', () => {
     expect(reply.body).toEqual({ deleted: true })
     expect(await mentions(h, s.userId)).toEqual({})
     expect(await mentions(h, s.email)).toEqual({})
-    expect(await h.deps.db.query('select reporter_id, word_id, note from content_report')).toEqual([
-      { reporter_id: null, word_id: 'c:w-1', note: 'robotic' },
+    expect(await h.deps.db.query('select reporter_id, word_id, note, suggestion from content_report')).toEqual([
+      { reporter_id: null, word_id: 'c:w-1', note: 'robotic', suggestion: 'human' },
     ])
   })
 
@@ -113,6 +113,8 @@ describe('data export (spec §11)', () => {
     const byWord = (states: Iterable<ReviewState>) => [...states].sort((a, b) => (a.wordId < b.wordId ? -1 : 1))
     expect(byWord(replay(exported.reviewEvents).values())).toEqual(byWord(pulled.body.reviewStates))
     expect(exported.documents.find((d: { type: string }) => d.type === 'settings')?.fields).toEqual({ newWordLimit: 5 })
+    // The report is the learner's own words, the suggestion with the note.
+    expect(exported.documents.find((d: { type: string }) => d.type === 'content_report')?.fields).toMatchObject({ note: 'robotic', suggestion: 'human' })
     expect(exported.dayComplete).toHaveLength(1)
   })
 
