@@ -298,6 +298,30 @@ describe('askModel, signed in with a Google service account', () => {
     for (const secret of [account.email, 'PRIVATE KEY', jwt, jwt.split('.')[1]!, jwt.split('.')[2]!, 'ya29', 'Ton', 'Describe', 'a-key-id']) expect(all).not.toContain(secret)
   })
 
+  it('fills {project} in the address from the key file, on every call, and asks nobody when the key file has none', async () => {
+    const { model, deps, calls, logged } = googleSetup()
+    const open = { ...google, url: 'https://aiplatform.eu.rep.googleapis.com/v1/projects/{project}/locations/eu/endpoints/openapi' }
+    expect((await askModel(deps, open, req)).ok).toBe(true)
+    // The second call has the token kept, and the project with it.
+    expect((await askModel(deps, open, req)).ok).toBe(true)
+    expect(model.requests.map((r) => r.url)).toEqual([`${VERTEX}/chat/completions`, `${VERTEX}/chat/completions`])
+    expect(model.tokenRequests).toHaveLength(1)
+    const before = calls.length
+    for (const [id, detail] of [[undefined, 'key file: no project_id'], ['../other', 'key file: project_id'], ['Bad_Project', 'key file: project_id']] as const) {
+      forgetGoogleToken()
+      const other = await testServiceAccount({ project_id: id })
+      expect(await askModel(deps, { ...open, key: other.keyFile }, req)).toEqual({ ok: false, why: 'refused' })
+      expect(logged.at(-1)).toBe(`feedback AI: refused (${detail})`)
+    }
+    expect(calls).toHaveLength(before)
+    // An address with no placeholder asks nothing of the key file's project.
+    forgetGoogleToken()
+    const none = await testServiceAccount({ project_id: undefined })
+    model.serviceAccount = none
+    expect((await askModel(deps, { ...google, key: none.keyFile }, req)).ok).toBe(true)
+    expect(model.requests.at(-1)!.url).toBe(`${VERTEX}/chat/completions`)
+  })
+
   it('makes no token when the sign-in is a key', async () => {
     const { model, deps, calls } = googleSetup()
     model.serviceAccount = null

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { checkProductionConfig } from './check-config'
+import { checkProductionConfig, parseJsonc } from './check-config'
 
 const real = readFileSync(join(import.meta.dirname, '..', 'wrangler.jsonc'), 'utf8')
 
@@ -32,6 +32,10 @@ function config(over: { database_id?: string; vars?: Record<string, string>; dro
 describe('checkProductionConfig', () => {
   it('passes the config the repository ships with (JSONC, comments and all)', () => {
     expect(checkProductionConfig(real)).toEqual([])
+    // Production asks Google directly, at its endpoint for the European Union, with the project left to the key file; a local run keeps the defaults.
+    const shipped = parseJsonc(real) as { vars: Record<string, string>; env: { production: { vars: Record<string, string> } } }
+    expect(shipped.env.production.vars).toMatchObject({ FEEDBACK_AI_AUTH: 'google-service-account', FEEDBACK_AI_URL: 'https://aiplatform.eu.rep.googleapis.com/v1/projects/{project}/locations/eu/endpoints/openapi', FEEDBACK_AI_MODEL: 'google/gemini-3.8-flash' })
+    expect(shipped.vars).toMatchObject({ FEEDBACK_AI_AUTH: 'key', FEEDBACK_AI_URL: 'https://openrouter.ai/api/v1', FEEDBACK_AI_MODEL: 'google/gemini-3.8-flash' })
   })
   it('refuses placeholders', () => {
     const problems = checkProductionConfig(
@@ -89,6 +93,14 @@ describe('checkProductionConfig', () => {
       'http://127.0.0.1:4184',
       '',
     ]) expect(google(bad).join('\n')).toMatch(/FEEDBACK_AI_URL must be an https address on googleapis\.com/)
+    // The project can be left to the key file: {project}, in the path only, and with this sign-in only.
+    expect(google('https://aiplatform.eu.rep.googleapis.com/v1/projects/{project}/locations/eu/endpoints/openapi')).toEqual([])
+    for (const bad of ['https://{project}.googleapis.com/v1', 'https://{project}-aiplatform.googleapis.com/v1/projects/{project}/x', 'https://aiplatform.googleapis.com/v1/projects/{project_id}/x', 'https://aiplatform.googleapis.com/v1/projects/{project/x', 'https://aiplatform.googleapis.com/v1/{location}/{project}']) {
+      expect(google(bad).join('\n')).toMatch(/FEEDBACK_AI_URL must be an https address on googleapis\.com/)
+    }
+    for (const auth of [{}, { FEEDBACK_AI_AUTH: 'key' }]) {
+      expect(checkProductionConfig(config({ vars: { ...auth, FEEDBACK_AI_URL: 'https://ai.example.com/v1/projects/{project}' } })).join('\n')).toMatch(/FEEDBACK_AI_URL must be an https address/)
+    }
     // There is no default to fall back to: the address must be written.
     expect(google().join('\n')).toMatch(/FEEDBACK_AI_URL must be an https address on googleapis\.com/)
     // By key, the rules are as they were: any https address, and none at all is the default.

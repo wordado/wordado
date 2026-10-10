@@ -53,8 +53,10 @@ export function checkProductionConfig(jsonc: string): string[] {
   const addressed = (url: string) => /^https:\/\/[a-z0-9.-]+(:\d+)?(\/[A-Za-z0-9._~/-]*[A-Za-z0-9._~-])?$/.test(url) && !url.endsWith('/chat/completions')
   if (aiAuth === 'google-service-account') {
     // A token made from the service account goes to Google and nowhere else, and there is no default address.
-    if (aiUrl === undefined || !addressed(aiUrl) || !/^https:\/\/([a-z0-9-]+\.)*googleapis\.com\//.test(aiUrl)) {
-      problems.push('env.production vars.FEEDBACK_AI_URL must be an https address on googleapis.com with no slash at its end and without /chat/completions when FEEDBACK_AI_AUTH is google-service-account')
+    // `{project}` in the path is filled from the key file by the Worker: a project is not written in a public file.
+    const plain = aiUrl === undefined || (aiUrl.split('/')[2] ?? '').includes('{') ? undefined : aiUrl.replaceAll('{project}', 'project')
+    if (plain === undefined || !addressed(plain) || !/^https:\/\/([a-z0-9-]+\.)*googleapis\.com\//.test(plain)) {
+      problems.push('env.production vars.FEEDBACK_AI_URL must be an https address on googleapis.com with no slash at its end and without /chat/completions when FEEDBACK_AI_AUTH is google-service-account; its path may hold {project}')
     }
   } else if (aiUrl !== undefined && !addressed(aiUrl)) {
     problems.push('env.production vars.FEEDBACK_AI_URL must be an https address with no slash at its end and without /chat/completions, such as https://openrouter.ai/api/v1')

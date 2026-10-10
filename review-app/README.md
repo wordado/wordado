@@ -154,11 +154,14 @@ as a pull request against the content repository, with no local checkout and no 
        key, changes it at Google's token endpoint for an access token that lives an hour, keeps the token in
        memory only, and asks the model with it. `FEEDBACK_AI_URL` must be set (there is no default) and must be
        an https address on `googleapis.com`: the address of Vertex AI's OpenAI-compatible endpoint, with the
-       project and the location in it. A key file that names another token address is refused.
+       project and the location in it. `{project}` in its path is replaced with the key file's `project_id`, so
+       that no project is written in this public repository; a key file with none is a failing call. A key
+       file that names another token address is refused.
 
      **Learners' feedback is meant to go the second way, to Vertex AI's endpoint for the European Union,** so
-     that the text is processed in the EU. The defaults (`key`, OpenRouter's address) are left as they are for a
-     setup like the corpus review's.
+     that the text is processed in the EU: `env.production` in `wrangler.jsonc` is set so. The defaults in the
+     code and for a local run (`key`, OpenRouter's address) are left as they are for a setup like the corpus
+     review's.
    - the Worker secret `FEEDBACK_AI_KEY`, set as the other secrets are (`wrangler secret put FEEDBACK_AI_KEY
      --env production`, never pasted or committed; a key file is piped in from the file, and the file deleted).
      A key or a service account made for this alone, with a spending limit and the least permission of its own,

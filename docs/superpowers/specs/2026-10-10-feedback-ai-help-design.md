@@ -128,7 +128,8 @@ topic, which becomes its match.
   - `google-service-account`: `FEEDBACK_AI_KEY` holds the content of a Google service account's JSON key file.
     The Worker signs a JWT with its private key (RS256, WebCrypto), changes it at Google's token endpoint for an
     access token that lives an hour, and asks the model with the token. The request to the model is the same
-    one. `FEEDBACK_AI_URL` has no default and must be an https address on `googleapis.com`.
+    one. `FEEDBACK_AI_URL` has no default and must be an https address on `googleapis.com`; `{project}` in its
+    path is the key file's `project_id`, so that the public configuration names no project.
 
   Rules that hold for the second way: the token is kept in the Worker's memory until shortly before it ends, and
   never in the database or the log; a token is asked for only when none is kept, so a call is at most one request

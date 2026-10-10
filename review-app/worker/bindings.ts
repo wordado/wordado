@@ -52,7 +52,7 @@ export interface Env {
   /** The languages the coordinator reads, which need no translation: two-letter codes with commas; unset is `en,bg`. */
   readonly FEEDBACK_READS?: string
   /** The service the model is reached through: an https address, to which `/chat/completions` is added. By `key`, unset is OpenRouter's, and any
-   * service that takes the same request can be named. By `google-service-account` it must be set, on googleapis.com. Plain http is for a stand-in on
+   * service that takes the same request can be named. By `google-service-account` it must be set, on googleapis.com, and `{project}` in its path is the key file's project. Plain http is for a stand-in on
    * the same machine, in tests and the hosted e2e only (feedbackAiConfig.ts). */
   readonly FEEDBACK_AI_URL?: string
 }

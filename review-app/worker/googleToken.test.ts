@@ -28,7 +28,7 @@ const later = (seconds: number) => void (now = new Date(now.getTime() + seconds 
 describe('googleToken', () => {
   it('signs a JWT with the account’s key and changes it for a token at Google’s token endpoint', async () => {
     expect(GOOGLE_TOKEN_URL).toBe('https://oauth2.googleapis.com/token')
-    expect(await ask()).toEqual({ ok: true, token: 'ya29.fake-1' })
+    expect(await ask()).toEqual({ ok: true, token: 'ya29.fake-1', projectId: 'a-project' })
     expect(google.tokenRequests).toHaveLength(1)
     const sent = google.tokenRequests[0]!
     expect(sent.url).toBe('https://oauth2.googleapis.com/token')
@@ -36,12 +36,46 @@ describe('googleToken', () => {
     expect(sent.headers).toEqual({ 'content-type': 'application/x-www-form-urlencoded' })
     expect(Object.keys(sent.form).sort()).toEqual(['assertion', 'grant_type'])
     expect(sent.form['grant_type']).toBe('urn:ietf:params:oauth:grant-type:jwt-bearer')
-    expect(sent.header).toEqual({ alg: 'RS256', typ: 'JWT' })
+    expect(sent.header).toEqual({ alg: 'RS256', typ: 'JWT', kid: 'a-key-id' })
     const iat = Math.floor(now.getTime() / 1000)
     expect(sent.claims).toEqual({ iss: account.email, scope: 'https://www.googleapis.com/auth/cloud-platform', aud: 'https://oauth2.googleapis.com/token', iat, exp: iat + 3600 })
     // A redirect is not followed, and the request ends with the time it was given.
     expect(inits[0]?.redirect).toBe('manual')
     expect(inits[0]?.signal).toBeInstanceOf(AbortSignal)
+  })
+
+  it('names the key in the JWT’s header when the key file names it, and not otherwise', async () => {
+    for (const [id, header] of [['k-2', { alg: 'RS256', typ: 'JWT', kid: 'k-2' }], [undefined, { alg: 'RS256', typ: 'JWT' }], ['', { alg: 'RS256', typ: 'JWT' }], [7, { alg: 'RS256', typ: 'JWT' }]] as const) {
+      forgetGoogleToken()
+      const other = await testServiceAccount({ private_key_id: id })
+      google.serviceAccount = other
+      expect((await ask(other.keyFile)).ok).toBe(true)
+      expect(google.tokenRequests.at(-1)!.header).toEqual(header)
+      expect(google.tokenRequests.at(-1)!.signed).toBe(true)
+    }
+  })
+
+  it('gives the key file’s project when the address needs it, and refuses a key file without one before asking anybody', async () => {
+    const project = async (id: unknown, kept = false) => {
+      if (!kept) forgetGoogleToken()
+      const other = await testServiceAccount({ project_id: id })
+      google.serviceAccount = other
+      return googleToken(deps(), other.keyFile, { standIn: false, needsProject: true, signal: signal() })
+    }
+    for (const good of ['a-project', 'abc123', 'wordado-feedback-ai-0123456789']) expect(await project(good)).toMatchObject({ ok: true, projectId: good })
+    const asked = google.tokenRequests.length
+    expect(await project(undefined)).toEqual({ ok: false, why: 'refused', detail: 'key file: no project_id' })
+    for (const bad of ['', 7, null, 'short', 'a'.repeat(31), 'A-project', '1-project', 'a-project-', 'a_project', 'a project', 'a/project', '../other', 'example.com:project', 'a-project?x=1', '{project}']) {
+      expect(await project(bad)).toEqual({ ok: false, why: 'refused', detail: bad === '' || typeof bad !== 'string' ? 'key file: no project_id' : 'key file: project_id' })
+    }
+    expect(google.tokenRequests).toHaveLength(asked)
+    // A key file with no project is good where the address needs none, and its token is kept; needed later, it is still refused.
+    const none = await testServiceAccount({ project_id: undefined })
+    google.serviceAccount = none
+    forgetGoogleToken()
+    expect(await googleToken(deps(), none.keyFile, { standIn: false, signal: signal() })).toEqual({ ok: true, token: `ya29.fake-${asked + 1}`, projectId: null })
+    expect(await googleToken(deps(), none.keyFile, { standIn: false, needsProject: true, signal: signal() })).toEqual({ ok: false, why: 'refused', detail: 'key file: no project_id' })
+    expect(google.tokenRequests).toHaveLength(asked + 1)
   })
 
   it('signs with RS256: the signature is good for the key’s public half, over the header and the claims as they were sent', async () => {
@@ -54,11 +88,11 @@ describe('googleToken', () => {
   })
 
   it('keeps the token in memory: a second read asks nobody', async () => {
-    expect(await ask()).toEqual({ ok: true, token: 'ya29.fake-1' })
+    expect(await ask()).toMatchObject({ ok: true, token: 'ya29.fake-1' })
     later(60)
-    expect(await ask()).toEqual({ ok: true, token: 'ya29.fake-1' })
+    expect(await ask()).toMatchObject({ ok: true, token: 'ya29.fake-1' })
     later(3600 - 60 - TOKEN_MARGIN_S - 1)
-    expect(await ask()).toEqual({ ok: true, token: 'ya29.fake-1' })
+    expect(await ask()).toMatchObject({ ok: true, token: 'ya29.fake-1' })
     expect(google.tokenRequests).toHaveLength(1)
   })
 
@@ -66,26 +100,26 @@ describe('googleToken', () => {
     expect(TOKEN_MARGIN_S).toBe(300)
     await ask()
     later(3600 - TOKEN_MARGIN_S)
-    expect(await ask()).toEqual({ ok: true, token: 'ya29.fake-2' })
+    expect(await ask()).toMatchObject({ ok: true, token: 'ya29.fake-2' })
     expect(google.tokenRequests).toHaveLength(2)
     expect(google.tokenRequests[1]!.claims['iat']).toBe(Math.floor(now.getTime() / 1000))
     // Its life is the one the endpoint said, not an hour taken for granted.
     google.expiresIn = 600
     later(3600)
-    expect(await ask()).toEqual({ ok: true, token: 'ya29.fake-3' })
+    expect(await ask()).toMatchObject({ ok: true, token: 'ya29.fake-3' })
     later(299)
     expect((await ask()).ok && google.tokenRequests.length).toBe(3)
     later(1)
-    expect(await ask()).toEqual({ ok: true, token: 'ya29.fake-4' })
+    expect(await ask()).toMatchObject({ ok: true, token: 'ya29.fake-4' })
   })
 
   it('keeps a token for the key file it was made from, and forgets it when told to', async () => {
     await ask()
     const other = await testServiceAccount()
     google.serviceAccount = other
-    expect(await ask(other.keyFile)).toEqual({ ok: true, token: 'ya29.fake-2' })
+    expect(await ask(other.keyFile)).toMatchObject({ ok: true, token: 'ya29.fake-2' })
     forgetGoogleToken()
-    expect(await ask(other.keyFile)).toEqual({ ok: true, token: 'ya29.fake-3' })
+    expect(await ask(other.keyFile)).toMatchObject({ ok: true, token: 'ya29.fake-3' })
   })
 
   it('refuses a key file that cannot be used, says which part, and asks nobody', async () => {
@@ -135,7 +169,7 @@ describe('googleToken', () => {
     standIn.serviceAccount = account
     const fetch = fetchBy({ 'http://127.0.0.1:4184': standIn.fetch, 'http://localhost:4184': standIn.fetch, 'https://example.com': standIn.fetch })
     const file = (uri: string) => JSON.stringify({ ...(JSON.parse(account.keyFile) as Record<string, unknown>), token_uri: uri })
-    expect(await googleToken({ fetch, now: () => now }, file('http://127.0.0.1:4184/token'), { standIn: true, signal: signal() })).toEqual({ ok: true, token: 'ya29.fake-1' })
+    expect(await googleToken({ fetch, now: () => now }, file('http://127.0.0.1:4184/token'), { standIn: true, signal: signal() })).toMatchObject({ ok: true, token: 'ya29.fake-1' })
     // The JWT is made for the endpoint it goes to.
     expect(standIn.tokenRequests[0]!.claims['aud']).toBe('http://127.0.0.1:4184/token')
     forgetGoogleToken()
@@ -159,7 +193,7 @@ describe('googleToken', () => {
     expect(google.tokenRequests).toHaveLength(10)
     // Nothing of a failure was kept: the next read asks again, and gets a token.
     google.tokenFailure = null
-    expect(await ask()).toEqual({ ok: true, token: 'ya29.fake-1' })
+    expect(await ask()).toMatchObject({ ok: true, token: 'ya29.fake-1' })
   })
 
   it('says unfit to an answer that holds no token it can use, and keeps none', async () => {

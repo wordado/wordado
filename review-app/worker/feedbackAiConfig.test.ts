@@ -98,6 +98,16 @@ describe('the AI help’s sign-in', () => {
     expect(aiSetup(env({ ...google, FEEDBACK_AI_KEY: ' ' }))).toEqual({ config: null, needs: 'FEEDBACK_AI_KEY' })
   })
 
+  it('takes {project} in the path of a service account’s address, to be filled from the key file, and nowhere else', () => {
+    const open = 'https://aiplatform.eu.rep.googleapis.com/v1/projects/{project}/locations/eu/endpoints/openapi'
+    expect(aiConfig(env({ ...google, FEEDBACK_AI_URL: open }))?.url).toBe(open)
+    for (const bad of ['https://{project}.googleapis.com/v1', 'https://aiplatform.googleapis.com/v1/projects/{project_id}/x', 'https://aiplatform.googleapis.com/v1/projects/{project/x', 'https://aiplatform.googleapis.com/v1/projects/project}/x', 'https://aiplatform.googleapis.com/v1/{location}/{project}']) {
+      expect(aiSetup(env({ ...google, FEEDBACK_AI_URL: bad }))).toEqual({ config: null, needs: 'FEEDBACK_AI_URL' })
+    }
+    // By key there is no key file to fill it from.
+    expect(aiSetup(env({ FEEDBACK_AI_KEY: 'k-1', FEEDBACK_AI_URL: 'https://ai.example.com/v1/{project}', APP_ORIGIN: 'https://review.wordado.com' }))).toEqual({ config: null, needs: 'FEEDBACK_AI_URL' })
+  })
+
   it('takes a stand-in on this machine for a service account too, where a developer or a test runs the Worker', () => {
     expect(aiConfig(env({ ...google, FEEDBACK_AI_URL: 'http://127.0.0.1:4184', APP_ORIGIN: 'http://127.0.0.1:4181' }))).toMatchObject({ auth: 'google-service-account', url: 'http://127.0.0.1:4184', standIn: true })
     expect(aiConfig(env({ ...google, FEEDBACK_AI_URL: 'https://model.test/v1', APP_ORIGIN: 'https://review.test' }))).toBeNull()

@@ -55,8 +55,13 @@
         // that takes the same request) or "google-service-account" (FEEDBACK_AI_KEY is the account's JSON key
         // file, and FEEDBACK_AI_URL must be an address on googleapis.com). FEEDBACK_AI_KEY is a secret; without it
         // there is no AI help. With it, the help is still off until an admin switches it on in the Feedback tab.
-        "FEEDBACK_AI_AUTH": "key",
-        "FEEDBACK_AI_URL": "https://openrouter.ai/api/v1",
+        // Production asks the model's provider directly, at its endpoint for the European Union; {project} is
+        // filled from the key file, so no project is written here. That this endpoint takes the request at this
+        // path is to be confirmed by the first real call; should it not, the regional form is the fallback:
+        // https://<region>-aiplatform.googleapis.com/v1/projects/{project}/locations/<region>/endpoints/openapi
+        // with a model that region has.
+        "FEEDBACK_AI_AUTH": "google-service-account",
+        "FEEDBACK_AI_URL": "https://aiplatform.eu.rep.googleapis.com/v1/projects/{project}/locations/eu/endpoints/openapi",
         "FEEDBACK_AI_MODEL": "google/gemini-3.8-flash",
         "FEEDBACK_AI_DAILY_CALLS": "200",
         "FEEDBACK_READS": "en,bg"

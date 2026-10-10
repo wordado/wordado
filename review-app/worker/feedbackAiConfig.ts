@@ -10,6 +10,9 @@ export const DEFAULT_DAILY_CALLS = 200
 /** The languages the coordinator reads when FEEDBACK_READS names none (spec 2026-10-10 §6). */
 const DEFAULT_READS: readonly string[] = ['en', 'bg']
 
+/** What an address may hold in place of a Google project, with a service account: the key file's `project_id` is put there (feedbackModel.ts). */
+export const PROJECT_PLACEHOLDER = '{project}'
+
 /** How the Worker signs in to the service: with a key sent as it is, or with a Google service account's key file, from which a token is made (googleToken.ts). */
 export type AiAuth = 'key' | 'google-service-account'
 /** A setting the help cannot do without, as the tab names it. */
@@ -58,14 +61,18 @@ function googleApiHost(hostname: string): boolean {
  * The service's address as it is used, or null when it is not one the secret and the messages may go to: it must be
  * https, with no name, password, query or fragment in it. Plain http is taken only for a stand-in on this machine,
  * and only where a developer or a test runs the Worker. With a key, no address is OpenRouter's. With a Google
- * service account there is no default, and the address must be on googleapis.com.
+ * service account there is no default, the address must be on googleapis.com, and its path may hold `{project}`,
+ * which no other address may.
  */
 function serviceUrl(env: Env, auth: AiAuth): { readonly url: string; readonly standIn: boolean } | null {
   const raw = (env.FEEDBACK_AI_URL ?? '').trim().replace(/\/+$/, '')
   if (raw === '') return auth === 'key' ? { url: DEFAULT_AI_URL, standIn: false } : null
+  // The placeholder is taken out to read the address: what is left must have no brace, and the host none at all.
+  const plain = raw.replaceAll(PROJECT_PLACEHOLDER, 'project')
+  if (/[{}]/.test(auth === 'key' ? raw : plain) || /[{}]/.test(raw.split('/')[2] ?? '')) return null
   let u: URL
   try {
-    u = new URL(raw)
+    u = new URL(plain)
   } catch {
     return null
   }
