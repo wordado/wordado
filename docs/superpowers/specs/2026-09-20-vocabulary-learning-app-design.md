@@ -1333,13 +1333,21 @@ The server keeps feedback apart from content reports, with the account when
 the sender was signed in. It limits how much one client and all clients
 together can send (§15), counting clients by a keyed hash of their address
 and never storing the address, and it drops what a program sends through a
-hidden field. Once a day at most, the scheduled job mails what is new to the
-coordinator, in one plain-text mail, because the mail allowance is shared
-with sign-in codes (§17.2). The coordinator's address is a secret of the
-deployment; without it feedback is kept and nothing is mailed.
+hidden field.
 
-A list of feedback in the review app's admin area, and the website's own
-form, are separate work.
+The coordinator reads feedback in the review app's Feedback tab (the hosted
+review app's design, §16), which asks this server for it each time and keeps
+no copy: `GET /v1/admin/feedback` answers only to a token the two
+deployments share, and to anyone else is a route that does not exist. Once a
+day at most, the scheduled job mails the coordinator a notice of what is
+new: how many messages, by kind, and a link to the tab. It is one mail a day
+because the mail allowance is shared with sign-in codes (§17.2). A
+deployment without the token mails the messages themselves instead, in one
+plain-text mail, since nothing else would show them. The coordinator's
+address is a secret of the deployment; without it feedback is kept and
+nothing is mailed.
+
+The website's own form is separate work.
 
 ## 9. Offline and synchronisation
 
@@ -1632,8 +1640,10 @@ on their next pull. That failure is far worse than the cheating it prevents.
   in-region plan is used. Both are disclosed in the privacy policy, and both
   are kept thin: sign-in emails carry a code and nothing else, and enrichment
   requests carry a word and no identifier. The daily feedback mail (§8.12)
-  is the exception that has to be disclosed: it carries learners' messages,
-  the address a learner gave for an answer, and the technical details listed
+  carries a count and a link, and nothing a learner wrote. Only a deployment
+  that the review app cannot read sends the other form, which is the
+  exception that has to be disclosed: it carries learners' messages, the
+  address a learner gave for an answer, and the technical details listed
   under the form, to the coordinator alone.
 - **Feedback (§8.12).** The optional address is used only to answer, and the
   technical details only to understand the message. The client's network
@@ -2235,6 +2245,17 @@ product owner.
 - **Privacy (§11):** export holds the learner's feedback; deletion keeps it
   without the account or the address. The mail carries learners' text
   through the email provider, which the privacy policy has to say.
+
+**2026-10-10 — feedback is read in the review app.** Decided by the product
+owner.
+
+- **Reading it (§8.12):** the coordinator reads feedback in the review app's
+  Feedback tab, which asks the server for it each time and keeps only its
+  own marks. The server has a read-only route for that, open to a shared
+  token alone.
+- **The mail (§8.12, §11):** with the token set, the daily mail is a count
+  by kind and a link to the tab, and carries no message or address. Without
+  it the mail is as before.
 
 ### Approval status
 
