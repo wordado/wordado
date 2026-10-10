@@ -1309,6 +1309,38 @@ rather than being trained to dismiss them.
 
 ---
 
+### 8.12 Feedback about the app
+
+Phase 1a. A report (§8.10) is about a word. Feedback is about the app itself:
+something that does not work, an idea, or anything else.
+
+**Feedback** is one tap from any screen outside a study session: in the
+account menu for a signed-in learner, in the demo's banner for everyone else,
+and linked from the About page. It opens a screen with a kind ("Something
+isn't working", "I have an idea", "Something else"), a message of at most
+2,000 characters, and an optional email address for an answer, which is never
+filled in for the learner. Under the fields the form lists what is sent
+beside the message, so nothing leaves unseen: the account if signed in, the
+app's version, the corpus version, the interface language, the screen the
+form was opened from (its path, never its query) and the browser's name.
+
+Sending needs a connection. Feedback is a plain request to the server, not a
+synced document, so it works signed out and the website can use the same
+endpoint. Offline, or when the send fails, the form says so and keeps what
+was typed; nothing is queued.
+
+The server keeps feedback apart from content reports, with the account when
+the sender was signed in. It limits how much one client and all clients
+together can send (§15), counting clients by a keyed hash of their address
+and never storing the address, and it drops what a program sends through a
+hidden field. Once a day at most, the scheduled job mails what is new to the
+coordinator, in one plain-text mail, because the mail allowance is shared
+with sign-in codes (§17.2). The coordinator's address is a secret of the
+deployment; without it feedback is kept and nothing is mailed.
+
+A list of feedback in the review app's admin area, and the website's own
+form, are separate work.
+
 ## 9. Offline and synchronisation
 
 ### 9.1 Local storage
@@ -1567,10 +1599,12 @@ on their next pull. That failure is far worse than the cheating it prevents.
   history. What remains holds no personal data: anonymous, aggregated
   corpus-difficulty statistics, and the shared enrichment cache, whose entries
   are dictionary words with no record of who asked for them. Content reports
-  are kept with the reporter removed.
+  are kept with the reporter removed. Feedback about the app (§8.12) is kept
+  with the account and the address given for an answer removed.
 - **Data export** is available from Phase 1a, because the right to a portable
   copy applies from the first day of processing, not from Phase 3: a JSON
-  download of the learner's settings, review events, and (from Phase 2) words.
+  download of the learner's settings, review events, the feedback they sent
+  while signed in (§8.12), and (from Phase 2) words.
   Friendlier formats and *import* come later (§14).
 - **Analytics without a consent banner.** Product metrics come from the
   first-party event log, in aggregate, and from cookieless page analytics.
@@ -1597,7 +1631,14 @@ on their next pull. That failure is far worse than the cheating it prevents.
   region, and the LLM gateway may route requests outside the EU unless a paid
   in-region plan is used. Both are disclosed in the privacy policy, and both
   are kept thin: sign-in emails carry a code and nothing else, and enrichment
-  requests carry a word and no identifier.
+  requests carry a word and no identifier. The daily feedback mail (§8.12)
+  is the exception that has to be disclosed: it carries learners' messages,
+  the address a learner gave for an answer, and the technical details listed
+  under the form, to the coordinator alone.
+- **Feedback (§8.12).** The optional address is used only to answer, and the
+  technical details only to understand the message. The client's network
+  address is not stored: the limit counts a keyed hash of it, dropped after a
+  day. The privacy policy says so.
 - Data-residency obligations in the launch markets are a legal-review item
   (§15).
 
@@ -2180,6 +2221,20 @@ product owner.
   the report dialog asks "What should it be?": one optional line of at most
   200 characters. It is stored with the report and reaches the reviewer
   before the learners' notes.
+
+**2026-10-10 — feedback about the app.** Decided by the product owner.
+
+- **Feedback (§8.12, new):** one form for something that does not work, an
+  idea or anything else, opened from the account menu (the demo's banner when
+  signed out) and from About, with an optional address for an answer. What
+  is sent beside the message is shown under the form.
+- **Needs a connection:** feedback is a request to the server, not a synced
+  document; offline the form says so and keeps the text.
+- **Reading it:** one mail a day, at most, to the coordinator. A list in the
+  review app and the website's form are separate work.
+- **Privacy (§11):** export holds the learner's feedback; deletion keeps it
+  without the account or the address. The mail carries learners' text
+  through the email provider, which the privacy policy has to say.
 
 ### Approval status
 
