@@ -1,5 +1,6 @@
 import { FEEDBACK_KINDS, type FeedbackItem, type FeedbackKind } from '@wordado/core'
 import type { Deps } from './app'
+import { countedDb } from './d1Count'
 import { claimWeeklyMail, dropOldAiCalls, feedbackAiIdsBetween, getSetting, listReviewers, releaseWeeklyMail, settleWeeklyMail } from './db'
 import { AI_BATCH, AI_SWITCH, readBatchAi } from './feedbackAi'
 import { aiConfig } from './feedbackAiConfig'
@@ -43,8 +44,21 @@ export async function countWeek(deps: Pick<Deps, 'fetch' | 'log'>, source: Feedb
   return { total: items.length, more: true, byKind, items }
 }
 
-/** Calls to the model in one job for the week's messages that have no reading, AI_BATCH messages each; one more is made for the paragraph. */
-export const WEEKLY_AI_CALLS = 4
+/**
+ * Calls to the model in one job for the week's messages that have no reading, AI_BATCH messages each; one more is
+ * made for the paragraph. Two, so 50 messages a week that nobody opened: the Free plan allows an invocation 50
+ * statements against D1, a call at its worst runs 10 (a new topic and a proposed match for every message), and the
+ * job runs 16 beside the calls. Two calls make 36 in all (d1Budget.test.ts); a third would make 46. The mail says
+ * how many of the week's messages were read; the rest are read when the tab shows them.
+ */
+export const WEEKLY_AI_CALLS = 2
+/**
+ * The statements the AI's part of the job may run against D1; at its worst it runs 30. The one that would go over
+ * is not run, and the mail goes without the AI's part. The job runs 6 beside it (the claim, the housekeeping, the
+ * admins, the record of the mail), so with this allowance it stays under 40, and the record of the mail is never
+ * the statement the plan refuses.
+ */
+export const WEEKLY_AI_STATEMENTS = 32
 /** How long the counts of calls and the week's paragraphs are kept. */
 const KEPT_DAYS = 30
 
@@ -53,11 +67,14 @@ const KEPT_DAYS = 30
  * the AI help. With the help set up and switched on, the week's messages that have no reading are read first, the
  * newest first, in at most WEEKLY_AI_CALLS calls; then the week is counted from the readings, and one more call
  * asks for the paragraph, which is written from the counts and the topics' titles alone. Every call is counted
- * against the day's limit. When a call fails or the limit is reached, the job stops asking and the AI adds nothing;
+ * against the day's limit. When a call fails, the limit is reached or the allowance of statements is spent
+ * (D1BudgetSpent), the job stops asking and the AI adds nothing;
  * what was read until then is kept, for the tab. A paragraph that was refused (one with an address or a link, say)
  * leaves the AI's numbers in the mail, without it.
  */
-async function weekAi(deps: Deps, week: string, period: { readonly since: number; readonly until: number }, items: readonly FeedbackItem[]): Promise<WeekMailAi | undefined> {
+async function weekAi(outer: Deps, week: string, period: { readonly since: number; readonly until: number }, items: readonly FeedbackItem[], statements: number): Promise<WeekMailAi | undefined> {
+  // Everything here asks the database through a counter with an allowance (WEEKLY_AI_STATEMENTS).
+  const deps: Deps = { ...outer, env: { ...outer.env, DB: countedDb(outer.env.DB, statements).db } }
   const config = aiConfig(deps.env)
   if (!config || (await getSetting(deps.env.DB, AI_SWITCH)) !== 'on') return undefined
   const without = (why: string) => (deps.log(`weekly mail: without the AI’s part (${why})`), undefined)
@@ -91,9 +108,10 @@ class WeeklyStopped extends Error {}
 /**
  * The timed job (spec 2026-10-10 §3.4): one mail a week to the admins, when feedback came. Never throws.
  * What it asks of others in one run, at most: WEEKLY_PAGES reads of the learner app's server, WEEKLY_AI_CALLS + 1
- * calls to the model (and one for a token, when it signs in with one), and one mail.
+ * calls to the model (and one for a token, when it signs in with one), and one mail; and of the database, under 40
+ * statements (WEEKLY_AI_STATEMENTS). `aiStatements` is another allowance for the AI's part, for a test.
  */
-export async function runWeekly(deps: Deps): Promise<WeeklyOutcome> {
+export async function runWeekly(deps: Deps, aiStatements = WEEKLY_AI_STATEMENTS): Promise<WeeklyOutcome> {
   const source = feedbackSource(deps)
   if (!source) {
     deps.log('weekly mail: not connected, LEARNER_APP_URL and FEEDBACK_READ_TOKEN are not both set')
@@ -120,7 +138,7 @@ export async function runWeekly(deps: Deps): Promise<WeeklyOutcome> {
     const admins = (await listReviewers(deps.env.DB)).filter((r) => r.role === 'admin' && !r.disabledAt).map((r) => r.email)
     if (admins.length === 0) throw new WeeklyStopped('no admin to send it to')
     // The AI's part never keeps the mail from going: whatever goes wrong with it, the mail is the one without it.
-    const ai = await weekAi(deps, week, { since, until }, items).catch((err: unknown) => (deps.log(`weekly mail: without the AI’s part (${err instanceof Error ? err.name : 'error'})`), undefined))
+    const ai = await weekAi(deps, week, { since, until }, items, aiStatements).catch((err: unknown) => (deps.log(`weekly mail: without the AI’s part (${err instanceof Error ? err.name : 'error'})`), undefined))
     await reviewMailer(deps).weekly(admins, { from: dateOf(since), to: dateOf(until - DAY_MS), ...counted, ...(ai ? { ai } : {}) })
     sent = true
     await settleWeeklyMail(deps.env.DB, week, counted.total, deps.now().toISOString())

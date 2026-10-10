@@ -302,7 +302,7 @@ packages), from `Wordado Review <review@wordado.com>`, with the Worker's own sen
   `LEARNER_APP_URL` (§16.2); while the last two are not both set it does nothing and logs one line.
 
 With the AI help set up and switched on (§16.9), the same job first has the AI read the week's messages that have
-no reading yet (at most 4 calls of 25 messages, the newest first), counts the week from the readings, and asks
+no reading yet (at most 2 calls of 25 messages, the newest first), counts the week from the readings, and asks
 once more for a paragraph written from those counts and the topics' titles alone. The mail then holds, between the
 counts by kind and the link: the paragraph, named as written by the AI; "Read by the AI: <n> of <total>" with a
 line for each of its categories; *Most messages* (up to five topics with their counts); "Bugs that block
@@ -632,8 +632,8 @@ tab is in the address (`#feedback`), like the others, and the review app's own w
   refused; not connected; the cap. Every cron line of the config has a job and every job a cron line. The hosted
   browser run fires the trigger once and sees one read of the learner app's server, and none the second time.
 - **The weekly job with the AI help:** the mail byte for byte the same while the help is off or not set up; the
-  added lines; no message, address, translation or summary in the mail or the logs; at most 4 calls and one for
-  300 unread messages, and "100 of 300"; the model down, the limit reached, and a failure of its own, each ending
+  added lines; no message, address, translation or summary in the mail or the logs; at most 2 calls and one for
+  300 unread messages, and "50 of 300"; the model down, the limit reached, and a failure of its own, each ending
   in the plain mail; a refused paragraph; the paragraph's request holding titles and counts only; a title written
   as an instruction changing no recipient.
 - **UI:** the card and its details, a state saved and one refused, a note saved and one refused, the filters, Load
@@ -726,6 +726,15 @@ Off until an admin switches it on, and absent without the secret `FEEDBACK_AI_KE
   none otherwise; the daily read without a token, once a day, keeping the list when refused. The hosted browser
   run reads By topic, confirms a match, renames, notes and marks a topic, desktop and phone, and fires the daily
   line.
+
+**What an invocation asks of D1.** The Workers Free plan allows 50 queries of D1 in one invocation, and the
+documentation does not say that a batch counts as one, so each statement of a batch is counted. Every path is
+held to 40 in its worst case by `worker/d1Budget.test.ts`, with a counter around the test database
+(`worker/d1Count.ts`): rows are written several a statement, under the 100 bound values a statement may have. A
+page read by the AI runs 13 at its worst, the daily read of 300 issues 13, the weekly job 36. The weekly job reads
+at most 2 calls' worth of unread messages for that reason, and its AI part runs under an allowance of 32
+statements: the one that would go over is not run, the mail goes without the AI's part, and the record of the
+mail always has its statement.
 
 **The week and the drafted issue** (design §3.4, §3.5):
 

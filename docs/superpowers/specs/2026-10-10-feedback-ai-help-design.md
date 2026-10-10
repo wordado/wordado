@@ -125,8 +125,9 @@ from the messages, so it cannot quote one.
 
 **As built (stage D).** The tab's summary is of the seven days up to now, counted from the kept readings alone,
 and says how many messages the AI has read. The mail's is of the week that ended on the Monday. Before it counts,
-the weekly job has the AI read the week's messages that have no reading: at most 4 calls of 25, so up to 100
-messages a week nobody opened; the mail says "Read by the AI: 100 of 300" when there were more. The paragraph is
+the weekly job has the AI read the week's messages that have no reading: at most 2 calls of 25, so up to 50
+messages a week nobody opened (what the Free plan's 50 database statements an invocation leave room for); the
+mail says "Read by the AI: 50 of 300" when there were more. The paragraph is
 kept by period, so the tab asks for it at most once a UTC day and the mail once a week; it is refused in code
 unless it is one paragraph of at most 600 characters with no address, link or phone number. A topic is new in the
 week its first message came in. In the mail the AI's part stands between the counts by kind and the link. When

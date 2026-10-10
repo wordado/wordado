@@ -194,8 +194,9 @@ as a pull request against the content repository, with no local checkout and no 
    Above the filters the tab then shows **the week**: how many messages of the last seven days the AI read, by
    its category, the topics with the most messages, the bugs it reads as blocking, the new topics, and a few
    sentences it wrote from those numbers and titles alone (asked for once a day). The weekly mail gains the
-   same for its week: the job has the AI read up to 100 of the week's messages that nobody opened, in at most
-   four calls, and makes one more for the paragraph, all counted against the day's limit. When the help is
+   same for its week: the job has the AI read up to 50 of the week's messages that nobody opened, in at most
+   two calls, and makes one more for the paragraph, all counted against the day's limit (two calls are what
+   the Free plan's 50 database statements an invocation leave room for). When the help is
    off, a call fails or the limit is reached, the mail is the plain one.
 
    On an opened topic, **Draft an issue** has the AI write a title and a text from the topic's messages, in its

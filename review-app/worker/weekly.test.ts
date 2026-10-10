@@ -403,9 +403,9 @@ describe('the weekly job (spec 2026-10-10 §3.4)', () => {
       expect(await runWeekly(deps())).toBe('sent')
       expect(inputs('feedback_messages')).toHaveLength(WEEKLY_AI_CALLS)
       expect(model.requests).toHaveLength(WEEKLY_AI_CALLS + 1)
-      // The newest hundred, a call's worth at a time.
+      // The newest ones, a call's worth at a time.
       expect((model.inputOf(0) as { messages: { id: number }[] }).messages.map((m) => m.id)).toEqual(Array.from({ length: AI_BATCH }, (_, i) => 300 - i))
-      expect((model.inputOf(WEEKLY_AI_CALLS - 1) as { messages: { id: number }[] }).messages.at(-1)!.id).toBe(201)
+      expect((model.inputOf(WEEKLY_AI_CALLS - 1) as { messages: { id: number }[] }).messages.at(-1)!.id).toBe(300 - WEEKLY_AI_CALLS * AI_BATCH + 1)
       expect(mails[0]!.body.text).toContain(`\n\nRead by the AI: ${WEEKLY_AI_CALLS * AI_BATCH} of 300\nBug: 0\nIdea: ${WEEKLY_AI_CALLS * AI_BATCH}\n`)
       expect(await calls()).toHaveLength(WEEKLY_AI_CALLS + 1)
     })
@@ -494,6 +494,14 @@ describe('the weekly job (spec 2026-10-10 §3.4)', () => {
       expect(await runWeekly(deps())).toBe('sent')
       expect(model.requests).toHaveLength(asked)
       expect(mails.at(-1)!.body.text).toContain(`Written by the AI: ${PARAGRAPH}`)
+    })
+
+    it('sends the mail it was, and settles the week, when the AI’s part would run more statements than it is allowed', async () => {
+      // Fewer than one call needs: the statement over the allowance is not run, and what the mail's record needs is left.
+      expect(await runWeekly(deps(), 8)).toBe('sent')
+      expect(mails.map((m) => m.body.text)).toEqual([PLAIN])
+      expect(logged).toContain('weekly mail: without the AI’s part (D1BudgetSpent)')
+      expect(await rows()).toEqual([{ week: '2026-10-12', claimed_at: '2026-10-12T06:00:00.000Z', messages: 5, sent_at: '2026-10-12T06:00:00.000Z' }])
     })
 
     it('sends the mail it was when the AI’s part breaks in a way of its own', async () => {
