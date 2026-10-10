@@ -1,4 +1,4 @@
-import type { WireDocument } from '@wordado/core'
+import { checkDocumentWrite, type WireDocument } from '@wordado/core'
 import { describe, expect, it } from 'vitest'
 import { Database } from './database'
 import { applyServerDocument, confirmPushedDocument, getDocument, pendingDocumentWrites, writeLocalPatch } from './documents'
@@ -169,5 +169,18 @@ describe('typed documents', () => {
     const writes = await pendingDocumentWrites(db.driver)
     expect(writes).toHaveLength(1)
     expect(writes[0]).toMatchObject({ type: 'content_report', key, patch: { baseVersion: 0, fields: { wordId: 'c:hello-1', field: 'audio', note: 'robotic', packVersion: 0, createdAt: env.now() } } })
+    expect(writes[0]!.patch.fields).not.toHaveProperty('suggestion')
+  })
+
+  it('files the learner’s suggestion with the report, and no suggestion field when it is empty', async () => {
+    const db = await open()
+    const env = testEnv()
+    await db.transaction((tx) => addContentReport(tx, env, { wordId: 'c:hello-1', field: 'translation', note: '', suggestion: 'здравей', packVersion: 0 }))
+    await db.transaction((tx) => addContentReport(tx, env, { wordId: 'c:bread-1', field: 'translation', note: '', suggestion: '', packVersion: 0 }))
+    const writes = await pendingDocumentWrites(db.driver)
+    const fields = (wordId: string) => writes.find((w) => w.patch.fields['wordId'] === wordId)!.patch.fields
+    expect(fields('c:hello-1')).toMatchObject({ suggestion: 'здравей' })
+    expect(fields('c:bread-1')).not.toHaveProperty('suggestion')
+    for (const w of writes) expect(checkDocumentWrite(w)).toEqual({ ok: true })
   })
 })
