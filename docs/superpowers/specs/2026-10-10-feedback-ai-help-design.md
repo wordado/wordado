@@ -1,6 +1,6 @@
 # AI help on learners' feedback — design
 
-**Date:** 2026-10-10 · **Status:** draft for the product owner's review
+**Date:** 2026-10-10 · **Status:** agreed with the product owner on 2026-10-10 (§10); not built
 **Issue:** #158. **Builds on:** the Feedback tab (#157; `2026-10-05-hosted-review-app-design.md` §16) and the
 feedback form (#153; `2026-09-20-vocabulary-learning-app-design.md` §8.12).
 
@@ -51,8 +51,9 @@ Worker may make only so many requests while it answers one). For each message th
   "topic": { "existing": 14 } | { "new": "Sound plays twice on phones" } }
 ```
 
-- **Translation** into the working language (§6), left out when the message is already in it. Shown under the
-  original, marked as a translation by the AI. The original is always shown.
+- **Translation** into English, only when it is needed: a message in English or in Bulgarian, which the
+  coordinator reads, gets none (§6). Shown under the original, marked as a translation by the AI. The original is
+  always shown.
 - **Category** is the model's reading, beside the kind the learner chose; the learner's kind is not replaced.
   `junk` messages are folded away under the *Open* filter, never deleted.
 - **Severity** for bugs only: `blocks` (cannot study or loses data), `annoys`, `cosmetic`.
@@ -97,9 +98,11 @@ topic, which becomes its match.
 ## 4. Where it runs, and what is stored
 
 - The model is called from the review app's Worker, through OpenRouter, with the model named in
-  `FEEDBACK_AI_MODEL` (the corpus reviewer's model by default). The key is a Worker secret,
-  `FEEDBACK_AI_KEY`: **a key of its own, with its own low spending limit**, so feedback can never touch the budget
-  of corpus work.
+  `FEEDBACK_AI_MODEL` (the corpus reviewer's model by default). The key is a Worker secret, `FEEDBACK_AI_KEY`,
+  set by the owner; a key made for this alone, with a limit of its own, is the safer choice, and the daily limit
+  of calls (rule 7) holds whichever key is used.
+- **A switch in the tab**, for admins: *AI help: on / off*, kept in the review app's database. Off, no call is
+  made and stored results stay shown. It is off until someone switches it on.
 - Stored in the review app's database, by the message's id, as the coordinator's marks are:
   - `feedback_ai`: language, translation, category, severity, summary, topic, the model, the prompt version, when.
   - `feedback_topics`: title, state, note, matched issue, whether the coordinator renamed it.
@@ -119,8 +122,9 @@ is not sent to it.
 
 ## 6. The working language
 
-One setting, `FEEDBACK_WORKING_LANGUAGE`: the language translations, summaries, topic titles and the weekly
-paragraph are written in. Drafted issues are always in English, the repository's language.
+English: summaries, topic titles, the weekly paragraph and drafted issues are written in it. A message is
+translated only when it is in a language the coordinator does not read: `FEEDBACK_READS` lists the languages that
+need no translation (default `en,bg`).
 
 ## 7. Errors
 
@@ -148,9 +152,9 @@ paragraph are written in. Drafted issues are always in English, the repository's
 - AI on the word reports: that is the judge (`2026-10-10-report-judge-design.md`).
 - Searching old feedback.
 
-## 10. Open questions for the owner
+## 10. Decided by the owner, 2026-10-10
 
-1. **The working language:** English or Bulgarian? English is the language of the issues and of the work in the
-   repository; Bulgarian is easier to skim.
-2. **A key of its own for feedback**, with a low limit, set by the owner as a secret on the review app.
-3. **The daily limit:** 200 calls is far above what a beta needs (one call covers a page of up to 50 messages).
+1. **English**, and a translation only for a message that is in neither English nor Bulgarian (§3.1, §6).
+2. **The key:** the one the corpus reviewer's model is reached with may be used; the owner sets it as the review
+   app's secret. A switch in the tab turns the AI help on and off (§4).
+3. **The daily limit** is 200 calls.
