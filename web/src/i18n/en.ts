@@ -418,6 +418,13 @@ export const en = {
   'themes.practise': 'Practise this theme',
   'themes.practiseNamed': 'Practise this theme: {name}',
   'themes.started': '{started} of {count} words started',
+  'themes.search': 'Search themes',
+  'themes.searchPlaceholder': 'A word, a translation or a theme',
+  'themes.searchFound': { one: '{count} theme found', other: '{count} themes found' },
+  'themes.searchNone': 'No theme has “{query}”.',
+  'themes.searchClear': 'Show all themes',
+  'themes.searchMore': '+{count} more',
+  'themes.searchNoTheme': 'Also in the course, in no theme:',
 
   'progress.title': 'Progress',
   'progress.tiers': 'Your words',
