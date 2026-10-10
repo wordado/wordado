@@ -30,3 +30,16 @@ describe('static asset caching (plan 6a: the service worker and the manifest are
     expect(rules('/assets/*')).toEqual(['Cache-Control: public, max-age=31536000, immutable'])
   })
 })
+
+describe('the app stays out of search results (#165)', () => {
+  const read = (file: string) => readFileSync(join(import.meta.dirname, '..', file), 'utf8')
+
+  it('tells crawlers not to fetch anything', () => {
+    expect(read('public/robots.txt')).toBe('User-agent: *\nDisallow: /\n')
+  })
+
+  it('says noindex in the page and in a header on every path, so the single-page fallback is covered too', () => {
+    expect(read('index.html')).toContain('<meta name="robots" content="noindex" />')
+    expect(rules('/*')).toEqual(['X-Robots-Tag: noindex'])
+  })
+})
