@@ -2,6 +2,7 @@ import { ChartColumn, LayoutGrid, Route as RouteIcon, SlidersVertical, Sun, type
 import { useEffect, useRef } from 'react'
 import { useT, type MessageKey } from '../i18n/i18n'
 import { Link, navigate, useRoute, type Route } from '../router'
+import { Feedback } from '../screens/Feedback'
 import { Home } from '../screens/Home'
 import { Matching } from '../screens/Matching'
 import { Path } from '../screens/Path'
@@ -55,6 +56,8 @@ function Screen(props: { readonly route: Route }) {
       return <Settings section={route.section ?? null} />
     case 'placement':
       return <Placement />
+    case 'feedback':
+      return <Feedback from={route.from} />
     case 'native-language':
       // Changing the native language later (plan 11, Task 7): the setup's language page, as a sub-page of
       // Settings' Languages section, so it gets that section's own has-section layout and Back link for free.
@@ -87,7 +90,8 @@ const WORDMARK = (
  * the account), the navigation (a second row, or the tab bar on a phone),
  * banners, and the routed screen. While studying, only the screen. While the
  * first-run setup is owed (`setup`, plan 11), the setup instead of the routed
- * screen (except Sign in, which a returning learner needs), under the
+ * screen (except Sign in, which a returning learner needs, and Feedback, for
+ * a setup that does not work), under the
  * masthead's first row alone; `onFinishSetup` ends it.
  */
 export function App(props: { readonly resumed: boolean; readonly setup: boolean; onFinishSetup(): void }) {
@@ -105,7 +109,7 @@ export function App(props: { readonly resumed: boolean; readonly setup: boolean;
     setupBefore.current = props.setup
   }, [props.setup])
 
-  const inSetup = props.setup && route.name !== 'signin'
+  const inSetup = props.setup && route.name !== 'signin' && route.name !== 'feedback'
 
   // After an in-app navigation, focus the new screen, as a page load would
   // (spec §11.1). The shell itself also mounts fresh after a take-over or a

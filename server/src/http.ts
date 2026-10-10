@@ -18,6 +18,20 @@ export function requireUser(auth: Auth): MiddlewareHandler<AppEnv> {
   }
 }
 
+/**
+ * For a route anyone may call (feedback, spec §8.12): the session's user when
+ * there is one, and no `userId` otherwise. A refreshed cookie is passed on as
+ * requireUser does.
+ */
+export function optionalUser(auth: Auth): MiddlewareHandler<AppEnv> {
+  return async (c, next) => {
+    const { headers, response: session } = await auth.api.getSession({ headers: c.req.raw.headers, returnHeaders: true })
+    if (session) c.set('userId', session.user.id)
+    await next()
+    for (const cookie of headers.getSetCookie()) c.res.headers.append('set-cookie', cookie)
+  }
+}
+
 /** The learner a client means to sync, sent beside the session cookie. */
 export const EXPECTED_USER_HEADER = 'x-wordado-user'
 

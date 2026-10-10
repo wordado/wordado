@@ -7,6 +7,12 @@ describe('consoleMailer', () => {
     await consoleMailer((line) => lines.push(line)).sendSignInCode('ana@example.com', '123456')
     expect(lines).toEqual(['Sign-in code for ana@example.com: 123456'])
   })
+
+  it('prints the feedback mail whole', async () => {
+    const lines: string[] = []
+    await consoleMailer((line) => lines.push(line)).sendFeedback('coordinator@example.com', { subject: 'Wordado feedback: 1 new', text: '1. An idea' })
+    expect(lines).toEqual(['Feedback mail for coordinator@example.com: Wordado feedback: 1 new\n1. An idea'])
+  })
 })
 
 describe('resendMailer', () => {
@@ -51,8 +57,29 @@ describe('resendMailer', () => {
     expect(body.text).toContain('Tu código de inicio de sesión en Wordado es 123456. Caduca en 5 minutos.')
   })
 
+  it('sends the feedback mail as plain text to the one address it is given', async () => {
+    const calls: { url: string; init: RequestInit }[] = []
+    const mailer = resendMailer({
+      apiKey: 're_test',
+      from: 'Wordado <codes@wordado.com>',
+      fetch: async (url, init) => {
+        calls.push({ url, init })
+        return new Response('{}', { status: 200 })
+      },
+    })
+    await mailer.sendFeedback('coordinator@example.com', { subject: 'Wordado feedback: 1 new', text: '1. An idea' })
+    expect(calls).toHaveLength(1)
+    expect(JSON.parse(String(calls[0]!.init.body))).toEqual({
+      from: 'Wordado <codes@wordado.com>',
+      to: ['coordinator@example.com'],
+      subject: 'Wordado feedback: 1 new',
+      text: '1. An idea',
+    })
+  })
+
   it('throws when Resend refuses', async () => {
     const mailer = resendMailer({ apiKey: 're_test', from: 'x@wordado.com', fetch: async () => new Response('no', { status: 422 }) })
     await expect(mailer.sendSignInCode('ana@example.com', '123456')).rejects.toThrow('422')
+    await expect(mailer.sendFeedback('coordinator@example.com', { subject: 's', text: 't' })).rejects.toThrow('422')
   })
 })

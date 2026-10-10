@@ -3,7 +3,7 @@ import type { FixedField } from '@wordado/core'
 import { useEffect, useState } from 'react'
 import type { AccountNotice } from '../account/controller'
 import { useT, type MessageKey } from '../i18n/i18n'
-import { Link } from '../router'
+import { Link, useFeedbackRoute } from '../router'
 import { useOnline } from '../useOnline'
 import { useStore } from '../useStore'
 import { ConfirmDialog } from './Confirm'
@@ -28,6 +28,7 @@ export function Banners() {
   const { backend, account, accounts } = useApp()
   const { expired } = useStore(accounts.store)
   const [leaving, setLeaving] = useState(false)
+  const feedback = useFeedbackRoute()
   return (
     <div className="banners">
       <UpdateBanner />
@@ -43,6 +44,10 @@ export function Banners() {
             <button type="button" className="link-button" onClick={() => setLeaving(true)}>
               {t('banner.demoLeave')}
             </button>
+            {/* The demo has no account menu to hold it (spec §8.12: feedback is one tap from any screen, signed in or not). */}
+            <Link className="banner-feedback" to={feedback}>
+              {t('feedback.open')}
+            </Link>
           </p>
         </div>
       ) : (

@@ -5,12 +5,15 @@ import type { Db } from '../db/db'
  * `on delete cascade`, every row holding the learner's data: sessions and
  * linked sign-ins, the answer log (append-only, but not exempt from
  * erasure), derived state, documents, devices, push windows and
- * subscriptions. Content reports stay, with `reporter_id` set to null. A
- * pending sign-in code and the record of codes sent (src/signInLimit.ts)
- * are keyed by address rather than by user, so they are removed by address.
+ * subscriptions. Content reports stay, with `reporter_id` set to null. So
+ * does feedback about the app (spec §8.12), with `user_id` set to null and
+ * the address given for an answer removed first. A pending sign-in code and
+ * the record of codes sent (src/signInLimit.ts) are keyed by address rather
+ * than by user, so they are removed by address.
  */
 export async function deleteAccount(db: Db, userId: string): Promise<boolean> {
   return db.transaction(async (tx) => {
+    await tx.query(`update feedback set contact_email = '' where user_id = $1`, [userId])
     const [user] = await tx.query<{ email: string }>('delete from "user" where id = $1 returning email', [userId])
     if (!user) return false
     // Better Auth names them `<purpose>-otp-<email>`.

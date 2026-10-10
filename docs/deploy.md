@@ -111,6 +111,9 @@ private `wordado/wordado-research`, cloned into `docs/research/` and ignored her
      `GOOGLE_CLIENT_SECRET` (redirect `https://app.wordado.com/api/auth/callback/google`). Without Resend,
      production prints sign-in codes to its log, as development does. The preview has no mailer on
      purpose: its codes are only in its log, which `smoke:remote` reads.
+   - Production only, optional: `gh secret set FEEDBACK_EMAIL --env production`, the address the daily
+     feedback mail goes to (spec §8.12). A secret, not a variable, so the address is never shown. Without
+     it feedback is kept and nothing is mailed; a deploy refuses it without `RESEND_API_KEY`.
    A deploy refuses half of a pair, and a `BETTER_AUTH_SECRET` under 32 characters (`server/scripts/secretsFile.ts`).
 7. **Protect `main`.** *Done 2026-09-25*: the five checks below are required, a pull request must be
    up to date with `main` before it merges, and force pushes to `main` and its deletion are refused.

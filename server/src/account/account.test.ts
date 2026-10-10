@@ -7,7 +7,7 @@ import { EXPORT_FORMAT } from './export'
 
 const MINUTE = 60_000
 
-/** A learner with something in every table: answers, state, a completed day, documents, a report, a half-sent push, a device, a push subscription. */
+/** A learner with something in every table: answers, state, a completed day, documents, a report, a half-sent push, a device, a push subscription, feedback. */
 async function busyLearner(h: Harness, s: Session): Promise<void> {
   const events = [1, 2, 3].map((n) => rawEvent('dev-a', n, h.clock.now - (10 - n) * MINUTE, { wordId: `c:w-${n}` }))
   const date = dayToIsoDate(localDay(events[0]!.clientTs, TZ))
@@ -33,6 +33,17 @@ async function busyLearner(h: Harness, s: Session): Promise<void> {
     [`https://fcm.googleapis.com/fcm/send/${s.userId}`, s.userId, h.clock.now],
   )
   await s.post('/api/auth/update-user', { country: 'BG' })
+  const sent = await s.post('/v1/feedback', {
+    kind: 'idea',
+    message: 'A dark theme, please.',
+    email: s.email,
+    appVersion: 'B3kq9xZa',
+    corpusVersion: 'bg 6',
+    language: 'bg',
+    screen: '/progress',
+    userAgent: 'Mozilla/5.0',
+  })
+  expect(sent.status).toBe(200)
 }
 
 /** Rows anywhere in the database whose text mentions `needle`, by table. */
@@ -47,7 +58,7 @@ async function mentions(h: Harness, needle: string): Promise<Record<string, numb
 }
 
 describe('account deletion (spec §11)', () => {
-  it('leaves no row that names the learner, and keeps their reports without them', async () => {
+  it('leaves no row that names the learner, and keeps their reports and feedback without them', async () => {
     const h = harness()
     const s = await h.signIn()
     await busyLearner(h, s)
@@ -59,6 +70,10 @@ describe('account deletion (spec §11)', () => {
     expect(await mentions(h, s.email)).toEqual({})
     expect(await h.deps.db.query('select reporter_id, word_id, note, suggestion from content_report')).toEqual([
       { reporter_id: null, word_id: 'c:w-1', note: 'robotic', suggestion: 'human' },
+    ])
+    // Feedback stays too (spec §8.12), without the account or the address given for an answer.
+    expect(await h.deps.db.query('select user_id, message, contact_email from feedback')).toEqual([
+      { user_id: null, message: 'A dark theme, please.', contact_email: '' },
     ])
   })
 
@@ -84,6 +99,9 @@ describe('account deletion (spec §11)', () => {
     // Three words from dev-a and the one dev-b answered on its unfinished push.
     expect(pulled.body.reviewStates).toHaveLength(4)
     expect(await h.deps.db.query('select reporter_id from content_report where reporter_id is not null')).toEqual([{ reporter_id: staying.userId }])
+    expect(await h.deps.db.query(`select user_id, contact_email from feedback where contact_email <> ''`)).toEqual([
+      { user_id: staying.userId, contact_email: staying.email },
+    ])
   })
 
   it('asks for confirmation', async () => {
@@ -116,6 +134,28 @@ describe('data export (spec §11)', () => {
     // The report is the learner's own words, the suggestion with the note.
     expect(exported.documents.find((d: { type: string }) => d.type === 'content_report')?.fields).toMatchObject({ note: 'robotic', suggestion: 'human' })
     expect(exported.dayComplete).toHaveLength(1)
+  })
+
+  it('holds the feedback the learner sent while signed in, and nobody else’s', async () => {
+    const h = harness()
+    const s = await h.signIn()
+    const other = await h.signIn()
+    await busyLearner(h, s)
+    await busyLearner(h, other)
+    const exported = (await s.get('/v1/export')).body
+    expect(exported.feedback).toEqual([
+      {
+        kind: 'idea',
+        message: 'A dark theme, please.',
+        email: s.email,
+        receivedAt: h.clock.now,
+        appVersion: 'B3kq9xZa',
+        corpusVersion: 'bg 6',
+        userAgent: 'Mozilla/5.0',
+        language: 'bg',
+        screen: '/progress',
+      },
+    ])
   })
 
   it('answers 401 without a session', async () => {
