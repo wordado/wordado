@@ -82,9 +82,15 @@ match.
 
 ### 3.4 The week
 
-For the weekly mail of #139 and at the top of the tab: how many messages came, by category; the topics with the
+At the top of the tab and in the weekly mail of #139: how many messages came, by category; the topics with the
 most messages; the bugs marked `blocks`; the new topics. Counted from the stored results, with one model call for
 a short paragraph in words.
+
+**The mail is sent by the review app** to its admins, as its other mails are, and not by the learner app, which
+mails no feedback (#166). It holds the counts, the topic titles and the paragraph, all in our words, and a link to
+the tab. **No text a learner wrote and no contact address is in it:** a mail stays with the mail service, and the
+messages themselves are read in the tab only. The paragraph is written from the topic titles and the counts, not
+from the messages, so it cannot quote one.
 
 ### 3.5 Draft an issue
 
@@ -141,6 +147,8 @@ need no translation (default `en,bg`).
   nothing but its own advice; the masking of addresses, phone numbers and links; the daily limit; the contact
   address never appears in a request.
 - Topics: an existing one is picked, a new one is made, a moved message stays moved, a merge.
+- The weekly mail: it holds no message text and no contact address; the model call for its paragraph is given
+  titles and counts only.
 - The draft: no sentence of a learner's message appears in it (checked on the recorded answer, and the prompt is
   tested for the rule).
 - The hosted browser run: the tab with translations and topics from a stand-in model, desktop and phone.
@@ -158,3 +166,4 @@ need no translation (default `en,bg`).
 2. **The key:** the one the corpus reviewer's model is reached with may be used; the owner sets it as the review
    app's secret. A switch in the tab turns the AI help on and off (§4).
 3. **The daily limit** is 200 calls.
+4. **The week's summary is mailed by the review app** to its admins, without any text a learner wrote (§3.4).
