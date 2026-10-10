@@ -5,7 +5,7 @@ import { FakeModel } from './test/fakeModel'
 import { fetchBy } from './test/platform'
 
 const KEY = 'k'.repeat(40)
-const config: AiConfig = { key: KEY, model: 'test/model', url: 'https://model.test/api/v1', dailyCalls: 200, reads: ['en', 'bg'] }
+const config: AiConfig = { auth: 'key', key: KEY, model: 'test/model', url: 'https://model.test/api/v1', standIn: false, dailyCalls: 200, reads: ['en', 'bg'] }
 const SECRET_TEXT = 'Der Ton wird zweimal abgespielt.'
 const req: ModelRequest = {
   name: 'feedback_messages',

@@ -113,7 +113,7 @@ describe('the AI help’s routes (spec 2026-10-10)', () => {
   })
 
   it('is off until an admin switches it on: nothing is read and nobody is asked', async () => {
-    expect(await status()).toEqual({ setUp: true, on: false, model: 'test/model', callsToday: 0, dailyCalls: 200, reads: ['en', 'bg'] })
+    expect(await status()).toEqual({ setUp: true, needs: null, on: false, model: 'test/model', callsToday: 0, dailyCalls: 200, reads: ['en', 'bg'] })
     expect(await read()).toEqual({ results: {}, asked: 0, left: 0, why: 'off' })
     expect(server.requests).toEqual([])
     expect(model.requests).toEqual([])
@@ -123,7 +123,7 @@ describe('the AI help’s routes (spec 2026-10-10)', () => {
   it('is not set up without a key: it cannot be switched on, and nobody is asked', async () => {
     const { FEEDBACK_AI_KEY: _key, ...unset } = env
     env = unset
-    expect(await status()).toMatchObject({ setUp: false, on: false })
+    expect(await status()).toMatchObject({ setUp: false, needs: 'FEEDBACK_AI_KEY', on: false })
     const res = await admin('PUT', '/api/admin/feedback/ai', { on: true })
     expect(res.status).toBe(409)
     expect(await res.json()).toEqual({ message: 'AI help is not set up: set FEEDBACK_AI_KEY for the review app.' })
@@ -142,7 +142,7 @@ describe('the AI help’s routes (spec 2026-10-10)', () => {
 
   it('keeps the switch with who set it and when, and writes no mark', async () => {
     const res = await admin('PUT', '/api/admin/feedback/ai', { on: true })
-    expect(await res.json()).toEqual({ setUp: true, on: true, model: 'test/model', callsToday: 0, dailyCalls: 200, reads: ['en', 'bg'] })
+    expect(await res.json()).toEqual({ setUp: true, needs: null, on: true, model: 'test/model', callsToday: 0, dailyCalls: 200, reads: ['en', 'bg'] })
     expect((await env.DB.prepare('SELECT * FROM settings').all()).results).toEqual([{ name: 'feedback_ai', value: 'on', updated_at: '2026-10-05T12:00:00.000Z', updated_by: 'admin@example.com' }])
     expect(await marks()).toEqual([])
     expect((await admin('PUT', '/api/admin/feedback/ai', { on: false })).status).toBe(200)
@@ -219,10 +219,23 @@ describe('POST /api/admin/feedback/ai/read (spec 2026-10-10 §3.1)', () => {
 
   it('is not set up with an address that is not https, and sends nothing anywhere', async () => {
     env = { ...env, FEEDBACK_AI_URL: 'http://model.test/api/v1' }
-    expect(await status()).toMatchObject({ setUp: false })
+    expect(await status()).toMatchObject({ setUp: false, needs: 'FEEDBACK_AI_URL' })
+    // The switch is refused with the name of the setting that is wrong, not of one that is there.
+    const res = await admin('PUT', '/api/admin/feedback/ai', { on: true })
+    expect(res.status).toBe(409)
+    expect(await res.json()).toEqual({ message: 'AI help is not set up: set FEEDBACK_AI_URL for the review app.' })
     expect((await read()).why).toBe('not-set-up')
     expect(model.requests).toEqual([])
     expect(server.requests).toEqual([])
+  })
+
+  it('is not set up with a sign-in it does not know, and says which setting', async () => {
+    env = { ...env, FEEDBACK_AI_AUTH: 'google' }
+    expect(await status()).toMatchObject({ setUp: false, needs: 'FEEDBACK_AI_AUTH' })
+    const res = await admin('PUT', '/api/admin/feedback/ai', { on: true })
+    expect(await res.json()).toEqual({ message: 'AI help is not set up: set FEEDBACK_AI_AUTH for the review app.' })
+    expect((await read()).why).toBe('not-set-up')
+    expect(model.requests).toEqual([])
   })
 
   it('reads the page the tab shows: the kind and the cursor go to the server as they came', async () => {

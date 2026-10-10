@@ -3,7 +3,7 @@ import type { Context, Hono } from 'hono'
 import { apiError, jsonBody, type AppEnv, type Deps } from '../app'
 import { forgetFeedbackAi, putSetting } from '../db'
 import { AI_SWITCH, aiStatus, readPageAi } from '../feedbackAi'
-import { aiConfig } from '../feedbackAiConfig'
+import { aiSetup } from '../feedbackAiConfig'
 import { FeedbackUnread, feedbackSource } from '../learnerApp'
 
 /** The first key of a body that is not one of `known`, if it has any. */
@@ -23,14 +23,15 @@ export function feedbackAiRoutes(app: Hono<AppEnv>, deps: Deps): void {
     return c.json(await aiStatus(deps))
   })
 
-  /** The switch. On is refused while there is no key; off is always taken. It is kept with who set it and when. */
+  /** The switch. On is refused while the help is not set up, with the name of the setting it needs; off is always taken. It is kept with who set it and when. */
   app.put('/api/admin/feedback/ai', async (c) => {
     fresh(c)
     const body = await jsonBody<Record<string, unknown>>(c)
     const extra = extraKey(body, ['on'])
     if (extra !== undefined) return apiError(c, 400, `the switch is on or off, and has no ${extra}`)
     if (typeof body['on'] !== 'boolean') return apiError(c, 400, 'on must be true or false')
-    if (body['on'] && !aiConfig(deps.env)) return apiError(c, 409, 'AI help is not set up: set FEEDBACK_AI_KEY for the review app.')
+    const { needs } = aiSetup(deps.env)
+    if (body['on'] && needs !== null) return apiError(c, 409, `AI help is not set up: set ${needs} for the review app.`)
     await putSetting(deps.env.DB, AI_SWITCH, body['on'] ? 'on' : 'off', c.get('me').email, deps.now().toISOString())
     return c.json(await aiStatus(deps))
   })

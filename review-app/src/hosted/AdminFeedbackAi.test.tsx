@@ -6,7 +6,7 @@ import { AdminFeedbackAi, AI_PRIVACY_NOTE } from './AdminFeedbackAi'
 
 afterEach(() => (cleanup(), vi.restoreAllMocks()))
 
-const status = (over: Partial<FeedbackAiStatus> = {}): FeedbackAiStatus => ({ setUp: true, on: false, model: 'test/model', callsToday: 0, dailyCalls: 200, reads: ['en', 'bg'], ...over })
+const status = (over: Partial<FeedbackAiStatus> = {}): FeedbackAiStatus => ({ setUp: true, needs: null, on: false, model: 'test/model', callsToday: 0, dailyCalls: 200, reads: ['en', 'bg'], ...over })
 
 function shown(first: FeedbackAiStatus | null | 'failed') {
   const onStatus = vi.fn()
@@ -22,7 +22,7 @@ const line = (panel: HTMLElement) => panel.querySelector('.feedback-ai-state')!.
 describe('AdminFeedbackAi: the switch and what it says', () => {
   it('says the privacy policy must name the AI service before it is switched on, whatever the state', () => {
     expect(AI_PRIVACY_NOTE).toBe('Before this is switched on for learners’ feedback, the privacy policy must name the AI service: the service the model is reached through, the model’s provider, and that they receive the text of a feedback message without the contact address.')
-    for (const s of [status(), status({ on: true }), status({ setUp: false }), null, 'failed'] as const) {
+    for (const s of [status(), status({ on: true }), status({ setUp: false, needs: 'FEEDBACK_AI_KEY' }), null, 'failed'] as const) {
       const { panel } = shown(s)
       expect(within(panel).getByText(AI_PRIVACY_NOTE)).toBeTruthy()
       cleanup()
@@ -30,11 +30,21 @@ describe('AdminFeedbackAi: the switch and what it says', () => {
   })
 
   it('is not set up without the key: the switch cannot be moved, and the line names the setting', () => {
-    const { panel, toggle } = shown(status({ setUp: false }))
+    const { panel, toggle } = shown(status({ setUp: false, needs: 'FEEDBACK_AI_KEY' }))
     expect(toggle.disabled).toBe(true)
     expect(toggle.checked).toBe(false)
     expect(line(panel)).toBe('AI help is not set up: set FEEDBACK_AI_KEY for the review app.')
     expect(panel.querySelector('.feedback-ai-state code')?.textContent).toBe('FEEDBACK_AI_KEY')
+  })
+
+  it('names the setting that is wrong, whichever it is', () => {
+    for (const needs of ['FEEDBACK_AI_URL', 'FEEDBACK_AI_AUTH'] as const) {
+      const { panel, toggle } = shown(status({ setUp: false, needs }))
+      expect(toggle.disabled).toBe(true)
+      expect(line(panel)).toBe(`AI help is not set up: set ${needs} for the review app.`)
+      expect(panel.querySelector('.feedback-ai-state code')?.textContent).toBe(needs)
+      cleanup()
+    }
   })
 
   it('is off until it is switched on, and says that no message is sent', () => {

@@ -194,9 +194,11 @@ export interface FeedbackAi {
 /** A message as the learner app's server gives it, with the coordinator's mark and, when there is one, the AI's reading. */
 export type FeedbackView = FeedbackItem & FeedbackMark & { readonly ai: FeedbackAi | null }
 
-/** `GET /api/admin/feedback/ai`. `setUp`: the key is there. `on`: an admin switched it on. `reads`: the languages that need no translation. */
+/** `GET /api/admin/feedback/ai`. `setUp`: the sign-in, the secret and the address are there. `needs`: the first setting that is missing or wrong while
+ * it is not. `on`: an admin switched it on. `reads`: the languages that need no translation. */
 export interface FeedbackAiStatus {
   readonly setUp: boolean
+  readonly needs: 'FEEDBACK_AI_AUTH' | 'FEEDBACK_AI_KEY' | 'FEEDBACK_AI_URL' | null
   readonly on: boolean
   readonly model: string
   readonly callsToday: number

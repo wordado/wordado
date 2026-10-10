@@ -2,7 +2,7 @@ import type { FeedbackItem, FeedbackKind } from '@wordado/core'
 import type { FeedbackAi, FeedbackAiRead, FeedbackAiStatus, FeedbackAiWhy } from '../shared/hosted'
 import type { Deps } from './app'
 import { aiCallsToday, claimAiCall, feedbackAiRows, getSetting, putFeedbackAi, type FeedbackAiRow } from './db'
-import { aiConfig, aiLimits } from './feedbackAiConfig'
+import { aiConfig, aiLimits, aiSetup } from './feedbackAiConfig'
 import { askModel } from './feedbackModel'
 import { messagesRequest, PROMPT_VERSION, readMessagesAnswer } from './feedbackPrompt'
 import { readFeedback, type FeedbackSource } from './learnerApp'
@@ -14,10 +14,11 @@ export const AI_BATCH = 25
 /** The name the switch has in `settings`: 'on' or 'off', and off while there is no row. */
 export const AI_SWITCH = 'feedback_ai'
 
-/** Whether there is a key, whether an admin switched the help on, and how the day's limit stands. */
+/** Whether the help is set up (and the setting it needs while it is not), whether an admin switched it on, and how the day's limit stands. */
 export async function aiStatus(deps: Pick<Deps, 'env' | 'now'>): Promise<FeedbackAiStatus> {
   const [on, callsToday] = await Promise.all([getSetting(deps.env.DB, AI_SWITCH), aiCallsToday(deps.env.DB, deps.now())])
-  return { setUp: aiConfig(deps.env) !== null, on: on === 'on', callsToday, ...aiLimits(deps.env) }
+  const { needs } = aiSetup(deps.env)
+  return { setUp: needs === null, needs, on: on === 'on', callsToday, ...aiLimits(deps.env) }
 }
 
 /**

@@ -69,7 +69,7 @@ const PROPOSAL = answer(/\/api\/admin\/assignments\/split$/, {
 })
 
 /** The AI help's status as the Feedback tab gets it, without asking the server: its switch stays as it is. */
-const aiStatus = (over: Row): Api => answer(/\/api\/admin\/feedback\/ai$/, { setUp: true, on: true, model: 'google/gemini-3.8-flash', callsToday: 12, dailyCalls: 200, reads: ['en', 'bg'], ...over })
+const aiStatus = (over: Row): Api => answer(/\/api\/admin\/feedback\/ai$/, { setUp: true, needs: null, on: true, model: 'google/gemini-3.8-flash', callsToday: 12, dailyCalls: 200, reads: ['en', 'bg'], ...over })
 
 /** The Feedback tab with the AI help on and every message read: the stand-in model's readings are put on the list's
  * answer, and the AI is told nothing is left to read, so nothing is kept on the server. `why` is what a reading answers. */
@@ -342,7 +342,7 @@ const SHOTS_ADMIN: readonly Shot[] = [
     },
   },
   { name: 'hosted-admin-feedback-ai-limit', who: 'admin', path: '/#feedback', api: aiRead('limit', 9), steps: async (page) => void (await page.getByText(/Today’s limit of 200 AI calls is reached/).waitFor()) },
-  { name: 'hosted-admin-feedback-ai-not-set-up', who: 'admin', path: '/#feedback', api: [aiStatus({ setUp: false, on: false })], steps: async (page) => void (await page.getByText(/AI help is not set up/).waitFor()) },
+  { name: 'hosted-admin-feedback-ai-not-set-up', who: 'admin', path: '/#feedback', api: [aiStatus({ setUp: false, needs: 'FEEDBACK_AI_KEY', on: false })], steps: async (page) => void (await page.getByText(/AI help is not set up/).waitFor()) },
   {
     name: 'hosted-admin-feedback-ai-forget',
     who: 'admin',

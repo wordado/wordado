@@ -40,7 +40,10 @@ export interface Env {
   readonly LEARNER_APP_URL?: string
   /** A secret, the same value as that server's: what it answers to. Unset leaves the tab unconnected. */
   readonly FEEDBACK_READ_TOKEN?: string
-  /** A secret: the key the AI help on feedback reaches its model with (spec 2026-10-10 §4). Unset, there is no AI help and the tab says so. */
+  /** How the AI help on feedback signs in to its service: `key` (the default) or `google-service-account`. Anything else, and there is no AI help. */
+  readonly FEEDBACK_AI_AUTH?: string
+  /** A secret: what the AI help on feedback signs in with (spec 2026-10-10 §4). By `key`, the service's key. By `google-service-account`, the content of
+   * the account's JSON key file, from which the Worker makes a token (googleToken.ts). Unset, there is no AI help and the tab says so. */
   readonly FEEDBACK_AI_KEY?: string
   /** The model, as the service names it; unset is the default of feedbackAiConfig.ts. */
   readonly FEEDBACK_AI_MODEL?: string
@@ -48,7 +51,8 @@ export interface Env {
   readonly FEEDBACK_AI_DAILY_CALLS?: string
   /** The languages the coordinator reads, which need no translation: two-letter codes with commas; unset is `en,bg`. */
   readonly FEEDBACK_READS?: string
-  /** The service the model is reached through: an https address, to which `/chat/completions` is added; unset is OpenRouter's. Any service that
-   * takes the same request can be named. Plain http is for a stand-in on the same machine, in tests and the hosted e2e only (feedbackAiConfig.ts). */
+  /** The service the model is reached through: an https address, to which `/chat/completions` is added. By `key`, unset is OpenRouter's, and any
+   * service that takes the same request can be named. By `google-service-account` it must be set, on googleapis.com. Plain http is for a stand-in on
+   * the same machine, in tests and the hosted e2e only (feedbackAiConfig.ts). */
   readonly FEEDBACK_AI_URL?: string
 }

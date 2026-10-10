@@ -7,9 +7,9 @@ import { dateOf } from './adminUtil'
 
 afterEach(() => (cleanup(), vi.restoreAllMocks()))
 
-const aiStatus = (over: Partial<FeedbackAiStatus> = {}): FeedbackAiStatus => ({ setUp: true, on: true, model: 'test/model', callsToday: 3, dailyCalls: 200, reads: ['en', 'bg'], ...over })
+const aiStatus = (over: Partial<FeedbackAiStatus> = {}): FeedbackAiStatus => ({ setUp: true, needs: null, on: true, model: 'test/model', callsToday: 3, dailyCalls: 200, reads: ['en', 'bg'], ...over })
 // Without the key, as a deployment is before the owner sets it: the tab is what it was before there was any AI help.
-beforeEach(() => void vi.spyOn(hostedApi.admin, 'feedbackAi').mockResolvedValue(aiStatus({ setUp: false, on: false })))
+beforeEach(() => void vi.spyOn(hostedApi.admin, 'feedbackAi').mockResolvedValue(aiStatus({ setUp: false, needs: 'FEEDBACK_AI_KEY', on: false })))
 
 const item = (id: number, over: Partial<FeedbackView> = {}): FeedbackView => ({
   id,
@@ -383,7 +383,7 @@ describe('AdminFeedback: asking the AI about a page', () => {
 
   it('does not ask while the AI help is off, not set up or out of reach', async () => {
     const read = vi.spyOn(hostedApi.admin, 'readFeedbackAi').mockResolvedValue(aiRead())
-    for (const mock of [() => aiOn({ on: false }), () => aiOn({ setUp: false, on: true }), () => vi.spyOn(hostedApi.admin, 'feedbackAi').mockRejectedValue(new Error('internal error'))]) {
+    for (const mock of [() => aiOn({ on: false }), () => aiOn({ setUp: false, needs: 'FEEDBACK_AI_KEY', on: true }), () => vi.spyOn(hostedApi.admin, 'feedbackAi').mockRejectedValue(new Error('internal error'))]) {
       mock()
       listed()
       render(<AdminFeedback />)

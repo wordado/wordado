@@ -79,7 +79,7 @@ export function AdminFeedbackAi(props: { status: FeedbackAiStatus | null | 'fail
             ''
           ) : !known.setUp ? (
             <>
-              AI help is not set up: set <code>FEEDBACK_AI_KEY</code> for the review app.
+              AI help is not set up: set <code>{known.needs ?? 'FEEDBACK_AI_KEY'}</code> for the review app.
             </>
           ) : known.on ? (
             `On: ${known.model}. ${known.callsToday.toLocaleString('en')} of ${known.dailyCalls.toLocaleString('en')} calls used today.`
