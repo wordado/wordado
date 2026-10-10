@@ -9,7 +9,11 @@ afterEach(() => (cleanup(), vi.restoreAllMocks()))
 
 const aiStatus = (over: Partial<FeedbackAiStatus> = {}): FeedbackAiStatus => ({ setUp: true, needs: null, on: true, model: 'test/model', callsToday: 3, dailyCalls: 200, reads: ['en', 'bg'], repo: 'wordado/wordado', ...over })
 // Without the key, as a deployment is before the owner sets it: the tab is what it was before there was any AI help.
-beforeEach(() => void vi.spyOn(hostedApi.admin, 'feedbackAi').mockResolvedValue(aiStatus({ setUp: false, needs: 'FEEDBACK_AI_KEY', on: false })))
+beforeEach(() => {
+  vi.spyOn(hostedApi.admin, 'feedbackAi').mockResolvedValue(aiStatus({ setUp: false, needs: 'FEEDBACK_AI_KEY', on: false }))
+  // No topics: a card then shows its message's topic, when it has one, and offers no other.
+  vi.spyOn(hostedApi.admin, 'feedbackTopics').mockResolvedValue([])
+})
 
 const item = (id: number, over: Partial<FeedbackView> = {}): FeedbackView => ({
   id,

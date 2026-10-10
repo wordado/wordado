@@ -112,7 +112,7 @@ export function AdminFeedbackAi(props: { status: FeedbackAiStatus | null | 'fail
       )}
       <p className="note feedback-ai-privacy">{AI_PRIVACY_NOTE}</p>
       <Dialog open={asking} title="Forget the AI’s results" onClose={() => setAsking(false)} error={forgetFailed}>
-        <p>Everything the AI wrote about the feedback is removed. Your marks and notes stay. It is made again as pages are read.</p>
+        <p>Everything the AI wrote about the feedback is removed, and with it the topics you have not worked on and where you moved messages. Your marks and notes stay. It is made again as pages are read.</p>
         <span className="form-actions">
           <button type="button" className="button danger" disabled={forgetting} onClick={() => void forget()}>
             Forget them

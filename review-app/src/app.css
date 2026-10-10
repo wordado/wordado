@@ -1676,6 +1676,170 @@ kbd {
   overflow-wrap: anywhere;
 }
 
+/* A message's topic, under what the AI says of it, and the select that moves it to another. */
+.feedback-topic {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--space-2) var(--space-4);
+}
+
+.feedback-topic-name {
+  flex: 1 1 14rem;
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.feedback-move {
+  flex: 0 1 16rem;
+}
+
+/* By topic (spec 2026-10-10 §3.2): a line for each topic, which opens to its tools and its messages. The line is
+   the title, which is the button that opens it, then how many, when, how bad and where it stands, then the issue
+   it looks like. */
+.topic-list {
+  display: grid;
+  gap: var(--space-3);
+  padding: 0;
+  list-style: none;
+}
+
+.topic-item > article {
+  min-width: 0;
+  background: var(--paper-raised);
+  border: 1px solid var(--rule);
+  border-radius: 1.125rem;
+  box-shadow: var(--lift);
+}
+
+.topic-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-3) var(--space-4);
+}
+
+.topic-line > * {
+  min-width: 0;
+  margin: 0;
+}
+
+.topic-title {
+  flex: 1 1 16rem;
+  font-size: var(--step-0);
+}
+
+.topic-open {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: 2.75rem;
+  padding: var(--space-1) 0;
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+/* Closed, the mark points to the side; opened, down. */
+.topic-open::before {
+  flex-shrink: 0;
+  content: '▸';
+  color: var(--ink-soft);
+}
+
+.topic-open[aria-expanded='true']::before {
+  content: '▾';
+}
+
+.topic-open:hover {
+  text-decoration: underline;
+}
+
+.topic-meta,
+.topic-match {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  font-size: var(--step--1);
+  color: var(--ink-soft);
+}
+
+.topic-match {
+  color: var(--ink);
+}
+
+.topic-body {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4) var(--space-4);
+  border-top: 1px solid var(--rule);
+}
+
+.topic-body[hidden] {
+  display: none;
+}
+
+.topic-body > * {
+  min-width: 0;
+  margin: 0;
+}
+
+/* The messages of a topic are cards inside its card: flat, so that a card does not lift off a card. */
+.topic-body .feedback-item > article {
+  background: var(--paper);
+  box-shadow: none;
+}
+
+.topic-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--space-3) var(--space-4);
+}
+
+.topic-tool {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.topic-tool > .field {
+  flex: 1 1 10rem;
+}
+
+.topic-tool > .feedback-status {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.topic-rename {
+  flex: 1 1 22rem;
+}
+
+.topic-merge {
+  display: grid;
+  flex: 0 1 16rem;
+}
+
+.topic-issue {
+  flex: 0 1 14rem;
+}
+
+.topic-mark {
+  flex-basis: 100%;
+}
+
 .feedback-junk {
   margin-top: var(--space-4);
 }
@@ -1975,6 +2139,31 @@ kbd {
 
   .feedback-junk > summary {
     padding: var(--space-3) 0;
+  }
+
+  /* By topic: the line's parts each on a line of their own, and the tools one under another, the card's whole width. */
+  .topic-line,
+  .topic-body {
+    padding: var(--space-3);
+  }
+
+  .topic-title,
+  .topic-meta,
+  .topic-match {
+    flex-basis: 100%;
+  }
+
+  .topic-tool,
+  .topic-merge,
+  .topic-issue,
+  .topic-rename,
+  .feedback-move {
+    flex: 1 1 100%;
+  }
+
+  .topic-line .button,
+  .topic-tools .button {
+    min-height: 2.75rem;
   }
 
   .dialog {

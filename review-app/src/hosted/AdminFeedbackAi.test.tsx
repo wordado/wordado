@@ -100,7 +100,7 @@ describe('AdminFeedbackAi: the switch and what it says', () => {
     const { panel, onForgotten } = shown(status({ on: true }))
     fireEvent.click(within(panel).getByRole('button', { name: 'Forget the AI’s results' }))
     const dialog = await screen.findByRole('dialog', { name: 'Forget the AI’s results' })
-    expect(within(dialog).getByText('Everything the AI wrote about the feedback is removed. Your marks and notes stay. It is made again as pages are read.')).toBeTruthy()
+    expect(within(dialog).getByText('Everything the AI wrote about the feedback is removed, and with it the topics you have not worked on and where you moved messages. Your marks and notes stay. It is made again as pages are read.')).toBeTruthy()
     expect(forget).not.toHaveBeenCalled()
     fireEvent.click(within(dialog).getByRole('button', { name: 'Forget them' }))
     await waitFor(() => expect(onForgotten).toHaveBeenCalledTimes(1))

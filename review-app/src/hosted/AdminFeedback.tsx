@@ -1,26 +1,16 @@
 import type { FeedbackKind } from '@wordado/core'
-import { type FormEvent, useCallback, useEffect, useId, useRef, useState } from 'react'
-import {
-  type FeedbackAiStatus,
-  type FeedbackAiWhy,
-  type FeedbackCategory,
-  type FeedbackSeverity,
-  type FeedbackState,
-  type FeedbackStateFilter,
-  type FeedbackView,
-  MAX_FEEDBACK_NOTE_LENGTH,
-} from '../../shared/hosted'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import type { FeedbackAiStatus, FeedbackAiWhy, FeedbackStateFilter, FeedbackTopicRef, FeedbackTopicView, FeedbackView } from '../../shared/hosted'
 import { hostedApi } from '../hostedApi'
 import { AdminFeedbackAi, aiFailureLine } from './AdminFeedbackAi'
-import { count, dateOf, messageOf } from './adminUtil'
+import { AdminFeedbackTopics } from './AdminFeedbackTopics'
+import { count, messageOf } from './adminUtil'
+import { FeedbackCard } from './FeedbackCard'
 
-const KIND_LABEL: Readonly<Record<FeedbackKind, string>> = { bug: 'Bug', idea: 'Idea', other: 'Other' }
-const KIND_CHIP: Readonly<Record<FeedbackKind, string>> = { bug: 'chip major', idea: 'chip', other: 'chip off' }
-const STATES: readonly (readonly [FeedbackState, string])[] = [['new', 'New'], ['seen', 'Looked at'], ['done', 'Done'], ['declined', 'Not doing']]
+/** How the tab lists the feedback: a card a message, or a line a topic (spec 2026-10-10 §3.2). */
+type View = 'messages' | 'topics'
+const VIEWS: readonly (readonly [View, string])[] = [['messages', 'Messages'], ['topics', 'By topic']]
 const KIND_FILTERS: readonly (readonly [FeedbackKind | '', string])[] = [['', 'All'], ['bug', 'Bug'], ['idea', 'Idea'], ['other', 'Other']]
-const CATEGORY_LABEL: Readonly<Record<FeedbackCategory, string>> = { bug: 'Bug', idea: 'Idea', question: 'Question', praise: 'Praise', junk: 'Junk' }
-const SEVERITY_LABEL: Readonly<Record<FeedbackSeverity, string>> = { blocks: 'Blocks study', annoys: 'Annoys', cosmetic: 'Cosmetic' }
-const SEVERITY_CHIP: Readonly<Record<FeedbackSeverity, string>> = { blocks: 'chip major', annoys: 'chip minor', cosmetic: 'chip off' }
 const STATE_FILTERS: readonly (readonly [FeedbackStateFilter, string])[] = [['open', 'Open'], ['all', 'All'], ['done', 'Done'], ['declined', 'Not doing']]
 
 /** What the tab has from the server: nothing yet, that feedback is not connected, that it could not be read, or the
@@ -37,8 +27,11 @@ interface AiLeft { readonly before: number | undefined; readonly left: number }
 /** The Feedback tab (spec §16): what learners wrote about the app, newest first, read from the learner app's server
  * each time, and the coordinator's own mark on each message: where it stands, and a note. With the AI help set up
  * and switched on (spec 2026-10-10), each page shown is then read by the AI, and what it says is put on the cards
- * as advice; without it, or when it fails, the tab is what it is without it and says so in one line. */
+ * as advice; without it, or when it fails, the tab is what it is without it and says so in one line.
+ * By topic, the same feedback is one line for each thing it is about (AdminFeedbackTopics); the filter by state
+ * is then of the topics' own state, and the view stays as it is when the filter changes. */
 export function AdminFeedback() {
+  const [view, setView] = useState<View>('messages')
   const [kind, setKind] = useState<FeedbackKind | ''>('')
   const [state, setState] = useState<FeedbackStateFilter>('open')
   const [loaded, setLoaded] = useState<Loaded>({ kind: 'loading' })
@@ -55,6 +48,21 @@ export function AdminFeedback() {
   // The AI's answers are for one list: a list read anew (another filter) takes none of the answers asked for before it.
   const listed = useRef(0)
   const aiKnown = useRef<Promise<FeedbackAiStatus | null> | null>(null)
+  // The topics: for the By topic view, and for a card to offer them to move its message to. Null: not known yet.
+  const [topics, setTopics] = useState<readonly FeedbackTopicView[] | null | 'failed'>(null)
+  const topicsAsked = useRef(0)
+
+  /** Reads the topics, from the review app's own database: nothing is asked of the AI or of the learner app's server.
+   * A failure is not the list's: the messages stay as they are, and By topic says so. */
+  const loadTopics = useCallback(async () => {
+    const mine = ++topicsAsked.current
+    try {
+      const found = await hostedApi.admin.feedbackTopics()
+      if (mine === topicsAsked.current) setTopics(found)
+    } catch {
+      if (mine === topicsAsked.current) setTopics('failed')
+    }
+  }, [])
 
   /** The AI help's status, asked for once. A failure is not the list's: the tab goes on without the AI. */
   const aiStatus = useCallback(() => {
@@ -85,6 +93,8 @@ export function AdminFeedback() {
         setAiWhy(answer.why)
         setAiLeft((pages) => [...pages.filter((p) => p.before !== before), ...(answer.left > 0 ? [{ before, left: answer.left }] : [])])
         if (answer.asked > 0) setAi((now) => (now !== null && now !== 'failed' ? { ...now, callsToday: now.callsToday + 1 } : now))
+        // A reading may have made a topic, or put a message in one.
+        if (Object.keys(answer.results).length > 0) void loadTopics()
       } catch {
         if (list === listed.current) setAiUnreached(true)
       } finally {
@@ -92,7 +102,7 @@ export function AdminFeedback() {
         if (list === listed.current) setAiReading((n) => n - 1)
       }
     },
-    [aiStatus],
+    [aiStatus, loadTopics],
   )
 
   const load = useCallback(
@@ -128,6 +138,19 @@ export function AdminFeedback() {
 
   useEffect(() => void load({ kind, state }), [load, kind, state])
   useEffect(() => void aiStatus(), [aiStatus])
+  useEffect(() => void loadTopics(), [loadTopics])
+
+  /** Another view. By topic shows the topics as they are now. */
+  const look = (next: View) => {
+    setView(next)
+    if (next === 'topics') void loadTopics()
+  }
+
+  /** A message was moved from its card: the list shows where it is now, and the topics are counted again. */
+  const moved = (id: number, topic: FeedbackTopicRef) => {
+    setLoaded((now) => (now.kind === 'list' ? { ...now, items: now.items.map((item) => (item.id === id && item.ai ? { ...item, ai: { ...item.ai, topic } } : item)) } : now))
+    void loadTopics()
+  }
 
   /** The switch was moved. On: the list is read again, and with it the AI reads the page. Off: nothing more is asked. */
   const switched = (status: FeedbackAiStatus) => {
@@ -142,11 +165,12 @@ export function AdminFeedback() {
     }
   }
 
-  /** The AI's results are gone: its parts leave the cards, which stay as they are otherwise. */
+  /** The AI's results are gone: its parts leave the cards, which stay as they are otherwise, and the topics nobody worked on are gone too. */
   const forgotten = () => {
     setLoaded((now) => (now.kind === 'list' ? { ...now, items: now.items.map((item) => (item.ai ? { ...item, ai: null } : item)) } : now))
     setAiWhy(null)
     setAiLeft([])
+    void loadTopics()
   }
 
   const filtered = kind !== '' || state !== 'all'
@@ -156,21 +180,35 @@ export function AdminFeedback() {
   const shown = junk.length > 0 ? items.filter((item) => item.ai?.category !== 'junk') : items
   const aiFailed = aiFailureLine(aiWhy, ai !== null && ai !== 'failed' ? ai.dailyCalls : 0)
   const left = aiLeft.reduce((sum, p) => sum + p.left, 0)
+  const known = ai !== null && ai !== 'failed' ? ai : null
+  const offered = topics !== null && topics !== 'failed' ? topics : []
   return (
     <>
       <h2 className="visually-hidden">Feedback</h2>
       <AdminFeedbackAi status={ai} unreached={aiUnreached} onStatus={switched} onForgotten={forgotten} />
       <div className="tab-actions feedback-filters">
         <label className="field">
-          Kind
-          <select value={kind} onChange={(e) => setKind(e.target.value as FeedbackKind | '')}>
-            {KIND_FILTERS.map(([id, label]) => (
+          View
+          <select value={view} onChange={(e) => look(e.target.value as View)}>
+            {VIEWS.map(([id, label]) => (
               <option key={id} value={id}>
                 {label}
               </option>
             ))}
           </select>
         </label>
+        {view === 'messages' && (
+          <label className="field">
+            Kind
+            <select value={kind} onChange={(e) => setKind(e.target.value as FeedbackKind | '')}>
+              {KIND_FILTERS.map(([id, label]) => (
+                <option key={id} value={id}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <label className="field">
           Show
           <select value={state} onChange={(e) => setState(e.target.value as FeedbackStateFilter)}>
@@ -182,17 +220,18 @@ export function AdminFeedback() {
           </select>
         </label>
       </div>
-      {busy && (
+      {view === 'topics' && <AdminFeedbackTopics topics={topics} show={state} aiOn={known !== null && known.setUp && known.on} repo={known?.repo ?? ''} onChanged={loadTopics} />}
+      {view === 'messages' && busy && (
         <div className="busy-bar" role="progressbar" aria-label="Loading feedback">
           <span />
         </div>
       )}
-      {loaded.kind === 'unconnected' && (
+      {view === 'messages' && loaded.kind === 'unconnected' && (
         <p className="note">
           Feedback is not connected: set <code>FEEDBACK_READ_TOKEN</code> and <code>LEARNER_APP_URL</code> for the review app, then open this tab again.
         </p>
       )}
-      {loaded.kind === 'failed' && (
+      {view === 'messages' && loaded.kind === 'failed' && (
         <div role="alert" className="notice feedback-failed">
           <p>Feedback could not be read. {loaded.message}</p>
           <button className="button small" onClick={() => void load({ kind, state })}>
@@ -200,7 +239,7 @@ export function AdminFeedback() {
           </button>
         </div>
       )}
-      {loaded.kind === 'list' && (
+      {view === 'messages' && loaded.kind === 'list' && (
         <>
           {aiReading > 0 && (
             <p role="status" className="note feedback-ai-reading">
@@ -235,7 +274,7 @@ export function AdminFeedback() {
               </p>
               <ul className="feedback-list" aria-label="Feedback">
                 {shown.map((item) => (
-                  <FeedbackCard key={item.id} item={item} />
+                  <FeedbackCard key={item.id} item={item} topics={offered} onMoved={moved} />
                 ))}
               </ul>
             </>
@@ -247,7 +286,7 @@ export function AdminFeedback() {
               </summary>
               <ul className="feedback-list" aria-label="Messages the AI reads as junk">
                 {junk.map((item) => (
-                  <FeedbackCard key={item.id} item={item} />
+                  <FeedbackCard key={item.id} item={item} topics={offered} onMoved={moved} />
                 ))}
               </ul>
             </details>
@@ -267,152 +306,5 @@ export function AdminFeedback() {
         </>
       )}
     </>
-  )
-}
-
-/** How a save stands: nothing said, on its way, kept, or refused with the reason. */
-type Saving = { readonly kind: 'idle' } | { readonly kind: 'busy' } | { readonly kind: 'saved' } | { readonly kind: 'failed'; readonly message: string }
-const IDLE: Saving = { kind: 'idle' }
-
-function SaveStatus(props: { saving: Saving; what: string }) {
-  const { saving } = props
-  return (
-    <span role="status" className={`feedback-status${saving.kind === 'failed' ? ' failed' : ''}`}>
-      {saving.kind === 'busy' && 'Saving…'}
-      {saving.kind === 'saved' && 'Saved'}
-      {saving.kind === 'failed' && `${props.what} not saved: ${saving.message}`}
-    </span>
-  )
-}
-
-/** One message: what the learner sent, what the AI reads in it when it has (marked as the AI's, under the learner's
- * own words, which are never changed), the details folded away, and the mark. The state saves when it is chosen;
- * the note on Save. Each save sends the other one as it was last saved. */
-function FeedbackCard(props: { item: FeedbackView }) {
-  const { item } = props
-  const id = useId()
-  // The mark as the server last confirmed it. Each save sends the whole mark, so the saves of one message go one
-  // after another, and each builds on the answer to the one before.
-  const saved = useRef<{ readonly state: FeedbackState; readonly note: string }>({ state: item.state, note: item.note })
-  const queue = useRef<Promise<void>>(Promise.resolve())
-  const [savedNote, setSavedNote] = useState(item.note)
-  // What the control shows: the saved state, or the one on its way.
-  const [chosen, setChosen] = useState(item.state)
-  const [draft, setDraft] = useState(item.note)
-  const [stateSaving, setStateSaving] = useState<Saving>(IDLE)
-  const [noteSaving, setNoteSaving] = useState<Saving>(IDLE)
-  const when = new Date(item.receivedAt).toISOString()
-
-  const save = (change: { state: FeedbackState } | { note: string }, say: (saving: Saving) => void, refused: () => void) => {
-    say({ kind: 'busy' })
-    queue.current = queue.current.then(async () => {
-      try {
-        const answer = await hostedApi.admin.markFeedback(item.id, { ...saved.current, ...change })
-        saved.current = { state: answer.state, note: answer.note }
-        setSavedNote(answer.note)
-        say({ kind: 'saved' })
-      } catch (err) {
-        refused()
-        say({ kind: 'failed', message: messageOf(err) })
-      }
-    })
-  }
-
-  const choose = (next: FeedbackState) => {
-    setChosen(next)
-    // Refused: the control goes back to what the server holds.
-    save({ state: next }, setStateSaving, () => setChosen(saved.current.state))
-  }
-
-  const saveNote = (e: FormEvent) => {
-    e.preventDefault()
-    // Refused: what was typed stays in the field, to be saved again.
-    save({ note: draft.trim() }, setNoteSaving, () => undefined)
-  }
-
-  return (
-    <li className="feedback-item">
-      <article aria-labelledby={`${id}-title`}>
-        <h3 id={`${id}-title`} className="feedback-head">
-          <span className={KIND_CHIP[item.kind]}>{KIND_LABEL[item.kind]}</span>
-          <time dateTime={when}>{dateOf(when)}</time>
-          <span className="note">{item.signedIn ? 'signed in' : 'not signed in'}</span>
-        </h3>
-        <p className="feedback-message">{item.message}</p>
-        {item.ai && item.ai.translation !== '' && (
-          <div className="feedback-translated">
-            <p className="feedback-ai-label">Translation by the AI</p>
-            <p className="feedback-translation" lang="en">
-              {item.ai.translation}
-            </p>
-          </div>
-        )}
-        {item.ai && (
-          <div className="feedback-ai">
-            <p className="feedback-ai-chips">
-              <span className="chip ai">AI: {CATEGORY_LABEL[item.ai.category]}</span>
-              {item.ai.severity && <span className={SEVERITY_CHIP[item.ai.severity]}>{SEVERITY_LABEL[item.ai.severity]}</span>}
-            </p>
-            <p className="feedback-ai-summary">AI summary: {item.ai.summary}</p>
-          </div>
-        )}
-        {item.contactEmail !== '' && (
-          <p className="feedback-contact">
-            Answer to <span className="invite-link">{item.contactEmail}</span>{' '}
-            <a className="row-link" href={`mailto:${encodeURIComponent(item.contactEmail).replace('%40', '@')}`}>
-              Write a mail
-            </a>
-          </p>
-        )}
-        <details className="feedback-details">
-          <summary>Details</summary>
-          <dl>
-            <dt>App version</dt>
-            <dd>{item.appVersion}</dd>
-            <dt>Word list version</dt>
-            <dd>{item.corpusVersion === '' ? 'none' : item.corpusVersion}</dd>
-            <dt>Language</dt>
-            <dd>{item.language}</dd>
-            <dt>Screen</dt>
-            <dd>{item.screen}</dd>
-            <dt>Browser</dt>
-            <dd>{item.userAgent === '' ? 'not given' : item.userAgent}</dd>
-          </dl>
-        </details>
-        <form className="feedback-mark" aria-label="Your mark" onSubmit={saveNote}>
-          <div className="feedback-state">
-            <label className="field">
-              State
-              <select value={chosen} aria-busy={stateSaving.kind === 'busy'} onChange={(e) => choose(e.target.value as FeedbackState)}>
-                {STATES.map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <SaveStatus saving={stateSaving} what="State" />
-          </div>
-          <label className="field feedback-note">
-            Note
-            <textarea
-              rows={2}
-              maxLength={MAX_FEEDBACK_NOTE_LENGTH}
-              value={draft}
-              onChange={(e) => {
-                setDraft(e.target.value)
-                setNoteSaving(IDLE)
-              }}
-            />
-          </label>
-          <span className="form-actions">
-            <button type="submit" className="button small" disabled={noteSaving.kind === 'busy' || draft.trim() === savedNote}>
-              Save note
-            </button>
-            <SaveStatus saving={noteSaving} what="Note" />
-          </span>
-        </form>
-      </article>
-    </li>
   )
 }
