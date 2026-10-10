@@ -10,6 +10,7 @@ describe('workerSecrets: what a deploy uploads (spec §4.4: secrets from the Git
       'RESEND_API_KEY',
       'EMAIL_FROM',
       'FEEDBACK_EMAIL',
+      'FEEDBACK_READ_TOKEN',
       'GOOGLE_CLIENT_ID',
       'GOOGLE_CLIENT_SECRET',
       'VAPID_PUBLIC_KEY',
@@ -43,5 +44,11 @@ describe('workerSecrets: what a deploy uploads (spec §4.4: secrets from the Git
     const mailer = { BETTER_AUTH_SECRET: secret, RESEND_API_KEY: 're_x', EMAIL_FROM: 'Wordado <codes@example.com>' }
     expect(workerSecrets(mailer)).toEqual(mailer)
     expect(workerSecrets({ ...mailer, FEEDBACK_EMAIL: 'feedback@example.com' })).toEqual({ ...mailer, FEEDBACK_EMAIL: 'feedback@example.com' })
+  })
+
+  it('refuses a FEEDBACK_READ_TOKEN under 32 characters, and takes a deploy without one', () => {
+    expect(() => workerSecrets({ BETTER_AUTH_SECRET: secret, FEEDBACK_READ_TOKEN: 't'.repeat(31) })).toThrow('FEEDBACK_READ_TOKEN must be at least 32 characters')
+    expect(workerSecrets({ BETTER_AUTH_SECRET: secret, FEEDBACK_READ_TOKEN: 't'.repeat(32) })).toEqual({ BETTER_AUTH_SECRET: secret, FEEDBACK_READ_TOKEN: 't'.repeat(32) })
+    expect(workerSecrets({ BETTER_AUTH_SECRET: secret, FEEDBACK_READ_TOKEN: '' })).toEqual({ BETTER_AUTH_SECRET: secret })
   })
 })

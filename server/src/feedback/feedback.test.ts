@@ -2,8 +2,9 @@ import { MAX_FEEDBACK_MESSAGE_LENGTH } from '@wordado/core'
 import { describe, expect, it, vi } from 'vitest'
 import { BASE_URL, harness, type Harness, type Reply } from '../../test/harness'
 import { runScheduled } from '../jobs/scheduled'
+import { FEEDBACK_PAGE_DEFAULT, FEEDBACK_PAGE_MAX, hasReadToken } from './admin'
 import { FEEDBACK_PER_CLIENT_PER_HOUR, FEEDBACK_PER_DAY, FEEDBACK_SEND_RETENTION_MS, feedbackClient, pruneFeedbackSends } from './limit'
-import { FEEDBACK_MAIL_MAX, mailNewFeedback } from './mail'
+import { FEEDBACK_MAIL_MAX, feedbackNotice, mailNewFeedback } from './mail'
 
 const HOUR = 3_600_000
 const DAY = 86_400_000
@@ -175,6 +176,174 @@ describe('POST /v1/feedback (spec §8.12)', () => {
   })
 })
 
+describe('GET /v1/admin/feedback (spec §8.12)', () => {
+  const token = 'r'.repeat(40)
+  const withToken = () => harness({ config: { feedbackReadToken: token } })
+  /** As the review app's server asks: the token, and no Origin or cookie. */
+  const read = (h: Harness, query = '', authorization: string | null = `Bearer ${token}`): Promise<Reply> =>
+    h.request(`/v1/admin/feedback${query}`, authorization === null ? {} : { headers: { authorization } })
+
+  it('gives the feedback newest first, with whether the sender was signed in and never who', async () => {
+    const h = withToken()
+    const s = await h.signIn()
+    await s.post('/v1/feedback', { ...feedback, email: 'ana@example.com' })
+    const first = h.clock.now
+    h.clock.advance(60_000)
+    await send(h, { ...feedback, kind: 'idea', message: 'A dark theme.\nAnd bigger letters.', corpusVersion: '' })
+    const reply = await read(h)
+    expect(reply.status).toBe(200)
+    expect(reply.headers.get('cache-control')).toBe('no-store')
+    expect(reply.headers.get('access-control-allow-origin')).toBeNull()
+    expect(reply.body.nextBefore).toBeNull()
+    expect(reply.body.items).toEqual([
+      {
+        id: expect.any(Number),
+        receivedAt: h.clock.now,
+        kind: 'idea',
+        message: 'A dark theme.\nAnd bigger letters.',
+        contactEmail: '',
+        signedIn: false,
+        appVersion: 'B3kq9xZa',
+        corpusVersion: '',
+        language: 'bg',
+        screen: '/path',
+        userAgent: 'Mozilla/5.0 (X11; Linux x86_64)',
+      },
+      {
+        id: expect.any(Number),
+        receivedAt: first,
+        kind: 'bug',
+        message: 'The path does not open.',
+        contactEmail: 'ana@example.com',
+        signedIn: true,
+        appVersion: 'B3kq9xZa',
+        corpusVersion: 'bg 6',
+        language: 'bg',
+        screen: '/path',
+        userAgent: 'Mozilla/5.0 (X11; Linux x86_64)',
+      },
+    ])
+    expect(JSON.stringify(reply.body)).not.toContain(s.userId)
+  })
+
+  it('is a route that does not exist without the token, with a wrong one, or when the secret is not set', async () => {
+    const h = withToken()
+    await send(h, feedback)
+    const unknown = await h.request('/v1/no-such-route')
+    expect(unknown.status).toBe(404)
+    for (const authorization of [null, '', 'Bearer', 'Bearer ', `Bearer ${token}x`, `Bearer ${token.slice(1)}`, `bearer ${token}`, `Basic ${token}`, token]) {
+      const reply = await read(h, '', authorization)
+      expect(reply.status).toBe(404)
+      expect(reply.body).toEqual(unknown.body)
+    }
+    // The token in the address is not the token.
+    expect((await read(h, `?token=${token}`, null)).status).toBe(404)
+    // A signed-in learner is nobody here.
+    const s = await h.signIn()
+    expect((await s.get('/v1/admin/feedback')).status).toBe(404)
+    const closed = harness()
+    for (const authorization of [null, `Bearer ${token}`, 'Bearer ', 'Bearer null']) {
+      const reply = await read(closed, '', authorization)
+      expect(reply.status).toBe(404)
+      expect(reply.body).toEqual(unknown.body)
+    }
+  })
+
+  it('compares the whole token', async () => {
+    expect(await hasReadToken(token, `Bearer ${token}`)).toBe(true)
+    expect(await hasReadToken(token, `Bearer ${token.slice(0, -1)}`)).toBe(false)
+    expect(await hasReadToken(token, `Bearer ${token}${token}`)).toBe(false)
+    expect(await hasReadToken(token, undefined)).toBe(false)
+  })
+
+  it('answers a caller that is not a browser, and leaves the guard on every other /v1 route as it was', async () => {
+    const h = withToken()
+    // No Origin, no cookie, no Sec-Fetch-Site: a server's request.
+    expect((await read(h)).status).toBe(200)
+    // The token opens nothing else, and nothing but reading: a form post from another site is still refused.
+    const form = (path: string) =>
+      h.request(path, { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'text/plain', origin: 'https://elsewhere.example.com' }, body: '{}' })
+    expect((await form('/v1/feedback')).status).toBe(403)
+    expect((await form('/v1/admin/feedback')).status).toBe(403)
+    for (const method of ['POST', 'PUT', 'DELETE']) {
+      const reply = await h.request('/v1/admin/feedback', { method, headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json', origin: BASE_URL }, body: '{}' })
+      expect(reply.status).toBe(404)
+    }
+    expect((await h.request('/v1/sync/pull', { headers: { authorization: `Bearer ${token}` } })).status).not.toBe(200)
+    expect(await stored(h)).toEqual([])
+  })
+
+  it(`gives ${FEEDBACK_PAGE_DEFAULT} a page, and the older ones from the cursor it names`, async () => {
+    const h = withToken()
+    await seedFeedback(h, FEEDBACK_PAGE_DEFAULT + 2, h.clock.now - HOUR)
+    const first = await read(h)
+    expect(first.body.items).toHaveLength(FEEDBACK_PAGE_DEFAULT)
+    expect(first.body.items[0].message).toBe(`idea ${FEEDBACK_PAGE_DEFAULT + 2}`)
+    expect(first.body.nextBefore).toBe(first.body.items.at(-1).id)
+    const second = await read(h, `?before=${first.body.nextBefore}`)
+    expect(second.body.items.map((item: { message: string }) => item.message)).toEqual(['idea 2', 'idea 1'])
+    expect(second.body.nextBefore).toBeNull()
+    const small = await read(h, '?limit=2')
+    expect(small.body.items.map((item: { message: string }) => item.message)).toEqual([`idea ${FEEDBACK_PAGE_DEFAULT + 2}`, `idea ${FEEDBACK_PAGE_DEFAULT + 1}`])
+    expect(small.body.nextBefore).toBe(small.body.items[1].id)
+    // A page that ends exactly at the oldest message names no next one.
+    expect((await read(h, `?limit=2&before=${second.body.items[0].id + 1}`)).body.nextBefore).toBeNull()
+  })
+
+  it('filters by kind and by the time received', async () => {
+    const h = withToken()
+    await send(h, feedback)
+    h.clock.advance(60_000)
+    await send(h, { ...feedback, kind: 'idea', message: 'A dark theme.' })
+    h.clock.advance(60_000)
+    await send(h, { ...feedback, kind: 'other', message: 'Thank you.' })
+    const messages = async (query: string) => (await read(h, query)).body.items.map((item: { message: string }) => item.message)
+    expect(await messages('?kind=bug')).toEqual(['The path does not open.'])
+    expect(await messages('?kind=idea')).toEqual(['A dark theme.'])
+    expect(await messages(`?since=${h.clock.now - 60_000}`)).toEqual(['Thank you.', 'A dark theme.'])
+    expect(await messages(`?since=${h.clock.now - 60_000}&kind=idea`)).toEqual(['A dark theme.'])
+  })
+
+  it('refuses a query it does not understand, once the token is right', async () => {
+    const h = withToken()
+    for (const query of ['?limit=0', `?limit=${FEEDBACK_PAGE_MAX + 1}`, '?limit=ten', '?before=abc', '?before=-1', '?kind=praise', '?since=yesterday']) {
+      const reply = await read(h, query)
+      expect(reply.status).toBe(400)
+      expect(reply.body.error).toBe('invalid')
+      expect((await read(h, query, 'Bearer wrong')).status).toBe(404)
+    }
+    expect((await read(h, `?limit=${FEEDBACK_PAGE_MAX}`)).status).toBe(200)
+  })
+
+  it('changes nothing, and never logs the token', async () => {
+    const h = withToken()
+    await send(h, feedback)
+    const before = await stored(h)
+    const logs = [vi.spyOn(console, 'log').mockImplementation(() => {}), vi.spyOn(console, 'error').mockImplementation(() => {})]
+    try {
+      await read(h)
+      await read(h, '?limit=0')
+      await read(h, '', 'Bearer wrong')
+      for (const log of logs) expect(JSON.stringify(log.mock.calls)).not.toContain(token)
+    } finally {
+      for (const log of logs) log.mockRestore()
+    }
+    expect(await stored(h)).toEqual(before)
+  })
+
+  it('no longer gives the address of a deleted account', async () => {
+    const h = withToken()
+    const s = await h.signIn()
+    await s.post('/v1/feedback', { ...feedback, email: 'ana@example.com' })
+    expect((await read(h)).body.items[0].contactEmail).toBe('ana@example.com')
+    expect((await s.del('/v1/account', { confirm: true })).status).toBe(200)
+    const [item] = (await read(h)).body.items
+    expect(item.message).toBe('The path does not open.')
+    expect(item.contactEmail).toBe('')
+    expect(item.signedIn).toBe(false)
+  })
+})
+
 describe('the daily feedback mail (spec §8.12)', () => {
   const to = 'coordinator@example.com'
   const withMail = () => harness({ config: { feedbackEmail: to } })
@@ -276,5 +445,69 @@ describe('the daily feedback mail (spec §8.12)', () => {
     expect(h.feedbackMails).toEqual([])
     expect((await stored(h)).map((row) => row['mailed_at'])).toEqual([null, null])
     expect(await h.deps.db.query('select utc_day from feedback_mail')).toEqual([])
+  })
+
+  describe('when the review app shows the feedback (FEEDBACK_READ_TOKEN is set)', () => {
+    const review = 'https://review.example.com'
+    const withTab = (reviewAppUrl: string | null = review) => harness({ config: { feedbackEmail: to, feedbackReadToken: 'r'.repeat(40), reviewAppUrl } })
+
+    it('is a notice: how many are new, by kind, and a link to the Feedback tab, with no message or address in it', async () => {
+      const h = withTab()
+      const s = await h.signIn()
+      await s.post('/v1/feedback', { ...feedback, email: 'ana@example.com' })
+      await send(h, { ...feedback, message: 'It also crashes.' })
+      await send(h, { ...feedback, kind: 'idea', message: 'A dark theme.' }, '10.30.0.2')
+      await runScheduled(h.deps)
+      expect(h.feedbackMails).toEqual([
+        {
+          to,
+          subject: 'Wordado feedback: 3 new',
+          text: '3 new messages about the app.\n\nSomething isn’t working: 2\nIdeas: 1\n\nRead them in the review app: https://review.example.com/#feedback',
+        },
+      ])
+      const mail = h.feedbackMails[0]!
+      for (const kept of ['The path does not open.', 'It also crashes.', 'A dark theme.', 'ana@example.com', s.userId, 'Mozilla', 'B3kq9xZa']) expect(mail.text).not.toContain(kept)
+      expect((await stored(h)).map((row) => row['mailed_at'])).toEqual([h.clock.now, h.clock.now, h.clock.now])
+    })
+
+    it('says where to look when the review app’s address is not set', async () => {
+      const h = withTab(null)
+      await send(h, { ...feedback, kind: 'other' })
+      await runScheduled(h.deps)
+      expect(h.feedbackMails[0]!.text).toBe('1 new message about the app.\n\nSomething else: 1\n\nRead them in the review app: Admin, then Feedback.')
+    })
+
+    it(`counts every waiting message, more than ${FEEDBACK_MAIL_MAX} too, and leaves none for the next day`, async () => {
+      const h = withTab()
+      await seedFeedback(h, FEEDBACK_MAIL_MAX + 3, h.clock.now - HOUR)
+      expect(await mailNewFeedback(h.deps)).toBe(FEEDBACK_MAIL_MAX + 3)
+      expect(h.feedbackMails[0]!.subject).toBe(`Wordado feedback: ${FEEDBACK_MAIL_MAX + 3} new`)
+      expect(h.feedbackMails[0]!.text).toContain(`Ideas: ${FEEDBACK_MAIL_MAX + 3}\n`)
+      expect(await h.deps.db.query('select id from feedback where mailed_at is null')).toEqual([])
+      h.clock.advance(DAY)
+      expect(await mailNewFeedback(h.deps)).toBe(0)
+      expect(h.feedbackMails).toHaveLength(1)
+    })
+
+    it('is still one mail a UTC day, and a failed send waits for the next', async () => {
+      const h = withTab()
+      h.clock.now = Math.floor(h.clock.now / DAY) * DAY + HOUR
+      await send(h, feedback)
+      const failing = vi.spyOn(h.deps.mailer, 'sendFeedback').mockRejectedValueOnce(new Error('Resend refused the email: 500'))
+      await expect(runScheduled(h.deps)).rejects.toThrow(AggregateError)
+      await send(h, { ...feedback, kind: 'idea' })
+      await runScheduled(h.deps)
+      expect(failing).toHaveBeenCalledTimes(1)
+      expect((await stored(h)).map((row) => row['mailed_at'])).toEqual([null, null])
+      h.clock.advance(DAY)
+      await runScheduled(h.deps)
+      await runScheduled(h.deps)
+      expect(h.feedbackMails).toHaveLength(1)
+      expect(h.feedbackMails[0]!.subject).toBe('Wordado feedback: 2 new')
+    })
+
+    it('names only the kinds that have something new', () => {
+      expect(feedbackNotice({ bug: 0, idea: 0, other: 2 }, review).text).toBe('2 new messages about the app.\n\nSomething else: 2\n\nRead them in the review app: https://review.example.com/#feedback')
+    })
   })
 })

@@ -34,6 +34,32 @@ export interface FeedbackInput {
   readonly userAgent: string
 }
 
+/**
+ * One message as `GET /v1/admin/feedback` gives it to the review app (spec §8.12): what the learner sent, and
+ * whether an account was attached, never which.
+ */
+export interface FeedbackItem {
+  readonly id: number
+  /** Epoch milliseconds, by the server's clock. */
+  readonly receivedAt: number
+  readonly kind: FeedbackKind
+  readonly message: string
+  /** Where to answer; empty when the learner gave none, or their account is deleted. */
+  readonly contactEmail: string
+  readonly signedIn: boolean
+  readonly appVersion: string
+  readonly corpusVersion: string
+  readonly language: string
+  readonly screen: string
+  readonly userAgent: string
+}
+
+/** A page of feedback, newest first. `nextBefore` is the `before` that gives the next, older page; null on the last. */
+export interface FeedbackPage {
+  readonly items: readonly FeedbackItem[]
+  readonly nextBefore: number | null
+}
+
 /** Whether a program filled in the hidden field. */
 export function isFeedbackTrap(raw: unknown): boolean {
   if (!isRecord(raw)) return false

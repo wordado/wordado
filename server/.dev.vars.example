@@ -5,6 +5,9 @@ BETTER_AUTH_SECRET=local-development-only-secret-0123456789abcdef
 # GOOGLE_CLIENT_SECRET=
 # Optional: where the daily feedback mail goes; without it feedback is kept and nothing is mailed. Printed to the console locally.
 # FEEDBACK_EMAIL=you@example.com
+# Optional: lets the review app read feedback (GET /v1/admin/feedback); at least 32 characters, the same value as the
+# review app's FEEDBACK_READ_TOKEN. Without it the route does not exist.
+# FEEDBACK_READ_TOKEN=local-development-only-feedback-token-0123456789
 # Optional: reminders. `pnpm --filter @wordado/server vapid-keys` prints a pair.
 # VAPID_PUBLIC_KEY=
 # VAPID_PRIVATE_KEY=

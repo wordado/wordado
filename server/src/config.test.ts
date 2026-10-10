@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { configFromEnv, DEFAULT_MIN_PROTOCOL_VERSION, type Env } from './config'
+import { configFromEnv, DEFAULT_MIN_PROTOCOL_VERSION, MIN_FEEDBACK_READ_TOKEN_LENGTH, type Env } from './config'
 
 const env = (over: Partial<Env> = {}): Env => ({
   HYPERDRIVE: { connectionString: 'postgres://localhost/x' },
@@ -19,6 +19,8 @@ describe('configFromEnv', () => {
       google: null,
       vapid: null,
       feedbackEmail: null,
+      feedbackReadToken: null,
+      reviewAppUrl: null,
     })
   })
 
@@ -32,6 +34,8 @@ describe('configFromEnv', () => {
         VAPID_PUBLIC_KEY: 'pub',
         VAPID_PRIVATE_KEY: 'priv',
         FEEDBACK_EMAIL: ' feedback@example.com ',
+        FEEDBACK_READ_TOKEN: ` ${'t'.repeat(32)} `,
+        REVIEW_APP_URL: ' https://review.example.com/ ',
       }),
     )
     expect(config.trustedOrigins).toEqual(['http://localhost:5173', 'https://preview.wordado.com'])
@@ -39,6 +43,8 @@ describe('configFromEnv', () => {
     expect(config.google).toEqual({ clientId: 'id', clientSecret: 'secret' })
     expect(config.vapid).toEqual({ publicKey: 'pub', privateKey: 'priv', subject: 'mailto:reminders@wordado.com' })
     expect(config.feedbackEmail).toBe('feedback@example.com')
+    expect(config.feedbackReadToken).toBe('t'.repeat(32))
+    expect(config.reviewAppUrl).toBe('https://review.example.com')
   })
 
   it('needs both halves of a Google client or a VAPID pair', () => {
@@ -58,5 +64,17 @@ describe('configFromEnv', () => {
 
   it('reads an empty FEEDBACK_EMAIL as none', () => {
     expect(configFromEnv(env({ FEEDBACK_EMAIL: ' ' })).feedbackEmail).toBeNull()
+  })
+
+  it('reads an empty or a short FEEDBACK_READ_TOKEN as none: the route stays closed and the app runs', () => {
+    expect(configFromEnv(env({ FEEDBACK_READ_TOKEN: '' })).feedbackReadToken).toBeNull()
+    expect(configFromEnv(env({ FEEDBACK_READ_TOKEN: 't'.repeat(MIN_FEEDBACK_READ_TOKEN_LENGTH - 1) })).feedbackReadToken).toBeNull()
+  })
+
+  it('reads an empty REVIEW_APP_URL as none, and refuses one that is not an origin', () => {
+    expect(configFromEnv(env({ REVIEW_APP_URL: ' ' })).reviewAppUrl).toBeNull()
+    for (const bad of ['review.example.com', 'https://review.example.com/admin', 'https://review.example.com/?a=1', 'mailto:review@example.com']) {
+      expect(() => configFromEnv(env({ REVIEW_APP_URL: bad }))).toThrow('REVIEW_APP_URL')
+    }
   })
 })
