@@ -745,16 +745,18 @@ button.settings-row:hover {
   height: 100%;
   background: var(--blue);
   border-radius: inherit;
-  animation: busy-slide 1.2s ease-in-out infinite;
+  animation: busy-slide 1.1s ease-in-out infinite alternate;
 }
 
+/* From one end to the other and back, never off the track: the bar is seen at once, and also when a busy
+   browser holds the animation still. */
 @keyframes busy-slide {
   from {
-    transform: translateX(-100%);
+    transform: translateX(0);
   }
 
   to {
-    transform: translateX(250%);
+    transform: translateX(150%);
   }
 }
 
