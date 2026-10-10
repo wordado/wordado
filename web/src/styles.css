@@ -2573,7 +2573,8 @@ dialog.report input[type='text'] {
 }
 
 .field input,
-.field select {
+.field select,
+.field textarea {
   min-height: 2.75rem;
   max-width: 24rem;
   padding: var(--space-2) var(--space-3);
@@ -2584,7 +2585,8 @@ dialog.report input[type='text'] {
   border-radius: var(--radius);
 }
 
-.field input[aria-invalid='true'] {
+.field input[aria-invalid='true'],
+.field textarea[aria-invalid='true'] {
   border-color: var(--rose);
   border-width: 2px;
 }
@@ -2608,9 +2610,51 @@ dialog.report input[type='text'] {
 
 /* Inside the card a field never runs past its edge, and a checkbox sits level with its words. */
 .form-section .field > select,
+.form-section .field > textarea,
 .form-section .field > input:not([type='checkbox']) {
   width: 100%;
   max-width: 100%;
+}
+
+/* Feedback about the app (spec §8.12): the form on the setup's card, and under its fields what is sent beside the message. */
+
+.feedback-form textarea {
+  display: block;
+  resize: vertical;
+}
+
+.feedback-form .choices label {
+  align-items: center;
+}
+
+.feedback-details {
+  padding: var(--space-3) 0;
+  font-size: var(--step--1);
+  color: var(--ink-soft);
+  border-top: 1px solid var(--rule);
+}
+
+.form-section .feedback-details h2 {
+  margin: 0 0 var(--space-1);
+  font: 600 var(--step--1) / 1.4 var(--font-ui);
+}
+
+.feedback-details ul {
+  margin: 0;
+  padding-inline-start: 1.25rem;
+}
+
+/* A browser's name is one long line of tokens. */
+.feedback-details li {
+  overflow-wrap: anywhere;
+}
+
+.feedback-form [role='status']:focus {
+  outline: none;
+}
+
+.feedback-form .bar {
+  margin-top: var(--space-3);
 }
 
 .form-section label.check {
@@ -2740,6 +2784,15 @@ dialog.report input[type='text'] {
   flex-wrap: wrap;
   gap: var(--space-4);
   margin-top: var(--space-1);
+}
+
+/* Feedback in the demo's banner: a finger's room (2.75rem) around the word, without making the banner taller. */
+.banner-actions .banner-feedback {
+  display: inline-flex;
+  align-items: center;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  margin-block: -0.75rem;
 }
 
 .notice-line {

@@ -1,3 +1,4 @@
+import type { FeedbackInput } from '@wordado/core'
 import type { Fetch } from '../content/packs'
 import type { Locale } from '../i18n/i18n'
 import { expectedUserHeader } from './transport'
@@ -47,7 +48,12 @@ export interface ExportFile {
   readonly json: string
 }
 
-/** Everything the app asks of the server beside sync (spec §8.6, §8.11, §11). */
+/** `POST /v1/feedback` (spec §8.12): the message, the details shown under the form, and the field no person fills in. */
+export interface FeedbackBody extends FeedbackInput {
+  readonly website: string
+}
+
+/** Everything the app asks of the server beside sync (spec §8.6, §8.11, §8.12, §11). */
 export interface Api {
   sendCode(email: string): Promise<void>
   verifyCode(email: string, code: string): Promise<void>
@@ -66,6 +72,8 @@ export interface Api {
   pushPublicKey(): Promise<string | null>
   putSubscription(body: PushSubscriptionBody): Promise<void>
   deleteSubscription(endpoint: string): Promise<void>
+  /** Feedback about the app, signed in or not: with a session the server attaches the account. */
+  sendFeedback(body: FeedbackBody): Promise<void>
 }
 
 const codeOf = (body: unknown): string | null => {
@@ -77,7 +85,8 @@ const codeOf = (body: unknown): string | null => {
 /**
  * The app's calls to its own origin: `/api/auth` (Better Auth) and `/v1` (plan 5), with the session cookie.
  * `expectedUser` names the recorded learner on the push-subscription calls, the account deletion and
- * the export, so a session that is someone else's is refused (409) rather than acted on.
+ * the export, so a session that is someone else's is refused (409) rather than acted on; on feedback,
+ * so such a session's account is not attached to it.
  */
 export function httpApi(fetchFn: Fetch = (input, init) => fetch(input, init), expectedUser: () => string | null = () => null): Api {
   async function request(
@@ -171,6 +180,9 @@ export function httpApi(fetchFn: Fetch = (input, init) => fetch(input, init), ex
     },
     deleteSubscription: async (endpoint) => {
       await call('DELETE', '/v1/push/subscription', { endpoint }, expectedUserHeader(expectedUser()))
+    },
+    sendFeedback: async (body) => {
+      await call('POST', '/v1/feedback', body, expectedUserHeader(expectedUser()))
     },
   }
 }

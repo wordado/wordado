@@ -1,5 +1,5 @@
 import { useT } from '../i18n/i18n'
-import { Link } from '../router'
+import { Link, useFeedbackRoute } from '../router'
 import { SyncLine, useSyncMessage } from './Banners'
 import { useApp } from './context'
 import { ProgressBar } from './ProgressBar'
@@ -9,8 +9,9 @@ import { usePopover } from './usePopover'
 /**
  * Who is signed in, at the end of the masthead: a circle with the first
  * letter of the email that opens a small menu (the email, what sync is doing,
- * the account settings, signing out). A sync warning marks the circle so it
- * is not hidden in the closed menu. The demo gets the way in instead.
+ * the account settings, feedback, signing out). A sync warning marks the
+ * circle so it is not hidden in the closed menu. The demo gets the way in
+ * instead; having no menu, it finds feedback in its banner (Banners).
  */
 export function AccountMenu() {
   const { t } = useT()
@@ -18,6 +19,7 @@ export function AccountMenu() {
   const message = useSyncMessage()
   const { signingOut, error, start: signOut, dialog } = useSignOut()
   const { open, root, trigger, onKeyDown, triggerProps, panelId } = usePopover()
+  const feedback = useFeedbackRoute()
 
   if (account === null) {
     return (
@@ -47,6 +49,9 @@ export function AccountMenu() {
           <ul>
             <li>
               <Link to={{ name: 'settings', section: 'account' }}>{t('account.settings')}</Link>
+            </li>
+            <li>
+              <Link to={feedback}>{t('feedback.open')}</Link>
             </li>
             <li>
               <button type="button" className="link-button" disabled={signingOut} onClick={() => void signOut()}>

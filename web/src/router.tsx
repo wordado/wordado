@@ -18,6 +18,8 @@ export type Route =
   | { readonly name: 'settings'; readonly section?: SettingsSection }
   | { readonly name: 'placement' }
   | { readonly name: 'native-language' }
+  /** Feedback about the app (spec §8.12). `from` is the path of the screen it was opened from, without its query. */
+  | { readonly name: 'feedback'; readonly from?: string | undefined }
 
 /** Modes a learner can choose for a run; matching has its own route. */
 const RUN_MODES: readonly Mode[] = ['flashcard', 'multiple_choice', 'listening_select']
@@ -37,6 +39,20 @@ function scopeParam(search: string): { readonly unit?: string; readonly theme?: 
   if (unit) return { unit }
   const theme = params.get('theme')
   return theme ? { theme } : {}
+}
+
+/** The path of a route, without its query: what the feedback form says it was opened from. */
+export const routePath = (route: Route): string => routeHref(route).split('?')[0]!
+
+/**
+ * Where the feedback form was opened from (`?from=<path>`): kept only as the path of a screen the app has, so
+ * an address written by hand cannot put other text into what is sent.
+ */
+function fromParam(search: string): { readonly from?: string } {
+  const from = new URLSearchParams(search).get('from')
+  if (!from || !from.startsWith('/')) return {}
+  const route = parseRoute(from.split(/[?#]/)[0]!, '')
+  return route.name === 'feedback' ? {} : { from: routePath(route) }
 }
 
 export function parseRoute(pathname: string, search: string): Route {
@@ -64,6 +80,8 @@ export function parseRoute(pathname: string, search: string): Route {
       return { name: 'placement' }
     case '/settings/native-language':
       return { name: 'native-language' }
+    case '/feedback':
+      return { name: 'feedback', ...fromParam(search) }
     default: {
       const section = SETTINGS_SECTIONS.find((s) => path === `/settings/${s}`)
       return section ? { name: 'settings', section } : { name: 'home' }
@@ -99,6 +117,8 @@ export function routeHref(route: Route): string {
       return '/settings/native-language'
     case 'settings':
       return route.section ? `/settings/${route.section}` : '/settings'
+    case 'feedback':
+      return route.from ? `/feedback?${new URLSearchParams({ from: route.from }).toString()}` : '/feedback'
     default:
       return `/${route.name}`
   }
@@ -130,6 +150,15 @@ export function useRoute(): Route {
     const url = new URL(current, 'http://local')
     return parseRoute(url.pathname, url.search)
   }, [current])
+}
+
+/**
+ * The feedback form as a link on the current screen opens it (spec §8.12): it says which screen it was opened
+ * from. Opened from itself, it keeps the screen before.
+ */
+export function useFeedbackRoute(): Route {
+  const route = useRoute()
+  return useMemo(() => ({ name: 'feedback', from: route.name === 'feedback' ? route.from : routePath(route) }), [route])
 }
 
 export interface LinkProps {
