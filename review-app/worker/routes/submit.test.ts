@@ -123,6 +123,9 @@ describe('POST /api/submit', () => {
     expect(res.status).toBe(200)
     const out = (await res.json()) as SubmitResult
     expect(out).toMatchObject({ pr: 1, count: 2, leftOut: [] })
+    // The files are read together, not one request each: a submit over many files stays within what a Worker may ask.
+    expect(fake.requests.filter((r) => r === 'POST /graphql')).toHaveLength(1)
+    expect(fake.requests.some((r) => r.includes('/contents/'))).toBe(false)
     const pr = fake.pulls[0]!
     expect(pr.title).toBe('translation-bg: 2 decisions by Ivan')
     expect(pr.head).toBe('review/translation-bg-ivan-20261005-1')
