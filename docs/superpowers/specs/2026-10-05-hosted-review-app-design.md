@@ -2,6 +2,10 @@
 
 Date: 2026-10-05. Status: draft for the product owner's review.
 Builds on: `2026-10-04-ai-review-and-review-app-design.md` (the local review app, §5; "Remote reviewers later", §8).
+Revised 2026-10-10: the weekly feedback mail and the Worker's first timed job (issue #158): §8 gains the mail, §14
+the cron triggers, §16.3 the table that keeps it to one a week, §16.6 and §16.8 follow. The learner app's server
+mails no feedback, so this mail is the only notice that feedback came. AI help on the Feedback tab is designed in
+`2026-10-10-feedback-ai-help-design.md`.
 Revised 2026-10-09: §15 added, the spot check (issue #129): an assignment over a random sample of the rows the AI
 review passed, with the reviewer's word on how serious each fault was. §5's *No overlap* and §12 point to it.
 Revised 2026-10-08: §7.2 and §11, after a Submit failed three times at the pull request on 2026-10-07 with nothing
@@ -278,9 +282,20 @@ packages), from `Wordado Review <review@wordado.com>`, with the Worker's own sen
 - **Invite** (on creating a reviewer, and *Resend invite*): "You are invited to review <language> for Wordado", the
   link `https://review.wordado.com`, and one line: sign in with this address; you get a code by email.
 - **Submitted** (to every admin): "<name> submitted <n> decisions on <queue>", with the pull request link.
+- **Weekly feedback** (to every admin who is not disabled; `2026-10-10-feedback-ai-help-design.md` §3.4): "Wordado
+  feedback: <n> messages this week", then how many messages learners sent in the week (Monday to Sunday, UTC), a
+  line for each of the learner's own kinds (*Something isn't working*, *An idea*, *Something else*) with its
+  count, and a link to the Feedback tab. Nothing a learner wrote is in it, and no address a learner gave: a mail
+  stays with the mail service, and the messages are read in the tab only. It is sent by a timed job on Monday at
+  06:00 UTC for the week that ended that day. A week with no feedback sends no mail. The job reads at most ten
+  pages of 100 messages; past that the mail says "more than". A second trigger on Tuesday tries again after a
+  Monday that failed (the app's server not reached, the mail refused); a row for each week (§16.3) makes it do
+  nothing after a Monday that worked. The job needs `RESEND_API_KEY`, and `FEEDBACK_READ_TOKEN` with
+  `LEARNER_APP_URL` (§16.2); while the last two are not both set it does nothing and logs one line.
 
 A failed send never fails the action: the reviewer is still created (the admin page shows *invite not sent* and
-the link to copy), and a submission is still recorded.
+the link to copy), and a submission is still recorded. A weekly mail that was not sent is tried once more, the
+next day.
 
 ## 9. UI
 
@@ -355,6 +370,9 @@ the link to copy), and a submission is still recorded.
 - CI (the app repo's `ci.yml`): typecheck, lint, unit, Worker tests, e2e, on every pull request.
 - A deploy workflow deploys `wordado-review` on merges to `main`, behind the GitHub environment
   `production-review` (manual approval), and applies D1 migrations first.
+- The Worker has two cron triggers in `wrangler.jsonc`, written at the top level and in `env.production`:
+  `0 6 * * 1` (Monday 06:00 UTC), the weekly feedback mail (§8), and `0 6 * * 2`, its second try on Tuesday. Each
+  line has its job in `worker/index.ts`, and a test fails when the two lists differ.
 - `review-app/README.md` gets a *Hosted* section with the one-time setup: the D1 database and R2 bucket, the
   Access application and policy, DNS for `review.wordado.com`, the GitHub App (permissions, webhook URL, install
   on wordado-content), the Resend key, the R2 keys in wordado-content, and the variables of §10.
@@ -523,6 +541,12 @@ CREATE TABLE feedback_marks (
 
 A message with no row is new and has no note. Nothing a learner sent is in the table.
 
+Migration `0005_weekly_mails.sql` adds `weekly_mails`, a row for each week the weekly mail (§8) was looked at:
+`week` (the UTC date of the Monday the week ended on), `claimed_at`, `messages` (the count; null while a run holds
+the row) and `sent_at` (null when no mail went, because no feedback came). A run takes the week by inserting its
+row before it reads anything, so a job run twice sends one mail; a run that fails gives the row back, and a row
+left unfinished for an hour is given up. It holds numbers and times only.
+
 ### 16.4 API
 
 Both routes are for admins only, behind the same check as the rest of `/api/admin/*`.
@@ -562,7 +586,7 @@ page until the list is read again.
 
 Two filters: **Kind** (*All*, *Bug*, *Idea*, *Other*) and **Show** (*Open*, *All*, *Done*, *Not doing*), with
 *Open* first. **Load more** reads the next, older page. With nothing at all the tab says *No feedback yet.* The
-tab is in the address (`#feedback`), like the others, and the learner app server's daily mail links to it.
+tab is in the address (`#feedback`), like the others, and the review app's own weekly mail (§8) links to it.
 
 ### 16.7 Left out
 
@@ -575,10 +599,16 @@ tab is in the address (`#feedback`), like the others, and the learner app server
 
 - **Server:** the page and its order, the cursor, the filters, 404 with the body of an unknown route for every
   wrong or missing token and while no token is set, a request with no Origin, the guard unchanged for the other
-  routes, nothing changed and the token never logged; both forms of the daily mail.
+  routes, nothing changed and the token never logged.
 - **Worker:** admins only, one request a page with the token in a header, the join, each state filter, a short and
   an empty page that still lead on, not connected, unreachable, an error status, an answer that is not a page,
   the strict `PUT`; no table holds anything a learner sent.
+- **The weekly job:** the week from the moment it runs (Monday, Tuesday, Sunday); the count by kind, with what
+  came after the week's end left out and nothing older asked for; every active admin and nobody else; no message
+  text and no contact address in the request to the mail service or in any log line; no mail in a week with none;
+  a second run that asks nothing of anyone; the week given back when the server is not reached or the mail is
+  refused; not connected; the cap. Every cron line of the config has a job and every job a cron line. The hosted
+  browser run fires the trigger once and sees one read of the learner app's server, and none the second time.
 - **UI:** the card and its details, a state saved and one refused, a note saved and one refused, the filters, Load
   more, not connected, unreachable with Try again, empty.
 - **E2E:** against a fake learner app server, on a desktop screen and a phone: an admin opens the tab, sees two

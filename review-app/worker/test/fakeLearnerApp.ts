@@ -18,7 +18,7 @@ export function feedbackItem(id: number, over: Partial<FeedbackItem> = {}): Feed
   }
 }
 
-/** The learner app server's `GET /v1/admin/feedback`, in memory (spec §13): the token, the pages and the kind filter as the real route has them. */
+/** The learner app server's `GET /v1/admin/feedback`, in memory (spec §13): the token, the pages and the `kind` and `since` filters as the real route has them. */
 export class FakeLearnerApp {
   /** Every request made, as `METHOD path?query`. */
   readonly requests: string[] = []
@@ -38,8 +38,9 @@ export class FakeLearnerApp {
     const limit = Number(url.searchParams.get('limit') ?? '50')
     const before = url.searchParams.get('before')
     const kind = url.searchParams.get('kind')
+    const since = url.searchParams.get('since')
     const found = this.items
-      .filter((item) => (before === null || item.id < Number(before)) && (kind === null || item.kind === kind))
+      .filter((item) => (before === null || item.id < Number(before)) && (kind === null || item.kind === kind) && (since === null || item.receivedAt >= Number(since)))
       .sort((a, b) => b.id - a.id)
     const items = found.slice(0, limit)
     return json({ items, nextBefore: found.length > limit ? items.at(-1)!.id : null } satisfies FeedbackPage)

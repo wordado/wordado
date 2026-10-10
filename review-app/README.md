@@ -133,7 +133,10 @@ as a pull request against the content repository, with no local checkout and no 
 8. Optional, for the Feedback tab: the Worker secret `FEEDBACK_READ_TOKEN`, the same value as the learner app
    server's secret of that name (`docs/deploy.md`, step 6, has the commands that set both without showing the
    value), and the variable `LEARNER_APP_URL` in `wrangler.jsonc`, that server's origin. While either is missing
-   the tab says feedback is not connected, and the rest of the app works.
+   the tab says feedback is not connected, and the rest of the app works. The same two settings, with
+   `RESEND_API_KEY` (step 5), also carry the weekly feedback mail: on Monday at 06:00 UTC the Worker mails every
+   admin how many messages learners sent in the week before, with a link to the tab and nothing a learner wrote.
+   A week with no feedback sends no mail, and Tuesday tries again when Monday failed.
 
 `scripts/check-config.ts` refuses to deploy while any of steps 1–4 is still a placeholder, or a secret is written
 as a variable; it runs in

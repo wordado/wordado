@@ -14,6 +14,8 @@ export interface R2Bucket {
   get(key: string): Promise<R2ObjectBody | null>
   put(key: string, value: string): Promise<unknown>
 }
+/** What the runtime hands a timed job: the cron line that fired, as the config writes it, and when. */
+export interface ScheduledController { readonly cron: string; readonly scheduledTime: number }
 
 export interface Env {
   readonly DB: D1Database

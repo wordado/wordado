@@ -39,6 +39,20 @@ describe('Feedback (spec §8.12)', () => {
     expect(email.maxLength).toBe(254)
   })
 
+  it('asks under the message for no personal details, on the form only', async () => {
+    await render()
+    const line = screen.getByText('Please don’t write personal details about yourself or other people.')
+    expect(line.tagName).toBe('P')
+    const message = screen.getByLabelText('Your message')
+    // The line describes the field, so a screen reader says it with the label.
+    expect(message.getAttribute('aria-describedby')).toBe(line.id)
+    expect(message.nextElementSibling).toBe(line)
+    type('Your message', 'Hello.')
+    await send()
+    expect(screen.getByRole('status')).toBeTruthy()
+    expect(screen.queryByText('Please don’t write personal details about yourself or other people.')).toBeNull()
+  })
+
   it('lists everything that is sent with the message, the account only when signed in', async () => {
     const { client } = await render()
     const { packVersion, l1 } = client.store.get()
@@ -108,7 +122,11 @@ describe('Feedback (spec §8.12)', () => {
     expect(api.calls).toEqual([])
     const message = screen.getByLabelText('Your message')
     expect(message.getAttribute('aria-invalid')).toBe('true')
-    expect(document.getElementById(message.getAttribute('aria-describedby')!)!.textContent).toBe('Write your message first.')
+    // The field is described by the line about personal details first, then by what is wrong.
+    expect(message.getAttribute('aria-describedby')!.split(' ').map((id) => document.getElementById(id)!.textContent)).toEqual([
+      'Please don’t write personal details about yourself or other people.',
+      'Write your message first.',
+    ])
     const email = screen.getByLabelText('Email, if you’d like an answer (optional)')
     expect(document.getElementById(email.getAttribute('aria-describedby')!)!.textContent).toBe('Enter an email address, like name@example.com.')
     type('Your message', 'Hello.')
@@ -184,14 +202,17 @@ describe('Feedback (spec §8.12)', () => {
     expect(screen.getAllByRole('radio').map((radio) => radio.closest('label')!.textContent)).toEqual(['Нещо не работи', 'Имам идея', 'Нещо друго'])
     expect(screen.getByLabelText('Вашето съобщение')).toBeTruthy()
     expect(screen.getByLabelText('Имейл, ако искате отговор (по желание)')).toBeTruthy()
+    expect(screen.getByText('Моля, не пишете лични данни за себе си или за други хора.')).toBeTruthy()
     fireEvent.change(screen.getByLabelText('Вашето съобщение'), { target: { value: 'Здравейте.' } })
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Изпратете' })))
     expect(screen.getByRole('status').textContent).toBe('Благодарим! Получихме съобщението ви.')
     cleanup()
     await render({}, { locale: 'de' })
     expect(screen.getByRole('button', { name: 'Senden' })).toBeTruthy()
+    expect(screen.getByText('Bitte schreib keine persönlichen Daten über dich oder andere Personen.')).toBeTruthy()
     cleanup()
     await render({}, { locale: 'es' })
     expect(screen.getByRole('button', { name: 'Enviar' })).toBeTruthy()
+    expect(screen.getByText('Por favor, no escribas datos personales tuyos ni de otras personas.')).toBeTruthy()
   })
 })

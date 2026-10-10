@@ -111,19 +111,18 @@ private `wordado/wordado-research`, cloned into `docs/research/` and ignored her
      `GOOGLE_CLIENT_SECRET` (redirect `https://app.wordado.com/api/auth/callback/google`). Without Resend,
      production prints sign-in codes to its log, as development does. The preview has no mailer on
      purpose: its codes are only in its log, which `smoke:remote` reads.
-   - Production only, optional: `gh secret set FEEDBACK_EMAIL --env production`, the address the daily
-     feedback mail goes to (spec §8.12). A secret, not a variable, so the address is never shown. Without
-     it feedback is kept and nothing is mailed; a deploy refuses it without `RESEND_API_KEY`.
    - Production only, optional: `FEEDBACK_READ_TOKEN`, which lets the review app's Feedback tab read
      feedback from this server (`GET /v1/admin/feedback`, spec §8.12). One random value, the same in both
      deployments, made and set without ever being shown:
      `t=$(openssl rand -hex 32)`, then `printf %s "$t" | gh secret set FEEDBACK_READ_TOKEN --env production`
      here and `printf %s "$t" | pnpm --filter @wordado/review-app exec wrangler secret put FEEDBACK_READ_TOKEN --env production`
      for the review app (`review-app/README.md`, "Hosted", step 8), then `unset t`. Without it the route
-     answers 404 and the tab says feedback is not connected; with it the daily mail is a count and a link
-     and no longer carries the messages. The link goes to `REVIEW_APP_URL`, a plain variable in
-     `server/wrangler.jsonc`. To change the token, set a new value in both places and deploy this server;
-     until both agree the tab says the app's server answered 404.
+     answers 404 and the tab says feedback is not connected. To change the token, set a new value in both
+     places and deploy this server; until both agree the tab says the app's server answered 404.
+   - This server mails no feedback. The notice that feedback came is the review app's weekly mail to its
+     admins (`review-app/README.md`, "Hosted", step 8): a count and a link to the tab, sent on Monday for
+     the week before. It needs the review app's `RESEND_API_KEY`, `FEEDBACK_READ_TOKEN` and
+     `LEARNER_APP_URL`, and no setting of its own here.
    A deploy refuses half of a pair, and a `BETTER_AUTH_SECRET` or a `FEEDBACK_READ_TOKEN` under 32 characters (`server/scripts/secretsFile.ts`).
 7. **Protect `main`.** *Done 2026-09-25*: the five checks below are required, a pull request must be
    up to date with `main` before it merges, and force pushes to `main` and its deletion are refused.

@@ -68,6 +68,12 @@ const learnerApp = new FakeLearnerApp(FEEDBACK_TOKEN, [
 ])
 createServer((req, res) => {
   void (async () => {
+    // What the review app has asked of it, for the test of the timed job.
+    if (req.url === '/_state') {
+      res.writeHead(200, { 'content-type': 'application/json' })
+      res.end(JSON.stringify({ requests: learnerApp.requests }))
+      return
+    }
     const headers = Object.fromEntries(Object.entries(req.headers).map(([k, v]) => [k, String(v)]))
     const out = await learnerApp.fetch(`http://127.0.0.1:4183${req.url}`, { method: req.method ?? 'GET', headers })
     res.writeHead(out.status, { 'content-type': out.headers.get('content-type') ?? 'text/plain' })

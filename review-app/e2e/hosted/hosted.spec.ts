@@ -478,3 +478,16 @@ test('an admin reads the feedback, marks one message done, writes a note on anot
 test('@phone an admin reads and marks the feedback on a phone', async ({ browser }) => {
   await readsFeedback(browser, 'Idea', 'Let me choose how many new words a day.', 'A dark theme would be easier in the evening.')
 })
+
+test('the weekly job asks the learner app’s server once a week', async () => {
+  const asked = async () => ((await (await fetch('http://127.0.0.1:4183/_state')).json()) as { requests: string[] }).requests.filter((r) => /^GET \/v1\/admin\/feedback\?limit=100&since=\d+$/.test(r))
+  const before = (await asked()).length
+  // Monday's cron line, fired by hand, since no cron fires locally: wrangler dev runs the Worker's `scheduled` for this
+  // address. (Its other one, /__scheduled, is answered by the page here, as every address outside /api is.)
+  const fire = async (cron: string) => expect(await (await fetch(`http://127.0.0.1:4181/cdn-cgi/handler/scheduled?cron=${encodeURIComponent(cron)}`)).text()).toBe('ok')
+  await fire('0 6 * * 1')
+  expect(await asked()).toHaveLength(before + 1)
+  // Tuesday's line, the same week: the week is taken, so nothing is asked.
+  await fire('0 6 * * 2')
+  expect(await asked()).toHaveLength(before + 1)
+})

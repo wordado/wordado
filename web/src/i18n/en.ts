@@ -469,6 +469,7 @@ export const en = {
   'feedback.kind.other': 'Something else',
   'feedback.message': 'Your message',
   'feedback.messageEmpty': 'Write your message first.',
+  'feedback.private': 'Please don’t write personal details about yourself or other people.',
   'feedback.email': 'Email, if you’d like an answer (optional)',
   'feedback.sentWith': 'Sent with your message',
   'feedback.account': 'Your account: {email}',

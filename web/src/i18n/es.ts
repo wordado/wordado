@@ -482,6 +482,7 @@ export const es: Messages = {
   'feedback.kind.other': 'Otra cosa',
   'feedback.message': 'Tu mensaje',
   'feedback.messageEmpty': 'Escribe primero tu mensaje.',
+  'feedback.private': 'Por favor, no escribas datos personales tuyos ni de otras personas.',
   'feedback.email': 'Correo electrónico, si quieres una respuesta (opcional)',
   'feedback.sentWith': 'Se envía con tu mensaje',
   'feedback.account': 'Tu cuenta: {email}',

@@ -600,6 +600,7 @@ test.describe('feedback about the app (spec §8.12)', () => {
     const details = page.getByRole('list', { name: 'Sent with your message' })
     await expect(details.getByRole('listitem')).toHaveCount(5)
     await expect(details.getByText('Opened from: /progress')).toBeVisible()
+    await expect(page.getByText('Please don’t write personal details about yourself or other people.')).toBeVisible()
     await expectAccessible(page, { dark: true })
     for (const kind of ['Something isn’t working', 'I have an idea', 'Something else']) await expectTapTarget(page.locator('.feedback-form .choices label', { hasText: kind }))
     await expectTapTarget(page.getByLabel('Your message', { exact: true }))

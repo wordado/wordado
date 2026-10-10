@@ -235,3 +235,20 @@ export async function putFeedbackMark(db: D1Database, id: number, mark: Feedback
     .bind(id, mark.state, mark.note, mark.updatedAt, mark.updatedBy)
     .run()
 }
+
+/** How long a run may hold a week without finishing before the next run takes it. */
+const WEEKLY_CLAIM_MS = 60 * 60 * 1000
+/** Takes the week for this run: true when no other run has it. A claim left unfinished for an hour is given up first. */
+export async function claimWeeklyMail(db: D1Database, week: string, now: Date): Promise<boolean> {
+  await db.prepare('DELETE FROM weekly_mails WHERE week = ? AND messages IS NULL AND claimed_at < ?').bind(week, new Date(now.getTime() - WEEKLY_CLAIM_MS).toISOString()).run()
+  const claimed = await db.prepare('INSERT INTO weekly_mails (week, claimed_at) VALUES (?, ?) ON CONFLICT (week) DO NOTHING').bind(week, now.toISOString()).run()
+  return claimed.meta.changes === 1
+}
+/** The run ended: how many messages the week had, and when the mail went (null: none was sent). */
+export async function settleWeeklyMail(db: D1Database, week: string, messages: number, sentAt: string | null): Promise<void> {
+  await db.prepare('UPDATE weekly_mails SET messages = ?, sent_at = ? WHERE week = ?').bind(messages, sentAt, week).run()
+}
+/** The run failed: the week is free for the next try. */
+export async function releaseWeeklyMail(db: D1Database, week: string): Promise<void> {
+  await db.prepare('DELETE FROM weekly_mails WHERE week = ? AND messages IS NULL').bind(week).run()
+}
