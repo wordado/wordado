@@ -254,3 +254,129 @@ describe('Themes: three groups', () => {
     expect(screen.getByText('Няма избрана тема. Новите думи следват вашия път.')).toBeTruthy()
   })
 })
+
+describe('Themes: search', () => {
+  const box = () => screen.getByRole<HTMLInputElement>('searchbox', { name: 'Search themes' })
+  const type = (query: string) => fireEvent.change(box(), { target: { value: query } })
+  const found = () => screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent)
+  const matched = (title: string) => [...card(title).querySelectorAll('.theme-matches li')].map((li) => li.textContent)
+
+  /** Every word gains one more accepted translation, so one query finds them all. */
+  function tagEveryWord(ctx: Awaited<ReturnType<typeof setup>>, extra: string) {
+    const snapshot = ctx.client.snapshot
+    const entries = new Map([...snapshot.corpus!.entries].map(([id, e]) => [id, { ...e, translations: [...e.translations, extra] }]))
+    act(() => ctx.client.store.set({ ...snapshot, corpus: { ...snapshot.corpus!, entries } }))
+  }
+
+  it('keeps only the themes that hold the word, in one list, each naming the words that matched', async () => {
+    const ctx = await setup()
+    withMoreThemes(ctx.client)
+    renderWith(<Themes />, ctx)
+    type('tea')
+    expect(groups()).toEqual(['1 theme found'])
+    expect(found()).toEqual(['First words'])
+    expect(matched('First words')).toEqual(['teacher учител', 'tea чай'])
+    expect(status()).toBe('1 theme found')
+    // A word of two themes stands under both, in the pack's order; each card says where its theme stands.
+    type('Key')
+    expect(groups()).toEqual(['2 themes found'])
+    expect(found()).toEqual(['Daily life', 'Later words'])
+    expect(matched('Daily life')).toEqual(['key ключ'])
+    expect(within(card('Daily life')).getByText('Not started')).toBeTruthy()
+    expect(within(card('Daily life')).getByRole('button', { name: 'Study this next: Daily life' })).toBeTruthy()
+  })
+
+  it('finds a theme by a translation, by a sense note and by its own name', async () => {
+    const ctx = await setup()
+    withMoreThemes(ctx.client)
+    renderWith(<Themes />, ctx)
+    type('маса')
+    expect(matched('Daily life')).toEqual(['table маса'])
+    type('часовник')
+    expect(matched('Later words')).toEqual(['time време (по часовник)'])
+    // By name: the theme stays, with no word to name. A name in the other language finds it too.
+    type('later')
+    expect(found()).toEqual(['Later words'])
+    expect(matched('Later words')).toEqual([])
+    type('всекидн')
+    expect(found()).toEqual(['Daily life'])
+  })
+
+  it('shows every theme, in its groups, until two letters are typed, and again when the search is emptied', async () => {
+    const ctx = await setup()
+    withMoreThemes(ctx.client)
+    renderWith(<Themes />, ctx)
+    type('k')
+    expect(groups()).toEqual(['Studying now', 'Not started'])
+    expect(within(card('Daily life')).queryByText('Not started')).toBeNull()
+    type('ke')
+    expect(groups()).toEqual(['2 themes found'])
+    fireEvent.keyDown(box(), { key: 'Escape' })
+    expect(box().value).toBe('')
+    expect(groups()).toEqual(['Studying now', 'Not started'])
+    expect(status()).toBe('')
+  })
+
+  it('says when no theme matches, and offers every theme again', async () => {
+    const ctx = await setup()
+    renderWith(<Themes />, ctx)
+    type(' zzz ')
+    expect(groups()).toEqual(['No theme has “zzz”.'])
+    expect(status()).toBe('No theme has “zzz”.')
+    expect(screen.queryAllByRole('heading', { level: 3 })).toEqual([])
+    fireEvent.click(screen.getByRole('button', { name: 'Show all themes' }))
+    expect(box().value).toBe('')
+    expect(found()).toEqual(['Daily life'])
+  })
+
+  it('names three matching words on a card and five of no theme, and counts the rest', async () => {
+    const ctx = await setup()
+    renderWith(<Themes />, ctx)
+    tagEveryWord(ctx, 'zqx')
+    type('zqx')
+    expect(found()).toEqual(['Daily life'])
+    expect(matched('Daily life')).toEqual(['breakfast закуска', 'lunch обяд', 'dinner вечеря', '+22 more'])
+    // The other 35 words are in no theme big enough to offer: they are in the course all the same.
+    expect(screen.getByText(/^Also in the course, in no theme:/).textContent).toBe(
+      'Also in the course, in no theme: hello здравей, goodbye довиждане, please моля, thank you благодаря, yes да, +30 more',
+    )
+  })
+
+  it('lists a matching word of no theme though no theme matches', async () => {
+    const ctx = await setup()
+    renderWith(<Themes />, ctx)
+    type('teach')
+    expect(groups()).toEqual(['No theme has “teach”.'])
+    expect(screen.getByText(/^Also in the course/).textContent).toBe('Also in the course, in no theme: teacher учител')
+  })
+
+  it('chooses a theme from the results, which stay as they are', async () => {
+    const ctx = await setup()
+    withMoreThemes(ctx.client)
+    renderWith(<Themes />, ctx)
+    type('key')
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Study this next: Daily life' })))
+    expect(ctx.client.snapshot.settings.activeTheme).toBe('daily-life')
+    expect(found()).toEqual(['Daily life', 'Later words'])
+    expect(within(card('Daily life')).getByText('Studying now')).toBeTruthy()
+    expect(within(card('Daily life')).queryByText('Not started')).toBeNull()
+    expect(status()).toBe('Now studying: Daily life')
+    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 3, name: 'Daily life' }))
+  })
+
+  it('searches in Bulgarian', async () => {
+    const ctx = await setup()
+    renderWith(<Themes />, { ...ctx, locale: 'bg' })
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Търсене в темите' }), { target: { value: 'КЛЮЧ' } })
+    expect(groups()).toEqual(['Намерена е 1 тема'])
+    expect(found()).toEqual(['Всекидневие'])
+  })
+
+  it('has no search when there is no theme to find', async () => {
+    const ctx = await setup()
+    const snapshot = ctx.client.snapshot
+    renderWith(<Themes />, ctx)
+    act(() => ctx.client.store.set({ ...snapshot, corpus: { ...snapshot.corpus!, themes: [] } }))
+    expect(screen.queryByRole('searchbox')).toBeNull()
+  })
+})
