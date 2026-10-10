@@ -40,7 +40,7 @@ const nextDay = () => (now = new Date(now.getTime() + 24 * 60 * 60 * 1000))
 
 describe('appRepo', () => {
   it('is the setting when it is an owner and a name, and null otherwise', () => {
-    const of = (APP_REPO?: string) => appRepo({ ...base, ...(APP_REPO === undefined ? {} : { APP_REPO }) })
+    const of = (APP_REPO?: string) => appRepo(APP_REPO === undefined ? {} : { APP_REPO })
     expect(of('wordado/wordado')).toBe('wordado/wordado')
     expect(of(' an-owner/a.repo_1 ')).toBe('an-owner/a.repo_1')
     for (const bad of [undefined, '', 'wordado', 'a/b/c', 'a/', '/b', 'a b/c', 'a/b?x=1', 'https://github.com/a/b', '../b', 'a/..']) expect(of(bad)).toBeNull()

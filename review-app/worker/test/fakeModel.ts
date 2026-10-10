@@ -4,11 +4,11 @@ import { testAppKey } from './fakeGitHub'
 /** What a request to the model holds, as the Worker's client sends it. */
 interface ModelBody { model: string; messages: { role: string; content: string }[]; response_format: { json_schema?: { name?: string } }; provider?: unknown }
 
-/** A plain reading of each message of an input: the learner's kind as the category, no translation, a summary that names the id. */
+/** A plain reading of each message of an input: the learner's kind as the category, no translation, a summary that names the id, no topic and no known issue. */
 export function plainAnswer(_name: string, input: unknown): unknown {
   const messages = (input as { messages?: { id: number; kind: string }[] }).messages ?? []
   return {
-    results: messages.map((m) => ({ id: m.id, language: 'en', translation: '', category: m.kind === 'other' ? 'praise' : m.kind, severity: m.kind === 'bug' ? 'annoys' : null, summary: `Message ${m.id} in short.` })),
+    results: messages.map((m) => ({ id: m.id, language: 'en', translation: '', category: m.kind === 'other' ? 'praise' : m.kind, severity: m.kind === 'bug' ? 'annoys' : null, summary: `Message ${m.id} in short.`, topic_id: 0, topic_new: '', issue: 0 })),
   }
 }
 

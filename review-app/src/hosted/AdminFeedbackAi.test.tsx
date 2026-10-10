@@ -6,7 +6,7 @@ import { AdminFeedbackAi, AI_PRIVACY_NOTE } from './AdminFeedbackAi'
 
 afterEach(() => (cleanup(), vi.restoreAllMocks()))
 
-const status = (over: Partial<FeedbackAiStatus> = {}): FeedbackAiStatus => ({ setUp: true, needs: null, on: false, model: 'test/model', callsToday: 0, dailyCalls: 200, reads: ['en', 'bg'], ...over })
+const status = (over: Partial<FeedbackAiStatus> = {}): FeedbackAiStatus => ({ setUp: true, needs: null, on: false, model: 'test/model', callsToday: 0, dailyCalls: 200, reads: ['en', 'bg'], repo: 'wordado/wordado', ...over })
 
 function shown(first: FeedbackAiStatus | null | 'failed') {
   const onStatus = vi.fn()

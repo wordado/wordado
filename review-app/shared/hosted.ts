@@ -217,11 +217,15 @@ export interface FeedbackTopicView extends FeedbackTopicRef {
   readonly worst: FeedbackSeverity | null
 }
 
+/** The AI's reading of a message as the tab shows it: with the topic the message is in now, which the AI or the coordinator chose, or none. */
+export type FeedbackAiView = FeedbackAi & { readonly topic: FeedbackTopicRef | null }
+
 /** A message as the learner app's server gives it, with the coordinator's mark and, when there is one, the AI's reading. */
-export type FeedbackView = FeedbackItem & FeedbackMark & { readonly ai: FeedbackAi | null }
+export type FeedbackView = FeedbackItem & FeedbackMark & { readonly ai: FeedbackAiView | null }
 
 /** `GET /api/admin/feedback/ai`. `setUp`: the sign-in, the secret and the address are there. `needs`: the first setting that is missing or wrong while
- * it is not. `on`: an admin switched it on. `reads`: the languages that need no translation. */
+ * it is not. `on`: an admin switched it on. `reads`: the languages that need no translation. `repo`: the public app repository whose issues a topic's
+ * match links to, as owner/name, or empty when none is set. */
 export interface FeedbackAiStatus {
   readonly setUp: boolean
   readonly needs: 'FEEDBACK_AI_AUTH' | 'FEEDBACK_AI_KEY' | 'FEEDBACK_AI_URL' | null
@@ -230,6 +234,7 @@ export interface FeedbackAiStatus {
   readonly callsToday: number
   readonly dailyCalls: number
   readonly reads: readonly string[]
+  readonly repo: string
 }
 
 /** Why the AI gave nothing: switched off, no key, the day's limit, not reached, late, refused by the service, or an answer that did not fit. */
@@ -237,7 +242,7 @@ export type FeedbackAiWhy = 'off' | 'not-set-up' | 'limit' | 'unreachable' | 'la
 
 /** `POST /api/admin/feedback/ai/read`: the new results by message id; how many messages were sent; how many still have none. */
 export interface FeedbackAiRead {
-  readonly results: Readonly<Record<number, FeedbackAi>>
+  readonly results: Readonly<Record<number, FeedbackAiView>>
   readonly asked: number
   readonly left: number
   readonly why: FeedbackAiWhy | null

@@ -3,7 +3,7 @@ import type { Hono } from 'hono'
 import { FEEDBACK_STATE_FILTERS, FEEDBACK_STATES, MAX_FEEDBACK_NOTE_LENGTH, type FeedbackList, type FeedbackState, type FeedbackStateFilter, type FeedbackView } from '../../shared/hosted'
 import { apiError, jsonBody, type AppEnv, type Deps } from '../app'
 import { dropFeedbackAiNotIn, feedbackAiRows, feedbackMarks, putFeedbackMark } from '../db'
-import { FEEDBACK_PAGE } from '../feedbackAi'
+import { aiView, FEEDBACK_PAGE } from '../feedbackAi'
 import { FeedbackUnread, feedbackSource, readFeedback } from '../learnerApp'
 
 export { FEEDBACK_PAGE }
@@ -20,7 +20,7 @@ export function feedbackRoutes(app: Hono<AppEnv>, deps: Deps): void {
    * for and never kept, each message with the coordinator's own mark. `kind` is filtered by that server; `state`
    * is filtered here, after the page is read, since only the review app knows the marks: a page can therefore hold
    * fewer messages than were read (`read`), or none, while `nextBefore` still leads to the older ones.
-   * Each message also has the AI's reading when one is kept (spec 2026-10-10 §3.1); the model is not asked here.
+   * Each message also has the AI's reading when one is kept (spec 2026-10-10 §3.1), with the topic it is in; the model is not asked here.
    */
   app.get('/api/admin/feedback', async (c) => {
     const source = feedbackSource(deps)
@@ -58,7 +58,7 @@ export function feedbackRoutes(app: Hono<AppEnv>, deps: Deps): void {
           note: mark?.note ?? '',
           markedAt: mark?.updatedAt ?? null,
           // A reading of an older prompt version is shown until it is replaced.
-          ai: ai ? { language: ai.language, translation: ai.translation, category: ai.category, severity: ai.severity, summary: ai.summary } : null,
+          ai: ai ? aiView(ai) : null,
         }
       })
       .filter((item) => shown.includes(item.state))

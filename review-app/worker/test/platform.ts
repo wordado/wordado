@@ -30,6 +30,7 @@ export async function startPlatform(): Promise<{ env: Env; dispose(): Promise<vo
     ACCESS_AUD: 'aud-test',
     ADMIN_EMAIL: 'admin@example.com',
     CONTENT_REPO: 'wordado/wordado-content',
+    APP_REPO: 'wordado/wordado',
     GITHUB_APP_ID: '1',
     GITHUB_INSTALLATION_ID: '2',
     MAIL_FROM: 'Wordado Review <review@wordado.com>',
