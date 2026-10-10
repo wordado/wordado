@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
 /** JSONC to JSON: drops line comments and block comments outside strings, and trailing commas. */
-function parseJsonc(text: string): unknown {
+export function parseJsonc(text: string): unknown {
   let out = ''
   let inString = false
   for (let i = 0; i < text.length; i += 1) {

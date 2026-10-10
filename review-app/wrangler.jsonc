@@ -18,6 +18,9 @@
     "MAIL_FROM": "Wordado Review <review@wordado.com>",
     "LEARNER_APP_URL": ""
   },
+  // The weekly feedback mail (spec 2026-10-10 §3.4): Monday 06:00 UTC, and its second try on Tuesday. Each line has
+  // its job in worker/index.ts. Written here and in env.production, so nothing depends on what an environment inherits.
+  "triggers": { "crons": ["0 6 * * 1", "0 6 * * 2"] },
   "observability": { "enabled": true },
   "env": {
     "production": {
@@ -27,6 +30,8 @@
       // a deploy while any is still the placeholder. ADMIN_EMAIL, FEEDBACK_READ_TOKEN and the keys are secrets, not vars.
       "d1_databases": [{ "binding": "DB", "database_name": "wordado-review", "database_id": "b52cb790-18a9-485d-8e40-4d78af13e324", "migrations_dir": "migrations" }],
       "r2_buckets": [{ "binding": "SNAPSHOTS", "bucket_name": "wordado-review" }],
+      // The weekly feedback mail, Monday 06:00 UTC, and its second try on Tuesday (as at the top level).
+      "triggers": { "crons": ["0 6 * * 1", "0 6 * * 2"] },
       "vars": {
         "APP_ORIGIN": "https://review.wordado.com",
         "ACCESS_TEAM_DOMAIN": "wordado.cloudflareaccess.com",
