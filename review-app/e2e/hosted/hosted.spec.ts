@@ -491,7 +491,7 @@ async function readsAiFeedback(browser: Browser) {
   const toggle = ai.getByRole('switch', { name: 'AI help' })
   // The switch, and beside it what must be true before it is switched on for real.
   await expect(toggle).toBeEnabled()
-  await expect(ai.getByText(/the privacy policy must name the AI service/)).toBeVisible()
+  await expect(ai.getByText(/the privacy policy must name the AI service, and the transfer of the text to it must be covered/)).toBeVisible()
   if (!(await toggle.isChecked())) await toggle.click()
   await expect(toggle).toBeChecked()
   await expect(ai.getByText(/^On: .+ \d+ of 200 calls used today\.$/)).toBeVisible()
@@ -530,11 +530,16 @@ async function readsAiFeedback(browser: Browser) {
   await expectFits(page, '.admin *')
 
   // What the stand-in model was sent: no address for an answer, no address or link from a text, no browser, no version.
-  const { requests } = (await (await fetch('http://127.0.0.1:4184/_state')).json()) as { requests: { url: string; body: unknown }[] }
+  const { requests, tokens } = (await (await fetch('http://127.0.0.1:4184/_state')).json()) as { requests: { url: string; authorization: string; body: unknown }[]; tokens: { url: string; signed: boolean; given: string | null }[] }
   expect(requests.length).toBeGreaterThan(0)
   expect(requests.every((r) => r.url === 'http://127.0.0.1:4184/chat/completions')).toBe(true)
-  const sent = JSON.stringify(requests)
-  for (const theirs of ['answer-me@example.com', 'learner@example.com', 'ideas@example.com', 'lerner@example.com', 'example.com/offer', 'Mozilla', 'B3kq9xZa', 'bg 6', 'e2e-model-key']) expect(sent).not.toContain(theirs)
+  // The Worker signed in as a service account does: a JWT signed with the key file's key, changed for a token, and
+  // the model asked with a token the stand-in gave. (The real Worker runtime signs here, not Node.)
+  expect(tokens.length).toBeGreaterThan(0)
+  expect(tokens.every((t) => t.url === 'http://127.0.0.1:4184/token' && t.signed && t.given !== null)).toBe(true)
+  expect(requests.every((r) => tokens.some((t) => r.authorization === `Bearer ${t.given}`))).toBe(true)
+  const sent = JSON.stringify(requests.map((r) => r.body))
+  for (const theirs of ['answer-me@example.com', 'learner@example.com', 'ideas@example.com', 'lerner@example.com', 'example.com/offer', 'Mozilla', 'B3kq9xZa', 'bg 6', 'PRIVATE KEY', 'gserviceaccount']) expect(sent).not.toContain(theirs)
   expect(sent).toContain('[email]')
   expect(sent).toContain('[link]')
 

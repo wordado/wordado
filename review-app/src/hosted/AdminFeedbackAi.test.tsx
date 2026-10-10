@@ -20,8 +20,8 @@ function shown(first: FeedbackAiStatus | null | 'failed') {
 const line = (panel: HTMLElement) => panel.querySelector('.feedback-ai-state')!.textContent
 
 describe('AdminFeedbackAi: the switch and what it says', () => {
-  it('says the privacy policy must name the AI service before it is switched on, whatever the state', () => {
-    expect(AI_PRIVACY_NOTE).toBe('Before this is switched on for learners’ feedback, the privacy policy must name the AI service: the service the model is reached through, the model’s provider, and that they receive the text of a feedback message without the contact address.')
+  it('says what the privacy policy must name and what must cover the transfer before it is switched on, whatever the state', () => {
+    expect(AI_PRIVACY_NOTE).toBe('Before this is switched on for learners’ feedback, the privacy policy must name the AI service, and the transfer of the text to it must be covered: by the EU–US Data Privacy Framework or by standard contractual clauses.')
     for (const s of [status(), status({ on: true }), status({ setUp: false, needs: 'FEEDBACK_AI_KEY' }), null, 'failed'] as const) {
       const { panel } = shown(s)
       expect(within(panel).getByText(AI_PRIVACY_NOTE)).toBeTruthy()

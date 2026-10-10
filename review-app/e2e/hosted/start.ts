@@ -10,7 +10,7 @@ import { CURRENT_KEY } from '../../shared/snapshot'
 import type { D1Database, R2Bucket } from '../../worker/bindings'
 import { FakeGitHub, testAppKey } from '../../worker/test/fakeGitHub'
 import { FakeLearnerApp } from '../../worker/test/fakeLearnerApp'
-import { FakeModel } from '../../worker/test/fakeModel'
+import { FakeModel, testServiceAccount } from '../../worker/test/fakeModel'
 import { testKeys } from '../../worker/test/jwt'
 import { migrate } from '../../worker/test/platform'
 import { FEEDBACK, standInAnswer } from './feedbackFixture'
@@ -77,15 +77,19 @@ createServer((req, res) => {
 }).listen(4183, '127.0.0.1')
 
 // The stand-in model, for the AI help on the Feedback tab: it answers what feedbackFixture.ts wrote down for each
-// message, and keeps what it was sent, so the browser run can look at it. No model is ever asked.
-const MODEL_KEY = 'e2e-model-key'
-const model = new FakeModel(MODEL_KEY)
+// message, and keeps what it was sent, so the browser run can look at it. No model is ever asked. It stands in for
+// Google's: the Worker signs in with a service account made for this run (a new key each time, written nowhere),
+// whose key file names the stand-in's own token endpoint, as only a local Worker lets it.
+const account = await testServiceAccount({ token_uri: 'http://127.0.0.1:4184/token' })
+const model = new FakeModel('unused')
+model.serviceAccount = account
 model.answer = standInAnswer
 createServer((req, res) => {
   void (async () => {
     if (req.url === '/_state') {
       res.writeHead(200, { 'content-type': 'application/json' })
-      res.end(JSON.stringify({ requests: model.requests.map((r) => ({ url: r.url, body: r.body })) }))
+      const tokens = model.tokenRequests.map((r, i) => ({ url: r.url, signed: r.signed, given: r.signed ? (model.tokens[i] ?? null) : null }))
+      res.end(JSON.stringify({ requests: model.requests.map((r) => ({ url: r.url, authorization: r.headers['authorization'] ?? '', body: r.body })), tokens }))
       return
     }
     const chunks: Buffer[] = []
@@ -110,6 +114,6 @@ const vars = {
   GITHUB_API_URL: 'http://127.0.0.1:4182', GITHUB_APP_ID: '1', GITHUB_INSTALLATION_ID: '1', GITHUB_APP_PRIVATE_KEY: (await testAppKey()).pem,
   APP_ORIGIN: 'http://127.0.0.1:4181',
   LEARNER_APP_URL: 'http://127.0.0.1:4183', FEEDBACK_READ_TOKEN: FEEDBACK_TOKEN,
-  FEEDBACK_AI_URL: 'http://127.0.0.1:4184', FEEDBACK_AI_KEY: MODEL_KEY,
+  FEEDBACK_AI_AUTH: 'google-service-account', FEEDBACK_AI_URL: 'http://127.0.0.1:4184', FEEDBACK_AI_KEY: account.keyFile,
 }
 spawn('pnpm', ['exec', 'wrangler', 'dev', '--port', '4181', '--ip', '127.0.0.1', '--persist-to', state, ...Object.entries(vars).flatMap(([k, v]) => ['--var', `${k}:${v}`])], { cwd: root, stdio: 'inherit' })

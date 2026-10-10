@@ -4,9 +4,10 @@ import { Dialog } from '../Dialog'
 import { hostedApi } from '../hostedApi'
 import { count, messageOf } from './adminUtil'
 
-/** What stands beside the switch, always (spec 2026-10-10 §5): switching it on sends learners' words to another company. */
+/** What stands beside the switch, always (spec 2026-10-10 §5): switching it on sends learners' words to another company, which the privacy policy
+ * must name, and which may process them outside the EU only under one of the two covers the policy relies on. */
 export const AI_PRIVACY_NOTE =
-  'Before this is switched on for learners’ feedback, the privacy policy must name the AI service: the service the model is reached through, the model’s provider, and that they receive the text of a feedback message without the contact address.'
+  'Before this is switched on for learners’ feedback, the privacy policy must name the AI service, and the transfer of the text to it must be covered: by the EU–US Data Privacy Framework or by standard contractual clauses.'
 
 /** Why the AI gave nothing, in words for the one line that says so. */
 const WHY: Readonly<Record<'unreachable' | 'late' | 'refused' | 'unfit', string>> = {
