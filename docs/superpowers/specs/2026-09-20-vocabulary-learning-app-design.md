@@ -1319,7 +1319,9 @@ account menu for a signed-in learner, in the demo's banner for everyone else,
 and linked from the About page. It opens a screen with a kind ("Something
 isn't working", "I have an idea", "Something else"), a message of at most
 2,000 characters, and an optional email address for an answer, which is never
-filled in for the learner. Under the fields the form lists what is sent
+filled in for the learner. One line under the message asks the learner to
+write no personal details about themselves or other people: a message is
+free text, and people read it. Under the fields the form lists what is sent
 beside the message, so nothing leaves unseen: the account if signed in, the
 app's version, the corpus version, the interface language, the screen the
 form was opened from (its path, never its query) and the browser's name.
@@ -1338,14 +1340,11 @@ hidden field.
 The coordinator reads feedback in the review app's Feedback tab (the hosted
 review app's design, §16), which asks this server for it each time and keeps
 no copy: `GET /v1/admin/feedback` answers only to a token the two
-deployments share, and to anyone else is a route that does not exist. Once a
-day at most, the scheduled job mails the coordinator a notice of what is
-new: how many messages, by kind, and a link to the tab. It is one mail a day
-because the mail allowance is shared with sign-in codes (§17.2). A
-deployment without the token mails the messages themselves instead, in one
-plain-text mail, since nothing else would show them. The coordinator's
-address is a secret of the deployment; without it feedback is kept and
-nothing is mailed.
+deployments share, and to anyone else is a route that does not exist. This
+server mails no feedback. The notice that feedback came is the review app's
+weekly mail to its admins (the hosted review app's design, §8): how many
+messages came in the week, by kind, and a link to the tab, with nothing a
+learner wrote.
 
 The website's own form is separate work.
 
@@ -1639,12 +1638,9 @@ on their next pull. That failure is far worse than the cheating it prevents.
   region, and the LLM gateway may route requests outside the EU unless a paid
   in-region plan is used. Both are disclosed in the privacy policy, and both
   are kept thin: sign-in emails carry a code and nothing else, and enrichment
-  requests carry a word and no identifier. The daily feedback mail (§8.12)
-  carries a count and a link, and nothing a learner wrote. Only a deployment
-  that the review app cannot read sends the other form, which is the
-  exception that has to be disclosed: it carries learners' messages, the
-  address a learner gave for an answer, and the technical details listed
-  under the form, to the coordinator alone.
+  requests carry a word and no identifier. This server mails no feedback
+  (§8.12): the notice is the review app's weekly mail, which carries a count
+  and a link, and nothing a learner wrote.
 - **Feedback (§8.12).** The optional address is used only to answer, and the
   technical details only to understand the message. The client's network
   address is not stored: the limit counts a keyed hash of it, dropped after a
@@ -2256,6 +2252,15 @@ owner.
 - **The mail (§8.12, §11):** with the token set, the daily mail is a count
   by kind and a link to the tab, and carries no message or address. Without
   it the mail is as before.
+
+**2026-10-10 — the notice of feedback is the review app's weekly mail.**
+Decided by the product owner.
+
+- **The mail (§8.12, §11):** this server mails no feedback. The review app
+  mails its admins once a week: how many messages came, by kind, and a link
+  to the Feedback tab, with no message and no address.
+- **The form (§8.12):** one line under the message asks the learner to write
+  no personal details about themselves or other people.
 
 ### Approval status
 
