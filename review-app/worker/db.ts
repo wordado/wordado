@@ -213,6 +213,16 @@ export async function setSubmissionStatus(db: D1Database, id: number, status: Su
   await db.prepare('UPDATE submissions SET status = ? WHERE id = ?').bind(status, id).run()
 }
 
+/** The values one statement may bind (D1's limit). Rows are written several a statement, as many as fit under it:
+ * the Free plan counts the statements an invocation runs, each member of a batch among them (d1Budget.test.ts). */
+const MAX_BOUND = 100
+/** `all` in runs of at most `size`. */
+function chunks<T>(all: readonly T[], size: number): T[][] {
+  const out: T[][] = []
+  for (let at = 0; at < all.length; at += size) out.push(all.slice(at, at + size))
+  return out
+}
+
 /** The coordinator's mark on a learner's feedback (spec §16), by the message's id at the learner app's server. */
 export interface FeedbackMarkRow { readonly state: FeedbackState; readonly note: string; readonly updatedAt: string; readonly updatedBy: string }
 /** The marks of these messages, by id; a message nobody has marked is not in it. At most a page of ids (D1 binds 100 values). */
@@ -276,20 +286,27 @@ export async function feedbackAiRows(db: D1Database, ids: readonly number[]): Pr
   return out
 }
 /**
- * Keeps these readings, each in place of the one its message had: one batch. A reading brings its message's topic,
+ * Keeps these readings, each in place of the one its message had: one batch, of few statements. A reading brings its message's topic,
  * except for a message the coordinator moved: that one keeps the coordinator's topic whatever the reading says
  * (spec 2026-10-10 §3.2). A topic that is gone by now leaves the message with none.
  */
 export async function putFeedbackAi(db: D1Database, rows: ReadonlyMap<number, FeedbackAiRow>): Promise<void> {
   if (rows.size === 0) return
-  const put = db.prepare(
-    `INSERT INTO feedback_ai (feedback_id, received_at, language, translation, category, severity, summary, model, prompt_version, created_at, topic_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT id FROM feedback_topics WHERE id = ?))
-     ON CONFLICT (feedback_id) DO UPDATE SET received_at = excluded.received_at, language = excluded.language, translation = excluded.translation, category = excluded.category,
-       severity = excluded.severity, summary = excluded.summary, model = excluded.model, prompt_version = excluded.prompt_version, created_at = excluded.created_at,
-       topic_id = CASE WHEN feedback_ai.topic_by = 'coordinator' THEN feedback_ai.topic_id ELSE excluded.topic_id END`,
+  // Several readings a statement, as many as its bound values allow: a call's 25 readings are three statements.
+  const row = '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT id FROM feedback_topics WHERE id = ?))'
+  await db.batch(
+    chunks([...rows], Math.floor(MAX_BOUND / 11)).map((some) =>
+      db
+        .prepare(
+          `INSERT INTO feedback_ai (feedback_id, received_at, language, translation, category, severity, summary, model, prompt_version, created_at, topic_id)
+           VALUES ${some.map(() => row).join(', ')}
+           ON CONFLICT (feedback_id) DO UPDATE SET received_at = excluded.received_at, language = excluded.language, translation = excluded.translation, category = excluded.category,
+             severity = excluded.severity, summary = excluded.summary, model = excluded.model, prompt_version = excluded.prompt_version, created_at = excluded.created_at,
+             topic_id = CASE WHEN feedback_ai.topic_by = 'coordinator' THEN feedback_ai.topic_id ELSE excluded.topic_id END`,
+        )
+        .bind(...some.flatMap(([id, r]) => [id, r.receivedAt, r.language, r.translation, r.category, r.severity, r.summary, r.model, r.promptVersion, r.createdAt, r.topicId ?? null])),
+    ),
   )
-  await db.batch([...rows].map(([id, r]) => put.bind(id, r.receivedAt, r.language, r.translation, r.category, r.severity, r.summary, r.model, r.promptVersion, r.createdAt, r.topicId ?? null)))
 }
 /** The ids of the messages received from `since` up to, and not at, `until` (epoch ms) that have a reading of this prompt version: one read, for the weekly job. */
 export async function feedbackAiIdsBetween(db: D1Database, since: number, until: number, promptVersion: number): Promise<Set<number>> {
@@ -346,14 +363,21 @@ export async function topicTitles(db: D1Database, limit: number): Promise<Feedba
 /** As the database compares titles (COLLATE NOCASE): without regard to the case of A to Z. */
 const sameTitle = (title: string) => title.replace(/[A-Z]/g, (letter) => letter.toLowerCase())
 /** Makes a topic for each title that no topic has yet, and gives each title's topic: a title that differs from an
- * existing one only in case is that topic. One batch and one read; at most a call's worth of titles. */
+ * existing one only in case is that topic. For a call's worth of titles, one insert and one read. */
 export async function insertTopicsIfAbsent(db: D1Database, titles: readonly string[], at: string): Promise<Map<string, number>> {
   const out = new Map<string, number>()
   if (titles.length === 0) return out
-  const insert = db.prepare('INSERT INTO feedback_topics (title, created_at, updated_at) VALUES (?, ?, ?) ON CONFLICT (title) DO NOTHING')
-  await db.batch(titles.map((title) => insert.bind(title, at, at)))
-  const found = await db.prepare(`SELECT id, title FROM feedback_topics WHERE title IN (${titles.map(() => '?').join(', ')})`).bind(...titles).all<FeedbackTopicRef>()
-  const ids = new Map(found.results.map((r) => [sameTitle(r.title), r.id]))
+  // Several titles a statement: a call's worth is one insert and one read.
+  await db.batch(
+    chunks(titles, Math.floor(MAX_BOUND / 3)).map((some) =>
+      db.prepare(`INSERT INTO feedback_topics (title, created_at, updated_at) VALUES ${some.map(() => '(?, ?, ?)').join(', ')} ON CONFLICT (title) DO NOTHING`).bind(...some.flatMap((title) => [title, at, at])),
+    ),
+  )
+  const ids = new Map<string, number>()
+  for (const some of chunks(titles, MAX_BOUND)) {
+    const found = await db.prepare(`SELECT id, title FROM feedback_topics WHERE title IN (${some.map(() => '?').join(', ')})`).bind(...some).all<FeedbackTopicRef>()
+    for (const r of found.results) ids.set(sameTitle(r.title), r.id)
+  }
   for (const title of titles) {
     const id = ids.get(sameTitle(title))
     if (id !== undefined) out.set(title, id)
@@ -409,8 +433,15 @@ export async function setTopicIssue(db: D1Database, id: number, issue: number | 
  * confirmed or removed, and never over an earlier proposal. A proposal is not the coordinator's work on a topic. */
 export async function proposeTopicIssues(db: D1Database, proposals: readonly { readonly topic: number; readonly issue: number }[]): Promise<void> {
   if (proposals.length === 0) return
-  const propose = db.prepare("UPDATE feedback_topics SET issue = ?, issue_state = 'proposed' WHERE id = ? AND issue_state = 'none'")
-  await db.batch(proposals.map((p) => propose.bind(p.issue, p.topic)))
+  // Several topics a statement, each given its own issue: a call's worth is one statement. Each topic is named once.
+  const once = [...new Map(proposals.map((p) => [p.topic, p.issue]))]
+  await db.batch(
+    chunks(once, Math.floor(MAX_BOUND / 3)).map((some) =>
+      db
+        .prepare(`UPDATE feedback_topics SET issue = CASE id ${some.map(() => 'WHEN ? THEN ?').join(' ')} END, issue_state = 'proposed' WHERE id IN (${some.map(() => '?').join(', ')}) AND issue_state = 'none'`)
+        .bind(...some.flat(), ...some.map(([topic]) => topic)),
+    ),
+  )
 }
 /** The ids of a topic's messages, the newest first, at most `limit` of them, and how many it has in all. */
 export async function topicFeedbackIds(db: D1Database, topic: number, limit: number): Promise<{ ids: number[]; total: number }> {
@@ -435,8 +466,11 @@ export async function openIssues(db: D1Database, notOlderThan: string, limit: nu
 }
 /** Puts what a read gave in place of what was kept: one batch, so an issue that was closed is gone and a failed write keeps the old list. */
 export async function replaceOpenIssues(db: D1Database, issues: readonly { readonly number: number; readonly title: string }[], at: string): Promise<void> {
-  const insert = db.prepare('INSERT INTO open_issues (number, title, read_at) VALUES (?, ?, ?) ON CONFLICT (number) DO UPDATE SET title = excluded.title')
-  await db.batch([db.prepare('DELETE FROM open_issues'), ...issues.map((issue) => insert.bind(issue.number, issue.title, at))])
+  // Several issues a statement: the most a read gives, 300, are ten statements.
+  const inserts = chunks(issues, Math.floor(MAX_BOUND / 3)).map((some) =>
+    db.prepare(`INSERT INTO open_issues (number, title, read_at) VALUES ${some.map(() => '(?, ?, ?)').join(', ')} ON CONFLICT (number) DO UPDATE SET title = excluded.title`).bind(...some.flatMap((issue) => [issue.number, issue.title, at])),
+  )
+  await db.batch([db.prepare('DELETE FROM open_issues'), ...inserts])
 }
 /** Takes the UTC day for a read of the open issues: true when no read has it yet. Taken before anything is asked, and
  * never given back, so a read that fails is not tried again the same day. */
