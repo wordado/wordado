@@ -3,7 +3,7 @@ import { TEST_DATABASE_URL } from '../test/db'
 import { BASE_URL, harness } from '../test/harness'
 import { AUTH_MAX_BODY_BYTES, createApp } from './app'
 import { createPool, pgDb } from './db/db'
-import { OTP_SENDS_PER_MINUTE, SESSION_DAYS } from './auth'
+import { createAuth, OTP_SENDS_PER_MINUTE, SESSION_DAYS } from './auth'
 
 const json = { 'content-type': 'application/json', origin: BASE_URL }
 
@@ -132,6 +132,27 @@ describe('sign-in (spec §8.6)', () => {
     expect((await session.get('/v1/me')).body.country).toBe('BG')
     expect((await session.post('/api/auth/update-user', { country: null })).status).toBe(200)
     expect((await session.get('/v1/me')).body.country).toBe(null)
+  })
+
+  it('keeps no name and no picture, whatever update-user sends (#163)', async () => {
+    const h = harness()
+    const session = await h.signIn()
+    expect((await session.post('/api/auth/update-user', { name: 'Ana', image: 'https://example.com/ana.png' })).status).toBe(200)
+    expect(await h.deps.db.query('select name, image from "user" where id = $1', [session.userId])).toEqual([{ name: '', image: null }])
+  })
+
+  it('keeps no tokens of a linked Google account, when it is created and when it is updated (#163)', async () => {
+    const h = harness()
+    const session = await h.signIn()
+    const ctx = await createAuth(h.deps).$context
+    const tokens = { accessToken: 'ya29.access', refreshToken: '1//refresh', idToken: 'eyJ.id', accessTokenExpiresAt: new Date(), scope: 'openid email' }
+    const account = await ctx.internalAdapter.createAccount({ accountId: 'google-sub', providerId: 'google', userId: session.userId, ...tokens })
+    const stored = () =>
+      h.deps.db.query('select "accessToken", "refreshToken", "idToken", "accessTokenExpiresAt", "refreshTokenExpiresAt", scope from account where "providerId" = $1', ['google'])
+    const blank = { accessToken: null, refreshToken: null, idToken: null, accessTokenExpiresAt: null, refreshTokenExpiresAt: null, scope: null }
+    expect(await stored()).toEqual([blank])
+    await ctx.internalAdapter.updateAccount(account.id, tokens)
+    expect(await stored()).toEqual([blank])
   })
 
   it(`refuses an auth request body over ${AUTH_MAX_BODY_BYTES} bytes`, async () => {

@@ -14,6 +14,17 @@ export const OTP_SENDS_PER_MINUTE = 3
  * returning learner is not asked for a code again — which also keeps email
  * volume inside the provider's daily allowance (spec §17).
  */
+/**
+ * Nothing from Google sign-in that the app does not use (#163). Better Auth copies the name and the picture
+ * of the Google profile into `user` and keeps the tokens for calling Google in `account`; no screen shows
+ * the former and nothing calls Google, so none of it is stored. The hooks run on every write, so a learner
+ * cannot set a name through update-user either, and a later Google sign-in does not bring the tokens back.
+ */
+export const withoutProfile = <T extends object>(user: T): T => ({ ...user, name: '', image: null })
+export const withoutTokens = <T extends object>(account: T): T => ({
+  ...account, accessToken: null, refreshToken: null, idToken: null, accessTokenExpiresAt: null, refreshTokenExpiresAt: null, scope: null,
+})
+
 export function createAuth(deps: ServerDeps) {
   const { config } = deps
   return betterAuth({
@@ -25,6 +36,17 @@ export function createAuth(deps: ServerDeps) {
     // Only the country is kept from the age gate (spec §11); the client sets it through update-user.
     user: { additionalFields: { country: { type: 'string', required: false, input: true } } },
     session: { expiresIn: SESSION_DAYS * 86_400, updateAge: 86_400 },
+    account: { updateAccountOnSignIn: false },
+    databaseHooks: {
+      user: {
+        create: { before: async (user) => ({ data: withoutProfile(user) }) },
+        update: { before: async (user) => ({ data: withoutProfile(user) }) },
+      },
+      account: {
+        create: { before: async (account) => ({ data: withoutTokens(account) }) },
+        update: { before: async (account) => ({ data: withoutTokens(account) }) },
+      },
+    },
     socialProviders: config.google
       ? { google: { clientId: config.google.clientId, clientSecret: config.google.clientSecret } }
       : {},
