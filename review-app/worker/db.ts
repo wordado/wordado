@@ -291,6 +291,11 @@ export async function putFeedbackAi(db: D1Database, rows: ReadonlyMap<number, Fe
   )
   await db.batch([...rows].map(([id, r]) => put.bind(id, r.receivedAt, r.language, r.translation, r.category, r.severity, r.summary, r.model, r.promptVersion, r.createdAt, r.topicId ?? null)))
 }
+/** The ids of the messages received from `since` up to, and not at, `until` (epoch ms) that have a reading of this prompt version: one read, for the weekly job. */
+export async function feedbackAiIdsBetween(db: D1Database, since: number, until: number, promptVersion: number): Promise<Set<number>> {
+  const found = await db.prepare('SELECT feedback_id FROM feedback_ai WHERE received_at >= ? AND received_at < ? AND prompt_version = ?').bind(since, until, promptVersion).all<{ feedback_id: number }>()
+  return new Set(found.results.map((r) => r.feedback_id))
+}
 /** Drops the readings between two ids whose message the server no longer gives: how many. `kept` is at most a page of ids. */
 export async function dropFeedbackAiNotIn(db: D1Database, lowest: number, highest: number, kept: readonly number[]): Promise<number> {
   const not = kept.length > 0 ? ` AND feedback_id NOT IN (${kept.map(() => '?').join(', ')})` : ''
@@ -495,6 +500,10 @@ export async function claimAiCall(db: D1Database, now: Date, what: string, messa
     .bind(day, now.toISOString(), what, messages, day, limit)
     .run()
   return claimed.meta.changes === 1
+}
+/** Drops what the limit and the tab no longer need: the calls counted on days before `before` (a UTC day), and the week's paragraphs made before it. */
+export async function dropOldAiCalls(db: D1Database, before: string): Promise<void> {
+  await db.batch([db.prepare('DELETE FROM feedback_ai_calls WHERE day < ?').bind(before), db.prepare('DELETE FROM feedback_week_texts WHERE made_at < ?').bind(before)])
 }
 export async function aiCallsToday(db: D1Database, now: Date): Promise<number> {
   return (await db.prepare('SELECT COUNT(*) AS n FROM feedback_ai_calls WHERE day = ?').bind(utcDay(now)).first<{ n: number }>())?.n ?? 0

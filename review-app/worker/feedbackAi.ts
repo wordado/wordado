@@ -2,7 +2,7 @@ import type { FeedbackItem, FeedbackKind } from '@wordado/core'
 import type { FeedbackAiRead, FeedbackAiStatus, FeedbackAiView, FeedbackAiWhy } from '../shared/hosted'
 import type { Deps } from './app'
 import { aiCallsToday, claimAiCall, feedbackAiRows, getSetting, insertTopicsIfAbsent, openIssues, proposeTopicIssues, putFeedbackAi, topicTitles, type FeedbackAiRow, type FeedbackAiStored } from './db'
-import { aiConfig, aiLimits, aiSetup } from './feedbackAiConfig'
+import { aiConfig, aiLimits, aiSetup, type AiConfig } from './feedbackAiConfig'
 import { askModel } from './feedbackModel'
 import { messagesRequest, MODEL_ISSUES, MODEL_TOPICS, PROMPT_VERSION, readMessagesAnswer, type ModelContext } from './feedbackPrompt'
 import { readFeedback, type FeedbackSource } from './learnerApp'
@@ -30,39 +30,25 @@ export async function aiStatus(deps: Pick<Deps, 'env' | 'now'>): Promise<Feedbac
 }
 
 /**
- * Reads the page again, asks the model about the messages with no result of this prompt version, keeps what fits,
- * and answers the readings the page's messages now have, the new ones and those kept before.
- * At most two requests go out: one to the learner app's server, one to the model, for at most AI_BATCH messages,
- * the newest first; the rest are counted in `left`. Without a key or switched off, none goes out. A call is counted
- * before it is made. Throws FeedbackUnread when the learner app's server does not give the page.
- * With the messages the model is given the topics so far and the open issues as last read (both from the database),
- * and a reading may put its message in a topic and name a known issue (spec 2026-10-10 §3.2, §3.3). What comes of an
- * answer is, for each message asked about, its own row, and beside that only: a new topic by a title that may be
- * one, and a proposed match on a topic that has none. No mark, no state, no title and no confirmed match is changed.
+ * Asks the model about some messages already read from the learner app's server: one call, counted before it is
+ * made, for at most AI_BATCH of them. What fits is kept, and `kept` is what those messages have now; `why` says why
+ * nothing was kept, when nothing was. With the messages the model is given the topics so far and the open issues as
+ * last read (both from the database), and a reading may put its message in a topic and name a known issue (spec
+ * 2026-10-10 §3.2, §3.3). What comes of an answer is, for each message asked about, its own row, and beside that
+ * only: a new topic by a title that may be one, and a proposed match on a topic that has none. No mark, no state,
+ * no title and no confirmed match is changed. The tab asks through readPageAi; the weekly job asks here.
  */
-export async function readPageAi(deps: Deps, source: FeedbackSource, page: { readonly kind: FeedbackKind | null; readonly before: number | null }): Promise<FeedbackAiRead> {
-  const nothing = (why: FeedbackAiWhy | null, asked = 0, left = 0): FeedbackAiRead => ({ results: {}, asked, left, why })
-  const config = aiConfig(deps.env)
-  if (!config) return nothing('not-set-up')
-  if ((await getSetting(deps.env.DB, AI_SWITCH)) !== 'on') return nothing('off')
-  const { items } = await readFeedback(deps, source, { limit: FEEDBACK_PAGE, kind: page.kind, before: page.before })
-  const stored = await feedbackAiRows(deps.env.DB, items.map((item) => item.id))
-  const todo: FeedbackItem[] = items.filter((item) => stored.get(item.id)?.promptVersion !== PROMPT_VERSION)
-  // The readings the page's messages already have. They go back with every answer that names no failure: the list
-  // the tab holds may have been read a moment before another request kept them, and would never show them otherwise.
-  const have: Record<number, FeedbackAiView> = {}
-  for (const [id, row] of stored) if (row.promptVersion === PROMPT_VERSION) have[id] = aiView(row)
-  if (todo.length === 0) return { results: have, asked: 0, left: 0, why: null }
-  const batch = todo.slice(0, AI_BATCH)
-  // From the database alone: still one read of the learner app's server and one call to the model.
+export async function readBatchAi(deps: Pick<Deps, 'env' | 'fetch' | 'log' | 'now'>, config: AiConfig, batch: readonly FeedbackItem[]): Promise<{ readonly why: FeedbackAiWhy | null; readonly kept: ReadonlyMap<number, FeedbackAiStored> }> {
+  const nothing = (why: FeedbackAiWhy) => ({ why, kept: new Map<number, FeedbackAiStored>() })
+  // From the database alone: the call to the model is the only request that leaves.
   const [topics, issues] = await Promise.all([topicTitles(deps.env.DB, MODEL_TOPICS), openIssues(deps.env.DB, new Date(deps.now().getTime() - ISSUES_FRESH_MS).toISOString(), MODEL_ISSUES)])
   const context: ModelContext = { topics, issues }
-  if (!(await claimAiCall(deps.env.DB, deps.now(), 'messages', batch.length, config.dailyCalls))) return nothing('limit', 0, todo.length)
+  if (!(await claimAiCall(deps.env.DB, deps.now(), 'messages', batch.length, config.dailyCalls))) return nothing('limit')
   const answer = await askModel(deps, config, messagesRequest(batch, config.reads, context))
-  if (!answer.ok) return nothing(answer.why, batch.length, todo.length)
+  if (!answer.ok) return nothing(answer.why)
   // The answer changes nothing but these rows: what does not fit is left out, and a message keeps no result.
   const read = readMessagesAnswer(answer.value, batch, config.reads, context)
-  if (read === null || read.size === 0) return nothing('unfit', batch.length, todo.length)
+  if (read === null || read.size === 0) return nothing('unfit')
   const createdAt = deps.now().toISOString()
   // New topics first, so that a reading can name its own. A title some topic has is that topic.
   const titles = [...new Set([...read.values()].flatMap((r) => (r.topic && 'new' in r.topic ? [r.topic.new] : [])))]
@@ -87,7 +73,34 @@ export async function readPageAi(deps: Deps, source: FeedbackSource, page: { rea
     proposals.set(now.topicId, issue)
   }
   await proposeTopicIssues(deps.env.DB, [...proposals].map(([topic, issue]) => ({ topic, issue })))
+  return { why: null, kept }
+}
+
+/**
+ * Reads the page again, asks the model about the messages with no result of this prompt version, keeps what fits,
+ * and answers the readings the page's messages now have, the new ones and those kept before.
+ * At most two requests go out: one to the learner app's server, one to the model, for at most AI_BATCH messages,
+ * the newest first; the rest are counted in `left`. Without a key or switched off, none goes out. A call is counted
+ * before it is made (readBatchAi). Throws FeedbackUnread when the learner app's server does not give the page.
+ */
+export async function readPageAi(deps: Deps, source: FeedbackSource, page: { readonly kind: FeedbackKind | null; readonly before: number | null }): Promise<FeedbackAiRead> {
+  const nothing = (why: FeedbackAiWhy | null, asked = 0, left = 0): FeedbackAiRead => ({ results: {}, asked, left, why })
+  const config = aiConfig(deps.env)
+  if (!config) return nothing('not-set-up')
+  if ((await getSetting(deps.env.DB, AI_SWITCH)) !== 'on') return nothing('off')
+  const { items } = await readFeedback(deps, source, { limit: FEEDBACK_PAGE, kind: page.kind, before: page.before })
+  const stored = await feedbackAiRows(deps.env.DB, items.map((item) => item.id))
+  const todo: FeedbackItem[] = items.filter((item) => stored.get(item.id)?.promptVersion !== PROMPT_VERSION)
+  // The readings the page's messages already have. They go back with every answer that names no failure: the list
+  // the tab holds may have been read a moment before another request kept them, and would never show them otherwise.
+  const have: Record<number, FeedbackAiView> = {}
+  for (const [id, row] of stored) if (row.promptVersion === PROMPT_VERSION) have[id] = aiView(row)
+  if (todo.length === 0) return { results: have, asked: 0, left: 0, why: null }
+  const batch = todo.slice(0, AI_BATCH)
+  const { why, kept } = await readBatchAi(deps, config, batch)
+  // The limit was reached before anything was sent; any other failure came after the messages went.
+  if (why !== null) return nothing(why, why === 'limit' ? 0 : batch.length, todo.length)
   const results: Record<number, FeedbackAiView> = { ...have }
   for (const [id, row] of kept) results[id] = aiView(row)
-  return { results, asked: batch.length, left: todo.length - rows.size, why: null }
+  return { results, asked: batch.length, left: todo.length - kept.size, why: null }
 }

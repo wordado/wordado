@@ -79,5 +79,73 @@ describe('reviewMailer', () => {
       const refusing = reviewMailer({ env, fetch: async () => new Response('no', { status: 422 }), now: () => new Date(), log: () => undefined } as never)
       await expect(refusing.weekly(['admin@example.com'], week)).rejects.toThrow(/422/)
     })
+
+    describe('with what the AI read of the week', () => {
+      const ai = {
+        read: 6,
+        byCategory: { bug: 3, idea: 2, question: 0, praise: 1, junk: 0 },
+        topTopics: [{ title: 'Sound plays twice on phones', count: 3 }, { title: 'A dark theme', count: 1 }],
+        blockingBugs: 1,
+        newTopics: ['A dark theme'],
+        paragraph: 'Six messages were read, half of them about the sound playing twice.',
+      }
+      const PLAIN = '7 messages came from learners between 2026-10-05 and 2026-10-11.\n\nSomething isn\'t working: 3\nAn idea: 2\nSomething else: 2\n\nRead them: https://review.wordado.com/#feedback'
+
+      it('keeps its own lines and the link, and puts the AI’s part between them', async () => {
+        const { calls, mailer } = sending()
+        await mailer.weekly(['admin@example.com'], { ...week, ai })
+        expect(calls[0]!.body['subject']).toBe('Wordado feedback: 7 messages this week')
+        expect(calls[0]!.body['text']).toBe(
+          [
+            '7 messages came from learners between 2026-10-05 and 2026-10-11.',
+            '',
+            "Something isn't working: 3",
+            'An idea: 2',
+            'Something else: 2',
+            '',
+            'Written by the AI: Six messages were read, half of them about the sound playing twice.',
+            '',
+            'Read by the AI: 6 of 7',
+            'Bug: 3',
+            'Idea: 2',
+            'Question: 0',
+            'Praise: 1',
+            'Junk: 0',
+            '',
+            'Most messages:',
+            '- Sound plays twice on phones: 3',
+            '- A dark theme: 1',
+            '',
+            'Bugs that block learners: 1',
+            '',
+            'New topics:',
+            '- A dark theme',
+            '',
+            'Read them: https://review.wordado.com/#feedback',
+          ].join('\n'),
+        )
+      })
+
+      it('goes without the paragraph when there is none, and without a list that is empty', async () => {
+        const { calls, mailer } = sending()
+        await mailer.weekly(['admin@example.com'], { ...week, ai: { ...ai, paragraph: null, topTopics: [], newTopics: [], blockingBugs: 0 } })
+        expect(calls[0]!.body['text']).toBe(
+          '7 messages came from learners between 2026-10-05 and 2026-10-11.\n\nSomething isn\'t working: 3\nAn idea: 2\nSomething else: 2\n\nRead by the AI: 6 of 7\nBug: 3\nIdea: 2\nQuestion: 0\nPraise: 1\nJunk: 0\n\nBugs that block learners: 0\n\nRead them: https://review.wordado.com/#feedback',
+        )
+      })
+
+      it('says of how many when the count stopped at the cap', async () => {
+        const { calls, mailer } = sending()
+        await mailer.weekly(['admin@example.com'], { ...week, total: 1000, more: true, ai: { ...ai, read: 100 } })
+        expect(String(calls[0]!.body['text'])).toContain('\n\nRead by the AI: 100 of more than 1,000\nBug: 3\n')
+      })
+
+      it('is the mail it was, byte for byte, without the AI’s part or when the AI read nothing', async () => {
+        const { calls, mailer } = sending()
+        await mailer.weekly(['admin@example.com'], week)
+        await mailer.weekly(['admin@example.com'], { ...week, ai: { ...ai, read: 0 } })
+        expect(calls.map((c) => c.body['text'])).toEqual([PLAIN, PLAIN])
+      })
+    })
   })
 })
