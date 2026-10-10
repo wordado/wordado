@@ -462,6 +462,7 @@ export const de: Messages = {
   'report.audio': 'Schlechtes Audio',
   'report.level': 'Falsches Niveau',
   'report.other': 'Etwas anderes',
+  'report.suggestion': 'Wie sollte es heißen? (optional)',
   'report.note': 'Details (optional)',
   'report.send': 'Meldung senden',
   'report.cancel': 'Abbrechen',

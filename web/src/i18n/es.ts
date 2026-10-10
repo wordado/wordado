@@ -460,6 +460,7 @@ export const es: Messages = {
   'report.audio': 'Problema con el audio',
   'report.level': 'Nivel incorrecto',
   'report.other': 'Otra cosa',
+  'report.suggestion': '¿Cómo debería ser? (opcional)',
   'report.note': 'Detalles (opcional)',
   'report.send': 'Enviar el informe',
   'report.cancel': 'Cancelar',
