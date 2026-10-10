@@ -440,6 +440,10 @@ export const de: Messages = {
   'themes.searchClear': 'Alle Themen anzeigen',
   'themes.searchMore': '+{count} weitere',
   'themes.searchNoTheme': 'Auch im Kurs, aber in keinem Thema:',
+  'theme.find': 'Wort in diesem Thema suchen',
+  'theme.findFound': { one: '{count} Wort gefunden', other: '{count} Wörter gefunden' },
+  'theme.findNone': 'Kein Wort dieses Themas enthält „{query}“.',
+  'theme.findClear': 'Alle Wörter anzeigen',
 
   'progress.title': 'Fortschritt',
   'progress.tiers': 'Deine Wörter',
