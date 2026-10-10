@@ -1570,16 +1570,18 @@ dialog.report textarea {
     width: 40%;
     background: var(--rose);
     border-radius: 999px;
-    animation: bar-travel 1.4s ease-in-out infinite;
+    animation: bar-travel 1.1s ease-in-out infinite alternate;
   }
 
+  /* From one end to the other and back, never off the track: the stripe is seen in the first frame, and also
+     while a busy browser holds the animation still (opening the words is such a moment). */
   @keyframes bar-travel {
     from {
-      transform: translateX(-100%);
+      transform: translateX(0);
     }
 
     to {
-      transform: translateX(250%);
+      transform: translateX(150%);
     }
   }
 }
