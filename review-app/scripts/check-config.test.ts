@@ -57,9 +57,12 @@ describe('checkProductionConfig', () => {
       expect(checkProductionConfig(config({ vars: { LEARNER_APP_URL: bad } })).join('\n')).toMatch(/LEARNER_APP_URL/)
     }
   })
-  it('refuses the AI help’s key and a stand-in model’s address in production vars', () => {
+  it('refuses the AI help’s key in production vars, and an address of its service that is not https', () => {
     expect(checkProductionConfig(config({ vars: { FEEDBACK_AI_KEY: 'k'.repeat(40) } })).join('\n')).toMatch(/FEEDBACK_AI_KEY must not be set: it is a secret/)
-    expect(checkProductionConfig(config({ vars: { FEEDBACK_AI_URL: 'http://127.0.0.1:4184' } })).join('\n')).toMatch(/FEEDBACK_AI_URL must not be set: it is for tests only/)
+    for (const good of ['https://openrouter.ai/api/v1', 'https://ai.example.com', 'https://ai.example.com:8443/v1']) expect(checkProductionConfig(config({ vars: { FEEDBACK_AI_URL: good } }))).toEqual([])
+    for (const bad of ['', 'http://127.0.0.1:4184', 'http://ai.example.com/v1', 'ai.example.com/v1', 'https://ai.example.com/v1/', 'https://ai.example.com/v1?key=1', 'https://user:pass@ai.example.com/v1', 'https://ai.example.com/v1/chat/completions']) {
+      expect(checkProductionConfig(config({ vars: { FEEDBACK_AI_URL: bad } })).join('\n')).toMatch(/FEEDBACK_AI_URL must be an https address/)
+    }
   })
   it('takes the AI help’s limit as digits and its languages as two-letter codes with commas, or neither at all', () => {
     expect(checkProductionConfig(config({ vars: { FEEDBACK_AI_MODEL: 'test/model', FEEDBACK_AI_DAILY_CALLS: '200', FEEDBACK_READS: 'en,bg' } }))).toEqual([])

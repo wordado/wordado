@@ -1,8 +1,8 @@
 import { localOrTestOrigin } from './access'
 import type { Env } from './bindings'
 
-/** Where the model is reached: OpenRouter's chat completions. */
-export const MODEL_URL = 'https://openrouter.ai/api/v1/chat/completions'
+/** The service the model is reached through when FEEDBACK_AI_URL names no other: OpenRouter. The client posts to `/chat/completions` under it. */
+export const DEFAULT_AI_URL = 'https://openrouter.ai/api/v1'
 /** The model asked when FEEDBACK_AI_MODEL names none: the corpus review's. */
 export const DEFAULT_AI_MODEL = 'google/gemini-3.8-flash'
 /** Calls to the model a UTC day when FEEDBACK_AI_DAILY_CALLS sets no other limit (spec 2026-10-10 §2 rule 7). */
@@ -13,6 +13,7 @@ const DEFAULT_READS: readonly string[] = ['en', 'bg']
 export interface AiConfig {
   readonly key: string
   readonly model: string
+  /** The service's address, with no slash at its end. */
   readonly url: string
   readonly dailyCalls: number
   /** The languages that need no translation. */
@@ -30,12 +31,43 @@ export function aiLimits(env: Env): { readonly model: string; readonly dailyCall
   }
 }
 
-/** The AI help's settings, or null while there is no key. A limit that is not a whole number from 0 up is the default. */
+/** Whether an address is OpenRouter's: what only that service knows is sent to it alone (feedbackModel.ts). */
+export function isOpenRouter(url: string): boolean {
+  try {
+    return new URL(url).hostname === 'openrouter.ai'
+  } catch {
+    return false
+  }
+}
+
+/**
+ * The service's address as it is used, or null when it is not one the key and the messages may go to: it must be
+ * https, with no name, password, query or fragment in it. Plain http is taken only for a stand-in on this machine,
+ * and only where a developer or a test runs the Worker.
+ */
+function serviceUrl(env: Env): string | null {
+  const raw = (env.FEEDBACK_AI_URL ?? '').trim().replace(/\/+$/, '')
+  if (raw === '') return DEFAULT_AI_URL
+  let u: URL
+  try {
+    u = new URL(raw)
+  } catch {
+    return null
+  }
+  if (u.hostname === '' || u.username !== '' || u.password !== '' || u.search !== '' || u.hash !== '' || raw.includes('?') || raw.includes('#')) return null
+  if (u.protocol === 'https:') return raw
+  const standIn = u.protocol === 'http:' && (u.hostname === '127.0.0.1' || u.hostname === 'localhost') && localOrTestOrigin(env.APP_ORIGIN)
+  return standIn ? raw : null
+}
+
+/**
+ * The AI help's settings, or null while it is not set up: there is no key, or FEEDBACK_AI_URL is not an address
+ * that may be used. A wrong address never falls back to another service: the owner chose where the messages go.
+ * A limit that is not a whole number from 0 up is the default.
+ */
 export function aiConfig(env: Env): AiConfig | null {
   const key = (env.FEEDBACK_AI_KEY ?? '').trim()
-  if (key === '') return null
-  // A stand-in model's address counts only where a developer or a test runs the Worker: anywhere else the key and
-  // the messages go to the real service and nowhere else, even if the setting were ever there.
-  const standIn = (env.FEEDBACK_AI_URL ?? '').trim()
-  return { key, url: standIn !== '' && localOrTestOrigin(env.APP_ORIGIN) ? standIn : MODEL_URL, ...aiLimits(env) }
+  const url = serviceUrl(env)
+  if (key === '' || url === null) return null
+  return { key, url, ...aiLimits(env) }
 }

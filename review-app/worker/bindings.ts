@@ -48,6 +48,7 @@ export interface Env {
   readonly FEEDBACK_AI_DAILY_CALLS?: string
   /** The languages the coordinator reads, which need no translation: two-letter codes with commas; unset is `en,bg`. */
   readonly FEEDBACK_READS?: string
-  /** Tests and the hosted e2e only: a stand-in model's address. Honoured only on a local or test APP_ORIGIN (feedbackAiConfig.ts); check-config refuses it in production. */
+  /** The service the model is reached through: an https address, to which `/chat/completions` is added; unset is OpenRouter's. Any service that
+   * takes the same request can be named. Plain http is for a stand-in on the same machine, in tests and the hosted e2e only (feedbackAiConfig.ts). */
   readonly FEEDBACK_AI_URL?: string
 }

@@ -44,7 +44,7 @@ beforeAll(async () => {
 afterAll(() => dispose())
 beforeEach(async () => {
   await resetDb(base.DB)
-  env = { ...base, LEARNER_APP_URL: SERVER, FEEDBACK_READ_TOKEN: TOKEN, FEEDBACK_AI_KEY: KEY, FEEDBACK_AI_URL: `${MODEL}/api/v1/chat/completions`, FEEDBACK_AI_MODEL: 'test/model' }
+  env = { ...base, LEARNER_APP_URL: SERVER, FEEDBACK_READ_TOKEN: TOKEN, FEEDBACK_AI_KEY: KEY, FEEDBACK_AI_URL: `${MODEL}/api/v1`, FEEDBACK_AI_MODEL: 'test/model' }
   server = new FakeLearnerApp(TOKEN, items())
   model = new FakeModel(KEY)
   logged = []
@@ -200,6 +200,29 @@ describe('POST /api/admin/feedback/ai/read (spec 2026-10-10 §3.1)', () => {
     expect(await read()).toEqual({ results: {}, asked: 0, left: 0, why: null })
     expect(model.requests).toHaveLength(1)
     expect(await calls()).toHaveLength(1)
+  })
+
+  it('asks the service FEEDBACK_AI_URL names, and no other', async () => {
+    env = { ...env, FEEDBACK_AI_URL: 'https://other.test/v1/' }
+    const other = new FakeModel(KEY)
+    const fetch = fetchBy({ [SERVER]: server.fetch, [MODEL]: model.fetch, 'https://other.test': other.fetch })
+    const res = await createApp(testDeps(env, { fetch })).request('/api/admin/feedback/ai/read', {
+      method: 'POST',
+      headers: { 'cf-access-jwt-assertion': await keys.token('admin@example.com', env), origin: env.APP_ORIGIN, 'content-type': 'application/json' },
+      body: JSON.stringify({ kind: '', before: null }),
+    })
+    expect(((await res.json()) as FeedbackAiRead).asked).toBe(5)
+    expect(other.requests.map((r) => r.url)).toEqual(['https://other.test/v1/chat/completions'])
+    expect('provider' in other.requests[0]!.body).toBe(false)
+    expect(model.requests).toEqual([])
+  })
+
+  it('is not set up with an address that is not https, and sends nothing anywhere', async () => {
+    env = { ...env, FEEDBACK_AI_URL: 'http://model.test/api/v1' }
+    expect(await status()).toMatchObject({ setUp: false })
+    expect((await read()).why).toBe('not-set-up')
+    expect(model.requests).toEqual([])
+    expect(server.requests).toEqual([])
   })
 
   it('reads the page the tab shows: the kind and the cursor go to the server as they came', async () => {

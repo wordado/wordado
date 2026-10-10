@@ -1,5 +1,5 @@
 /** What a request to the model holds, as the Worker's client sends it. */
-interface ModelBody { model: string; messages: { role: string; content: string }[]; response_format: { json_schema?: { name?: string } }; provider: unknown }
+interface ModelBody { model: string; messages: { role: string; content: string }[]; response_format: { json_schema?: { name?: string } }; provider?: unknown }
 
 /** A plain reading of each message of an input: the learner's kind as the category, no translation, a summary that names the id. */
 export function plainAnswer(_name: string, input: unknown): unknown {

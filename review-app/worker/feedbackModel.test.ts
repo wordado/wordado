@@ -5,7 +5,7 @@ import { FakeModel } from './test/fakeModel'
 import { fetchBy } from './test/platform'
 
 const KEY = 'k'.repeat(40)
-const config: AiConfig = { key: KEY, model: 'test/model', url: 'https://model.test/api/v1/chat/completions', dailyCalls: 200, reads: ['en', 'bg'] }
+const config: AiConfig = { key: KEY, model: 'test/model', url: 'https://model.test/api/v1', dailyCalls: 200, reads: ['en', 'bg'] }
 const SECRET_TEXT = 'Der Ton wird zweimal abgespielt.'
 const req: ModelRequest = {
   name: 'feedback_messages',
@@ -23,14 +23,14 @@ function setup() {
 }
 
 describe('askModel', () => {
-  it('makes one request: the instructions, the input as JSON in the user message, the schema held strictly, no provider that keeps data', async () => {
+  it('makes one request, in the way every service of this kind takes it: the instructions, the input as JSON in the user message, the schema held strictly', async () => {
     const { model, deps, inits, logged } = setup()
     model.answer = () => ({ results: [{ id: 1 }] })
     expect(await askModel(deps, config, req)).toEqual({ ok: true, value: { results: [{ id: 1 }] } })
     expect(model.requests).toHaveLength(1)
     const sent = model.requests[0]!
-    expect(sent.url).toBe(config.url)
-    expect(sent.headers).toMatchObject({ authorization: `Bearer ${KEY}`, 'content-type': 'application/json', 'http-referer': 'https://wordado.com', 'x-title': 'Wordado feedback' })
+    expect(sent.url).toBe('https://model.test/api/v1/chat/completions')
+    expect(sent.headers).toEqual({ authorization: `Bearer ${KEY}`, 'content-type': 'application/json' })
     expect(sent.body).toEqual({
       model: 'test/model',
       messages: [
@@ -38,13 +38,26 @@ describe('askModel', () => {
         { role: 'user', content: JSON.stringify(req.input) },
       ],
       response_format: { type: 'json_schema', json_schema: { name: 'feedback_messages', strict: true, schema: req.schema } },
-      provider: { require_parameters: true, data_collection: 'deny' },
     })
     expect(model.inputOf(0)).toEqual(req.input)
     expect(inits[0]?.method).toBe('POST')
     expect(inits[0]?.redirect).toBe('manual')
     expect(inits[0]?.signal).toBeInstanceOf(AbortSignal)
     expect(logged).toEqual([])
+  })
+
+  it('adds what only OpenRouter knows when the address is OpenRouter’s: who asks, and no provider that keeps what it is sent', async () => {
+    const { model, deps } = setup()
+    expect((await askModel(deps, { ...config, url: 'https://openrouter.ai/api/v1' }, req)).ok).toBe(true)
+    const sent = model.requests[0]!
+    expect(sent.url).toBe('https://openrouter.ai/api/v1/chat/completions')
+    expect(sent.headers).toEqual({ authorization: `Bearer ${KEY}`, 'content-type': 'application/json', 'http-referer': 'https://wordado.com', 'x-title': 'Wordado feedback' })
+    expect(sent.body.provider).toEqual({ require_parameters: true, data_collection: 'deny' })
+    // Everything else is the same request.
+    const { provider: _provider, ...rest } = sent.body
+    await askModel(deps, config, req)
+    expect(model.requests[1]!.body).toEqual(rest)
+    expect('provider' in model.requests[1]!.body).toBe(false)
   })
 
   it('gives the model twenty seconds', async () => {

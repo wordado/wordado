@@ -38,14 +38,19 @@ export function checkProductionConfig(jsonc: string): string[] {
   for (const name of ['ACCESS_TEAM_DOMAIN', 'ACCESS_AUD', 'GITHUB_APP_ID', 'GITHUB_INSTALLATION_ID']) {
     if (!prod.vars?.[name]) problems.push(`env.production vars.${name} is empty (review-app/README.md, "Hosted")`)
   }
-  for (const name of ['ACCESS_JWKS', 'GITHUB_API_URL', 'FEEDBACK_AI_URL', 'ADMIN_EMAIL', 'FEEDBACK_READ_TOKEN', 'FEEDBACK_AI_KEY']) {
+  for (const name of ['ACCESS_JWKS', 'GITHUB_API_URL', 'ADMIN_EMAIL', 'FEEDBACK_READ_TOKEN', 'FEEDBACK_AI_KEY']) {
     if (prod.vars && name in prod.vars) problems.push(`env.production vars.${name} must not be set: ${SECRETS.has(name) ? 'it is a secret' : 'it is for tests only'}`)
   }
   // Optional: without it the Feedback tab says it is not connected. The token only ever goes to an https origin.
   const learnerApp = prod.vars?.['LEARNER_APP_URL'] ?? ''
   if (learnerApp !== '' && !/^https:\/\/[a-z0-9.-]+$/.test(learnerApp)) problems.push('env.production vars.LEARNER_APP_URL must be an https origin with no path, such as https://app.wordado.com')
-  // The AI help on feedback (spec 2026-10-10): both optional, and the Worker has a default for each. Written wrong, the
-  // Worker would quietly take the default, so a deploy says it instead.
+  // The AI help on feedback (spec 2026-10-10): all optional, and the Worker has a default for each. The key and the
+  // messages only ever go to an https address; to one written wrong the Worker sends nothing, so a deploy says it.
+  const aiUrl = prod.vars?.['FEEDBACK_AI_URL']
+  if (aiUrl !== undefined && (!/^https:\/\/[a-z0-9.-]+(:\d+)?(\/[A-Za-z0-9._~/-]*[A-Za-z0-9._~-])?$/.test(aiUrl) || aiUrl.endsWith('/chat/completions'))) {
+    problems.push('env.production vars.FEEDBACK_AI_URL must be an https address with no slash at its end and without /chat/completions, such as https://openrouter.ai/api/v1')
+  }
+  // Written wrong, the Worker would quietly take the default for these two.
   const dailyCalls = prod.vars?.['FEEDBACK_AI_DAILY_CALLS']
   if (dailyCalls !== undefined && !/^\d+$/.test(dailyCalls)) problems.push('env.production vars.FEEDBACK_AI_DAILY_CALLS must be a whole number, such as 200')
   const reads = prod.vars?.['FEEDBACK_READS']
