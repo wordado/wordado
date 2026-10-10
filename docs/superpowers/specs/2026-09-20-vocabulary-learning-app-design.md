@@ -1343,7 +1343,9 @@ hidden field.
 The coordinator reads feedback in the review app's Feedback tab (the hosted
 review app's design, §16), which asks this server for it each time and keeps
 no copy: `GET /v1/admin/feedback` answers only to a token the two
-deployments share, and to anyone else is a route that does not exist. This
+deployments share, and to anyone else is a route that does not exist. It
+gives pages, newest first, or with `ids` (1 to 100 ids) those messages
+alone, which is how the review app reads the messages of a topic. This
 server mails no feedback. The notice that feedback came is the review app's
 weekly mail to its admins (the hosted review app's design, §8): how many
 messages came in the week, by kind, and a link to the tab, with nothing a

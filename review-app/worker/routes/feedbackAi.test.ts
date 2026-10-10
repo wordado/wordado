@@ -195,6 +195,9 @@ describe('POST /api/admin/feedback/ai/read (spec 2026-10-10 §3.1)', () => {
         5: { language: 'en', translation: '', category: 'bug', severity: 'annoys', summary: 'Message 5 in short.', topic: null },
         3: { language: 'de', translation: 'The sound plays twice.', category: 'bug', severity: 'annoys', summary: 'The sound of a word plays twice.', topic: null },
         1: { language: 'en', translation: '', category: 'bug', severity: 'annoys', summary: 'Message 1 in short.', topic: null },
+        // The readings kept before come back too: the list the tab holds may be older than they are.
+        4: { language: 'en', translation: '', category: 'idea', severity: null, summary: 'Kept from before.', topic: null },
+        2: { language: 'en', translation: '', category: 'idea', severity: null, summary: 'Kept from before.', topic: null },
       },
       asked: 3,
       left: 0,
@@ -203,8 +206,11 @@ describe('POST /api/admin/feedback/ai/read (spec 2026-10-10 §3.1)', () => {
     expect(await storedIds()).toEqual([1, 2, 3, 4, 5])
     expect((await rows())[2]).toEqual({ feedback_id: 3, received_at: feedbackItem(3).receivedAt, language: 'de', translation: 'The sound plays twice.', category: 'bug', severity: 'annoys', summary: 'The sound of a word plays twice.', model: 'test/model', prompt_version: PROMPT_VERSION, created_at: '2026-10-05T12:00:00.000Z', topic_id: null, topic_by: 'ai' })
     expect(await calls()).toEqual([{ day: '2026-10-05', what: 'messages', messages: 3 }])
-    // Everything has a result now: the page is read, and the model is not asked.
-    expect(await read()).toEqual({ results: {}, asked: 0, left: 0, why: null })
+    // Everything has a result now: the page is read, and the model is not asked. What is kept is answered again,
+    // for a tab whose list was read before another request kept it.
+    const again = await read()
+    expect(again).toMatchObject({ asked: 0, left: 0, why: null })
+    expect(again.results).toEqual(answer.results)
     expect(model.requests).toHaveLength(1)
     expect(await calls()).toHaveLength(1)
   })
@@ -468,7 +474,7 @@ describe('POST /api/admin/feedback/ai/read (spec 2026-10-10 §3.1)', () => {
     expect(model.requests).toHaveLength(2)
     expect(await status()).toMatchObject({ callsToday: 2, dailyCalls: 2 })
     // A page with nothing to ask is not a call, and says nothing of the limit.
-    expect(await read()).toEqual({ results: {}, asked: 0, left: 0, why: null })
+    expect(await read()).toMatchObject({ asked: 0, left: 0, why: null })
     now = new Date('2026-10-06T00:00:01Z')
     expect((await status()).callsToday).toBe(0)
     expect(await read({ before: 31 })).toMatchObject({ asked: 25, left: 5, why: null })
@@ -606,7 +612,7 @@ describe('topics and known issues (spec 2026-10-10 §3.2, §3.3)', () => {
     expect(await topicRows()).toHaveLength(1)
     expect(JSON.stringify([await rows(), await topicRows(), answer])).not.toContain('example.com')
     // Each has a reading of this version: none is asked again, so a title that is refused cannot use up the day's calls.
-    expect(await read()).toEqual({ results: {}, asked: 0, left: 0, why: null })
+    expect(await read()).toMatchObject({ asked: 0, left: 0, why: null })
     expect(model.requests).toHaveLength(1)
     expect(await calls()).toHaveLength(1)
   })
@@ -721,7 +727,8 @@ describe('topics and known issues (spec 2026-10-10 §3.2, §3.3)', () => {
     expect(user!.content).not.toContain('attacker@example.com')
     expect(sentIds(0)).toEqual([5, 4, 3])
     // What came of it: the three messages asked about are in a topic called "Owned". That is advice, on a screen.
-    expect(Object.keys(answer.results).map(Number).sort()).toEqual([3, 4, 5])
+    expect(Object.keys(answer.results).map(Number).sort()).toEqual([1, 2, 3, 4, 5])
+    expect([answer.results[1], answer.results[2]].map((r) => [r!.summary, r!.topic?.id])).toEqual([['Kept from before.', theme], ['Kept from before.', theme]])
     const owned = (await topicRows()).find((t) => t['title'] === 'Owned')!
     expect(await topicsOf()).toEqual({ 1: [theme, 'coordinator'], 2: [theme, 'ai'], 3: [owned['id'], 'ai'], 4: [owned['id'], 'ai'], 5: [null, 'ai'] })
     // Nothing else changed: no mark was made or moved, no topic was renamed, marked, merged or matched, the issue

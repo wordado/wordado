@@ -250,7 +250,8 @@ export interface FeedbackAiStatus {
 /** Why the AI gave nothing: switched off, no key, the day's limit, not reached, late, refused by the service, or an answer that did not fit. */
 export type FeedbackAiWhy = 'off' | 'not-set-up' | 'limit' | 'unreachable' | 'late' | 'refused' | 'unfit'
 
-/** `POST /api/admin/feedback/ai/read`: the new results by message id; how many messages were sent; how many still have none. */
+/** `POST /api/admin/feedback/ai/read`: the readings of the page's messages by message id, the new ones and those of this prompt version kept
+ * before (none when the AI gave nothing); how many messages were sent; how many still have none. */
 export interface FeedbackAiRead {
   readonly results: Readonly<Record<number, FeedbackAiView>>
   readonly asked: number

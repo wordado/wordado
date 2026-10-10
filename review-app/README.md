@@ -171,23 +171,38 @@ as a pull request against the content repository, with no local checkout and no 
      `/chat/completions` is added to it); `FEEDBACK_AI_MODEL`, the model as that service names it;
      `FEEDBACK_AI_DAILY_CALLS`, the most calls a UTC day (200); `FEEDBACK_READS`, the languages the coordinator
      reads, which get no translation (`en,bg`).
+   - the variable `APP_REPO`, the public app repository as `owner/name` (`wordado/wordado`). Once a day, at
+     05:00 UTC, the Worker reads the numbers and titles of its open issues from GitHub's public API, so that the
+     AI can say a topic "looks like #94". It needs no access and sends no token: the issues of a public
+     repository are public. GitHub allows few such requests an hour, so a read is refused now and then; it is
+     not tried again that day, and once the list is two days old no match is proposed until a read works.
+     Without `APP_REPO` nothing is read and no match is proposed.
    - **the switch**, *AI help*, in the Feedback tab. It is off until an admin switches it on, and with it off no
      message is sent anywhere. **Before it is switched on in production, the privacy policy must name the AI
      service** (the company that runs the model, and that it receives the text of a feedback message without
      the contact address), **and the transfer of the text to it must be covered**: by the EU–US Data Privacy
      Framework or by standard contractual clauses.
 
+   With the help on, the tab also has *View: By topic*: messages about the same thing share a topic, a short
+   title in English that the AI writes or picks from the ones there are. A topic can be renamed, merged into
+   another, marked and noted like a message (marking it Done marks its messages done), and a message can be
+   moved to another topic, after which the AI leaves it there. The match with an issue is a proposal until the
+   coordinator confirms or removes it. **This needs the learner app's server from the same change** (it gives
+   messages by id): deploy that server first (`docs/deploy.md`). With an older server a topic opens with
+   messages missing and says so.
+
    What is sent: a message's text with email addresses, web addresses and phone numbers masked, the kind the
-   learner chose, the interface language and the screen. Never the address for an answer, the browser or the
+   learner chose, the interface language and the screen, and with them the titles of the topics so far and of
+   the open issues. Never the address for an answer, the browser or the
    versions. What is kept in D1: the AI's reading of each message (it holds a translation and a summary, text
-   derived from the message), until the message is gone from the learner app's server or an admin chooses
+   derived from the message) and the topics' titles, until the message is gone from the learner app's server or an admin chooses
    **Forget the AI's results**. When the AI is switched off, not set up, over the day's limit or failing, the
    tab works as it does without it and says why in one line. A key file that cannot be read, a token Google
    refuses and a call the model refuses are all "failing": the Worker's log has one line for each, with the
    step (`key file`, `token` or `model`) and a status, and nothing of the secret, the token or a message.
 
 `scripts/check-config.ts` refuses to deploy while any of steps 1–4 is still a placeholder, a secret is written
-as a variable, `FEEDBACK_AI_AUTH` is neither of its two values, or `FEEDBACK_AI_URL` is not an https address
+as a variable, `FEEDBACK_AI_AUTH` is neither of its two values, `APP_REPO` is not `owner/name`, or `FEEDBACK_AI_URL` is not an https address
 (on `googleapis.com`, when the sign-in is `google-service-account`); it runs in
 `deploy-review.yml` before the Worker is built.
 

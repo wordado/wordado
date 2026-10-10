@@ -544,9 +544,9 @@ async function readsAiFeedback(browser: Browser) {
   expect(sent).toContain('[link]')
 
   // A reload: what the AI said is kept, and is there with the list itself.
-  const listed = page.waitForResponse((res) => /\/api\/admin\/feedback\?/.test(res.url()))
+  // (Asked for by itself: a response the page was waiting for when it reloads has no body left to read.)
   await page.reload()
-  const first = (await (await listed).json()) as { items: { id: number; ai: { category: string } | null }[] }
+  const first = (await (await page.request.get('/api/admin/feedback?kind=&state=all')).json()) as { items: { id: number; ai: { category: string } | null }[] }
   expect(first.items.find((item) => item.id === 9)?.ai?.category).toBe('bug')
   await expect(toggle).toBeChecked()
   await expect(items.filter({ hasText: 'Der Ton eines Wortes' }).locator('.feedback-translation')).toBeVisible()
@@ -559,6 +559,136 @@ test('an admin switches the AI help on and reads translations, the AI’s catego
 
 test('@phone an admin reads the feedback with the AI help on a phone', async ({ browser }) => {
   await readsAiFeedback(browser)
+})
+
+/** The Feedback tab by topic (spec 2026-10-10 §3.2, §3.3), with the stand-in model's topics. The desktop and the
+ * phone run share the topics, so each changes only its own: the desktop one the topic about the sound, the phone
+ * one the topic about the number of words; nobody changes the third. Merging, and Done marking a topic's messages,
+ * would change what the other tests count: they are the Worker's and the page's own tests. */
+async function readsTopics(browser: Browser, mine: 'sound' | 'words') {
+  const page = await as(browser, 'admin')
+  await page.goto('/#feedback')
+  const panel = page.getByRole('tabpanel', { name: 'Feedback' })
+  const toggle = panel.getByRole('region', { name: 'AI help' }).getByRole('switch', { name: 'AI help' })
+  // Enabled once the page knows how the help stands: only then does the switch show whether it is on.
+  await expect(toggle).toBeEnabled()
+  if (!(await toggle.isChecked())) await toggle.click()
+  await expect(toggle).toBeChecked()
+  // Every message, read by the AI: the topics are made as it reads, so they are all there before anything is changed.
+  await panel.getByLabel('Show').selectOption({ label: 'All' })
+  const items = panel.getByRole('list', { name: 'Feedback' }).getByRole('listitem')
+  await expect(items).toHaveCount(9)
+  await expect(items.locator('.feedback-ai')).toHaveCount(9)
+  // A card names its message's topic, and offers the others to move it to; the advertisement is in none.
+  const path = items.filter({ hasText: 'The path does not open after I finish a unit.' })
+  await expect(path.getByText('Topic: Path stays white after a unit')).toBeVisible()
+  await expect(path.getByLabel('Move to…')).toBeVisible()
+  await expect(items.filter({ hasText: 'Cheap watches' }).getByText('Topic: none')).toBeVisible()
+
+  const byTopic = async () => {
+    await panel.getByLabel('View').selectOption({ label: 'By topic' })
+    await panel.getByLabel('Show').selectOption({ label: 'All' })
+    await expect(panel.getByRole('list', { name: 'Feedback' })).toHaveCount(0)
+  }
+  await byTopic()
+  const topics = panel.getByRole('list', { name: 'Topics' }).locator('> li')
+  await expect(topics).toHaveCount(3)
+  // The topic nobody changes: one message, the worst a bug can be, no match.
+  const untouched = topics.filter({ hasText: 'Path stays white after a unit' })
+  await expect(untouched.getByText('1 message', { exact: true })).toBeVisible()
+  await expect(untouched.getByText('Blocks study')).toBeVisible()
+  await expect(untouched.getByRole('link')).toHaveCount(0)
+  await expectFits(page, '.admin *')
+
+  if (mine === 'sound') {
+    const topic = topics.filter({ hasText: '#94' })
+    await expect(topic.getByRole('button', { name: 'Sound plays twice on phones' })).toHaveAttribute('aria-expanded', 'false')
+    await expect(topic.getByText('2 messages', { exact: true })).toBeVisible()
+    await expect(topic.getByText('Annoys')).toBeVisible()
+    // The match the AI proposed is a link to the issue; the coordinator confirms it.
+    const proposed = topic.getByRole('link', { name: 'looks like #94' })
+    await expect(proposed).toHaveAttribute('href', 'https://github.com/wordado/wordado/issues/94')
+    await expect(proposed).toHaveAttribute('title', 'The sound of a word plays twice on a phone')
+    await topic.getByRole('button', { name: 'Confirm' }).click()
+    await expect(topic.getByRole('link', { name: '#94', exact: true })).toHaveAttribute('href', 'https://github.com/wordado/wordado/issues/94')
+    await expect(topic.getByRole('button', { name: 'Confirm' })).toHaveCount(0)
+    // Opened: both messages, the German one with its translation.
+    await topic.getByRole('button', { name: 'Sound plays twice on phones' }).click()
+    const messages = topic.getByRole('list', { name: 'Messages of the topic' }).getByRole('listitem')
+    await expect(messages).toHaveCount(2)
+    await expect(messages.nth(0).locator('.feedback-message')).toHaveText('The sound of a word plays twice on my phone.')
+    await expect(messages.nth(1).locator('.feedback-message')).toContainText('Der Ton eines Wortes wird auf meinem Handy zweimal abgespielt.')
+    await expect(messages.nth(1).locator('.feedback-translation')).toContainText('The sound of a word is played twice on my phone.')
+    await expect(topic.getByLabel('Merge into…')).toBeVisible()
+    await expectFits(page, '.admin *')
+    // Renamed: the title is a field, and Save keeps it.
+    await topic.getByRole('button', { name: 'Rename' }).click()
+    await topic.getByRole('textbox', { name: 'Title' }).fill('The sound of a word plays twice')
+    await topic.getByRole('button', { name: 'Save', exact: true }).click()
+    await expect(topic.getByRole('button', { name: 'The sound of a word plays twice' })).toHaveAttribute('aria-expanded', 'true')
+    await expect(messages).toHaveCount(2)
+    // A reload: the new title, with its messages and its match.
+    await page.reload()
+    await byTopic()
+    await expect(topics).toHaveCount(3)
+    await expect(topic.getByRole('button', { name: 'The sound of a word plays twice' })).toBeVisible()
+    await expect(topic.getByText('2 messages', { exact: true })).toBeVisible()
+    await expect(panel.getByRole('button', { name: 'Sound plays twice on phones' })).toHaveCount(0)
+    // A message's card names the topic as it is called now.
+    await panel.getByLabel('View').selectOption({ label: 'Messages' })
+    await expect(items.filter({ hasText: 'Der Ton eines Wortes' }).getByText('Topic: The sound of a word plays twice')).toBeVisible()
+    await expectFits(page, '.admin *')
+    return
+  }
+
+  const topic = topics.filter({ hasText: 'Choose the number of new words' })
+  await expect(topic.getByText('2 messages', { exact: true })).toBeVisible()
+  await expect(topic.getByRole('link', { name: 'looks like #95' })).toHaveAttribute('href', 'https://github.com/wordado/wordado/issues/95')
+  await expect(topic.getByRole('button', { name: 'Remove' })).toBeVisible()
+  await topic.getByRole('button', { name: 'Choose the number of new words' }).tap()
+  const messages = topic.getByRole('list', { name: 'Messages of the topic' }).getByRole('listitem')
+  await expect(messages).toHaveCount(2)
+  await expect(messages.filter({ hasText: 'Me gustaría elegir' }).locator('.feedback-translation')).toHaveText('I would like to choose how many new words I learn each day.')
+  await expectFits(page, '.admin *')
+  // The topic's own note and state, as on a message.
+  const mark = topic.getByRole('form', { name: 'The topic’s mark' })
+  await mark.getByLabel('Note').fill('Planned with the settings.')
+  await mark.getByRole('button', { name: 'Save note' }).tap()
+  await expect(mark.getByRole('status').filter({ hasText: 'Saved' })).toBeVisible()
+  await mark.getByLabel('State').selectOption({ label: 'Looked at' })
+  await expect(mark.getByRole('status').filter({ hasText: 'Saved' })).toHaveCount(2)
+  await expect(topic.locator('.topic-meta').getByText('Looked at')).toBeVisible()
+  await expectFits(page, '.admin *')
+  await page.reload()
+  await byTopic()
+  await expect(topic.locator('.topic-meta').getByText('Looked at')).toBeVisible()
+  await topic.getByRole('button', { name: 'Choose the number of new words' }).tap()
+  await expect(mark.getByLabel('Note')).toHaveValue('Planned with the settings.')
+  await expect(mark.getByLabel('State')).toHaveValue('seen')
+  // Its messages were not marked with it.
+  await expect(messages.filter({ hasText: 'Me gustaría elegir' }).getByLabel('State')).toHaveValue('new')
+  await expectFits(page, '.admin *')
+}
+
+test('an admin reads the feedback by topic, confirms a proposed match, opens a topic and renames it', async ({ browser }) => {
+  await readsTopics(browser, 'sound')
+})
+
+test('@phone an admin reads the feedback by topic on a phone, and notes and marks a topic', async ({ browser }) => {
+  await readsTopics(browser, 'words')
+})
+
+test('the daily job reads the open issues of the app’s repository once a day, with no token', async () => {
+  const asked = async () => ((await (await fetch('http://127.0.0.1:4182/_state')).json()) as { issueRequests: { authorization: string | null; page: number }[] }).issueRequests
+  const before = (await asked()).length
+  const fire = async () => expect(await (await fetch(`http://127.0.0.1:4181/cdn-cgi/handler/scheduled?cron=${encodeURIComponent('0 5 * * *')}`)).text()).toBe('ok')
+  await fire()
+  const requests = await asked()
+  expect(requests).toHaveLength(before + 1)
+  expect(requests.at(-1)).toEqual({ authorization: null, page: 1 })
+  // The same day again: the day is taken, so GitHub is not asked.
+  await fire()
+  expect(await asked()).toHaveLength(before + 1)
 })
 
 test('the weekly job asks the learner app’s server once a week', async () => {

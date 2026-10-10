@@ -13,7 +13,7 @@ import { FakeLearnerApp } from '../../worker/test/fakeLearnerApp'
 import { FakeModel, testServiceAccount } from '../../worker/test/fakeModel'
 import { testKeys } from '../../worker/test/jwt'
 import { migrate } from '../../worker/test/platform'
-import { FEEDBACK, standInAnswer } from './feedbackFixture'
+import { FEEDBACK, KNOWN_ISSUES, standInAnswer } from './feedbackFixture'
 
 const root = join(import.meta.dirname, '..', '..')
 const walk = (dir: string): string[] => readdirSync(dir).flatMap((n) => (statSync(join(dir, n)).isDirectory() ? walk(join(dir, n)) : [join(dir, n)]))
@@ -37,18 +37,22 @@ await proxy.env.DB.prepare("INSERT INTO assignments (reviewer, queue, files, fla
 // The phone run has a reviewer and a queue of its own, so the two browser projects can run side by side.
 await proxy.env.DB.prepare("INSERT INTO reviewers (email, name, languages, role, invited_at) VALUES ('phone@example.com', 'Petra', '[\"en\"]', 'reviewer', '2026-10-05T00:00:00Z')").run()
 await proxy.env.DB.prepare("INSERT INTO assignments (reviewer, queue, files, flagged_only, created_at) VALUES ('phone@example.com', 'level', '*', 0, '2026-10-05T00:00:00Z')").run()
+// The open issues of the app's repository, as the daily job keeps them: read just now, so the AI is offered them.
+for (const issue of KNOWN_ISSUES) await proxy.env.DB.prepare('INSERT INTO open_issues (number, title, read_at) VALUES (?, ?, ?)').bind(issue.number, issue.title, new Date().toISOString()).run()
 await proxy.dispose()
 
 // The fake GitHub: main holds the fixture's review files.
 const files = Object.fromEntries(walk(join(content, 'review')).map((p) => [relative(content, p), readFileSync(p, 'utf8')]))
 const gh = new FakeGitHub(files)
+// The app's own repository is public: its open issues are listed for anyone, and the daily job reads them.
+gh.issues = [...KNOWN_ISSUES]
 createServer((req, res) => {
   void (async () => {
     const chunks: Buffer[] = []
     for await (const c of req) chunks.push(c as Buffer)
     if (req.url === '/_state') {
       res.writeHead(200, { 'content-type': 'application/json' })
-      res.end(JSON.stringify({ pulls: gh.pulls, branches: [...gh.branches.keys()] }))
+      res.end(JSON.stringify({ pulls: gh.pulls, branches: [...gh.branches.keys()], issueRequests: gh.issueRequests }))
       return
     }
     const headers = Object.fromEntries(Object.entries(req.headers).map(([k, v]) => [k, String(v)]))
@@ -112,7 +116,7 @@ writeFileSync(join(root, '.e2e', 'tokens.json'), JSON.stringify(tokens))
 const vars = {
   ACCESS_JWKS: keys.jwks, ACCESS_TEAM_DOMAIN: TEAM, ACCESS_AUD: AUD, ADMIN_EMAIL: 'admin@example.com',
   GITHUB_API_URL: 'http://127.0.0.1:4182', GITHUB_APP_ID: '1', GITHUB_INSTALLATION_ID: '1', GITHUB_APP_PRIVATE_KEY: (await testAppKey()).pem,
-  APP_ORIGIN: 'http://127.0.0.1:4181',
+  APP_ORIGIN: 'http://127.0.0.1:4181', APP_REPO: 'wordado/wordado',
   LEARNER_APP_URL: 'http://127.0.0.1:4183', FEEDBACK_READ_TOKEN: FEEDBACK_TOKEN,
   FEEDBACK_AI_AUTH: 'google-service-account', FEEDBACK_AI_URL: 'http://127.0.0.1:4184', FEEDBACK_AI_KEY: account.keyFile,
 }

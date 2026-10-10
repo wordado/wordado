@@ -128,6 +128,11 @@ private `wordado/wordado-research`, cloned into `docs/research/` and ignored her
      European Union. Nothing is set here, and this server sends feedback to nobody but the review app. Before
      the switch in the tab is turned on, the privacy policy must name the AI service, and the transfer of the
      text to it must be covered (the EU–US Data Privacy Framework or standard contractual clauses).
+   - **Order, for topics on the Feedback tab (#158, stage C): this server first, then the review app.** The
+     review app opens a topic by asking this server for messages by id (`ids` on `GET /v1/admin/feedback`).
+     A server from before that ignores `ids` and gives its newest page: nothing breaks and nothing is
+     deleted, but a topic then opens with messages missing, and says so, until this server is deployed.
+     The other way round is safe as well: the new server answers the old review app as before.
    A deploy refuses half of a pair, and a `BETTER_AUTH_SECRET` or a `FEEDBACK_READ_TOKEN` under 32 characters (`server/scripts/secretsFile.ts`).
 7. **Protect `main`.** *Done 2026-09-25*: the five checks below are required, a pull request must be
    up to date with `main` before it merges, and force pushes to `main` and its deletion are refused.

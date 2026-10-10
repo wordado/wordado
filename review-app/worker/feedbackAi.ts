@@ -30,7 +30,8 @@ export async function aiStatus(deps: Pick<Deps, 'env' | 'now'>): Promise<Feedbac
 }
 
 /**
- * Reads the page again, asks the model about the messages with no result of this prompt version, keeps what fits.
+ * Reads the page again, asks the model about the messages with no result of this prompt version, keeps what fits,
+ * and answers the readings the page's messages now have, the new ones and those kept before.
  * At most two requests go out: one to the learner app's server, one to the model, for at most AI_BATCH messages,
  * the newest first; the rest are counted in `left`. Without a key or switched off, none goes out. A call is counted
  * before it is made. Throws FeedbackUnread when the learner app's server does not give the page.
@@ -47,7 +48,11 @@ export async function readPageAi(deps: Deps, source: FeedbackSource, page: { rea
   const { items } = await readFeedback(deps, source, { limit: FEEDBACK_PAGE, kind: page.kind, before: page.before })
   const stored = await feedbackAiRows(deps.env.DB, items.map((item) => item.id))
   const todo: FeedbackItem[] = items.filter((item) => stored.get(item.id)?.promptVersion !== PROMPT_VERSION)
-  if (todo.length === 0) return nothing(null)
+  // The readings the page's messages already have. They go back with every answer that names no failure: the list
+  // the tab holds may have been read a moment before another request kept them, and would never show them otherwise.
+  const have: Record<number, FeedbackAiView> = {}
+  for (const [id, row] of stored) if (row.promptVersion === PROMPT_VERSION) have[id] = aiView(row)
+  if (todo.length === 0) return { results: have, asked: 0, left: 0, why: null }
   const batch = todo.slice(0, AI_BATCH)
   // From the database alone: still one read of the learner app's server and one call to the model.
   const [topics, issues] = await Promise.all([topicTitles(deps.env.DB, MODEL_TOPICS), openIssues(deps.env.DB, new Date(deps.now().getTime() - ISSUES_FRESH_MS).toISOString(), MODEL_ISSUES)])
@@ -82,7 +87,7 @@ export async function readPageAi(deps: Deps, source: FeedbackSource, page: { rea
     proposals.set(now.topicId, issue)
   }
   await proposeTopicIssues(deps.env.DB, [...proposals].map(([topic, issue]) => ({ topic, issue })))
-  const results: Record<number, FeedbackAiView> = {}
+  const results: Record<number, FeedbackAiView> = { ...have }
   for (const [id, row] of kept) results[id] = aiView(row)
   return { results, asked: batch.length, left: todo.length - rows.size, why: null }
 }

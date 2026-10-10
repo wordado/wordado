@@ -2,6 +2,9 @@
 
 Date: 2026-10-05. Status: draft for the product owner's review.
 Builds on: `2026-10-04-ai-review-and-review-app-design.md` (the local review app, §5; "Remote reviewers later", §8).
+Revised 2026-10-10: topics and known issues on the Feedback tab (issue #158, stage C): §16.9 gains the topics, their
+routes and tables, the daily read of the open issues and the setting `APP_REPO`; §16.2 gains `ids`; §14's cron
+triggers gain the daily line.
 Revised 2026-10-10: AI help on the Feedback tab, per message (issue #158, stage B): §16.9 added, with its routes
 and its three tables; §16.3, §16.7 and §16.8 follow. With the help switched on, D1 holds text derived from a
 learner's message (a translation, a summary); with it off, nothing changes.
@@ -373,8 +376,9 @@ next day.
 - CI (the app repo's `ci.yml`): typecheck, lint, unit, Worker tests, e2e, on every pull request.
 - A deploy workflow deploys `wordado-review` on merges to `main`, behind the GitHub environment
   `production-review` (manual approval), and applies D1 migrations first.
-- The Worker has two cron triggers in `wrangler.jsonc`, written at the top level and in `env.production`:
-  `0 6 * * 1` (Monday 06:00 UTC), the weekly feedback mail (§8), and `0 6 * * 2`, its second try on Tuesday. Each
+- The Worker has three cron triggers in `wrangler.jsonc`, written at the top level and in `env.production`:
+  `0 6 * * 1` (Monday 06:00 UTC), the weekly feedback mail (§8), `0 6 * * 2`, its second try on Tuesday, and
+  `0 5 * * *`, the daily read of the app repository's open issues (§16.9). Each
   line has its job in `worker/index.ts`, and a test fails when the two lists differ.
 - `review-app/README.md` gets a *Hosted* section with the one-time setup: the D1 database and R2 bucket, the
   Access application and policy, DNS for `review.wordado.com`, the GitHub App (permissions, webhook URL, install
@@ -514,7 +518,8 @@ gone from the server.
 ### 16.2 The link between the two services
 
 `GET /v1/admin/feedback` on the learner app's server gives the messages newest first, in pages of at most 100
-(`limit`, 50 when not named), older ones with `before=<id>`, filtered with `kind` and `since`. It answers
+(`limit`, 50 when not named), older ones with `before=<id>`, filtered with `kind` and `since`, or the messages of
+some ids alone with `ids` (1 to 100 ids with commas; an id it does not have is simply absent). It answers
 `{ items, nextBefore }`; an item has the message, its kind, when it was received, the address given for an answer
 (or none), whether the sender was signed in (never who), and the technical details the form showed. The route is
 read-only.
@@ -620,18 +625,21 @@ tab is in the address (`#feedback`), like the others, and the review app's own w
 
 ### 16.9 AI help
 
-Designed in `2026-10-10-feedback-ai-help-design.md`; this is what is built of it so far (its §3.1: per message).
+Designed in `2026-10-10-feedback-ai-help-design.md`; this is what is built of it so far (its §3.1: per message;
+§3.2 and §3.3: topics and known issues, at the end of this section).
 Off until an admin switches it on, and absent without the secret `FEEDBACK_AI_KEY`.
 
 - **Routes,** admins only, answered with `cache-control: no-store`, registered before the mark's route so that
   `/api/admin/feedback/ai` is not read as a message called "ai":
-  - `GET /api/admin/feedback/ai`: `{ setUp, needs, on, model, callsToday, dailyCalls, reads }`; `needs` is the
-    setting that is missing or wrong while it is not set up.
+  - `GET /api/admin/feedback/ai`: `{ setUp, needs, on, model, callsToday, dailyCalls, reads, repo }`; `needs` is
+    the setting that is missing or wrong while it is not set up; `repo` is `APP_REPO`, for the links to issues.
   - `PUT /api/admin/feedback/ai` takes exactly `{ on }`; on while it is not set up is a 409 that names that setting.
   - `POST /api/admin/feedback/ai/read` takes exactly `{ kind, before }`, the page as the list names it, and never
     a message: the Worker reads that page again from the learner app's server, sends the messages with no result
     of the current prompt version to the model in one call (at most 25, the newest first), keeps what fits and
-    answers `{ results, asked, left, why }`. Two requests go out at most.
+    answers `{ results, asked, left, why }`. Two requests go out at most. `results` holds the readings of the
+    page's messages, the new ones and those kept before, so a tab whose list was read a moment before another
+    request kept a reading still shows it.
   - `DELETE /api/admin/feedback/ai/results` forgets every result.
   - `GET /api/admin/feedback` gives each message its stored result as `ai`, and asks the model nothing.
 - **Tables,** migration `0006_feedback_ai.sql`: `feedback_ai` (by message id: language, translation, category,
@@ -652,3 +660,51 @@ Off until an admin switches it on, and absent without the secret `FEEDBACK_AI_KE
   service account: the JWT's header, claims and signature, checked with a key made in the test; the token kept
   across two reads and made again after its hour; a key file, a token and a call that are refused. The hosted
   browser run reads the tab with a stand-in model, signed in as a service account, desktop and phone.
+
+**Topics and known issues** (design §3.2, §3.3; prompt version 2):
+
+- **What the model is given and answers.** With a page's messages the one call also carries `topics` (id and title
+  of the 150 used most recently) and `issues` (number and title of at most 100 open issues, only while the list is
+  less than 48 hours old; addresses in a title are masked). Each result has three more fields, flat, with one
+  plain type each: `topic_id` (0 for none), `topic_new` (empty for none) and `issue` (0 for none). The check after
+  the answer decides: a `topic_id` counts only when it was sent, and then the title is not read; with 0, a title
+  counts when it is one line of 3 to 80 characters that masking would not change; an id that was not sent gives no
+  topic; an `issue` counts only when it was sent; junk gets neither. A title some topic has (without regard to
+  case) is that topic. Readings of prompt version 1 are asked again as pages are read, and shown until then; a
+  reading whose topic was refused is kept and not asked again.
+- **What an answer can change:** the row of each message asked about; a new topic; and a *proposed* match on a
+  topic that has none. Never a mark, a topic's state, note or title, a confirmed or removed match, or the topic of
+  a message the coordinator moved (`topic_by = 'coordinator'`).
+- **Routes,** admins only, `no-store`, none of them asks the model:
+  - `GET /api/admin/feedback/topics`: one line a topic (`count`, `newestAt`, `worst`, state, note, match), from D1
+    alone; at most 500, the one with the newest message first.
+  - `GET /api/admin/feedback/topics/:id`: `{ topic, items, more, incomplete }`: its 50 newest messages, read from
+    the learner app's server by `ids` in one request. A reading whose message that server no longer has is
+    dropped. A server from before `ids` gives its newest page instead: then nothing is dropped and `incomplete`
+    is true.
+  - `PUT /api/admin/feedback/topics/:id` takes exactly `{ title, state, note }`; a title another topic has is a
+    409 that says to merge; a topic that becomes Done marks its messages done (those with a reading, keeping their
+    notes); Not doing marks none.
+  - `POST /api/admin/feedback/topics/:id/merge` takes exactly `{ into }`.
+  - `PUT /api/admin/feedback/:id/topic` takes exactly `{ topic }`: the coordinator moves a message.
+  - `PUT /api/admin/feedback/topics/:id/issue` takes exactly `{ issue }`: a number confirms, null removes, and
+    after a removal the AI proposes none for that topic.
+- **Tables,** migration `0007_feedback_topics.sql`: `feedback_topics` (title, unique without regard to case; state;
+  note; issue and its state; whether it was renamed; who last worked on it); `feedback_ai` gains `topic_id` and
+  `topic_by`; `open_issues` (number, title, when read); `open_issues_reads` (a row a UTC day, taken before the
+  read). *Forget the AI's results* also drops the topics nobody has worked on.
+- **The daily read.** Cron `0 5 * * *`: `GET /repos/{APP_REPO}/issues?state=open&per_page=100`, at most 3 pages,
+  from GitHub's public API with no token (`GITHUB_API_URL` in tests). Pull requests are skipped. One read a UTC
+  day at most, whatever comes of it; a refused read keeps what is stored and logs the status. `APP_REPO` is the
+  public app repository as `owner/name`; without it no issue is read and no match is proposed.
+- **The tab:** a *View* select, *Messages* or *By topic*. By topic: a line a topic, with *looks like #N* as a link
+  and *Confirm* / *Remove* while proposed; opened, its messages as cards, *Rename*, *Merge into…*, state, note
+  and *Issue number*. A card names its message's topic and has *Move to…*.
+- **Testing:** an existing topic picked, a new one made and shared by two messages; a title with an address, and
+  an id that was not sent, give no topic and are not asked again; a moved message stays moved through a new
+  reading; a match proposed only from an issue that was sent, never over the coordinator's answer, and none once
+  the list is 48 hours old; a message that orders topics, matches and marks, with an answer that obeys, changes
+  nothing but the topic of the messages asked about; the routes' bodies; one outbound request to open a topic and
+  none otherwise; the daily read without a token, once a day, keeping the list when refused. The hosted browser
+  run reads By topic, confirms a match, renames, notes and marks a topic, desktop and phone, and fires the daily
+  line.

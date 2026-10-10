@@ -1,6 +1,6 @@
 # AI help on learners' feedback — design
 
-**Date:** 2026-10-10 · **Status:** agreed with the product owner on 2026-10-10 (§10); the weekly mail (§3.4, without the AI's part) and stage B (§3.1: per message, the switch, the limit) built; §3.2 to §3.5 not built
+**Date:** 2026-10-10 · **Status:** agreed with the product owner on 2026-10-10 (§10); the weekly mail (§3.4, without the AI's part) and stage B (§3.1: per message, the switch, the limit) built; stage C (§3.2 topics, §3.3 known issues) built; §3.4's AI part and §3.5 not built
 **Issue:** #158. **Builds on:** the Feedback tab (#157; `2026-10-05-hosted-review-app-design.md` §16) and the
 feedback form (#153; `2026-09-20-vocabulary-learning-app-design.md` §8.12).
 
@@ -81,12 +81,32 @@ week.
   coordinator moved is never moved again by the model.
 - A topic can be given a state and a note like a message; marking it *Done* marks its messages.
 
+**As built (stage C).** The topic travels as two flat fields, `topic_id` (0 for none) and `topic_new` (empty for
+none), so that the schema has one plain type a field; the check after the answer decides which counts. An id
+counts only when it was sent with the request. A new title must be one line of 3 to 80 characters that masking
+would not change, since a title is shown in the tab and will be named in the weekly mail; one that is refused
+leaves the message in no topic, and the message is not asked about again for it. Titles are unique without
+regard to case. The model is given the 150 topics used most recently. The topic's state is its own: Done marks
+its messages done, those that have a reading, and Not doing marks none. A merge keeps the target's title and
+state, puts the source's note under the target's, and passes on the source's match when the target has none.
+Opening a topic reads its 50 newest messages from the learner app's server by id. *Forget the AI's results* drops
+the topics nobody worked on, and where messages were moved.
+
 ### 3.3 Match against known issues
 
 Once a day at most, the review app reads the titles and numbers of the open issues of the public app repository
 (they are public; no access is needed) and keeps them. The model is given them with the topics and may attach one
 issue number to a topic. The topic then shows "looks like #94", as a link. The coordinator confirms or removes the
 match.
+
+**As built (stage C).** A timed job at 05:00 UTC reads at most 300 open issues from GitHub's public API with no
+token; the repository is the setting `APP_REPO`. One read a UTC day at most, recorded before it is made, and never
+a second try: a refused read keeps the stored list. The model is offered at most 100 issues, and only while the
+list is less than 48 hours old. The issue travels as one field, `issue` (0 for none), and counts only when its
+number was sent. A match is `proposed` only on a topic that has none; the coordinator's `confirmed` (also a
+number they typed) and `removed` are never changed by the AI, and after `removed` it proposes none for that
+topic. An issue's title is written by whoever opened the issue: the prompt says it is data, and addresses in it
+are masked.
 
 ### 3.4 The week
 

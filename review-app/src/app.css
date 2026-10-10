@@ -1680,7 +1680,7 @@ kbd {
 .feedback-topic {
   display: flex;
   flex-wrap: wrap;
-  align-items: end;
+  align-items: center;
   gap: var(--space-2) var(--space-4);
 }
 
@@ -1691,8 +1691,17 @@ kbd {
   overflow-wrap: anywhere;
 }
 
+/* The label beside its select, on one line with the topic's name. */
 .feedback-move {
-  flex: 0 1 16rem;
+  display: flex;
+  flex: 0 1 22rem;
+  align-items: center;
+  gap: var(--space-2);
+  white-space: nowrap;
+}
+
+.feedback-move > select {
+  min-width: 0;
 }
 
 /* By topic (spec 2026-10-10 §3.2): a line for each topic, which opens to its tools and its messages. The line is
@@ -1717,7 +1726,7 @@ kbd {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-2) var(--space-4);
+  gap: var(--space-1) var(--space-4);
   padding: var(--space-3) var(--space-4);
 }
 
@@ -1736,8 +1745,7 @@ kbd {
   align-items: baseline;
   gap: var(--space-2);
   width: 100%;
-  min-height: 2.75rem;
-  padding: var(--space-1) 0;
+  padding: var(--space-2) 0;
   font: inherit;
   font-weight: 600;
   text-align: left;
@@ -1832,8 +1840,18 @@ kbd {
   flex: 0 1 16rem;
 }
 
+/* The number and its button on one line. */
 .topic-issue {
-  flex: 0 1 14rem;
+  flex: 0 1 18rem;
+  flex-wrap: nowrap;
+}
+
+.topic-issue > .field {
+  flex: 1 1 6rem;
+}
+
+.topic-issue > .feedback-status {
+  flex: 0 1 auto;
 }
 
 .topic-mark {
@@ -2161,6 +2179,16 @@ kbd {
     flex: 1 1 100%;
   }
 
+  .topic-issue {
+    flex-wrap: wrap;
+  }
+
+  .feedback-move {
+    display: grid;
+    white-space: normal;
+  }
+
+  .topic-open,
   .topic-line .button,
   .topic-tools .button {
     min-height: 2.75rem;
