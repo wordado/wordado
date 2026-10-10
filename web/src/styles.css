@@ -1858,6 +1858,12 @@ dialog.report input[type='text'] {
   color: var(--ink-soft);
 }
 
+/* The sense note is what tells two senses of one word apart here: the size the path's rows give it, not the card's small print. */
+.theme-matches .sense,
+.theme-unthemed .sense {
+  font-size: 0.85em;
+}
+
 /* In a search the card says which group its theme is of; quieter than "Studying now". */
 .theme-text .theme-state {
   align-self: flex-start;
