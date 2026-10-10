@@ -90,7 +90,8 @@ describe('AdminFeedbackWeek: the week at the top of the Feedback tab (spec 2026-
     const { write, again } = shown(week({ paragraph: null }), new Promise<FeedbackWeekParagraph>((resolve) => (done = resolve)))
     const region = await section()
     expect(within(region).getByText('12 messages read by the AI in the last 7 days')).toBeTruthy()
-    expect(within(region).getByRole('status').textContent).toBe('The AI is writing about the week…')
+    // (Asked for once the numbers are shown: the line comes a moment after them.)
+    expect((await within(region).findByText('The AI is writing about the week…')).getAttribute('role')).toBe('status')
     expect(within(region).queryByText('Written by the AI')).toBeNull()
     done({ paragraph: PARAGRAPH, why: null })
     expect(await within(region).findByText(PARAGRAPH)).toBeTruthy()
@@ -104,7 +105,7 @@ describe('AdminFeedbackWeek: the week at the top of the Feedback tab (spec 2026-
   it('keeps the numbers when the paragraph fails, says so in one line, and does not ask again by itself', async () => {
     const { write, again } = shown(week({ paragraph: null }), { paragraph: null, why: 'late' })
     const region = await section()
-    expect((await within(region).findByRole('status')).textContent).toBe('The AI wrote nothing about the week this time (it took too long).')
+    expect((await within(region).findByText('The AI wrote nothing about the week this time (it took too long).')).getAttribute('role')).toBe('status')
     expect(within(region).getByText('12 messages read by the AI in the last 7 days')).toBeTruthy()
     expect(within(region).queryByText('Written by the AI')).toBeNull()
     again(1)
@@ -114,11 +115,11 @@ describe('AdminFeedbackWeek: the week at the top of the Feedback tab (spec 2026-
 
   it('says when the day’s limit is why, and when the request itself failed', async () => {
     shown(week({ paragraph: null }), { paragraph: null, why: 'limit' })
-    expect((await within(await section()).findByRole('status')).textContent).toBe('Today’s limit of 200 AI calls is reached: nothing is written about the week.')
+    expect(await within(await section()).findByText('Today’s limit of 200 AI calls is reached: nothing is written about the week.')).toBeTruthy()
     cleanup()
     vi.restoreAllMocks()
     shown(week({ paragraph: null }), new Error('away'))
-    expect((await within(await section()).findByRole('status')).textContent).toBe('The AI wrote nothing about the week this time (it could not be reached).')
+    expect(await within(await section()).findByText('The AI wrote nothing about the week this time (it could not be reached).')).toBeTruthy()
   })
 
   it('asks for no paragraph while the AI help is off: the numbers of what it read before stay', async () => {
