@@ -217,6 +217,16 @@ export interface FeedbackTopicView extends FeedbackTopicRef {
   readonly worst: FeedbackSeverity | null
 }
 
+/** `GET /api/admin/feedback/topics/:id`: the topic and its newest messages, as the list of messages gives them.
+ * `more` is how many older messages it has beside them. `incomplete`: the learner app's server did not answer by id
+ * (it is from before that), so messages may be missing from `items` that it still has. */
+export interface FeedbackTopicOpened {
+  readonly topic: FeedbackTopicView
+  readonly items: readonly FeedbackView[]
+  readonly more: number
+  readonly incomplete: boolean
+}
+
 /** The AI's reading of a message as the tab shows it: with the topic the message is in now, which the AI or the coordinator chose, or none. */
 export type FeedbackAiView = FeedbackAi & { readonly topic: FeedbackTopicRef | null }
 
