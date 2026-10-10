@@ -24,6 +24,29 @@ describe('appJwt', () => {
 describe('GitHub', () => {
   const make = async (fake: FakeGitHub) => new GitHub({ api: 'https://api.github.test', appId: '1', installationId: '2', privateKeyPem: (await testAppKey()).pem, repo: fake.repo }, (i, init) => fake.fetch(i.replace('https://api.github.test', 'https://x'), init), () => now)
 
+  it('reads many files in a few requests: null for one that is not there, and by itself one that comes cut short', async () => {
+    const files: Record<string, string> = {}
+    for (let i = 0; i < 100; i++) files[`review/q/${i}.csv`] = `text ${i}, „кирилица“\n`
+    const fake = new FakeGitHub(files)
+    fake.truncated.add('review/q/7.csv')
+    const gh = await make(fake)
+    const head = await gh.headSha()
+    fake.requests.length = 0
+    const got = await gh.readTexts([...Object.keys(files), 'review/q/none.csv'], head)
+    expect(got.size).toBe(101)
+    for (const [path, text] of Object.entries(files)) expect(got.get(path)).toBe(text)
+    expect(got.get('review/q/none.csv')).toBeNull()
+    expect(fake.requests.filter((r) => r === 'POST /graphql')).toHaveLength(3)
+    expect(fake.requests.filter((r) => r.includes('/contents/'))).toEqual(['GET /repos/wordado/wordado-content/contents/review/q/7.csv'])
+    expect(await gh.readTexts([], head)).toEqual(new Map())
+  })
+
+  it('says what GitHub said when the many-file read is refused', async () => {
+    const fake = new FakeGitHub({ 'review/a.csv': 'old' })
+    const gh = new GitHub({ api: 'https://api.github.test', appId: '1', installationId: '2', privateKeyPem: (await testAppKey()).pem, repo: 'wordado/other' }, (i, init) => fake.fetch(String(i), init), () => new Date('2026-10-05T10:00:00Z'))
+    await expect(gh.readTexts(['review/a.csv'], 'sha-main')).rejects.toThrow(/files.*Could not resolve to a Repository/)
+  })
+
   it('reads a file at a commit, commits files on a new branch and opens a pull request', async () => {
     const fake = new FakeGitHub({ 'review/a.csv': 'old', 'review/b.csv': 'keep' })
     const gh = await make(fake)

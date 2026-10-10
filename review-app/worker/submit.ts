@@ -126,9 +126,12 @@ export async function submit(deps: Deps, me: ReviewerRow, a: AssignmentRow, gh: 
   const leftOut: { key: string; reason: 'changed' | 'gone' }[] = []
   const files: { path: string; content: string }[] = []
   const sent: DecisionRow[] = []
+  const sidecarOf = (file: string) => file.replace(/\.csv$/, '.json')
+  // All of them in a few requests: a spot check touches files from all over its queue.
+  const texts = await gh.readTexts([...byFile.keys()].flatMap((file) => [file, sidecarOf(file)]), head)
   for (const [file, decisions] of byFile) {
-    const csv = await gh.readText(file, head)
-    const sidecarText = await gh.readText(file.replace(/\.csv$/, '.json'), head)
+    const csv = texts.get(file) ?? null
+    const sidecarText = texts.get(sidecarOf(file)) ?? null
     if (csv === null || sidecarText === null) {
       for (const d of decisions) leftOut.push({ key: d.key, reason: 'gone' })
       continue
