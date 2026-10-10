@@ -2,6 +2,9 @@
 
 Date: 2026-10-05. Status: draft for the product owner's review.
 Builds on: `2026-10-04-ai-review-and-review-app-design.md` (the local review app, §5; "Remote reviewers later", §8).
+Revised 2026-10-10: AI help on the Feedback tab, per message (issue #158, stage B): §16.9 added, with its routes
+and its three tables; §16.3, §16.7 and §16.8 follow. With the help switched on, D1 holds text derived from a
+learner's message (a translation, a summary); with it off, nothing changes.
 Revised 2026-10-10: the weekly feedback mail and the Worker's first timed job (issue #158): §8 gains the mail, §14
 the cron triggers, §16.3 the table that keeps it to one a week, §16.6 and §16.8 follow. The learner app's server
 mails no feedback, so this mail is the only notice that feedback came. AI help on the Feedback tab is designed in
@@ -539,7 +542,8 @@ CREATE TABLE feedback_marks (
 );
 ```
 
-A message with no row is new and has no note. Nothing a learner sent is in the table.
+A message with no row is new and has no note. Nothing a learner sent is in the table. (The AI help, §16.9, keeps
+its own tables; with it switched on, `feedback_ai` holds text derived from a message.)
 
 Migration `0005_weekly_mails.sql` adds `weekly_mails`, a row for each week the weekly mail (§8) was looked at:
 `week` (the UTC date of the Monday the week ended on), `claimed_at`, `messages` (the count; null while a run holds
@@ -593,7 +597,7 @@ tab is in the address (`#feedback`), like the others, and the review app's own w
 - Searching old feedback, and a count of open messages on the tab.
 - More than one coordinator working at once: the last mark saved wins.
 - Answering from the app: the address opens the coordinator's own mail program.
-- Removing the mark of a message the server no longer has.
+- Removing the mark of a message the server no longer has. (The AI's reading of such a message is removed: §16.9.)
 
 ### 16.8 Testing
 
@@ -613,3 +617,38 @@ tab is in the address (`#feedback`), like the others, and the review app's own w
   more, not connected, unreachable with Try again, empty.
 - **E2E:** against a fake learner app server, on a desktop screen and a phone: an admin opens the tab, sees two
   messages, marks one done, writes a note, filters, and finds the marks after a reload.
+
+### 16.9 AI help
+
+Designed in `2026-10-10-feedback-ai-help-design.md`; this is what is built of it so far (its §3.1: per message).
+Off until an admin switches it on, and absent without the secret `FEEDBACK_AI_KEY`.
+
+- **Routes,** admins only, answered with `cache-control: no-store`, registered before the mark's route so that
+  `/api/admin/feedback/ai` is not read as a message called "ai":
+  - `GET /api/admin/feedback/ai`: `{ setUp, needs, on, model, callsToday, dailyCalls, reads }`; `needs` is the
+    setting that is missing or wrong while it is not set up.
+  - `PUT /api/admin/feedback/ai` takes exactly `{ on }`; on while it is not set up is a 409 that names that setting.
+  - `POST /api/admin/feedback/ai/read` takes exactly `{ kind, before }`, the page as the list names it, and never
+    a message: the Worker reads that page again from the learner app's server, sends the messages with no result
+    of the current prompt version to the model in one call (at most 25, the newest first), keeps what fits and
+    answers `{ results, asked, left, why }`. Two requests go out at most.
+  - `DELETE /api/admin/feedback/ai/results` forgets every result.
+  - `GET /api/admin/feedback` gives each message its stored result as `ai`, and asks the model nothing.
+- **Tables,** migration `0006_feedback_ai.sql`: `feedback_ai` (by message id: language, translation, category,
+  severity, summary, the message's own time, the model, the prompt version, when); `feedback_ai_calls` (a row a
+  call, counted before it is made, for the limit a UTC day); `settings` (the switch, with who set it and when).
+- **A result goes when its message does:** reading a page of the list with no filter by kind removes the results
+  kept between the page's ends for messages the server did not give. *Forget the AI's results* removes all.
+- **Settings:** `FEEDBACK_AI_AUTH` (`key`, the default, or `google-service-account`), `FEEDBACK_AI_KEY` (secret: the
+  key, or a service account's JSON key file), `FEEDBACK_AI_URL` (https; OpenRouter's by default with a key, on
+  `googleapis.com` and with no default with a service account), `FEEDBACK_AI_MODEL`, `FEEDBACK_AI_DAILY_CALLS`,
+  `FEEDBACK_READS`. With a service account the Worker makes an access token from the key file and keeps it in
+  memory (design `2026-10-10-feedback-ai-help-design.md` §4).
+- **Testing:** the masking; one call for a page with stored and new messages; the address for an answer, the
+  browser and the versions in no request; a message written as an instruction, with an answer that obeys it,
+  changes no mark and no setting; an answer that does not fit stores nothing; the limit and the next UTC day; the
+  20 seconds; each failure said once; no log line with a message, a translation or the key; the request with and
+  without what only OpenRouter knows; an address that is not https; the tab without the AI as it was. For the
+  service account: the JWT's header, claims and signature, checked with a key made in the test; the token kept
+  across two reads and made again after its hour; a key file, a token and a call that are refused. The hosted
+  browser run reads the tab with a stand-in model, signed in as a service account, desktop and phone.

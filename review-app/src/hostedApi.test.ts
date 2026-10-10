@@ -27,3 +27,21 @@ describe('hostedApi.decide', () => {
     await expect(hostedApi.decide({ assignment: 1, queue: 'q', file: 'f', key: 'k', rowHash: 'h', action: 'keep' })).rejects.toThrow('internal error')
   })
 })
+
+describe('hostedApi.admin: the AI help on feedback', () => {
+  it('asks for the status, sets the switch, has a page read by the page’s own coordinates, and forgets the results', async () => {
+    const fetched = vi.fn(async (_path: string, _init?: RequestInit) => new Response('{}', { status: 200 }))
+    vi.stubGlobal('fetch', fetched)
+    const json = { 'content-type': 'application/json' }
+    await hostedApi.admin.feedbackAi()
+    expect(fetched.mock.calls[0]).toEqual(['/api/admin/feedback/ai'])
+    await hostedApi.admin.setFeedbackAi(true)
+    expect(fetched.mock.calls[1]).toEqual(['/api/admin/feedback/ai', { method: 'PUT', headers: json, body: '{"on":true}' }])
+    await hostedApi.admin.readFeedbackAi({ kind: 'bug', before: 40 })
+    expect(fetched.mock.calls[2]).toEqual(['/api/admin/feedback/ai/read', { method: 'POST', headers: json, body: '{"kind":"bug","before":40}' }])
+    await hostedApi.admin.readFeedbackAi({ kind: '' })
+    expect(fetched.mock.calls[3]).toEqual(['/api/admin/feedback/ai/read', { method: 'POST', headers: json, body: '{"kind":"","before":null}' }])
+    await hostedApi.admin.forgetFeedbackAi()
+    expect(fetched.mock.calls[4]).toEqual(['/api/admin/feedback/ai/results', { method: 'DELETE', headers: json, body: '{}' }])
+  })
+})

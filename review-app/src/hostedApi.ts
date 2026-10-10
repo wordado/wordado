@@ -2,6 +2,8 @@ import type { FeedbackKind } from '@wordado/core'
 import type { DecisionResult } from '../server/types'
 import type {
   AssignmentView,
+  FeedbackAiRead,
+  FeedbackAiStatus,
   FeedbackList,
   FeedbackMark,
   FeedbackState,
@@ -84,5 +86,11 @@ export const hostedApi = {
     feedback: (q: { kind: FeedbackKind | ''; state: FeedbackStateFilter; before?: number }) =>
       get<FeedbackList>(`/api/admin/feedback?${new URLSearchParams({ kind: q.kind, state: q.state, ...(q.before !== undefined ? { before: String(q.before) } : {}) }).toString()}`),
     markFeedback: (id: number, mark: { state: FeedbackState; note: string }) => send<FeedbackMark & { id: number }>('PUT', `/api/admin/feedback/${id}`, mark),
+    /** The AI help on feedback (spec 2026-10-10): whether it is set up and on, and how the day's limit stands. */
+    feedbackAi: () => get<FeedbackAiStatus>('/api/admin/feedback/ai'),
+    setFeedbackAi: (on: boolean) => send<FeedbackAiStatus>('PUT', '/api/admin/feedback/ai', { on }),
+    /** Has the AI read one page of the list, named as the list names it. No message goes from the browser: the Worker reads the page itself. */
+    readFeedbackAi: (q: { kind: FeedbackKind | ''; before?: number }) => send<FeedbackAiRead>('POST', '/api/admin/feedback/ai/read', { kind: q.kind, before: q.before ?? null }),
+    forgetFeedbackAi: () => send<{ forgotten: number }>('DELETE', '/api/admin/feedback/ai/results', {}),
   },
 }

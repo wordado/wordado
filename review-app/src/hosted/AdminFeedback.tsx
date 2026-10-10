@@ -1,13 +1,26 @@
 import type { FeedbackKind } from '@wordado/core'
 import { type FormEvent, useCallback, useEffect, useId, useRef, useState } from 'react'
-import { type FeedbackState, type FeedbackStateFilter, type FeedbackView, MAX_FEEDBACK_NOTE_LENGTH } from '../../shared/hosted'
+import {
+  type FeedbackAiStatus,
+  type FeedbackAiWhy,
+  type FeedbackCategory,
+  type FeedbackSeverity,
+  type FeedbackState,
+  type FeedbackStateFilter,
+  type FeedbackView,
+  MAX_FEEDBACK_NOTE_LENGTH,
+} from '../../shared/hosted'
 import { hostedApi } from '../hostedApi'
+import { AdminFeedbackAi, aiFailureLine } from './AdminFeedbackAi'
 import { count, dateOf, messageOf } from './adminUtil'
 
 const KIND_LABEL: Readonly<Record<FeedbackKind, string>> = { bug: 'Bug', idea: 'Idea', other: 'Other' }
 const KIND_CHIP: Readonly<Record<FeedbackKind, string>> = { bug: 'chip major', idea: 'chip', other: 'chip off' }
 const STATES: readonly (readonly [FeedbackState, string])[] = [['new', 'New'], ['seen', 'Looked at'], ['done', 'Done'], ['declined', 'Not doing']]
 const KIND_FILTERS: readonly (readonly [FeedbackKind | '', string])[] = [['', 'All'], ['bug', 'Bug'], ['idea', 'Idea'], ['other', 'Other']]
+const CATEGORY_LABEL: Readonly<Record<FeedbackCategory, string>> = { bug: 'Bug', idea: 'Idea', question: 'Question', praise: 'Praise', junk: 'Junk' }
+const SEVERITY_LABEL: Readonly<Record<FeedbackSeverity, string>> = { blocks: 'Blocks study', annoys: 'Annoys', cosmetic: 'Cosmetic' }
+const SEVERITY_CHIP: Readonly<Record<FeedbackSeverity, string>> = { blocks: 'chip major', annoys: 'chip minor', cosmetic: 'chip off' }
 const STATE_FILTERS: readonly (readonly [FeedbackStateFilter, string])[] = [['open', 'Open'], ['all', 'All'], ['done', 'Done'], ['declined', 'Not doing']]
 
 /** What the tab has from the server: nothing yet, that feedback is not connected, that it could not be read, or the
@@ -18,8 +31,13 @@ type Loaded =
   | { readonly kind: 'failed'; readonly message: string }
   | { readonly kind: 'list'; readonly items: readonly FeedbackView[]; readonly nextBefore: number | null; readonly read: number; readonly moreFailed: string }
 
+/** A page the AI has not read to its end: its cursor (none for the newest page) and how many of its messages have no result. */
+interface AiLeft { readonly before: number | undefined; readonly left: number }
+
 /** The Feedback tab (spec §16): what learners wrote about the app, newest first, read from the learner app's server
- * each time, and the coordinator's own mark on each message: where it stands, and a note. */
+ * each time, and the coordinator's own mark on each message: where it stands, and a note. With the AI help set up
+ * and switched on (spec 2026-10-10), each page shown is then read by the AI, and what it says is put on the cards
+ * as advice; without it, or when it fails, the tab is what it is without it and says so in one line. */
 export function AdminFeedback() {
   const [kind, setKind] = useState<FeedbackKind | ''>('')
   const [state, setState] = useState<FeedbackStateFilter>('open')
@@ -27,32 +45,121 @@ export function AdminFeedback() {
   const [busy, setBusy] = useState(true)
   // Only the answer to the latest question is shown: a filter changed while a page was on its way wins.
   const asked = useRef(0)
+  // The AI help: how it stands (null: not known yet), how many of its readings are on their way, why the last one
+  // gave nothing, and the pages with messages it has not read yet.
+  const [ai, setAi] = useState<FeedbackAiStatus | null | 'failed'>(null)
+  const [aiReading, setAiReading] = useState(0)
+  const [aiWhy, setAiWhy] = useState<FeedbackAiWhy | null>(null)
+  const [aiLeft, setAiLeft] = useState<readonly AiLeft[]>([])
+  const [aiUnreached, setAiUnreached] = useState(false)
+  // The AI's answers are for one list: a list read anew (another filter) takes none of the answers asked for before it.
+  const listed = useRef(0)
+  const aiKnown = useRef<Promise<FeedbackAiStatus | null> | null>(null)
 
-  const load = useCallback(async (filter: { kind: FeedbackKind | ''; state: FeedbackStateFilter }, older?: { readonly items: readonly FeedbackView[]; readonly before: number; readonly read: number }) => {
-    const mine = ++asked.current
-    setBusy(true)
-    if (!older) setLoaded({ kind: 'loading' })
-    try {
-      const page = await hostedApi.admin.feedback({ ...filter, ...(older ? { before: older.before } : {}) })
-      if (mine !== asked.current) return
-      if (!page.connected) setLoaded({ kind: 'unconnected' })
-      else setLoaded({ kind: 'list', items: [...(older?.items ?? []), ...page.items], nextBefore: page.nextBefore, read: (older?.read ?? 0) + page.read, moreFailed: '' })
-    } catch (err) {
-      if (mine !== asked.current) return
-      // The older messages could not be read: the ones already shown stay, with their marks.
-      if (older) setLoaded({ kind: 'list', items: older.items, nextBefore: older.before, read: older.read, moreFailed: messageOf(err) })
-      else setLoaded({ kind: 'failed', message: messageOf(err) })
-    } finally {
-      if (mine === asked.current) setBusy(false)
-    }
+  /** The AI help's status, asked for once. A failure is not the list's: the tab goes on without the AI. */
+  const aiStatus = useCallback(() => {
+    aiKnown.current ??= hostedApi.admin.feedbackAi().then(
+      (status) => (setAi(status), status),
+      () => (setAi('failed'), null),
+    )
+    return aiKnown.current
   }, [])
 
+  /** Has the AI read one page already shown, and puts what it says on the cards. The list is not read again. */
+  const readAi = useCallback(
+    async (pageKind: FeedbackKind | '', before: number | undefined, list: number) => {
+      const status = await aiStatus()
+      if (list !== listed.current || !status?.setUp || !status.on) return
+      setAiReading((n) => n + 1)
+      try {
+        const answer = await hostedApi.admin.readFeedbackAi({ kind: pageKind, ...(before !== undefined ? { before } : {}) })
+        if (list !== listed.current) return
+        setAiUnreached(false)
+        // Switched off, or the key taken away, since the tab asked: the panel shows how it stands now.
+        if (answer.why === 'off' || answer.why === 'not-set-up') {
+          aiKnown.current = null
+          void aiStatus()
+          return
+        }
+        setLoaded((now) => (now.kind === 'list' ? { ...now, items: now.items.map((item) => (answer.results[item.id] ? { ...item, ai: answer.results[item.id]! } : item)) } : now))
+        setAiWhy(answer.why)
+        setAiLeft((pages) => [...pages.filter((p) => p.before !== before), ...(answer.left > 0 ? [{ before, left: answer.left }] : [])])
+        if (answer.asked > 0) setAi((now) => (now !== null && now !== 'failed' ? { ...now, callsToday: now.callsToday + 1 } : now))
+      } catch {
+        if (list === listed.current) setAiUnreached(true)
+      } finally {
+        // A list read anew started its own count: an answer to the one before it is not waited for.
+        if (list === listed.current) setAiReading((n) => n - 1)
+      }
+    },
+    [aiStatus],
+  )
+
+  const load = useCallback(
+    async (filter: { kind: FeedbackKind | ''; state: FeedbackStateFilter }, older?: { readonly before: number }) => {
+      const mine = ++asked.current
+      const list = older ? listed.current : ++listed.current
+      setBusy(true)
+      if (!older) {
+        setLoaded({ kind: 'loading' })
+        setAiReading(0)
+        setAiWhy(null)
+        setAiLeft([])
+      }
+      try {
+        const page = await hostedApi.admin.feedback({ ...filter, ...(older ? { before: older.before } : {}) })
+        if (mine !== asked.current) return
+        if (!page.connected) return setLoaded({ kind: 'unconnected' })
+        // The older messages go under the ones shown as they are now: with what the AI said of them in the meantime.
+        if (older) setLoaded((now) => (now.kind === 'list' ? { kind: 'list', items: [...now.items, ...page.items], nextBefore: page.nextBefore, read: now.read + page.read, moreFailed: '' } : now))
+        else setLoaded({ kind: 'list', items: page.items, nextBefore: page.nextBefore, read: page.read, moreFailed: '' })
+        void readAi(filter.kind, older?.before, list)
+      } catch (err) {
+        if (mine !== asked.current) return
+        // The older messages could not be read: the ones already shown stay, with their marks.
+        if (older) setLoaded((now) => (now.kind === 'list' ? { ...now, moreFailed: messageOf(err) } : now))
+        else setLoaded({ kind: 'failed', message: messageOf(err) })
+      } finally {
+        if (mine === asked.current) setBusy(false)
+      }
+    },
+    [readAi],
+  )
+
   useEffect(() => void load({ kind, state }), [load, kind, state])
+  useEffect(() => void aiStatus(), [aiStatus])
+
+  /** The switch was moved. On: the list is read again, and with it the AI reads the page. Off: nothing more is asked. */
+  const switched = (status: FeedbackAiStatus) => {
+    const was = ai !== null && ai !== 'failed' && ai.on
+    aiKnown.current = Promise.resolve(status)
+    setAi(status)
+    setAiUnreached(false)
+    if (status.setUp && status.on && !was) void load({ kind, state })
+    if (!status.on) {
+      setAiWhy(null)
+      setAiLeft([])
+    }
+  }
+
+  /** The AI's results are gone: its parts leave the cards, which stay as they are otherwise. */
+  const forgotten = () => {
+    setLoaded((now) => (now.kind === 'list' ? { ...now, items: now.items.map((item) => (item.ai ? { ...item, ai: null } : item)) } : now))
+    setAiWhy(null)
+    setAiLeft([])
+  }
 
   const filtered = kind !== '' || state !== 'all'
+  const items = loaded.kind === 'list' ? loaded.items : []
+  // Under Open, what the AI reads as junk is folded away under the list: out of the way, never out of reach.
+  const junk = state === 'open' ? items.filter((item) => item.ai?.category === 'junk') : []
+  const shown = junk.length > 0 ? items.filter((item) => item.ai?.category !== 'junk') : items
+  const aiFailed = aiFailureLine(aiWhy, ai !== null && ai !== 'failed' ? ai.dailyCalls : 0)
+  const left = aiLeft.reduce((sum, p) => sum + p.left, 0)
   return (
     <>
       <h2 className="visually-hidden">Feedback</h2>
+      <AdminFeedbackAi status={ai} unreached={aiUnreached} onStatus={switched} onForgotten={forgotten} />
       <div className="tab-actions feedback-filters">
         <label className="field">
           Kind
@@ -95,23 +202,55 @@ export function AdminFeedback() {
       )}
       {loaded.kind === 'list' && (
         <>
-          {loaded.items.length === 0 && (
+          {aiReading > 0 && (
+            <p role="status" className="note feedback-ai-reading">
+              The AI is reading the new messages…
+            </p>
+          )}
+          {aiReading === 0 && aiFailed !== '' && (
+            <p role="status" className="note feedback-ai-note">
+              {aiFailed}
+            </p>
+          )}
+          {aiReading === 0 && aiFailed === '' && left > 0 && (
+            <div className="feedback-ai-left">
+              <p role="status" className="note feedback-ai-note">
+                {count(left, 'message')} {left === 1 ? 'has' : 'have'} no AI result yet.
+              </p>
+              <button className="button small" onClick={() => void readAi(kind, aiLeft[0]!.before, listed.current)}>
+                Ask the AI
+              </button>
+            </div>
+          )}
+          {shown.length === 0 && (
             <p className="note">
               {loaded.read === 0 && kind === '' ? 'No feedback yet.' : loaded.nextBefore === null ? 'Nothing here to show.' : `Nothing to show among the newest ${count(loaded.read, 'message')}.`}
             </p>
           )}
-          {loaded.items.length > 0 && (
+          {shown.length > 0 && (
             <>
               <p className="eyebrow">
-                {count(loaded.items.length, 'message')}
-                {filtered && loaded.read > loaded.items.length ? ` of ${loaded.read.toLocaleString('en')} read` : ''}
+                {count(shown.length, 'message')}
+                {filtered && loaded.read > shown.length ? ` of ${loaded.read.toLocaleString('en')} read` : ''}
               </p>
               <ul className="feedback-list" aria-label="Feedback">
-                {loaded.items.map((item) => (
+                {shown.map((item) => (
                   <FeedbackCard key={item.id} item={item} />
                 ))}
               </ul>
             </>
+          )}
+          {junk.length > 0 && (
+            <details className="feedback-junk">
+              <summary>
+                {count(junk.length, 'message')} the AI reads as junk
+              </summary>
+              <ul className="feedback-list" aria-label="Messages the AI reads as junk">
+                {junk.map((item) => (
+                  <FeedbackCard key={item.id} item={item} />
+                ))}
+              </ul>
+            </details>
           )}
           {loaded.moreFailed && (
             <p role="alert" className="notice">
@@ -120,7 +259,7 @@ export function AdminFeedback() {
           )}
           {loaded.nextBefore !== null && (
             <div className="tab-actions">
-              <button className="button" disabled={busy} onClick={() => void load({ kind, state }, { items: loaded.items, before: loaded.nextBefore!, read: loaded.read })}>
+              <button className="button" disabled={busy} onClick={() => void load({ kind, state }, { before: loaded.nextBefore! })}>
                 {loaded.moreFailed ? 'Try again' : 'Load more'}
               </button>
             </div>
@@ -146,7 +285,8 @@ function SaveStatus(props: { saving: Saving; what: string }) {
   )
 }
 
-/** One message: what the learner sent, the details folded away, and the mark. The state saves when it is chosen;
+/** One message: what the learner sent, what the AI reads in it when it has (marked as the AI's, under the learner's
+ * own words, which are never changed), the details folded away, and the mark. The state saves when it is chosen;
  * the note on Save. Each save sends the other one as it was last saved. */
 function FeedbackCard(props: { item: FeedbackView }) {
   const { item } = props
@@ -199,6 +339,23 @@ function FeedbackCard(props: { item: FeedbackView }) {
           <span className="note">{item.signedIn ? 'signed in' : 'not signed in'}</span>
         </h3>
         <p className="feedback-message">{item.message}</p>
+        {item.ai && item.ai.translation !== '' && (
+          <div className="feedback-translated">
+            <p className="feedback-ai-label">Translation by the AI</p>
+            <p className="feedback-translation" lang="en">
+              {item.ai.translation}
+            </p>
+          </div>
+        )}
+        {item.ai && (
+          <div className="feedback-ai">
+            <p className="feedback-ai-chips">
+              <span className="chip ai">AI: {CATEGORY_LABEL[item.ai.category]}</span>
+              {item.ai.severity && <span className={SEVERITY_CHIP[item.ai.severity]}>{SEVERITY_LABEL[item.ai.severity]}</span>}
+            </p>
+            <p className="feedback-ai-summary">AI summary: {item.ai.summary}</p>
+          </div>
+        )}
         {item.contactEmail !== '' && (
           <p className="feedback-contact">
             Answer to <span className="invite-link">{item.contactEmail}</span>{' '}

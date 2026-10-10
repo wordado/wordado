@@ -30,6 +30,7 @@ beforeEach(() => {
   vi.spyOn(hostedApi.admin, 'assignments').mockResolvedValue([])
   vi.spyOn(hostedApi.admin, 'submissions').mockResolvedValue([])
   vi.spyOn(hostedApi.admin, 'feedback').mockResolvedValue({ connected: true, items: [], read: 0, nextBefore: null })
+  vi.spyOn(hostedApi.admin, 'feedbackAi').mockResolvedValue({ setUp: false, needs: 'FEEDBACK_AI_KEY', on: false, model: 'test/model', callsToday: 0, dailyCalls: 200, reads: ['en', 'bg'] })
 })
 
 const openTab = async (name: string) => fireEvent.click(await screen.findByRole('tab', { name }))

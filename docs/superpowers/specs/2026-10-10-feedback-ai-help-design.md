@@ -1,6 +1,6 @@
 # AI help on learners' feedback — design
 
-**Date:** 2026-10-10 · **Status:** agreed with the product owner on 2026-10-10 (§10); not built
+**Date:** 2026-10-10 · **Status:** agreed with the product owner on 2026-10-10 (§10); the weekly mail (§3.4, without the AI's part) and stage B (§3.1: per message, the switch, the limit) built; §3.2 to §3.5 not built
 **Issue:** #158. **Builds on:** the Feedback tab (#157; `2026-10-05-hosted-review-app-design.md` §16) and the
 feedback form (#153; `2026-09-20-vocabulary-learning-app-design.md` §8.12).
 
@@ -61,6 +61,14 @@ Worker may make only so many requests while it answers one). For each message th
 The page shows at once what is already stored; the new results appear when the request returns. A failure leaves
 the messages as they are, to be tried again the next time the page is read.
 
+**As built (stage B).** Two requests from the tab: the list, which joins the stored results and asks the model
+nothing, and then a request that names the page (its kind and cursor, never a message); the Worker reads that
+page again and makes the one call. A call takes at most 25 messages, the newest first; the tab says how many are
+left and offers **Ask the AI** for them. `topic` is not asked for yet (§3.2). A bug's severity travels as one of
+four words, with "none" for no severity, so that the schema has one type a field; it is kept as null. The
+translation and the summary are masked once more before they are kept. Besides the text, the screen is masked
+too, and the language is sent only when it is a two-letter code: both come from the learner's browser.
+
 ### 3.2 Groups
 
 Messages about the same thing share a **topic**: a short title in the working language. The model is given the
@@ -106,10 +114,30 @@ topic, which becomes its match.
 
 ## 4. Where it runs, and what is stored
 
-- The model is called from the review app's Worker, through OpenRouter, with the model named in
-  `FEEDBACK_AI_MODEL` (the corpus reviewer's model by default). The key is a Worker secret, `FEEDBACK_AI_KEY`,
+- The model is called from the review app's Worker, through the service named in `FEEDBACK_AI_URL` (OpenRouter by
+  default; any service that takes the same request, at an https address, so that another one is a change of
+  settings and not of code), with the model named in `FEEDBACK_AI_MODEL` (the corpus reviewer's model by
+  default). What only OpenRouter knows (who asks; no provider that keeps what it is sent) goes to OpenRouter alone. The key is a Worker secret, `FEEDBACK_AI_KEY`,
   set by the owner; a key made for this alone, with a limit of its own, is the safer choice, and the daily limit
   of calls (rule 7) holds whichever key is used.
+- **Added 2026-10-10: a second way to sign in.** The owner decided that learners' feedback goes to the model's
+  provider directly, at its endpoint for the European Union, so that the text is processed in the EU and passes
+  through no service between. `FEEDBACK_AI_AUTH` chooses the sign-in:
+  - `key` (the default): as above. `FEEDBACK_AI_KEY` is sent as it is; `FEEDBACK_AI_URL` is OpenRouter's when
+    unset.
+  - `google-service-account`: `FEEDBACK_AI_KEY` holds the content of a Google service account's JSON key file.
+    The Worker signs a JWT with its private key (RS256, WebCrypto), changes it at Google's token endpoint for an
+    access token that lives an hour, and asks the model with the token. The request to the model is the same
+    one. `FEEDBACK_AI_URL` has no default and must be an https address on `googleapis.com`; `{project}` in its
+    path is the key file's `project_id`, so that the public configuration names no project.
+
+  Rules that hold for the second way: the token is kept in the Worker's memory until shortly before it ends, and
+  never in the database or the log; a token is asked for only when none is kept, so a call is at most one request
+  more, and the 20 seconds (§7) run over the token and the model together; a key file that names a token address
+  other than Google's is refused, since a file must not say where a secret is sent; a sign-in that is not one of
+  the two is "not set up", and never falls back to the other. A key file that cannot be used, a refused token
+  and a refused call are the failures of §7: the tab works without the AI and says so once, and the log names
+  the step and the status and nothing else. "Not set up" names the setting that is missing or wrong.
 - **A switch in the tab**, for admins: *AI help: on / off*, kept in the review app's database. Off, no call is
   made and stored results stay shown. It is off until someone switches it on.
 - Stored in the review app's database, by the message's id, as the coordinator's marks are:
@@ -118,8 +146,9 @@ topic, which becomes its match.
   - `feedback_ai_calls`: one row per call, for the daily limit.
   - `open_issues`: number and title, refreshed at most once a day.
 - A translation and a summary are text derived from a learner's message, kept in a second database. They hold no
-  address (masked before sending) and no link to an account. They are deleted when the coordinator deletes the
-  mark, and all of it can be cleared with one admin action (*Forget the AI's results*), after which it is made
+  address (masked before sending) and no link to an account. They are deleted when their message is gone from
+  the learner app's server (as built: a page of the list read with no filter by kind removes the results kept
+  for messages that server no longer gives; there is no way to delete a mark), and all of it can be cleared with one admin action (*Forget the AI's results*), after which it is made
   again on reading.
 - A result is made once per message and prompt version. Changing the prompt asks again, a page at a time, as pages
   are read.
@@ -132,6 +161,9 @@ carries sign-in codes only. Both stay true:
 - **Before the switch is turned on in production,** the policy lists the AI service among those companies: the
   service the model is reached through and the model's provider, what they receive (the text of a feedback
   message, without the contact address) and where. The switch (§4) says so beside it. Until then it stays off.
+  *(2026-10-10: with the second sign-in of §4 there is one company, the model's provider. The note beside the
+  switch now says what the policy asks for as it stands: the AI service is named, and the transfer of the text
+  to it is covered by the EU–US Data Privacy Framework or by standard contractual clauses.)*
 - The key is limited, in the provider's account, to model providers that neither keep the requests nor train on
   them.
 - The weekly mail holds nothing a learner wrote (§3.4), so the policy's sentence about the mail service stands.

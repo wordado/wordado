@@ -78,9 +78,9 @@ describe('GET /api/admin/feedback (spec §16)', () => {
     const page = await list()
     expect(page.nextBefore).toBeNull()
     expect(page.items).toEqual([
-      { ...feedbackItem(3, { kind: 'other', message: 'Thank you.' }), state: 'new', note: '', markedAt: null },
-      { ...feedbackItem(2, { kind: 'idea', message: 'A dark theme.\nAnd bigger letters.' }), state: 'new', note: '', markedAt: null },
-      { ...feedbackItem(1, { message: 'The path does not open.', contactEmail: 'ana@example.com', signedIn: true }), state: 'new', note: '', markedAt: null },
+      { ...feedbackItem(3, { kind: 'other', message: 'Thank you.' }), state: 'new', note: '', markedAt: null, ai: null },
+      { ...feedbackItem(2, { kind: 'idea', message: 'A dark theme.\nAnd bigger letters.' }), state: 'new', note: '', markedAt: null, ai: null },
+      { ...feedbackItem(1, { message: 'The path does not open.', contactEmail: 'ana@example.com', signedIn: true }), state: 'new', note: '', markedAt: null, ai: null },
     ])
   })
 

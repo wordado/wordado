@@ -1564,6 +1564,134 @@ kbd {
   display: none;
 }
 
+/* The AI help on the Feedback tab (spec 2026-10-10): a panel above the filters with the switch, how it stands and
+   the note on the privacy policy. On a card, what the AI says stands under the learner's words, set apart by a
+   rule at its side and named as the AI's each time: it is advice, and never the message. */
+.feedback-ai-panel {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background: var(--paper-raised);
+  border: 1px solid var(--rule);
+  border-radius: 1.125rem;
+  box-shadow: var(--lift);
+}
+
+.feedback-ai-panel > * {
+  min-width: 0;
+  margin: 0;
+}
+
+.feedback-ai-switch {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+}
+
+.feedback-ai-switch > .check {
+  font-weight: 600;
+}
+
+.feedback-ai-state {
+  flex: 1 1 14rem;
+  min-width: 0;
+  margin: 0;
+  font-size: var(--step--1);
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
+
+.feedback-ai-privacy {
+  max-width: 60rem;
+}
+
+.feedback-ai-reading,
+.feedback-ai-note {
+  margin: 0 0 var(--space-3);
+}
+
+.feedback-ai-left {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  margin: 0 0 var(--space-3);
+}
+
+.feedback-ai-left > .feedback-ai-note {
+  margin: 0;
+}
+
+.feedback-translated,
+.feedback-ai {
+  display: grid;
+  gap: var(--space-1);
+  padding-left: var(--space-3);
+  border-left: 3px solid var(--rule);
+}
+
+.feedback-translated > p,
+.feedback-ai > p {
+  margin: 0;
+}
+
+.feedback-ai-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+/* As the message above it: a long word breaks rather than widening the page. */
+.feedback-translation {
+  max-width: 44rem;
+  font-family: var(--font-entry);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.feedback-ai {
+  font-size: var(--step--1);
+}
+
+.feedback-ai-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+}
+
+/* The AI's own reading, beside the learner's kind in the head: outlined, where the learner's is filled. */
+.chip.ai {
+  color: var(--ink);
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--ink-soft);
+}
+
+.feedback-ai-summary {
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
+
+.feedback-junk {
+  margin-top: var(--space-4);
+}
+
+.feedback-junk > summary {
+  width: fit-content;
+  padding: var(--space-2) 0;
+  font-size: var(--step--1);
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.feedback-junk > .feedback-list {
+  margin-top: var(--space-2);
+}
+
 /* Phones: one column, the decisions in a bar at the bottom of the screen, edit and the row list full-screen. */
 @media (max-width: 40rem) {
   .page {
@@ -1828,6 +1956,25 @@ kbd {
 
   .feedback-mark .button {
     min-height: 2.75rem;
+  }
+
+  /* The AI help: the switch, its line and the button each on a line of their own, wide enough for a thumb. */
+  .feedback-ai-panel {
+    padding: var(--space-3);
+  }
+
+  .feedback-ai-switch > .check,
+  .feedback-ai-switch > .button,
+  .feedback-ai-left > .button {
+    min-height: 2.75rem;
+  }
+
+  .feedback-ai-state {
+    flex-basis: 100%;
+  }
+
+  .feedback-junk > summary {
+    padding: var(--space-3) 0;
   }
 
   .dialog {

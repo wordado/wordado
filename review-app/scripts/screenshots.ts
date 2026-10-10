@@ -2,6 +2,7 @@ import { type ChildProcess, spawn } from 'node:child_process'
 import { mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { type Browser, chromium, type Page, type Route } from '@playwright/test'
+import { AI_ANSWERS } from '../e2e/hosted/feedbackFixture'
 
 /* Screenshots of every screen, for a pull request description and for a look at the whole app after a change to its
  * styles: `pnpm --filter @wordado/review-app screenshots`. It starts the two fixture servers the browser runs use
@@ -66,6 +67,22 @@ const PROPOSAL = answer(/\/api\/admin\/assignments\/split$/, {
     { reviewer: 'reviewer@example.com', files: ['review/title-bg/2026-10-04-02.csv'], rows: 29 },
   ],
 })
+
+/** The AI help's status as the Feedback tab gets it, without asking the server: its switch stays as it is. */
+const aiStatus = (over: Row): Api => answer(/\/api\/admin\/feedback\/ai$/, { setUp: true, needs: null, on: true, model: 'google/gemini-3.8-flash', callsToday: 12, dailyCalls: 200, reads: ['en', 'bg'], ...over })
+
+/** The Feedback tab with the AI help on and every message read: the stand-in model's readings are put on the list's
+ * answer, and the AI is told nothing is left to read, so nothing is kept on the server. `why` is what a reading answers. */
+const aiRead = (why: string | null = null, left = 0): readonly Api[] => [
+  aiStatus({}),
+  (page) =>
+    page.route(/\/api\/admin\/feedback\?/, async (route: Route) => {
+      const response = await route.fetch()
+      const body = (await response.json()) as { items: Row[] }
+      await route.fulfill({ response, json: { ...body, items: body.items.map((item) => ({ ...item, ai: left > 0 ? null : (AI_ANSWERS[item['id'] as number] ?? null) })) } })
+    }),
+  answer(/\/api\/admin\/feedback\/ai\/read$/, { results: {}, asked: 0, left, why }),
+]
 
 interface Shot {
   readonly name: string
@@ -302,13 +319,39 @@ const SHOTS_ADMIN: readonly Shot[] = [
       await first.getByText('App version').waitFor()
     },
   },
-  { name: 'hosted-admin-feedback-unconnected', who: 'admin', path: '/#feedback', api: [answer(/\/api\/admin\/feedback/, { connected: false })], steps: async (page) => void (await page.getByText(/Feedback is not connected/).waitFor()) },
+  { name: 'hosted-admin-feedback-unconnected', who: 'admin', path: '/#feedback', api: [answer(/\/api\/admin\/feedback\?/, { connected: false })], steps: async (page) => void (await page.getByText(/Feedback is not connected/).waitFor()) },
   {
     name: 'hosted-admin-feedback-unread',
     who: 'admin',
     path: '/#feedback',
-    api: [(page) => page.route(/\/api\/admin\/feedback/, (route: Route) => route.fulfill({ status: 502, json: { message: 'The app’s server could not be reached.' } }))],
+    api: [(page) => page.route(/\/api\/admin\/feedback\?/, (route: Route) => route.fulfill({ status: 502, json: { message: 'The app’s server could not be reached.' } }))],
     steps: async (page) => void (await page.getByRole('button', { name: 'Try again' }).waitFor()),
+  },
+  // The AI help (spec 2026-10-10): its readings on the cards, the junk fold open, and the panel in its other states.
+  { name: 'hosted-admin-feedback-ai', who: 'admin', path: '/#feedback', api: aiRead(), steps: async (page) => void (await page.getByText('Translation by the AI').first().waitFor()) },
+  {
+    name: 'hosted-admin-feedback-ai-other',
+    who: 'admin',
+    path: '/#feedback',
+    api: aiRead(),
+    steps: async (page) => {
+      await page.getByLabel('Kind').selectOption({ label: 'Other' })
+      await page.getByText('Translation by the AI').first().waitFor()
+      await page.getByText('1 message the AI reads as junk').click()
+      await page.getByText('AI: Junk').waitFor()
+    },
+  },
+  { name: 'hosted-admin-feedback-ai-limit', who: 'admin', path: '/#feedback', api: aiRead('limit', 9), steps: async (page) => void (await page.getByText(/Today’s limit of 200 AI calls is reached/).waitFor()) },
+  { name: 'hosted-admin-feedback-ai-not-set-up', who: 'admin', path: '/#feedback', api: [aiStatus({ setUp: false, needs: 'FEEDBACK_AI_KEY', on: false })], steps: async (page) => void (await page.getByText(/AI help is not set up/).waitFor()) },
+  {
+    name: 'hosted-admin-feedback-ai-forget',
+    who: 'admin',
+    path: '/#feedback',
+    api: aiRead(),
+    steps: async (page) => {
+      await page.getByText('Translation by the AI').first().waitFor()
+      await openDialog(page, 'Forget the AI’s results', 'Forget the AI’s results')
+    },
   },
   {
     name: 'hosted-admin-dialog-invite',

@@ -479,6 +479,88 @@ test('@phone an admin reads and marks the feedback on a phone', async ({ browser
   await readsFeedback(browser, 'Idea', 'Let me choose how many new words a day.', 'A dark theme would be easier in the evening.')
 })
 
+/** The Feedback tab with the AI help on, read by a stand-in model. The desktop and the phone run share the switch
+ * and the results that are kept, so this only does what is safe to do twice: it switches on, and never off; it
+ * marks nothing, and forgets nothing. (Switching off, Forget, the limit and the failures are the Worker's and the
+ * page's own tests.) */
+async function readsAiFeedback(browser: Browser) {
+  const page = await as(browser, 'admin')
+  await page.goto('/#feedback')
+  const panel = page.getByRole('tabpanel', { name: 'Feedback' })
+  const ai = panel.getByRole('region', { name: 'AI help' })
+  const toggle = ai.getByRole('switch', { name: 'AI help' })
+  // The switch, and beside it what must be true before it is switched on for real.
+  await expect(toggle).toBeEnabled()
+  await expect(ai.getByText(/the privacy policy must name the AI service, and the transfer of the text to it must be covered/)).toBeVisible()
+  if (!(await toggle.isChecked())) await toggle.click()
+  await expect(toggle).toBeChecked()
+  await expect(ai.getByText(/^On: .+ \d+ of 200 calls used today\.$/)).toBeVisible()
+
+  await panel.getByLabel('Kind').selectOption({ label: 'Other' })
+  const items = panel.getByRole('list', { name: 'Feedback' }).getByRole('listitem')
+  // German: the learner's words as they wrote them, then the translation, named as the AI's, its reading and its summary.
+  const german = items.filter({ hasText: 'Der Ton eines Wortes' })
+  await expect(german.locator('.feedback-message')).toContainText('Der Ton eines Wortes wird auf meinem Handy zweimal abgespielt.')
+  await expect(german.getByText('Translation by the AI')).toBeVisible()
+  await expect(german.locator('.feedback-translation')).toContainText('The sound of a word is played twice on my phone.')
+  await expect(german.getByText('AI: Bug')).toBeVisible()
+  await expect(german.getByText('Annoys')).toBeVisible()
+  await expect(german.getByText('AI summary: The sound of a word plays twice on a phone.')).toBeVisible()
+  // The learner's own kind stays in the head.
+  await expect(german.getByRole('heading', { level: 3 })).toContainText('Other')
+  const spanish = items.filter({ hasText: 'Me gustaría elegir' })
+  await expect(spanish.locator('.feedback-translation')).toHaveText('I would like to choose how many new words I learn each day.')
+  await expect(spanish.getByText('AI: Idea')).toBeVisible()
+  // Bulgarian is read as it is: a reading, and no translation.
+  const bulgarian = items.filter({ hasText: 'Благодаря за приложението' })
+  await expect(bulgarian.getByText('AI: Praise')).toBeVisible()
+  await expect(bulgarian.getByText('Translation by the AI')).toHaveCount(0)
+  // Under Open the advertisement is folded away under the list, and opens.
+  await expect(items.filter({ hasText: 'Cheap watches' })).toHaveCount(0)
+  const fold = panel.locator('details.feedback-junk')
+  await expect(fold.getByText('Cheap watches')).toBeHidden()
+  await fold.getByText('1 message the AI reads as junk').click()
+  await expect(fold.getByText('Cheap watches and fast loans!!!')).toBeVisible()
+  await expect(fold.getByText('AI: Junk')).toBeVisible()
+  await expectFits(page, '.admin *')
+  // Under All it is in the list like any other.
+  await panel.getByLabel('Show').selectOption({ label: 'All' })
+  await expect(items.filter({ hasText: 'Cheap watches' })).toHaveCount(1)
+  await expect(fold).toHaveCount(0)
+  await expectFits(page, '.admin *')
+
+  // What the stand-in model was sent: no address for an answer, no address or link from a text, no browser, no version.
+  const { requests, tokens } = (await (await fetch('http://127.0.0.1:4184/_state')).json()) as { requests: { url: string; authorization: string; body: unknown }[]; tokens: { url: string; signed: boolean; given: string | null }[] }
+  expect(requests.length).toBeGreaterThan(0)
+  expect(requests.every((r) => r.url === 'http://127.0.0.1:4184/chat/completions')).toBe(true)
+  // The Worker signed in as a service account does: a JWT signed with the key file's key, changed for a token, and
+  // the model asked with a token the stand-in gave. (The real Worker runtime signs here, not Node.)
+  expect(tokens.length).toBeGreaterThan(0)
+  expect(tokens.every((t) => t.url === 'http://127.0.0.1:4184/token' && t.signed && t.given !== null)).toBe(true)
+  expect(requests.every((r) => tokens.some((t) => r.authorization === `Bearer ${t.given}`))).toBe(true)
+  const sent = JSON.stringify(requests.map((r) => r.body))
+  for (const theirs of ['answer-me@example.com', 'learner@example.com', 'ideas@example.com', 'lerner@example.com', 'example.com/offer', 'Mozilla', 'B3kq9xZa', 'bg 6', 'PRIVATE KEY', 'gserviceaccount']) expect(sent).not.toContain(theirs)
+  expect(sent).toContain('[email]')
+  expect(sent).toContain('[link]')
+
+  // A reload: what the AI said is kept, and is there with the list itself.
+  const listed = page.waitForResponse((res) => /\/api\/admin\/feedback\?/.test(res.url()))
+  await page.reload()
+  const first = (await (await listed).json()) as { items: { id: number; ai: { category: string } | null }[] }
+  expect(first.items.find((item) => item.id === 9)?.ai?.category).toBe('bug')
+  await expect(toggle).toBeChecked()
+  await expect(items.filter({ hasText: 'Der Ton eines Wortes' }).locator('.feedback-translation')).toBeVisible()
+  await expectFits(page, '.admin *')
+}
+
+test('an admin switches the AI help on and reads translations, the AI’s categories and summaries, with junk folded away', async ({ browser }) => {
+  await readsAiFeedback(browser)
+})
+
+test('@phone an admin reads the feedback with the AI help on a phone', async ({ browser }) => {
+  await readsAiFeedback(browser)
+})
+
 test('the weekly job asks the learner app’s server once a week', async () => {
   const asked = async () => ((await (await fetch('http://127.0.0.1:4183/_state')).json()) as { requests: string[] }).requests.filter((r) => /^GET \/v1\/admin\/feedback\?limit=100&since=\d+$/.test(r))
   const before = (await asked()).length

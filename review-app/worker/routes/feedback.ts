@@ -2,11 +2,11 @@ import { FEEDBACK_KINDS, type FeedbackKind } from '@wordado/core'
 import type { Hono } from 'hono'
 import { FEEDBACK_STATE_FILTERS, FEEDBACK_STATES, MAX_FEEDBACK_NOTE_LENGTH, type FeedbackList, type FeedbackState, type FeedbackStateFilter, type FeedbackView } from '../../shared/hosted'
 import { apiError, jsonBody, type AppEnv, type Deps } from '../app'
-import { feedbackMarks, putFeedbackMark } from '../db'
+import { dropFeedbackAiNotIn, feedbackAiRows, feedbackMarks, putFeedbackMark } from '../db'
+import { FEEDBACK_PAGE } from '../feedbackAi'
 import { FeedbackUnread, feedbackSource, readFeedback } from '../learnerApp'
 
-/** The messages asked of the learner app's server for one page of the tab: one request to it for each page shown. */
-export const FEEDBACK_PAGE = 50
+export { FEEDBACK_PAGE }
 
 const SHOWN: Readonly<Record<FeedbackStateFilter, readonly FeedbackState[]>> = { open: ['new', 'seen'], all: FEEDBACK_STATES, done: ['done'], declined: ['declined'] }
 
@@ -20,6 +20,7 @@ export function feedbackRoutes(app: Hono<AppEnv>, deps: Deps): void {
    * for and never kept, each message with the coordinator's own mark. `kind` is filtered by that server; `state`
    * is filtered here, after the page is read, since only the review app knows the marks: a page can therefore hold
    * fewer messages than were read (`read`), or none, while `nextBefore` still leads to the older ones.
+   * Each message also has the AI's reading when one is kept (spec 2026-10-10 §3.1); the model is not asked here.
    */
   app.get('/api/admin/feedback', async (c) => {
     const source = feedbackSource(deps)
@@ -37,12 +38,28 @@ export function feedbackRoutes(app: Hono<AppEnv>, deps: Deps): void {
       if (err instanceof FeedbackUnread) return apiError(c, 502, err.message)
       throw err
     }
-    const marks = await feedbackMarks(deps.env.DB, page.items.map((item) => item.id))
+    const ids = page.items.map((item) => item.id)
+    // The AI's reading of a message goes when its message does (spec 2026-10-10 §4). A page read with no filter by
+    // kind holds every message between its ends: the top is the cursor, or open on the newest page; the bottom is
+    // its last message, or open on the oldest page. A reading kept inside them for a message the server did not give
+    // is of a message that is gone. An empty page drops nothing.
+    if (kind === null && ids.length > 0) {
+      await dropFeedbackAiNotIn(deps.env.DB, page.nextBefore === null ? 1 : ids.at(-1)!, before === null ? Number.MAX_SAFE_INTEGER : before - 1, ids)
+    }
+    const [marks, readings] = await Promise.all([feedbackMarks(deps.env.DB, ids), feedbackAiRows(deps.env.DB, ids)])
     const shown = SHOWN[state as FeedbackStateFilter]
     const items: FeedbackView[] = page.items
       .map((item) => {
         const mark = marks.get(item.id)
-        return { ...item, state: mark?.state ?? 'new', note: mark?.note ?? '', markedAt: mark?.updatedAt ?? null }
+        const ai = readings.get(item.id)
+        return {
+          ...item,
+          state: mark?.state ?? 'new',
+          note: mark?.note ?? '',
+          markedAt: mark?.updatedAt ?? null,
+          // A reading of an older prompt version is shown until it is replaced.
+          ai: ai ? { language: ai.language, translation: ai.translation, category: ai.category, severity: ai.severity, summary: ai.summary } : null,
+        }
       })
       .filter((item) => shown.includes(item.state))
     return c.json({ connected: true, items, read: page.items.length, nextBefore: page.nextBefore } satisfies FeedbackList)
