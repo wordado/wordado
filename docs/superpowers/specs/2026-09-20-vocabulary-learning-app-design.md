@@ -264,10 +264,8 @@ it is not needed to build or run it.
   its local connection string, supplied as an environment variable so that no
   credentials reach the repository.
 - *External services are stubbed.* Sign-in codes are printed to the console
-  instead of being emailed; the LLM gateway and TTS are replaced by fixtures;
-  Google sign-in works against a `localhost` redirect registered for
-  development. A seeded sample pack and its audio load from the local R2
-  simulation.
+  instead of being emailed; the LLM gateway and TTS are replaced by fixtures.
+  A seeded sample pack and its audio load from the local R2 simulation.
 - *Browser features work on `localhost`,* which browsers treat as a secure
   context: OPFS, the service worker, installation, and Web Push.
 - `core` and `client-data` need only Node: their suites run without the Worker,
@@ -930,8 +928,8 @@ enrichment*; it is studyable immediately with whatever the learner typed, and
 is enriched at the next sync, when the learner is shown the result to accept.
 
 **Abuse.** The quota is per account, and accounts are cheap to create only in
-appearance: every account has a verified email address or a Google identity
-(§8.6), enrichment requires one, and the server also rate-limits enrichment
+appearance: every account has a verified email address (§8.6), enrichment
+requires one, and the server also rate-limits enrichment
 per IP address.
 
 **The cache is not forever.** A bad model output must not be permanent. Every
@@ -1072,11 +1070,15 @@ as a cache, never as a store.
 
 ### 8.6 Accounts
 
-Sign-in is **passwordless**: Google, or a one-time code sent by email. There
-are no passwords to hash, store, leak, or reset, and a code sent to an address
-verifies that address as a side effect. Sign in with Apple is added with the
-iOS app, where the App Store requires it alongside Google; on the web it would
-cost a paid Apple developer membership for no gain, so the MVP omits it.
+Sign-in is **passwordless**: a one-time code sent by email. There are no
+passwords to hash, store, leak, or reset, and a code sent to an address
+verifies that address as a side effect. Sign-in with Google was offered until
+2026-10-10 and then removed (§16): a second path that added a processor, tokens
+and a publishing step, while the emailed code does the same job. Accounts made
+with it keep their email address and sign in by code. Sign in with Apple is a
+question for the iOS app, and the App Store requires it only beside another
+third-party sign-in; on the web it would cost a paid Apple developer membership
+for no gain, so the MVP omits it.
 
 Sessions are long-lived and refreshed on use, so a returning learner is not
 asked for a new code; this also keeps sign-in email volume inside the email
@@ -1085,8 +1087,8 @@ provider's daily free allowance (§17).
 A **demo mode** offers a small
 sample session so a prospective user can study before committing. Demo events
 are kept on the device in a database of their own, apart from any learner's,
-and are never uploaded unless an account is created; the demo survives a reload
-and the redirect of a Google sign-in. If the learner then **creates an account**
+and are never uploaded unless an account is created; the demo survives a
+reload. If the learner then **creates an account**
 from the demo, those events are attached to the new account — there is nothing
 to merge, because a new account has no prior data. If they instead sign in to
 an existing account, or choose to leave the demo, the demo database is deleted,
@@ -1322,8 +1324,8 @@ isn't working", "I have an idea", "Something else"), a message of at most
 filled in for the learner. One line under the message asks the learner to
 write no personal details about themselves or other people: a message is
 free text, and people read it. Under the fields the form lists what is sent
-beside the message, so nothing leaves unseen: the account if signed in, the
-app's version, the corpus version, the interface language, the screen the
+beside the message, so nothing leaves unseen: whether the learner is signed
+in, the app's version, the corpus version, the interface language, the screen the
 form was opened from (its path, never its query) and the browser's name.
 
 Sending needs a connection. Feedback is a plain request to the server, not a
@@ -1331,8 +1333,9 @@ synced document, so it works signed out and the website can use the same
 endpoint. Offline, or when the send fails, the form says so and keeps what
 was typed; nothing is queued.
 
-The server keeps feedback apart from content reports, with the account when
-the sender was signed in. It limits how much one client and all clients
+The server keeps feedback apart from content reports and apart from any
+account: it records only whether the sender was signed in, never which account
+(decided 2026-10-10, §16). It limits how much one client and all clients
 together can send (§15), counting clients by a keyed hash of their address
 and never storing the address, and it drops what a program sends through a
 hidden field.
@@ -1606,12 +1609,13 @@ on their next pull. That failure is far worse than the cheating it prevents.
   history. What remains holds no personal data: anonymous, aggregated
   corpus-difficulty statistics, and the shared enrichment cache, whose entries
   are dictionary words with no record of who asked for them. Content reports
-  are kept with the reporter removed. Feedback about the app (§8.12) is kept
-  with the account and the address given for an answer removed.
+  are kept with the reporter removed. Feedback about the app (§8.12) never
+  named the account; deletion blanks the address given for an answer on the
+  messages that carry the deleted account's address.
 - **Data export** is available from Phase 1a, because the right to a portable
   copy applies from the first day of processing, not from Phase 3: a JSON
-  download of the learner's settings, review events, the feedback they sent
-  while signed in (§8.12), and (from Phase 2) words.
+  download of the learner's settings, review events, and (from Phase 2)
+  words. Feedback is not in it: it is not linked to the account (§8.12).
   Friendlier formats and *import* come later (§14).
 - **Analytics without a consent banner.** Product metrics come from the
   first-party event log, in aggregate, and from cookieless page analytics.
@@ -1626,7 +1630,9 @@ on their next pull. That failure is far worse than the cheating it prevents.
   unknown), 13 elsewhere. No birth date is asked; like the country, the age is
   self-declared (decided 2026-10-01, replacing the birth-year question). Country is
   self-declared at sign-up, pre-filled from the request's country as reported
-  by the hosting platform; only the country is kept. There is no
+  by the hosting platform; it decides the threshold on the device and is not
+  sent to the server (decided 2026-10-10; until then the country was kept).
+  There is no
   parental-consent flow at launch; learners below the threshold are turned
   away.
 - Words a learner submits for enrichment are sent to third-party processors
@@ -1645,6 +1651,15 @@ on their next pull. That failure is far worse than the cheating it prevents.
   technical details only to understand the message. The client's network
   address is not stored: the limit counts a keyed hash of it, dropped after a
   day. The privacy policy says so.
+- **Sessions and counters.** A session records when it started and when it
+  expires, and neither the IP address nor the browser. No counter holds a
+  plain network address: the sign-in code limiter counts per email address and
+  in all, and every other limit, the authentication library's included, counts
+  a keyed hash (decided 2026-10-10).
+- **Not indexed.** The app at `app.wordado.com` tells search engines to stay
+  out (`noindex` in the page, `X-Robots-Tag` on every response, a `robots.txt`
+  that disallows all): its shell shows nothing without a browser session, and
+  the website is the public face (decided 2026-10-10).
 - Data-residency obligations in the launch markets are a legal-review item
   (§15).
 
@@ -1775,7 +1790,7 @@ German and Spanish joined it: each was a new pack with no code change, so the
 three L1s were published together, in the same corpus versions (2026-10-08;
 §16).
 
-- Accounts with passwordless sign-in (Google, emailed code), the age gate, and
+- Accounts with passwordless sign-in (an emailed code), the age gate, and
   a demo mode that carries over on sign-up (†). Self-service account deletion
   and a JSON data export (§11).
 - Corpus A1–B1, Bulgarian translations, audio to the quality bar (§5.4).
@@ -2262,6 +2277,22 @@ Decided by the product owner.
 - **The form (§8.12):** one line under the message asks the learner to write
   no personal details about themselves or other people.
 
+**2026-10-10 — store less, and no Google sign-in.** Decided by the product
+owner (issues #163, #165, #166).
+
+- **Sign-in (§8.6, §17):** the emailed code is the only sign-in. Google
+  sign-in, its tokens and its client are gone; accounts made with it keep
+  their email address and sign in by code.
+- **Country (§11):** the age gate still asks for it and it still decides the
+  threshold, but on the device; the server neither receives nor keeps it.
+- **Sessions and counters (§11):** a session keeps neither the IP address nor
+  the browser; no limit counter holds a plain network address.
+- **Feedback (§8.12, §11):** not linked to the account; the server notes only
+  whether the sender was signed in. It leaves the export; deletion blanks the
+  answer address on messages that carry the account's address.
+- **Search engines (§11):** `app.wordado.com` is `noindex`; the website is the
+  public face.
+
 ### Approval status
 
 Every change since the original approval that alters a settled product
@@ -2282,6 +2313,7 @@ decision, the phasing, or scope. † in the body marks those still pending.
 | German and Spanish published with the Bulgarian beta (§14) | Shipped; corpus version 6 on 2026-10-08 carries all three |
 | iOS and Android apps postponed; the web beta comes first (§14) | Decided by the product owner, 2026-10-01 |
 | † Scope added to Phase 1a by the second review: error reporting, reminders, known/suspended words, account deletion, data export, accessibility target, interface localisation (§14) | Pending |
+| Store less: no country, session details or plain addresses on the server, feedback unlinked; Google sign-in removed; the app not indexed (§8.6, §8.12, §11, §17) | Decided by the product owner, 2026-10-10 |
 
 ---
 
@@ -2302,7 +2334,7 @@ without touching the design. Allowances were checked against vendor pages on
 | Files and CDN | Cloudflare R2 | Audio and corpus packs. No egress charge. |
 | Store of record | Managed Postgres in an EU region (Neon, Frankfurt), through Cloudflare Hyperdrive | Region availability on the free plan to be confirmed directly. Supabase is the alternative, but its free databases pause after a week of inactivity. D1 is the fallback (§4.4). |
 | Batch jobs | Cloudflare Queues, started by Cron Triggers | Re-derivation (§4.3), league rollover (Phase 2). |
-| Authentication | Better Auth (MIT, runs inside our Worker), with its email-OTP plugin and Google sign-in | User data stays in our database. Apple sign-in is added with the iOS app. |
+| Authentication | Better Auth (MIT, runs inside our Worker), with its email-OTP plugin | User data stays in our database. Google sign-in was removed on 2026-10-10 (§8.6). |
 | Transactional email | Resend | Sign-in codes only. Stores content and logs in the US (§11). Needs a verified sending domain. |
 | LLM gateway (Phase 2 enrichment; build-time pipeline) | OpenRouter | One API across models, with structured output. Also offers TTS models. EU in-region routing is a paid business feature (§11). Requests are sent with data collection denied. |
 | Payments (Phase 2, if a business model is approved) | Decided with the business model | Kept with the private monetisation notes. |
@@ -2319,7 +2351,7 @@ each: roughly 15,000 requests a day.
 | Postgres (Neon) | 0.5 GB storage; 100 compute-hours/month; suspends after 5 min idle and wakes in a few hundred ms | Compute-hours under steady traffic. Clients sync in batches at session end, not per answer, which keeps the database asleep more of the day. | Neon's paid plan (price to be confirmed) |
 | Queues | 10,000 operations/day (about 3,300 messages); 24 h retention | A full re-derivation of a large user base in one day | Paid Queues pricing (to be confirmed) |
 | R2 | 10 GB storage; 1M write-class and 10M read-class operations/month; free egress | Not expected for A1–B1 audio and packs | Pay per GB beyond 10 GB |
-| Resend | 3,000 emails/month; **100/day**; 3 domains | The daily cap, on a day many new learners sign up by email. Google sign-in and long sessions carry most of the load. | Resend's paid plan (price to be confirmed) |
+| Resend | 3,000 emails/month; **100/day**; 3 domains | The daily cap, on a day many new learners sign up by email. Long sessions carry most of the load. | Resend's paid plan (price to be confirmed) |
 | GitHub Actions | 2,000 minutes/month on private repositories; unmetered on public ones; 500 MB artifacts | Frequent CI plus pipeline runs | Pay per minute (Linux is cheapest) |
 | Better Auth, Hono, React, Vite | Open source | — | — |
 
