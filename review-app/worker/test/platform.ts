@@ -47,3 +47,11 @@ export function testDeps(env: Env, overrides: Partial<Deps> = {}): Deps {
     ...overrides,
   }
 }
+
+/** One `fetch` for several fakes: a request goes to the fake of its origin, and anything else answers 599. */
+export function fetchBy(hosts: Readonly<Record<string, Deps['fetch']>>): Deps['fetch'] {
+  return async (input, init) => {
+    const fake = hosts[new URL(input).origin]
+    return fake ? fake(input, init) : new Response(`no fake for ${input}`, { status: 599 })
+  }
+}
