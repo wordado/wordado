@@ -30,23 +30,21 @@ Shared: the R2 bucket `wordado-content` (Western Europe) at `https://content.wor
 both addresses, with the corpus published by the content repository's **Corpus** workflow (version 6 on 2026-10-08,
 packs for bg, de and es); the rate-limit rule on `/v1/sync/*`; `main` protected.
 Sign-in, since 2026-09-27: Resend sends codes from `codes@wordado.com` (a sending-only key limited to
-wordado.com), and Google's app (redirect `https://app.wordado.com/api/auth/callback/google`) is in **Testing**: only its listed test users can sign in with Google, until the privacy policy is final (roadmap).
+wordado.com). Sign-in with Google was removed on 2026-10-10 (#170), together with its secrets and its client.
 Mail DNS, since 2026-09-27: DMARC is `v=DMARC1; p=none; rua=mailto:<id>@dmarc-reports.cloudflare.net;`, its
 reports read on the dashboard (wordado.com › Email › DMARC Management). Once a week or two of reports show every
-real sender passing, tighten it to `p=quarantine`. The apex MX, `10 inbound-smtp.eu-west-1.amazonaws.com`, is
-Resend's receiving record, but receiving is not enabled, so mail to `@wordado.com` is refused at once. Keep it
-until the support address below decides how wordado.com receives: no MX would leave senders retrying for days,
-and a null MX (`0 .`) can make some providers distrust mail *from* wordado.com, the sign-in codes included.
+real sender passing, tighten it to `p=quarantine`. Since 2026-10-10 the apex MX records are Cloudflare Email
+Routing's (`route1/2/3.mx.cloudflare.net`, with `include:_spf.mx.cloudflare.net` in the SPF record); Resend's
+receiving record is gone. Never leave the apex without an MX: no MX leaves senders retrying for days, and a null
+MX (`0 .`) can make some providers distrust mail *from* wordado.com, the sign-in codes included.
 Since 2026-10-02, `www.wordado.com` redirects to `https://wordado.com`, which is the website: a proxied
 `AAAA www 100::` record and a Redirect Rule (*Redirect from WWW to root*: 301, path and query string kept).
 Never serve the app on `www` too, nor on the main domain: its local data, sign-in cookie and installed app would
 be separate from `app.wordado.com`'s. The app is only ever on `app.wordado.com`.
-Not yet: a public support address, such as `support@wordado.com`
-(before Google's app is published): either Resend receiving (enable wordado.com under Receiving; it uses the
-present MX) or Cloudflare Email Routing, which replaces the MX with its own and forwards to a personal inbox. Google's **User support email** (Branding) is a dropdown of the signed-in account and the Google Groups it
-manages, so it needs a Google Group or a Google account for that address; until then it shows the personal
-address to test users only. The same address can fill the privacy policy's `[Contact email]`
-(the website's, `https://wordado.com/<lang>/privacy/`).
+The public contact address, since 2026-10-10: `privacy@wordado.com`, a Cloudflare Email Routing address with no
+mailbox, forwarded to the owner's inbox (wordado.com › Email › Email Routing). It is the one on the website's
+legal pages (`https://wordado.com/<lang>/privacy/`). A second address, such as `support@`, is one more routing
+rule.
 
 ## Provisioning, once
 
@@ -100,15 +98,12 @@ private `wordado/wordado-research`, cloned into `docs/research/` and ignored her
      (`openssl rand -base64 48`, a different one per environment). Also
      `gh variable set CONTENT_MANIFEST_URL --body https://content.wordado.com/manifest.json`.
    - `APP_ORIGIN`: `https://wordado-preview.<subdomain>.workers.dev` for preview, `https://app.wordado.com` for production.
-   - Production only: `gh variable set CONTENT_BUCKET --body wordado-content --env production`,
-     `gh secret set R2_ACCESS_KEY_ID --env production`, `gh secret set R2_SECRET_ACCESS_KEY --env production`.
-     The Worker does not use them, but they stay here and are removed only after the first corpus release
-     proves the content repository's copies work.
+   - The R2 token pair is the content repository's secret (`pipeline/README.md`), not this one's: the copies
+     kept here during the first corpus releases were removed on 2026-10-10.
    - Reminders, per environment: a pair from `pnpm --filter @wordado/server vapid-keys` as
      `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, and `VAPID_SUBJECT` (`mailto:…`).
    - Production only (*done 2026-09-27*): `RESEND_API_KEY` with `EMAIL_FROM`
-     (`Wordado <codes@wordado.com>`, once Resend has verified the domain), and `GOOGLE_CLIENT_ID` with
-     `GOOGLE_CLIENT_SECRET` (redirect `https://app.wordado.com/api/auth/callback/google`). Without Resend,
+     (`Wordado <codes@wordado.com>`, once Resend has verified the domain). Without Resend,
      production prints sign-in codes to its log, as development does. The preview has no mailer on
      purpose: its codes are only in its log, which `smoke:remote` reads.
    - Production only, optional: `FEEDBACK_READ_TOKEN`, which lets the review app's Feedback tab read
@@ -189,6 +184,8 @@ private `wordado/wordado-research`, cloned into `docs/research/` and ignored her
 - On an iPhone, install the app to the home screen, turn reminders on, and receive one.
 
 ## Moving the app to app.wordado.com (2026-10)
+
+*Done.* Kept as the record of how; the Google steps are moot since sign-in with Google was removed (2026-10-10).
 
 Done once, in one sitting, in this order. The website must already be built and checked on its preview
 address (wordado-site `docs/deploy.md`). Its legal pages need not be final yet: until its launch check passes,
