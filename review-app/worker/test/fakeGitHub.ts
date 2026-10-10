@@ -9,6 +9,10 @@ export class FakeGitHub {
   readonly commits = new Map<string, Commit>()
   readonly trees = new Map<string, Map<string, string>>()
   readonly pulls: { number: number; title: string; head: string; body: string; state: 'open' | 'closed'; merged: boolean }[] = []
+  /** Paths the GraphQL API cuts short, as it does for a large file. */
+  readonly truncated = new Set<string>()
+  /** Every request made, as `METHOD path`. */
+  readonly requests: string[] = []
   private n = 0
   constructor(files: Record<string, string>, readonly repo = 'wordado/wordado-content') {
     this.files = new Map(Object.entries(files))
@@ -34,10 +38,24 @@ export class FakeGitHub {
     const body = init.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : {}
     const json = (v: unknown, status = 200) => new Response(JSON.stringify(v), { status, headers: { 'content-type': 'application/json' } })
     const p = url.pathname
+    this.requests.push(`${method} ${p}`)
     const repo = `/repos/${this.repo}`
     if (method === 'POST' && /^\/app\/installations\/\d+\/access_tokens$/.test(p)) return json({ token: 'inst-token', expires_at: '2099-01-01T00:00:00Z' }, 201)
     if (!(init.headers as Record<string, string> | undefined)?.['authorization']?.startsWith('Bearer ')) return json({ message: 'no auth' }, 401)
     let m: RegExpExecArray | null
+    if (method === 'POST' && p === '/graphql') {
+      const vars = body['variables'] as Record<string, string>
+      if (`${vars['owner']}/${vars['name']}` !== this.repo) return json({ data: { repository: null }, errors: [{ message: 'Could not resolve to a Repository' }] })
+      const found: Record<string, unknown> = {}
+      for (const [k, expression] of Object.entries(vars)) {
+        if (!/^e\d+$/.test(k)) continue
+        const at = expression.indexOf(':')
+        const path = expression.slice(at + 1)
+        const text = this.commits.get(expression.slice(0, at))?.files.get(path)
+        found[`f${k.slice(1)}`] = text === undefined ? null : this.truncated.has(path) ? { __typename: 'Blob', text: text.slice(0, 1), isTruncated: true } : { __typename: 'Blob', text, isTruncated: false }
+      }
+      return json({ data: { repository: found } })
+    }
     if (method === 'GET' && (m = new RegExp(`^${repo}/git/ref/heads/(.+)$`).exec(p))) {
       const sha = this.branches.get(decodeURIComponent(m[1]!))
       return sha ? json({ object: { sha } }) : json({ message: 'Not Found' }, 404)

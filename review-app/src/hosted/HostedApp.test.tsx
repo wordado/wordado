@@ -238,9 +238,9 @@ describe('HostedApp', () => {
     render(<HostedApp me={me} />)
     await openAssignment()
     fireEvent.click(await screen.findByRole('button', { name: /Submit 1 decision/ }))
-    const status = await screen.findByRole('status')
-    await waitFor(() => expect(status.textContent).toMatch(/bank-3 \(changed\)/))
-    expect(status.textContent).toMatch(/bank-4 \(gone\)/)
+    // The answer takes the place of the line that says the submit is on its way.
+    await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/bank-3 \(changed\)/))
+    expect(screen.getByRole('status').textContent).toMatch(/bank-4 \(gone\)/)
   })
 
   it('says when a decided row changed and when decisions were discarded', async () => {
@@ -264,8 +264,12 @@ describe('HostedApp', () => {
     fireEvent.click(button)
     await waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(true))
     fireEvent.click(button)
+    // A submit takes seconds: the screen says it is working until the answer is there.
+    expect(screen.getByRole('progressbar', { name: 'Sending' })).toBeTruthy()
+    expect(screen.getByText('Sending 1 decision…')).toBeTruthy()
     finish({ pr: 3, url: 'https://github.com/x/pull/3', count: 1, leftOut: [] })
     expect(await screen.findByRole('link', { name: /pull request 3/i })).toBeTruthy()
+    expect(screen.queryByRole('progressbar', { name: 'Sending' })).toBeNull()
     expect(submit).toHaveBeenCalledTimes(1)
   })
 

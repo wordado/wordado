@@ -50,6 +50,9 @@ export function AssignmentReview(props: { assignment: AssignmentView; onBack(): 
   const submitNow = async () => {
     if (submitting) return
     setSubmitting(true)
+    // What an earlier try said no longer holds while this one runs.
+    setNotice('')
+    setSent(null)
     try {
       setSent(await hostedApi.submit(a.id))
       await load()
@@ -73,6 +76,17 @@ export function AssignmentReview(props: { assignment: AssignmentView; onBack(): 
           ({sent.count} decisions)
           {sent.leftOut.length > 0 && <> · Left out because they changed or are gone: {sent.leftOut.map((l) => `${l.key} (${l.reason})`).join(', ')}</>}
         </p>
+      )}
+      {/* until the answer is there; the rows are loaded again after it, under the answer */}
+      {submitting && !sent && (
+        <div role="status" className="notice sending">
+          <p>
+            Sending {open} {open === 1 ? 'decision' : 'decisions'}…
+          </p>
+          <div className="busy-bar" role="progressbar" aria-label="Sending">
+            <span />
+          </div>
+        </div>
       )}
       {changed.length > 0 && <p className="stale-notice">Changed since you decided it: {changed.join(', ')}</p>}
       <ReviewScreen

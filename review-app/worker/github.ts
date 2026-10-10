@@ -24,6 +24,8 @@ export function resetGitHubTokens(): void {
 export interface GitHubConfig { readonly api: string; readonly appId: string; readonly installationId: string; readonly privateKeyPem: string; readonly repo: string }
 
 const DETAIL_MAX = 300
+/** Files asked for in one GraphQL request. */
+const READ_BATCH = 40
 
 /**
  * A GitHub call that failed: `what` names the call, `status` is the HTTP status (0 when GitHub could not be
@@ -101,6 +103,35 @@ export class GitHub {
     if (res.status === 404) return null
     if (!res.ok) throw await failure(res, `contents ${path}`)
     return res.text()
+  }
+
+  /**
+   * Many files at one commit, in one request per READ_BATCH of them: a submit of a spot check reads files from
+   * all over a queue, and a Worker may make only so many requests while it answers one. Null for a file that is
+   * not there. A file GitHub does not return whole here is read by itself.
+   */
+  async readTexts(paths: readonly string[], ref: string): Promise<Map<string, string | null>> {
+    const out = new Map<string, string | null>()
+    const [owner = '', name = ''] = this.cfg.repo.split('/')
+    for (let at = 0; at < paths.length; at += READ_BATCH) {
+      const batch = paths.slice(at, at + READ_BATCH)
+      const query = `query($owner: String!, $name: String!${batch.map((_, i) => `, $e${i}: String!`).join('')}) { repository(owner: $owner, name: $name) {${batch.map((_, i) => ` f${i}: object(expression: $e${i}) { __typename ... on Blob { text isTruncated } }`).join('')} } }`
+      const variables: Record<string, string> = { owner, name }
+      batch.forEach((path, i) => (variables[`e${i}`] = `${ref}:${path}`))
+      const headers = { authorization: `Bearer ${await this.token()}`, accept: 'application/vnd.github+json', 'user-agent': 'wordado-review', 'content-type': 'application/json' }
+      const res = await this.send('files', `${this.cfg.api}/graphql`, { method: 'POST', headers, body: JSON.stringify({ query, variables }) })
+      if (!res.ok) throw await failure(res, 'files')
+      const body = (await res.json()) as { data?: { repository?: Record<string, { __typename: string; text?: string | null; isTruncated?: boolean } | null> | null } | null; errors?: { message?: string }[] }
+      const found = body.data?.repository
+      if (!found) throw new GitHubError('files', res.status, (body.errors ?? []).map((e) => e.message ?? '').filter(Boolean).join('; ').slice(0, DETAIL_MAX))
+      for (const [i, path] of batch.entries()) {
+        const f = found[`f${i}`]
+        if (f == null) out.set(path, null)
+        else if (f.__typename === 'Blob' && typeof f.text === 'string' && f.isTruncated === false) out.set(path, f.text)
+        else out.set(path, await this.readText(path, ref))
+      }
+    }
+    return out
   }
 
   /** The tree of `parent` with these files replaced. The same content gives the same sha, whoever writes it. */

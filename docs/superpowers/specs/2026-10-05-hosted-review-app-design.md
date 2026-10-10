@@ -200,6 +200,9 @@ columns), the verdict (`drop` or `ok`) and the note (an empty note keeps the exi
 
 1. Collect the assignment's decisions with no submission. None → 400 *nothing to submit*.
 2. Through the GitHub App, read each affected CSV and its JSON sidecar from wordado-content `main`.
+   All of them are read together, a few requests for the whole submit and not one per file: a spot check touches
+   files from all over its queue, and a Worker may make only so many requests while it answers one. While the
+   submit runs the screen says so, with a moving bar.
 3. For each decision, compute the row's hash from the sidecar's `proposed` and the CSV's `reopened`. A missing row
    or a different hash is left out (`gone` / `changed`) and stays unsubmitted; the response lists it and the UI
    shows it again.

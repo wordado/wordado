@@ -726,6 +726,46 @@ button.settings-row:hover {
   }
 }
 
+/* A submit takes a few seconds: a bar that keeps moving says the app is working, not how far it is. */
+
+.sending > p {
+  margin: 0 0 0.5rem;
+}
+
+.busy-bar {
+  overflow: hidden;
+  height: 0.375rem;
+  background: var(--rule);
+  border-radius: 999px;
+}
+
+.busy-bar > span {
+  display: block;
+  width: 40%;
+  height: 100%;
+  background: var(--blue);
+  border-radius: inherit;
+  animation: busy-slide 1.2s ease-in-out infinite;
+}
+
+@keyframes busy-slide {
+  from {
+    transform: translateX(-100%);
+  }
+
+  to {
+    transform: translateX(250%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .busy-bar > span {
+    width: 100%;
+    animation: none;
+    opacity: 0.5;
+  }
+}
+
 /* Progress: how much is decided (leaf) and how much of that is submitted (blue); the parts get an inline width. */
 
 .progress {
