@@ -489,11 +489,16 @@ async function readsAiFeedback(browser: Browser) {
   const panel = page.getByRole('tabpanel', { name: 'Feedback' })
   const ai = panel.getByRole('region', { name: 'AI help' })
   const toggle = ai.getByRole('switch', { name: 'AI help' })
-  // The switch, and beside it what must be true before it is switched on for real.
+  // The switch, and beside it, while it is off, what must be true before it is switched on for real. (The other
+  // browser project may have switched it on already.)
   await expect(toggle).toBeEnabled()
-  await expect(ai.getByText(/the privacy policy must name the AI service, and the transfer of the text to it must be covered/)).toBeVisible()
-  if (!(await toggle.isChecked())) await toggle.click()
+  const note = ai.getByText(/the privacy policy must name the AI service, and the transfer of the text to it must be covered/)
+  if (!(await toggle.isChecked())) {
+    await expect(note).toBeVisible()
+    await toggle.click()
+  }
   await expect(toggle).toBeChecked()
+  await expect(note).toHaveCount(0)
   await expect(ai.getByText(/^On: .+ \d+ of 200 calls used today\.$/)).toBeVisible()
 
   await panel.getByLabel('Kind').selectOption({ label: 'Other' })

@@ -1565,7 +1565,7 @@ kbd {
 }
 
 /* The AI help on the Feedback tab (spec 2026-10-10): a panel above the filters with the switch, how it stands and
-   the note on the privacy policy. On a card, what the AI says stands under the learner's words, set apart by a
+   while it is off, the note on the privacy policy. On a card, what the AI says stands under the learner's words, set apart by a
    rule at its side and named as the AI's each time: it is advice, and never the message. */
 .feedback-ai-panel {
   display: grid;
