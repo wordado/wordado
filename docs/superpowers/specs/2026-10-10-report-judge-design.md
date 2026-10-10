@@ -1,6 +1,6 @@
 # The AI reviewer judges reports and applies small fixes — design
 
-**Date:** 2026-10-10 · **Status:** draft for the product owner's review
+**Date:** 2026-10-10 · **Status:** agreed with the product owner on 2026-10-10 (§15); not built
 **Issues:** #138 (this design), #137 (the learner's suggestion, built), #139 (the list of automatic changes).
 **Parent specs:** `2026-09-20-vocabulary-learning-app-design.md` §5.4 and §8.10;
 `2026-10-04-ai-review-and-review-app-design.md` (the AI review, its storage, the release gate).
@@ -91,11 +91,30 @@ optional `reports` list (`field`, `note`, `suggestion` each); the `reopened` tex
 | `unsure`, or `fault` with no `right` candidate, or §6 refuses | — | **Native speaker.** The row stays reopened. The review app shows the judge's finding and reason beside the report. |
 
 - An applied fix reaches the reporter the way a person's fix does: the field's value changes in the next version,
-  `fixes.json` names it, and the app tells the reporter. Nothing is sent for a closed report.
+  `fixes.json` names it, and the app tells the reporter. A closed report is answered too, in the app (§5.1).
 - Closed is not silent for us: the count and the rows are in the run's summary and in the list of #139, so a
   reviewer that closes too readily is seen.
 - A report with nothing to check ("bad", an empty note, no suggestion) goes through step one like any other. When
   the reviewer finds no fault by itself, it is closed.
+
+### 5.1 Telling the reporter that a report was not accepted
+
+Decided by the owner on 2026-10-10: a learner whose report was closed is told so, politely, and can object.
+
+- **In the app, not by mail.** Many learners have no account, and those who have gave their address to sign in.
+  The message appears where "It is fixed now. Thank you!" appears today.
+- **How the app knows.** A release writes `closed.json` beside `fixes.json`: the word, the field, the L1, the
+  version it was closed in, and a reason code. Like `fixes.json` it names no learner; a device matches it against
+  its own reports made before that version.
+- **Fixed sentences, not the reviewer's own words.** The reviewer's reason is written in English for us, and a
+  sentence it wrote for the learner would be unchecked AI text in the app. The reason code picks one of a few
+  sentences that are part of the interface text, for example: "Thank you for your report on "{word}". We checked
+  it and kept the translation for this meaning: {sense}." Codes: `right-for-this-sense`, `nothing-to-check`
+  (the report said nothing that could be checked), `other`.
+- **"Still looks wrong".** A button on the message files a second report on the same word, marked as an objection
+  (`objects: true` on the report document). `judge` never judges an objection: the row goes to a native speaker,
+  with both reports. So the reviewer cannot close the same learner's complaint twice.
+- The wording is modest ("we kept it for now"): the reviewer is sometimes wrong, and the button is the remedy.
 
 ## 6. When a fix may be applied without a person
 
@@ -187,6 +206,8 @@ counts and a sample before the first real run; the cap of §6 applies per run af
 ## 12. Testing
 
 - Unit tests with recorded answers for each row of the table in §5 and each condition of §6.
+- `closed.json`: a closed report is listed with its reason code; an objection is never judged and reaches a
+  native speaker; the app shows the sentence for the code once, and the button files the objection.
 - The bounds of §7 (two characters, one word; one alternate added or removed) as table tests.
 - A run is repeatable: the same input and the same recorded answers give no new lines.
 - `triage` with the `reports` list, and an event without it (written before this design) still read.
@@ -208,11 +229,11 @@ counts and a sample before the first real run; the cap of §6 applies per run af
 - Releasing a corpus version without the owner (§9).
 - A random sample re-reviewed with every run. The spot check in the review app does this by hand.
 
-## 15. Open questions for the owner
+## 15. Decided by the owner, 2026-10-10
 
-1. **The pull request that merges by itself (§9).** The alternative is that the owner merges it, which puts a
-   person back into every run.
-2. **The first run of the small fixes (§7).** How many rows it would change is not known until the dry run; the
-   owner decides then whether to apply them all, by category, or a level at a time.
-3. **Who the native speaker for the rows in between is, per language**, and how fast they are expected to answer.
-   Until someone is named, those rows stay reopened and ship with their current text.
+1. **The pull request of §9 merges by itself.**
+2. **The first run of the small fixes is a dry run** (§7); the owner reads the counts and decides: all, by
+   category, or a level at a time.
+3. **The native speaker for the rows in between:** the owner for Bulgarian. German and Spanish have nobody yet;
+   those rows stay reopened and ship with their current text.
+4. **A closed report is answered in the app, with a way to object** (§5.1).
