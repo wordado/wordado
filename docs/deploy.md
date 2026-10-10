@@ -123,6 +123,12 @@ private `wordado/wordado-research`, cloned into `docs/research/` and ignored her
      admins (`review-app/README.md`, "Hosted", step 8): a count and a link to the tab, sent on Monday for
      the week before. It needs the review app's `RESEND_API_KEY`, `FEEDBACK_READ_TOKEN` and
      `LEARNER_APP_URL`, and no setting of its own here.
+   - AI help on the review app's Feedback tab is set up in the review app alone (`review-app/README.md`,
+     "Hosted", step 9): its secret `FEEDBACK_AI_KEY`, and its variables `FEEDBACK_AI_URL` (the address of the
+     service the model is reached through: https, OpenRouter's by default, any service that takes the same
+     request), `FEEDBACK_AI_MODEL`, `FEEDBACK_AI_DAILY_CALLS` and `FEEDBACK_READS`. Nothing is set here, and
+     this server sends feedback to nobody but the review app. The privacy policy must name the AI service
+     before the switch in the tab is turned on.
    A deploy refuses half of a pair, and a `BETTER_AUTH_SECRET` or a `FEEDBACK_READ_TOKEN` under 32 characters (`server/scripts/secretsFile.ts`).
 7. **Protect `main`.** *Done 2026-09-25*: the five checks below are required, a pull request must be
    up to date with `main` before it merges, and force pushes to `main` and its deletion are refused.

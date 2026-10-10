@@ -1,6 +1,6 @@
 # AI help on learners' feedback — design
 
-**Date:** 2026-10-10 · **Status:** agreed with the product owner on 2026-10-10 (§10); not built
+**Date:** 2026-10-10 · **Status:** agreed with the product owner on 2026-10-10 (§10); the weekly mail (§3.4, without the AI's part) and stage B (§3.1: per message, the switch, the limit) built; §3.2 to §3.5 not built
 **Issue:** #158. **Builds on:** the Feedback tab (#157; `2026-10-05-hosted-review-app-design.md` §16) and the
 feedback form (#153; `2026-09-20-vocabulary-learning-app-design.md` §8.12).
 
@@ -61,6 +61,14 @@ Worker may make only so many requests while it answers one). For each message th
 The page shows at once what is already stored; the new results appear when the request returns. A failure leaves
 the messages as they are, to be tried again the next time the page is read.
 
+**As built (stage B).** Two requests from the tab: the list, which joins the stored results and asks the model
+nothing, and then a request that names the page (its kind and cursor, never a message); the Worker reads that
+page again and makes the one call. A call takes at most 25 messages, the newest first; the tab says how many are
+left and offers **Ask the AI** for them. `topic` is not asked for yet (§3.2). A bug's severity travels as one of
+four words, with "none" for no severity, so that the schema has one type a field; it is kept as null. The
+translation and the summary are masked once more before they are kept. Besides the text, the screen is masked
+too, and the language is sent only when it is a two-letter code: both come from the learner's browser.
+
 ### 3.2 Groups
 
 Messages about the same thing share a **topic**: a short title in the working language. The model is given the
@@ -106,8 +114,10 @@ topic, which becomes its match.
 
 ## 4. Where it runs, and what is stored
 
-- The model is called from the review app's Worker, through OpenRouter, with the model named in
-  `FEEDBACK_AI_MODEL` (the corpus reviewer's model by default). The key is a Worker secret, `FEEDBACK_AI_KEY`,
+- The model is called from the review app's Worker, through the service named in `FEEDBACK_AI_URL` (OpenRouter by
+  default; any service that takes the same request, at an https address, so that another one is a change of
+  settings and not of code), with the model named in `FEEDBACK_AI_MODEL` (the corpus reviewer's model by
+  default). What only OpenRouter knows (who asks; no provider that keeps what it is sent) goes to OpenRouter alone. The key is a Worker secret, `FEEDBACK_AI_KEY`,
   set by the owner; a key made for this alone, with a limit of its own, is the safer choice, and the daily limit
   of calls (rule 7) holds whichever key is used.
 - **A switch in the tab**, for admins: *AI help: on / off*, kept in the review app's database. Off, no call is
@@ -118,8 +128,9 @@ topic, which becomes its match.
   - `feedback_ai_calls`: one row per call, for the daily limit.
   - `open_issues`: number and title, refreshed at most once a day.
 - A translation and a summary are text derived from a learner's message, kept in a second database. They hold no
-  address (masked before sending) and no link to an account. They are deleted when the coordinator deletes the
-  mark, and all of it can be cleared with one admin action (*Forget the AI's results*), after which it is made
+  address (masked before sending) and no link to an account. They are deleted when their message is gone from
+  the learner app's server (as built: a page of the list read with no filter by kind removes the results kept
+  for messages that server no longer gives; there is no way to delete a mark), and all of it can be cleared with one admin action (*Forget the AI's results*), after which it is made
   again on reading.
 - A result is made once per message and prompt version. Changing the prompt asks again, a page at a time, as pages
   are read.

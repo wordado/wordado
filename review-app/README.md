@@ -137,9 +137,34 @@ as a pull request against the content repository, with no local checkout and no 
    `RESEND_API_KEY` (step 5), also carry the weekly feedback mail: on Monday at 06:00 UTC the Worker mails every
    admin how many messages learners sent in the week before, with a link to the tab and nothing a learner wrote.
    A week with no feedback sends no mail, and Tuesday tries again when Monday failed.
+9. Optional, for AI help on the Feedback tab (a translation where one is needed, the AI's own category, a bug's
+   severity and a one-line summary beside each message; design `2026-10-10-feedback-ai-help-design.md`). It
+   needs step 8, and:
+   - the Worker secret `FEEDBACK_AI_KEY`, the key of the service the model is reached through, set as the other
+     secrets are (`wrangler secret put FEEDBACK_AI_KEY --env production`, never pasted or committed). A key made
+     for this alone, with a spending limit of its own, is the safer choice. In the service's account, limit the
+     key to model providers that neither keep requests nor train on them. Without the key there is no AI help,
+     and the tab says so.
+   - the variables in `wrangler.jsonc`: `FEEDBACK_AI_URL`, the service's address (https; `/chat/completions` is
+     added to it; OpenRouter's by default, and any service that takes the same request can be named, with no
+     change to the code); `FEEDBACK_AI_MODEL`, the model as that service names it; `FEEDBACK_AI_DAILY_CALLS`,
+     the most calls a UTC day (200); `FEEDBACK_READS`, the languages the coordinator reads, which get no
+     translation (`en,bg`). To OpenRouter the Worker also says that no provider that keeps what it is sent may
+     serve the request; another service is not told so by the request, and must be chosen for it.
+   - **the switch**, *AI help*, in the Feedback tab. It is off until an admin switches it on, and with it off no
+     message is sent anywhere. **Before it is switched on in production, the privacy policy must name the AI
+     service**: the service the model is reached through, the model's provider, and that they receive the text
+     of a feedback message without the contact address.
 
-`scripts/check-config.ts` refuses to deploy while any of steps 1–4 is still a placeholder, or a secret is written
-as a variable; it runs in
+   What is sent: a message's text with email addresses, web addresses and phone numbers masked, the kind the
+   learner chose, the interface language and the screen. Never the address for an answer, the browser or the
+   versions. What is kept in D1: the AI's reading of each message (it holds a translation and a summary, text
+   derived from the message), until the message is gone from the learner app's server or an admin chooses
+   **Forget the AI's results**. When the AI is switched off, not set up, over the day's limit or failing, the
+   tab works as it does without it and says why in one line.
+
+`scripts/check-config.ts` refuses to deploy while any of steps 1–4 is still a placeholder, a secret is written
+as a variable, or `FEEDBACK_AI_URL` is not an https address; it runs in
 `deploy-review.yml` before the Worker is built.
 
 ### Running it locally
@@ -181,7 +206,7 @@ An admin has **Admin** in the header. The page has five tabs, kept in the addres
 language with its progress and **Assign** where nobody holds it), **Reviewers**, **Assignments**,
 **Submissions** and **Feedback** (what learners wrote about the app, read from the learner app's server each
 time the tab is opened; the coordinator marks each message New, Looked at, Done or Not doing and can keep a note
-on it, and only those marks are stored here: spec §16). Inviting, assigning, splitting, reassigning and editing a reviewer's languages each open a dialog;
+on it; those marks are stored here, and, with the AI help switched on, the AI's reading of each message: spec §16). Inviting, assigning, splitting, reassigning and editing a reviewer's languages each open a dialog;
 when the server refuses, the dialog stays open and says why. The page is made for a laptop and usable on a phone.
 
 ### Changing reviewers
