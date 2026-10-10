@@ -1,5 +1,5 @@
 import type { D1Database } from './bindings'
-import type { Language, ReviewerView, Role } from '../shared/hosted'
+import type { Language, ReviewerView, Role, SampleRef, Severity } from '../shared/hosted'
 import type { Action } from '../server/types'
 
 export interface ReviewerRow {
@@ -58,11 +58,15 @@ export async function updateReviewer(
 }
 export const toReviewerView = (r: ReviewerRow): ReviewerView => ({ ...r, languages: [...r.languages] })
 
-export interface AssignmentRow { readonly id: number; readonly reviewer: string; readonly queue: string; readonly files: readonly string[] | '*'; readonly flaggedOnly: boolean; readonly createdAt: string; readonly closedAt: string | null }
-interface AssignmentRecord { id: number; reviewer: string; queue: string; files: string; flagged_only: number; created_at: string; closed_at: string | null }
+/** A spot check's sample (spec §15): the seed it was drawn with and its rows, in the order they are shown. */
+export interface SpotCheck { readonly seed: number; readonly sample: readonly SampleRef[] }
+/** `spotCheck` is null for an assignment of files; a spot check's `files` are the files its sample was drawn from. */
+export interface AssignmentRow { readonly id: number; readonly reviewer: string; readonly queue: string; readonly files: readonly string[] | '*'; readonly flaggedOnly: boolean; readonly spotCheck: SpotCheck | null; readonly createdAt: string; readonly closedAt: string | null }
+interface AssignmentRecord { id: number; reviewer: string; queue: string; files: string; flagged_only: number; spot_check: number; seed: number | null; sample: string | null; created_at: string; closed_at: string | null }
 const assignment = (r: AssignmentRecord): AssignmentRow => ({
   id: r.id, reviewer: r.reviewer, queue: r.queue, files: r.files === '*' ? '*' : (JSON.parse(r.files) as string[]),
-  flaggedOnly: r.flagged_only === 1, createdAt: r.created_at, closedAt: r.closed_at,
+  flaggedOnly: r.flagged_only === 1, spotCheck: r.spot_check === 1 ? { seed: r.seed ?? 0, sample: JSON.parse(r.sample ?? '[]') as SampleRef[] } : null,
+  createdAt: r.created_at, closedAt: r.closed_at,
 })
 export async function getAssignment(db: D1Database, id: number): Promise<AssignmentRow | null> {
   const r = await db.prepare('SELECT * FROM assignments WHERE id = ?').bind(id).first<AssignmentRecord>()
@@ -84,10 +88,11 @@ export async function listAssignments(db: D1Database, filter: { reviewer?: strin
   const sql = `SELECT * FROM assignments${where.length ? ` WHERE ${where.join(' AND ')}` : ''} ORDER BY closed_at IS NOT NULL, id DESC`
   return (await db.prepare(sql).bind(...args).all<AssignmentRecord>()).results.map(assignment)
 }
-export async function insertAssignment(db: D1Database, a: Omit<AssignmentRow, 'id' | 'closedAt'>): Promise<number> {
+export async function insertAssignment(db: D1Database, a: Omit<AssignmentRow, 'id' | 'closedAt' | 'spotCheck'> & { readonly spotCheck?: SpotCheck | null }): Promise<number> {
+  const spot = a.spotCheck ?? null
   const res = await db
-    .prepare('INSERT INTO assignments (reviewer, queue, files, flagged_only, created_at) VALUES (?, ?, ?, ?, ?)')
-    .bind(a.reviewer, a.queue, a.files === '*' ? '*' : JSON.stringify(a.files), a.flaggedOnly ? 1 : 0, a.createdAt)
+    .prepare('INSERT INTO assignments (reviewer, queue, files, flagged_only, spot_check, seed, sample, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+    .bind(a.reviewer, a.queue, a.files === '*' ? '*' : JSON.stringify(a.files), a.flaggedOnly ? 1 : 0, spot ? 1 : 0, spot ? spot.seed : null, spot ? JSON.stringify(spot.sample) : null, a.createdAt)
     .run()
   return res.meta.last_row_id
 }
@@ -95,23 +100,33 @@ export async function closeAssignment(db: D1Database, id: number, at: string): P
   await db.prepare('UPDATE assignments SET closed_at = ? WHERE id = ? AND closed_at IS NULL').bind(at, id).run()
 }
 
-export interface DecisionRow { readonly assignment: number; readonly queue: string; readonly file: string; readonly key: string; readonly rowHash: string; readonly action: Action; readonly cells: Readonly<Record<string, string>>; readonly note: string; readonly decidedAt: string; readonly submission: number | null }
-interface DecisionRecord { assignment: number; queue: string; file: string; key: string; row_hash: string; action: Action; cells: string; note: string; decided_at: string; submission: number | null }
+export interface DecisionRow { readonly assignment: number; readonly queue: string; readonly file: string; readonly key: string; readonly rowHash: string; readonly action: Action; readonly cells: Readonly<Record<string, string>>; readonly note: string; readonly severity: Severity | null; readonly decidedAt: string; readonly submission: number | null }
+interface DecisionRecord { assignment: number; queue: string; file: string; key: string; row_hash: string; action: Action; cells: string; note: string; severity: Severity | null; decided_at: string; submission: number | null }
 const decisionRow = (r: DecisionRecord): DecisionRow => ({
   assignment: r.assignment, queue: r.queue, file: r.file, key: r.key, rowHash: r.row_hash, action: r.action,
-  cells: JSON.parse(r.cells) as Record<string, string>, note: r.note, decidedAt: r.decided_at, submission: r.submission,
+  cells: JSON.parse(r.cells) as Record<string, string>, note: r.note, severity: r.severity, decidedAt: r.decided_at, submission: r.submission,
 })
 export async function listDecisions(db: D1Database, assignmentId: number): Promise<DecisionRow[]> {
   return (await db.prepare('SELECT * FROM decisions WHERE assignment = ? ORDER BY file, key').bind(assignmentId).all<DecisionRecord>()).results.map(decisionRow)
 }
-export async function upsertDecision(db: D1Database, d: DecisionRow): Promise<void> {
+/** The rows of a queue that a decision in an open or merged submission already settles, as key → the row hash decided on. */
+export async function settledRows(db: D1Database, queue: string): Promise<Map<string, Set<string>>> {
+  const found = await db
+    .prepare("SELECT d.key AS key, d.row_hash AS row_hash FROM decisions d JOIN submissions s ON s.id = d.submission WHERE d.queue = ? AND s.status IN ('open', 'merged')")
+    .bind(queue)
+    .all<{ key: string; row_hash: string }>()
+  const out = new Map<string, Set<string>>()
+  for (const r of found.results) out.set(r.key, (out.get(r.key) ?? new Set()).add(r.row_hash))
+  return out
+}
+export async function upsertDecision(db: D1Database, d: Omit<DecisionRow, 'severity'> & { readonly severity?: Severity | null }): Promise<void> {
   await db
     .prepare(
-      `INSERT INTO decisions (assignment, queue, file, key, row_hash, action, cells, note, decided_at, submission) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO decisions (assignment, queue, file, key, row_hash, action, cells, note, severity, decided_at, submission) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (assignment, queue, key) DO UPDATE SET file = excluded.file, row_hash = excluded.row_hash, action = excluded.action,
-       cells = excluded.cells, note = excluded.note, decided_at = excluded.decided_at, submission = excluded.submission`,
+       cells = excluded.cells, note = excluded.note, severity = excluded.severity, decided_at = excluded.decided_at, submission = excluded.submission`,
     )
-    .bind(d.assignment, d.queue, d.file, d.key, d.rowHash, d.action, JSON.stringify(d.cells), d.note, d.decidedAt, d.submission)
+    .bind(d.assignment, d.queue, d.file, d.key, d.rowHash, d.action, JSON.stringify(d.cells), d.note, d.severity ?? null, d.decidedAt, d.submission)
     .run()
 }
 export async function deleteDecision(db: D1Database, assignmentId: number, key: string): Promise<void> {

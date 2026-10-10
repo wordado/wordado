@@ -18,12 +18,31 @@ export function scopeFiles(snap: Snapshot, a: AssignmentRow): string[] {
   return a.files === '*' ? inSnapshot : inSnapshot.filter((f) => a.files.includes(f))
 }
 
+/** Whether a row is one the assignment's reviewer may decide: for a spot check a row of its sample, otherwise any
+ * row of its files. In both cases the file must still be open in the snapshot. */
+export function inScope(snap: Snapshot, a: AssignmentRow, file: string, key: string): boolean {
+  if (!scopeFiles(snap, a).includes(file)) return false
+  return a.spotCheck === null || a.spotCheck.sample.some((s) => s.file === file && s.key === key)
+}
+
 /**
  * The assignment's rows (spec §6): flagged-only → flagged, reported or stale, worst first; otherwise every row in file order.
+ * A spot check (spec §15): the rows of its sample that the snapshot still has, in the sample's own order, whatever
+ * has become of them since (flagged, reported); `keys` are then those rows' keys and no others.
  * Null when a file the snapshot lists is missing from R2: the data is unavailable, not empty, so nobody may read
  * its rows as gone and discard decisions on them.
  */
 export async function assignmentRows(snap: Snapshot, a: AssignmentRow): Promise<{ rows: RowView[]; keys: ReadonlySet<string> } | null> {
+  if (a.spotCheck) {
+    const byFile = new Map<string, Map<string, RowView>>()
+    for (const f of scopeFiles(snap, a)) {
+      const file = await snap.file(f)
+      if (!file) return null
+      byFile.set(f, new Map(file.rows.map((r) => [r.key, r])))
+    }
+    const rows = a.spotCheck.sample.flatMap((s) => byFile.get(s.file)?.get(s.key) ?? [])
+    return { rows, keys: new Set(rows.map((r) => r.key)) }
+  }
   const all: RowView[] = []
   for (const f of scopeFiles(snap, a)) {
     const file = await snap.file(f)
@@ -44,7 +63,7 @@ export function withDecisions(rows: readonly RowView[], decisions: readonly Deci
     return {
       ...r,
       decided: changed ? null : { verdict: d.action === 'drop' ? 'drop' : 'ok', note: d.note },
-      decision: { action: d.action, cells: d.cells, note: d.note, submission: d.submission, changed },
+      decision: { action: d.action, cells: d.cells, note: d.note, severity: d.severity, submission: d.submission, changed },
     }
   })
 }

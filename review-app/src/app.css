@@ -1112,6 +1112,54 @@ kbd {
   gap: var(--space-2);
 }
 
+/* A spot check's question, in the place of the decisions: the two answers side by side, each with what it means
+   under its word, and Cancel under both. */
+.decisions.severity-ask {
+  grid-auto-flow: row;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.severity-ask:focus-visible {
+  outline: none;
+}
+
+.ask-title {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-weight: 600;
+}
+
+.severity-ask .button.large {
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: var(--space-1);
+  white-space: normal;
+  text-align: left;
+}
+
+.ask-word {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.ask-meaning {
+  font-size: var(--step--1);
+  font-weight: 400;
+  color: var(--ink-soft);
+}
+
+.ask-cancel {
+  grid-column: 1 / -1;
+  justify-self: center;
+}
+
+/* What the work is for, above the row (a spot check). */
+.review-lead {
+  margin: 0 0 var(--space-3);
+}
+
 .card-nav {
   display: flex;
   flex-wrap: wrap;
@@ -1475,6 +1523,13 @@ kbd {
 
   .row-card.editing :is(.progress-line, .card-nav, .example) {
     display: none;
+  }
+
+  /* A spot check's question is a taller bar than the decisions: room under the card (and under an edit) to
+     scroll its end clear of it. */
+  .review.page:has(.severity-ask),
+  .row-card.editing:has(.severity-ask) {
+    padding-bottom: calc(16rem + env(safe-area-inset-bottom, 0px));
   }
 
   /* The notices above the review screen keep to the page's narrower gutter. */

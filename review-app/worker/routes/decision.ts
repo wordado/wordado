@@ -1,14 +1,27 @@
 import type { Hono } from 'hono'
-import type { DecisionResult } from '../../server/types'
+import type { Action, DecisionResult } from '../../server/types'
 import { invalidDecision } from '../../shared/apply'
-import type { HostedDecisionRequest } from '../../shared/hosted'
+import { SEVERITIES, type HostedDecisionRequest, type Severity } from '../../shared/hosted'
 import { apiError, jsonBody, type AppEnv, type Deps } from '../app'
 import { deleteDecision, listDecisions, listSubmissions, upsertDecision } from '../db'
-import { scopeFiles } from '../rows'
+import { inScope } from '../rows'
 import { currentSnapshot } from '../snapshotStore'
 import { NO_SNAPSHOT, ownAssignment } from './reviewer'
 
 const fail = (reason: 'changed' | 'gone' | 'invalid', message: string): DecisionResult => ({ ok: false, reason, message })
+
+/**
+ * The severity to store with a decision (spec §15), or why the request is wrong. A spot check asks how serious the
+ * fault was of every decision that changes the row (edit and drop; accept too, should a sampled row have gained
+ * an objection since), and of no other; outside a spot check a severity is refused, not dropped in silence.
+ */
+export function severityOf(spotCheck: boolean, action: Action, given: unknown): Severity | null | { invalid: string } {
+  const asked = spotCheck && action !== 'keep'
+  if (given === undefined || given === null) return asked ? { invalid: 'say how serious it was: severity must be major or minor' } : null
+  if (!spotCheck) return { invalid: 'only a spot check takes a severity' }
+  if (!asked) return { invalid: 'a row kept as it is has no severity' }
+  return (SEVERITIES as readonly unknown[]).includes(given) ? (given as Severity) : { invalid: 'severity must be major or minor' }
+}
 
 export function decisionRoutes(app: Hono<AppEnv>, deps: Deps): void {
   app.post('/api/decision', async (c) => {
@@ -17,7 +30,7 @@ export function decisionRoutes(app: Hono<AppEnv>, deps: Deps): void {
     if (!a) return apiError(c, 403, 'not your assignment')
     const snap = await currentSnapshot(deps)
     if (!snap) return apiError(c, 503, NO_SNAPSHOT)
-    if (req.queue !== a.queue || !scopeFiles(snap, a).includes(req.file)) return apiError(c, 403, 'this row is not in your assignment')
+    if (req.queue !== a.queue || !inScope(snap, a, req.file, req.key)) return apiError(c, 403, 'this row is not in your assignment')
     const rules = snap.queue(a.queue)!
     const invalid = invalidDecision(rules, req.action)
     if (invalid) return c.json(fail('invalid', invalid), 400)
@@ -25,6 +38,8 @@ export function decisionRoutes(app: Hono<AppEnv>, deps: Deps): void {
     const bad = Object.keys(cells).find((k) => !rules.columns.includes(k) || typeof cells[k] !== 'string')
     if (bad !== undefined) return c.json(fail('invalid', `${bad} cannot be edited in ${a.queue}`), 400)
     if (req.note !== undefined && typeof req.note !== 'string') return c.json(fail('invalid', 'the note must be text'), 400)
+    const severity = severityOf(a.spotCheck !== null, req.action, req.severity)
+    if (typeof severity === 'object' && severity !== null) return c.json(fail('invalid', severity.invalid), 400)
     const file = await snap.file(req.file)
     if (!file) return apiError(c, 503, NO_SNAPSHOT)
     const row = file.rows.find((r) => r.key === req.key)
@@ -40,7 +55,7 @@ export function decisionRoutes(app: Hono<AppEnv>, deps: Deps): void {
     if (settled) return c.json(fail('changed', `${req.key} is already submitted`), 409)
     await upsertDecision(deps.env.DB, {
       assignment: a.id, queue: a.queue, file: req.file, key: req.key, rowHash: req.rowHash, action: req.action,
-      cells, note: req.note ?? '', decidedAt: deps.now().toISOString(), submission: null,
+      cells, note: req.note ?? '', severity, decidedAt: deps.now().toISOString(), submission: null,
     })
     return c.json({ ok: true, version: row.rowHash } satisfies DecisionResult)
   })

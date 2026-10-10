@@ -14,6 +14,10 @@ describe('labels', () => {
     expect(scopeLabel({ files: ['a', 'b'], flaggedOnly: false })).toBe('2 files')
     expect(scopeLabel({ files: ['a'], flaggedOnly: true })).toBe('flagged rows in 1 file')
     expect(assignmentLabel({ queue: 'translation-es', files: '*', flaggedOnly: true })).toBe('Spanish translations · flagged rows')
+    // a spot check is named for what it is, not for the files its sample came from
+    expect(scopeLabel({ files: ['a', 'b'], flaggedOnly: false, spotCheck: { sample: 50, result: null } })).toBe('spot check')
+    expect(scopeLabel({ files: ['a', 'b'], flaggedOnly: false, spotCheck: null })).toBe('2 files')
+    expect(assignmentLabel({ queue: 'translation-de', files: ['a'], flaggedOnly: false, spotCheck: { sample: 50, result: null } })).toBe('German translations · spot check')
   })
   it('names a row’s fields in plain words', () => {
     expect(fieldLabel('translation')).toBe('Translation')

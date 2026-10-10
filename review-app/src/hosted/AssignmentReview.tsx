@@ -1,12 +1,13 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { Action, RowView } from '../../server/types'
-import type { AssignmentView, HostedRow, SubmitResult } from '../../shared/hosted'
+import type { AssignmentView, HostedRow, Severity, SubmitResult } from '../../shared/hosted'
 import { hostedApi } from '../hostedApi'
 import { assignmentLabel } from '../labels'
 import { ReviewScreen } from '../ReviewScreen'
+import { SPOT_CHECK_PURPOSE } from './spotCheck'
 
 /** One assignment on the shared review screen: decisions go to the Worker with the row hash they were made on,
- * and Submit sends the open ones as one pull request. */
+ * and Submit sends the open ones as one pull request. A spot check also asks how serious each fault was. */
 export function AssignmentReview(props: { assignment: AssignmentView; onBack(): void }) {
   const a = props.assignment
   const [rows, setRows] = useState<readonly HostedRow[]>([])
@@ -32,8 +33,8 @@ export function AssignmentReview(props: { assignment: AssignmentView; onBack(): 
   useEffect(() => void load(), [load])
 
   const onDecide = useCallback(
-    async (row: RowView, action: Action, cells: Record<string, string>, note: string) => {
-      const res = await hostedApi.decide({ assignment: a.id, queue: row.queue, file: row.file, key: row.key, rowHash: row.rowHash, action, cells, note })
+    async (row: RowView, action: Action, cells: Record<string, string>, note: string, severity?: Severity) => {
+      const res = await hostedApi.decide({ assignment: a.id, queue: row.queue, file: row.file, key: row.key, rowHash: row.rowHash, action, cells, note, ...(severity ? { severity } : {}) })
       if (res.ok) return null
       if (res.reason === 'changed') return 'This row changed; reloaded.'
       if (res.reason === 'gone') return 'This row is gone; reloaded.'
@@ -42,6 +43,8 @@ export function AssignmentReview(props: { assignment: AssignmentView; onBack(): 
     [a.id],
   )
 
+  const spotCheck = a.spotCheck !== null
+  const ratings = useMemo(() => new Map(rows.flatMap((r) => (r.decision?.severity && !r.decision.changed ? [[r.key, r.decision.severity] as const] : []))), [rows])
   const changed = rows.filter((r) => r.decision?.changed).map((r) => r.key)
   const open = rows.filter((r) => r.decision && !r.decision.changed && r.decision.submission === null).length
   const submitNow = async () => {
@@ -81,6 +84,7 @@ export function AssignmentReview(props: { assignment: AssignmentView; onBack(): 
         loadFailed={loadError !== ''}
         title={assignmentLabel(a)}
         onBack={props.onBack}
+        {...(spotCheck ? { lead: `Spot check. ${SPOT_CHECK_PURPOSE}`, askSeverity: true, ratings } : {})}
         actions={
           <button className={open > 0 ? 'button primary' : 'button'} onClick={() => void submitNow()} disabled={open === 0 || submitting}>
             {/* one piece, so the button's gap does not come between the words; a phone shows "Submit 2" */}

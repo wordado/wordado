@@ -8,7 +8,7 @@ afterEach(() => (cleanup(), vi.restoreAllMocks()))
 
 const progress = (over: Partial<Progress> = {}): Progress => ({ inScope: 741, decided: 212, changed: 0, submitted: 60, merged: 0, remaining: 469, ...over })
 const assignment = (over: Partial<AssignmentView> = {}): AssignmentView => ({
-  id: 7, reviewer: 'anna@example.com', reviewerName: 'Anna', queue: 'translation-de', files: '*', flaggedOnly: true, createdAt: 't', closedAt: null, progress: progress(), ...over,
+  id: 7, reviewer: 'anna@example.com', reviewerName: 'Anna', queue: 'translation-de', files: '*', flaggedOnly: true, spotCheck: null, createdAt: 't', closedAt: null, progress: progress(), ...over,
 })
 const untouched = assignment({ id: 8, queue: 'title-de', progress: progress({ inScope: 8, decided: 0, submitted: 0, remaining: 8 }) })
 
@@ -72,6 +72,17 @@ describe('Assignments', () => {
     fireEvent.click(done)
     expect(onOpen).not.toHaveBeenCalled()
     expect(screen.queryByText(/none decided yet/)).toBeNull()
+  })
+
+  it('labels a spot check and says in one line what it is for', async () => {
+    await show([assignment(), assignment({ id: 9, files: ['review/translation-de/a.csv'], flaggedOnly: false, spotCheck: { sample: 50, result: null }, progress: progress({ inScope: 50, decided: 0, submitted: 0, remaining: 50 }) })])
+    const row = (await screen.findByText('German translations · spot check')).closest('li')!
+    expect(within(row).getByText('50 rows · none decided yet')).toBeTruthy()
+    expect(within(row).getByText('These rows passed the AI review. Keep what is right, change what is wrong.')).toBeTruthy()
+    expect(within(row).getByRole('button', { name: 'Start' })).toBeTruthy()
+    // the other assignments say nothing of the kind
+    const other = screen.getByText('German translations · flagged rows').closest('li')!
+    expect(within(other).queryByText(/passed the AI review/)).toBeNull()
   })
 
   it('says so when nothing is assigned', async () => {

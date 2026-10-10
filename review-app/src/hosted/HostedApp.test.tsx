@@ -7,7 +7,7 @@ afterEach(() => (cleanup(), vi.restoreAllMocks(), (window.location.hash = '')))
 
 const me = { email: 'anna@example.com', name: 'Anna', role: 'reviewer' as const, languages: ['de' as const] }
 const progress = { inScope: 2, decided: 0, changed: 0, submitted: 0, merged: 0, remaining: 2 }
-const assignment = { id: 7, reviewer: me.email, reviewerName: 'Anna', queue: 'translation-de', files: '*' as const, flaggedOnly: true, createdAt: 't', closedAt: null, progress }
+const assignment = { id: 7, reviewer: me.email, reviewerName: 'Anna', queue: 'translation-de', files: '*' as const, flaggedOnly: true, spotCheck: null, createdAt: 't', closedAt: null, progress }
 const row = (key: string, over = {}) => ({
   queue: 'translation-de', file: 'review/translation-de/a.csv', version: 'v', key, kind: 'translation' as const, cells: { translation: 'Ufer' }, fields: ['translation'],
   context: { level: 'A1' }, otherSenses: [], reports: '', ai: 'flagged' as const, severity: 'major' as const, objections: [], decided: null, stale: false, rowHash: `h-${key}`, decision: null, ...over,
@@ -146,6 +146,88 @@ describe('HostedApp', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Submit 1 decision/ }))
     await waitFor(() => expect(submit).toHaveBeenCalledWith(7))
     expect(await screen.findByRole('link', { name: /pull request 12/i })).toBeTruthy()
+  })
+
+  describe('a spot check', () => {
+    const spot = { ...assignment, id: 9, files: ['review/translation-de/a.csv'], flaggedOnly: false, spotCheck: { sample: 2, result: null } }
+    const passed = (key: string, over = {}) => row(key, { ai: 'passed' as const, severity: null, ...over })
+    const open = async () => {
+      const item = (await screen.findByText('German translations · spot check')).closest('li')!
+      fireEvent.click(within(item).getByRole('button', { name: 'Start' }))
+      await screen.findByRole('article', { name: 'Row bank-2' })
+    }
+
+    it('says what it is in the header and above the row', async () => {
+      vi.spyOn(hostedApi, 'assignments').mockResolvedValue([spot])
+      vi.spyOn(hostedApi, 'rows').mockResolvedValue({ rows: [passed('bank-2'), passed('bank-3')], discarded: [] })
+      render(<HostedApp me={me} />)
+      await open()
+      expect(within(screen.getByRole('banner')).getByText('German translations · spot check')).toBeTruthy()
+      expect(within(screen.getByRole('main')).getByText('Spot check. These rows passed the AI review. Keep what is right, change what is wrong.')).toBeTruthy()
+    })
+
+    it('sends a drop with the answer to "How serious was it?", and a keep with none', async () => {
+      vi.spyOn(hostedApi, 'assignments').mockResolvedValue([spot])
+      const rows = vi.spyOn(hostedApi, 'rows').mockResolvedValue({ rows: [passed('bank-2'), passed('bank-3')], discarded: [] })
+      const decide = vi.spyOn(hostedApi, 'decide').mockResolvedValue({ ok: true, version: 'h' })
+      render(<HostedApp me={me} />)
+      await open()
+      fireEvent.keyDown(window, { key: '4' })
+      expect(screen.getByRole('group', { name: 'How serious was it?' })).toBeTruthy()
+      expect(decide).not.toHaveBeenCalled()
+      // the keys that leave the row, and the row list, are off while the question is open
+      expect(screen.getByRole<HTMLButtonElement>('button', { name: 'All rows' }).disabled).toBe(true)
+      for (const key of ['s', 'ArrowDown', 'ArrowUp', 'l']) fireEvent.keyDown(window, { key })
+      expect(screen.getByRole('article', { name: 'Row bank-2' })).toBeTruthy()
+      expect(screen.queryByRole('dialog')).toBeNull()
+      rows.mockResolvedValue({
+        rows: [passed('bank-2', { decided: { verdict: 'drop', note: '' }, decision: { action: 'drop', cells: {}, note: '', severity: 'major', submission: null, changed: false } }), passed('bank-3')],
+        discarded: [],
+      })
+      fireEvent.keyDown(window, { key: '1' })
+      expect(await screen.findByRole('article', { name: 'Row bank-3' })).toBeTruthy()
+      expect(decide).toHaveBeenCalledTimes(1)
+      expect(decide).toHaveBeenCalledWith(expect.objectContaining({ assignment: 9, key: 'bank-2', action: 'drop', severity: 'major' }))
+      await waitFor(() => expect((screen.getByRole('button', { name: /Keep/ }) as HTMLButtonElement).disabled).toBe(false))
+      fireEvent.click(screen.getByRole('button', { name: /Keep/ }))
+      await waitFor(() => expect(decide).toHaveBeenCalledTimes(2))
+      expect(decide.mock.calls[1]![0]).toMatchObject({ key: 'bank-3', action: 'keep' })
+      expect('severity' in decide.mock.calls[1]![0]).toBe(false)
+    })
+
+    it('shows on a decided row what it was rated, and lets the reviewer change their mind', async () => {
+      vi.spyOn(hostedApi, 'assignments').mockResolvedValue([spot])
+      const decided = passed('bank-2', { decided: { verdict: 'ok', note: '' }, decision: { action: 'edit', cells: { translation: 'Bank' }, note: '', severity: 'minor', submission: null, changed: false } })
+      vi.spyOn(hostedApi, 'rows').mockResolvedValue({ rows: [decided, passed('bank-3')], discarded: [] })
+      const decide = vi.spyOn(hostedApi, 'decide').mockResolvedValue({ ok: true, version: 'h' })
+      render(<HostedApp me={me} />)
+      const item = (await screen.findByText('German translations · spot check')).closest('li')!
+      fireEvent.click(within(item).getByRole('button', { name: 'Start' }))
+      // the first undecided row comes up; the decided one is chosen from the row list
+      await screen.findByRole('article', { name: 'Row bank-3' })
+      expect(screen.queryByText(/^rated/)).toBeNull()
+      fireEvent.click(screen.getByRole('button', { name: 'All rows' }))
+      fireEvent.click(within(screen.getByRole('list', { name: 'Rows' })).getByRole('button', { name: /bank-2/ }))
+      const article = await screen.findByRole('article', { name: 'Row bank-2' })
+      expect(within(article).getByText('rated minor')).toBeTruthy()
+      fireEvent.click(within(article).getByRole('button', { name: /Drop/ }))
+      fireEvent.click(within(article).getByRole('button', { name: /Serious/ }))
+      await waitFor(() => expect(decide).toHaveBeenCalledWith(expect.objectContaining({ key: 'bank-2', action: 'drop', severity: 'major' })))
+    })
+
+    it('asks nothing in an assignment that is not a spot check', async () => {
+      vi.spyOn(hostedApi, 'assignments').mockResolvedValue([assignment])
+      vi.spyOn(hostedApi, 'rows').mockResolvedValue({ rows: [row('bank-2'), row('bank-3')], discarded: [] })
+      const decide = vi.spyOn(hostedApi, 'decide').mockResolvedValue({ ok: true, version: 'h' })
+      render(<HostedApp me={me} />)
+      await openAssignment()
+      await screen.findByRole('article', { name: 'Row bank-2' })
+      expect(screen.queryByText(/passed the AI review/)).toBeNull()
+      fireEvent.keyDown(window, { key: '4' })
+      await waitFor(() => expect(decide).toHaveBeenCalledTimes(1))
+      expect('severity' in decide.mock.calls[0]![0]).toBe(false)
+      expect(screen.queryByRole('group', { name: 'How serious was it?' })).toBeNull()
+    })
   })
 
   it('gives each left-out row of a submit its own reason', async () => {
