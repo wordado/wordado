@@ -96,6 +96,8 @@ export const es: Messages = {
   'settings.autoUpdateHint': 'Wordado pasa a una versión nueva por sí solo cuando no estás en mitad de nada. Si lo desactivas, te avisa de que hay una versión nueva y te espera. Solo se aplica a este dispositivo.',
   'settings.autoUpdateNotKept': 'Este navegador no ha podido guardar el ajuste. Dura hasta que cierres Wordado.',
   'settings.about': 'Acerca de',
+  'about.aiChecked': 'Las traducciones están revisadas por IA. Si algo no te cuadra, dínoslo: basta un toque.',
+  'about.howToReport': 'Mientras estudias, abre el menú ⋯ de la tarjeta y elige «Informar de un problema».',
   'about.sources': 'La lista de palabras se basa en estas fuentes:',
   'about.ownList': 'Esta lista de palabras la ha preparado Wordado.',
   'about.unavailable': 'Las fuentes de los datos de las palabras aparecerán aquí cuando la aplicación se haya conectado.',
@@ -451,6 +453,7 @@ export const es: Messages = {
 
   'report.open': 'Informar de un problema',
   'report.title': 'Informar de un problema con «{word}»',
+  'report.aiChecked': 'Las traducciones están revisadas por IA. Dinos qué te parece incorrecto.',
   'report.field': '¿Qué falla?',
   'report.translation': 'Traducción incorrecta o rara',
   'report.example': 'Frase de ejemplo incorrecta o poco clara',

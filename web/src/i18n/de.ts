@@ -96,6 +96,8 @@ export const de: Messages = {
   'settings.autoUpdateHint': 'Wordado wechselt von selbst zu einer neuen Version, wenn du gerade nichts anderes machst. Ist das ausgeschaltet, sagt es dir, sobald eine neue Version bereit ist, und wartet auf dich. Das gilt nur für dieses Gerät.',
   'settings.autoUpdateNotKept': 'Dieser Browser konnte die Einstellung nicht speichern. Sie gilt, bis Wordado geschlossen wird.',
   'settings.about': 'Über Wordado',
+  'about.aiChecked': 'Die Übersetzungen wurden von KI geprüft. Wenn etwas falsch aussieht, sag uns Bescheid: Ein Tipp genügt.',
+  'about.howToReport': 'Öffne beim Lernen das Menü ⋯ auf der Karte und wähle „Problem melden“.',
   'about.sources': 'Die Wortliste stützt sich auf diese Quellen:',
   'about.ownList': 'Diese Wortliste wurde von Wordado erstellt.',
   'about.unavailable': 'Die Quellen der Wortdaten erscheinen hier, sobald die App online war.',
@@ -453,6 +455,7 @@ export const de: Messages = {
 
   'report.open': 'Problem melden',
   'report.title': 'Problem mit „{word}“ melden',
+  'report.aiChecked': 'Die Übersetzungen wurden von KI geprüft. Sag uns, was falsch aussieht.',
   'report.field': 'Was stimmt nicht?',
   'report.translation': 'Falsche oder merkwürdige Übersetzung',
   'report.example': 'Schlechter Beispielsatz',
