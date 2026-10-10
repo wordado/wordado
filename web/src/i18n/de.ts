@@ -433,6 +433,13 @@ export const de: Messages = {
   'themes.practise': 'Dieses Thema üben',
   'themes.practiseNamed': 'Dieses Thema üben: {name}',
   'themes.started': '{started} von {count} Wörtern begonnen',
+  'themes.search': 'Themen durchsuchen',
+  'themes.searchPlaceholder': 'Ein Wort, eine Übersetzung oder ein Thema',
+  'themes.searchFound': { one: '{count} Thema gefunden', other: '{count} Themen gefunden' },
+  'themes.searchNone': 'Kein Thema enthält „{query}“.',
+  'themes.searchClear': 'Alle Themen anzeigen',
+  'themes.searchMore': '+{count} weitere',
+  'themes.searchNoTheme': 'Auch im Kurs, aber in keinem Thema:',
 
   'progress.title': 'Fortschritt',
   'progress.tiers': 'Deine Wörter',

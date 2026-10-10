@@ -413,6 +413,13 @@ export const bg: Messages = {
   'themes.practise': 'Упражнете тази тема',
   'themes.practiseNamed': 'Упражнете тази тема: {name}',
   'themes.started': 'Започнати {started} от {count} думи',
+  'themes.search': 'Търсене в темите',
+  'themes.searchPlaceholder': 'Дума, превод или тема',
+  'themes.searchFound': { one: 'Намерена е {count} тема', other: 'Намерени са {count} теми' },
+  'themes.searchNone': 'Няма тема с „{query}“.',
+  'themes.searchClear': 'Покажете всички теми',
+  'themes.searchMore': 'и още {count}',
+  'themes.searchNoTheme': 'В курса, но извън темите:',
 
   'progress.title': 'Напредък',
   'progress.tiers': 'Вашите думи',

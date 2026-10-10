@@ -408,6 +408,31 @@ test('practises one theme from Themes, and comes back with the study theme as it
   await expect(page.getByRole('region', { name: 'Studying now' }).getByRole('heading', { level: 3 })).toHaveCount(0)
 })
 
+test('searches the themes for a word, and chooses a theme from what it finds', async ({ page }) => {
+  await page.goto('/')
+  await finishSetup(page)
+  await page.goto('/themes')
+  const search = page.getByRole('searchbox', { name: 'Search themes' })
+  await search.fill('key')
+  const results = page.getByRole('region', { name: '1 theme found' })
+  const card = results.getByRole('listitem').filter({ has: page.getByRole('heading', { name: 'Daily life' }) })
+  await expect(card.locator('.theme-matches')).toHaveText('key ключ')
+  await expect(card.getByText('Not started')).toBeVisible()
+  await expect(page.locator('.themes-page [role="status"]')).toHaveText('1 theme found')
+  await expectAccessible(page, { dark: true })
+  // Choosing from the results leaves them as they are; the card now says it is the one being studied.
+  await card.getByRole('button', { name: 'Study this next: Daily life' }).click()
+  await expect(results.getByRole('heading', { name: 'Daily life' })).toBeFocused()
+  await expect(card.getByText('Studying now')).toBeVisible()
+  // A word of the course that is in no theme is named all the same.
+  await search.fill('teach')
+  await expect(page.getByRole('heading', { name: 'No theme has “teach”.' })).toBeVisible()
+  await expect(page.getByText('Also in the course, in no theme: teacher учител')).toBeVisible()
+  await page.getByRole('button', { name: 'Show all themes' }).click()
+  await expect(search).toHaveValue('')
+  await expect(page.getByRole('region', { name: 'Studying now' }).getByRole('heading', { name: 'Daily life' })).toBeVisible()
+})
+
 test('practises a whole theme that is not started, chooses a word to learn, and takes the theme up from the done screen', async ({ page }) => {
   await page.goto('/')
   await finishSetup(page)
