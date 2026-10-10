@@ -175,8 +175,47 @@ export interface FeedbackMark {
   readonly markedAt: string | null
 }
 
-/** A message as the learner app's server gives it, with the coordinator's mark. */
-export type FeedbackView = FeedbackItem & FeedbackMark
+/** How the AI reads a message (spec 2026-10-10 §3.1): beside the kind the learner chose, never in its place. */
+export const FEEDBACK_CATEGORIES = ['bug', 'idea', 'question', 'praise', 'junk'] as const
+export type FeedbackCategory = (typeof FEEDBACK_CATEGORIES)[number]
+/** How bad a bug sounds to the AI: the learner cannot study or loses data, it is in the way, or it only looks wrong. */
+export const FEEDBACK_SEVERITIES = ['blocks', 'annoys', 'cosmetic'] as const
+export type FeedbackSeverity = (typeof FEEDBACK_SEVERITIES)[number]
+
+/** The AI's reading of one message (spec 2026-10-10 §3.1). `translation` is empty when none was needed. Advice only. */
+export interface FeedbackAi {
+  readonly language: string
+  readonly translation: string
+  readonly category: FeedbackCategory
+  readonly severity: FeedbackSeverity | null
+  readonly summary: string
+}
+
+/** A message as the learner app's server gives it, with the coordinator's mark and, when there is one, the AI's reading. */
+export type FeedbackView = FeedbackItem & FeedbackMark & { readonly ai: FeedbackAi | null }
+
+/** `GET /api/admin/feedback/ai`. `setUp`: the sign-in, the secret and the address are there. `needs`: the first setting that is missing or wrong while
+ * it is not. `on`: an admin switched it on. `reads`: the languages that need no translation. */
+export interface FeedbackAiStatus {
+  readonly setUp: boolean
+  readonly needs: 'FEEDBACK_AI_AUTH' | 'FEEDBACK_AI_KEY' | 'FEEDBACK_AI_URL' | null
+  readonly on: boolean
+  readonly model: string
+  readonly callsToday: number
+  readonly dailyCalls: number
+  readonly reads: readonly string[]
+}
+
+/** Why the AI gave nothing: switched off, no key, the day's limit, not reached, late, refused by the service, or an answer that did not fit. */
+export type FeedbackAiWhy = 'off' | 'not-set-up' | 'limit' | 'unreachable' | 'late' | 'refused' | 'unfit'
+
+/** `POST /api/admin/feedback/ai/read`: the new results by message id; how many messages were sent; how many still have none. */
+export interface FeedbackAiRead {
+  readonly results: Readonly<Record<number, FeedbackAi>>
+  readonly asked: number
+  readonly left: number
+  readonly why: FeedbackAiWhy | null
+}
 
 /** `GET /api/admin/feedback`. Not connected: the token or the server's address is not set. `read` is how many
  * messages the server's page held, before the filter by state; `nextBefore` is the `before` of the next, older

@@ -15,7 +15,7 @@ export async function migrate(db: D1Database): Promise<void> {
 }
 
 export async function resetDb(db: D1Database): Promise<void> {
-  await db.batch(['DELETE FROM weekly_mails', 'DELETE FROM feedback_marks', 'DELETE FROM decisions', 'DELETE FROM submissions', 'DELETE FROM assignments', 'DELETE FROM reviewers'].map((s) => db.prepare(s)))
+  await db.batch(['DELETE FROM settings', 'DELETE FROM feedback_ai_calls', 'DELETE FROM feedback_ai', 'DELETE FROM weekly_mails', 'DELETE FROM feedback_marks', 'DELETE FROM decisions', 'DELETE FROM submissions', 'DELETE FROM assignments', 'DELETE FROM reviewers'].map((s) => db.prepare(s)))
 }
 
 /** Local D1 and R2 from wrangler.jsonc's top level, in memory, migrated. */
@@ -45,5 +45,13 @@ export function testDeps(env: Env, overrides: Partial<Deps> = {}): Deps {
     log: () => undefined,
     sleep: async () => undefined,
     ...overrides,
+  }
+}
+
+/** One `fetch` for several fakes: a request goes to the fake of its origin, and anything else answers 599. */
+export function fetchBy(hosts: Readonly<Record<string, Deps['fetch']>>): Deps['fetch'] {
+  return async (input, init) => {
+    const fake = hosts[new URL(input).origin]
+    return fake ? fake(input, init) : new Response(`no fake for ${input}`, { status: 599 })
   }
 }

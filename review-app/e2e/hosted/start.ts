@@ -9,9 +9,11 @@ import { buildSnapshot } from '../../server/snapshot'
 import { CURRENT_KEY } from '../../shared/snapshot'
 import type { D1Database, R2Bucket } from '../../worker/bindings'
 import { FakeGitHub, testAppKey } from '../../worker/test/fakeGitHub'
-import { FakeLearnerApp, feedbackItem } from '../../worker/test/fakeLearnerApp'
+import { FakeLearnerApp } from '../../worker/test/fakeLearnerApp'
+import { FakeModel, testServiceAccount } from '../../worker/test/fakeModel'
 import { testKeys } from '../../worker/test/jwt'
 import { migrate } from '../../worker/test/platform'
+import { FEEDBACK, standInAnswer } from './feedbackFixture'
 
 const root = join(import.meta.dirname, '..', '..')
 const walk = (dir: string): string[] => readdirSync(dir).flatMap((n) => (statSync(join(dir, n)).isDirectory() ? walk(join(dir, n)) : [join(dir, n)]))
@@ -56,16 +58,9 @@ createServer((req, res) => {
   })()
 }).listen(4182, '127.0.0.1')
 
-// The fake learner app server: the feedback the Feedback tab reads. The bugs are the desktop run's and the ideas the
-// phone run's, so the two browser projects can mark theirs side by side.
+// The fake learner app server: the feedback the Feedback tab reads (feedbackFixture.ts).
 const FEEDBACK_TOKEN = 'e2e-feedback-read-token-0123456789abcdef'
-const learnerApp = new FakeLearnerApp(FEEDBACK_TOKEN, [
-  feedbackItem(1, { kind: 'idea', message: 'A dark theme would be easier in the evening.', contactEmail: 'ideas@example.com', signedIn: true }),
-  feedbackItem(2, { message: 'The path does not open after I finish a unit.\nI see a white screen until I reload.', contactEmail: 'learner@example.com', signedIn: true }),
-  feedbackItem(3, { kind: 'idea', message: 'Let me choose how many new words a day.', corpusVersion: '' }),
-  feedbackItem(4, { message: 'The sound of a word plays twice on my phone.' }),
-  feedbackItem(5, { kind: 'other', message: 'Thank you for the app. A-very-long-word-without-any-spaces-in-it-that-has-to-break-somewhere-on-a-narrow-screen-' + 'x'.repeat(60) }),
-])
+const learnerApp = new FakeLearnerApp(FEEDBACK_TOKEN, [...FEEDBACK])
 createServer((req, res) => {
   void (async () => {
     // What the review app has asked of it, for the test of the timed job.
@@ -81,6 +76,31 @@ createServer((req, res) => {
   })()
 }).listen(4183, '127.0.0.1')
 
+// The stand-in model, for the AI help on the Feedback tab: it answers what feedbackFixture.ts wrote down for each
+// message, and keeps what it was sent, so the browser run can look at it. No model is ever asked. It stands in for
+// Google's: the Worker signs in with a service account made for this run (a new key each time, written nowhere),
+// whose key file names the stand-in's own token endpoint, as only a local Worker lets it.
+const account = await testServiceAccount({ token_uri: 'http://127.0.0.1:4184/token' })
+const model = new FakeModel('unused')
+model.serviceAccount = account
+model.answer = standInAnswer
+createServer((req, res) => {
+  void (async () => {
+    if (req.url === '/_state') {
+      res.writeHead(200, { 'content-type': 'application/json' })
+      const tokens = model.tokenRequests.map((r, i) => ({ url: r.url, signed: r.signed, given: r.signed ? (model.tokens[i] ?? null) : null }))
+      res.end(JSON.stringify({ requests: model.requests.map((r) => ({ url: r.url, authorization: r.headers['authorization'] ?? '', body: r.body })), tokens }))
+      return
+    }
+    const chunks: Buffer[] = []
+    for await (const c of req) chunks.push(c as Buffer)
+    const headers = Object.fromEntries(Object.entries(req.headers).map(([k, v]) => [k, String(v)]))
+    const out = await model.fetch(`http://127.0.0.1:4184${req.url}`, { method: req.method ?? 'GET', headers, body: Buffer.concat(chunks).toString('utf8') })
+    res.writeHead(out.status, { 'content-type': out.headers.get('content-type') ?? 'text/plain' })
+    res.end(await out.text())
+  })()
+}).listen(4184, '127.0.0.1')
+
 const keys = await testKeys()
 const env = { ACCESS_AUD: AUD, ACCESS_TEAM_DOMAIN: TEAM }
 mkdirSync(join(root, '.e2e'), { recursive: true })
@@ -94,5 +114,6 @@ const vars = {
   GITHUB_API_URL: 'http://127.0.0.1:4182', GITHUB_APP_ID: '1', GITHUB_INSTALLATION_ID: '1', GITHUB_APP_PRIVATE_KEY: (await testAppKey()).pem,
   APP_ORIGIN: 'http://127.0.0.1:4181',
   LEARNER_APP_URL: 'http://127.0.0.1:4183', FEEDBACK_READ_TOKEN: FEEDBACK_TOKEN,
+  FEEDBACK_AI_AUTH: 'google-service-account', FEEDBACK_AI_URL: 'http://127.0.0.1:4184', FEEDBACK_AI_KEY: account.keyFile,
 }
 spawn('pnpm', ['exec', 'wrangler', 'dev', '--port', '4181', '--ip', '127.0.0.1', '--persist-to', state, ...Object.entries(vars).flatMap(([k, v]) => ['--var', `${k}:${v}`])], { cwd: root, stdio: 'inherit' })
