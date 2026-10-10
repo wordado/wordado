@@ -103,6 +103,22 @@ describe('exportQueues and importQueues', () => {
     expect(exportAll(dir, draft([changed, entry('bread-1')]))).toEqual([])
   })
 
+  it('writes again an open row that reports reopened, with what the learners said, and then leaves it alone', () => {
+    const dir = makeContent()
+    const d = draft([entry('water-1'), entry('bread-1')])
+    exportAll(dir, d)
+    const old = 'review/translation-bg/2026-10-01-01.csv'
+    const note = '1 reports (translation): suggested: „водица“'
+    Decisions.read(dir).append('translation-bg', [{ key: 'water-1', at: NOW, verdict: 'reopen', by: 'reports', note }])
+    // Nobody decided the row, so it is in a file already: the report must still reach a reviewer.
+    expect(exportAll(dir, d)).toEqual(['review/translation-bg/2026-10-01-02.csv'])
+    expect(csvRecords(readFileSync(join(dir, old), 'utf8')).rows.map((r) => r['key'])).toEqual(['bread-1'])
+    expect(csvRecords(readFileSync(join(dir, 'review/translation-bg/2026-10-01-02.csv'), 'utf8')).rows).toMatchObject([{ key: 'water-1', translation: 'вода', reopened: note }])
+    // The other queues, and a second run, change nothing.
+    expect(csvRecords(readFileSync(join(dir, 'review/english/2026-10-01-01.csv'), 'utf8')).rows.map((r) => r['key'])).toEqual(['water-1', 'bread-1'])
+    expect(exportAll(dir, d)).toEqual([])
+  })
+
   it('removes an open file left with no rows, and keeps a stale row that already has a verdict', () => {
     const dir = makeContent()
     exportAll(dir, draft([entry('water-1')]))
