@@ -301,10 +301,11 @@ export async function dropFeedbackAi(db: D1Database, ids: readonly number[]): Pr
   if (ids.length === 0) return 0
   return (await db.prepare(`DELETE FROM feedback_ai WHERE feedback_id IN (${ids.map(() => '?').join(', ')})`).bind(...ids).run()).meta.changes
 }
-/** Drops every reading: how many. With them go the topics nobody has worked on, which the AI alone made; a topic the
- * coordinator renamed, marked, noted or matched stays, empty. The marks and the count of calls stay. */
+/** Drops every reading: how many. With them go the topics nobody has worked on, which the AI alone made, and the
+ * paragraphs it wrote about a week; a topic the coordinator renamed, marked, noted or matched stays, empty. The
+ * marks and the count of calls stay. */
 export async function forgetFeedbackAi(db: D1Database): Promise<number> {
-  const [readings] = (await db.batch([db.prepare('DELETE FROM feedback_ai'), db.prepare('DELETE FROM feedback_topics WHERE updated_by IS NULL')])) as { meta: { changes: number } }[]
+  const [readings] = (await db.batch([db.prepare('DELETE FROM feedback_ai'), db.prepare('DELETE FROM feedback_topics WHERE updated_by IS NULL'), db.prepare('DELETE FROM feedback_week_texts')])) as { meta: { changes: number } }[]
   return readings?.meta.changes ?? 0
 }
 
@@ -440,6 +441,44 @@ export async function claimIssuesRead(db: D1Database, now: Date): Promise<boolea
 /** What came of the day's read, for whoever looks later. */
 export async function settleIssuesRead(db: D1Database, now: Date, outcome: string): Promise<void> {
   await db.prepare('UPDATE open_issues_reads SET outcome = ? WHERE day = ?').bind(outcome, utcDay(now)).run()
+}
+
+/** A period of feedback as the readings count it (spec 2026-10-10 §3.4): numbers and topic titles, in one batch. */
+export interface WeekCounts {
+  readonly byCategory: readonly { readonly category: FeedbackCategory; readonly n: number; readonly blocks: number }[]
+  readonly topTopics: readonly { readonly id: number; readonly title: string; readonly n: number }[]
+  readonly blocking: readonly { readonly id: number | null; readonly title: string | null; readonly n: number }[]
+  readonly newTopics: readonly FeedbackTopicRef[]
+}
+/**
+ * Counts the readings of the messages received from `since` up to, and not at, `until` (epoch ms): by category, with
+ * the bugs that block; the `top` topics with the most messages; the bugs that block by topic, a row with no id for
+ * those in none; and the topics made in the period. At most `listed` rows of each of the last two.
+ */
+export async function weekCounts(db: D1Database, period: { readonly since: number; readonly until: number }, top: number, listed: number): Promise<WeekCounts> {
+  const { since, until } = period
+  const [byCategory, topTopics, blocking, newTopics] = (await db.batch([
+    db.prepare("SELECT category, COUNT(*) AS n, COALESCE(SUM(category = 'bug' AND severity = 'blocks'), 0) AS blocks FROM feedback_ai WHERE received_at >= ? AND received_at < ? GROUP BY category").bind(since, until),
+    db
+      .prepare('SELECT t.id, t.title, COUNT(*) AS n FROM feedback_ai a JOIN feedback_topics t ON t.id = a.topic_id WHERE a.received_at >= ? AND a.received_at < ? GROUP BY t.id ORDER BY n DESC, MAX(a.received_at) DESC, t.id DESC LIMIT ?')
+      .bind(since, until, top),
+    db
+      .prepare(
+        `SELECT t.id, t.title, COUNT(*) AS n FROM feedback_ai a LEFT JOIN feedback_topics t ON t.id = a.topic_id
+         WHERE a.received_at >= ? AND a.received_at < ? AND a.category = 'bug' AND a.severity = 'blocks' GROUP BY t.id ORDER BY n DESC, t.id IS NULL, t.id DESC LIMIT ?`,
+      )
+      .bind(since, until, listed),
+    db.prepare('SELECT id, title FROM feedback_topics WHERE created_at >= ? AND created_at < ? ORDER BY id DESC LIMIT ?').bind(new Date(since).toISOString(), new Date(until).toISOString(), listed),
+  ])) as [{ results: WeekCounts['byCategory'] }, { results: WeekCounts['topTopics'] }, { results: WeekCounts['blocking'] }, { results: WeekCounts['newTopics'] }]
+  return { byCategory: byCategory.results, topTopics: topTopics.results, blocking: blocking.results, newTopics: newTopics.results }
+}
+/** The paragraph kept for a period (spec 2026-10-10 §3.4), or null. */
+export async function weekText(db: D1Database, period: string): Promise<string | null> {
+  return (await db.prepare('SELECT paragraph FROM feedback_week_texts WHERE period = ?').bind(period).first<{ paragraph: string }>())?.paragraph ?? null
+}
+/** Keeps a period's paragraph; the first one kept for a period stays. */
+export async function putWeekText(db: D1Database, period: string, paragraph: string, at: string): Promise<void> {
+  await db.prepare('INSERT INTO feedback_week_texts (period, paragraph, made_at) VALUES (?, ?, ?) ON CONFLICT (period) DO NOTHING').bind(period, paragraph, at).run()
 }
 
 const utcDay = (now: Date) => now.toISOString().slice(0, 10)
