@@ -140,31 +140,52 @@ as a pull request against the content repository, with no local checkout and no 
 9. Optional, for AI help on the Feedback tab (a translation where one is needed, the AI's own category, a bug's
    severity and a one-line summary beside each message; design `2026-10-10-feedback-ai-help-design.md`). It
    needs step 8, and:
-   - the Worker secret `FEEDBACK_AI_KEY`, the key of the service the model is reached through, set as the other
-     secrets are (`wrangler secret put FEEDBACK_AI_KEY --env production`, never pasted or committed). A key made
-     for this alone, with a spending limit of its own, is the safer choice. In the service's account, limit the
-     key to model providers that neither keep requests nor train on them. Without the key there is no AI help,
-     and the tab says so.
-   - the variables in `wrangler.jsonc`: `FEEDBACK_AI_URL`, the service's address (https; `/chat/completions` is
-     added to it; OpenRouter's by default, and any service that takes the same request can be named, with no
-     change to the code); `FEEDBACK_AI_MODEL`, the model as that service names it; `FEEDBACK_AI_DAILY_CALLS`,
-     the most calls a UTC day (200); `FEEDBACK_READS`, the languages the coordinator reads, which get no
-     translation (`en,bg`). To OpenRouter the Worker also says that no provider that keeps what it is sent may
-     serve the request; another service is not told so by the request, and must be chosen for it.
+   - the variable `FEEDBACK_AI_AUTH`, how the Worker signs in to the service the model is reached through. There
+     are two ways:
+     - `key` (the default): the secret `FEEDBACK_AI_KEY` is the service's key and is sent as it is.
+       `FEEDBACK_AI_URL` is OpenRouter's address when it is not set, and any service that takes the same request
+       at an https address can be named, with no change to the code. To OpenRouter the Worker also says that no
+       provider that keeps what it is sent may serve the request; another service is not told so by the request,
+       and must be chosen for it. In the service's account, limit the key to model providers that neither keep
+       requests nor train on them.
+     - `google-service-account`: for Gemini on Google Cloud's Vertex AI, asked directly. The secret
+       `FEEDBACK_AI_KEY` is the whole content of the service account's JSON key file (`client_email`,
+       `private_key` and, when it has one, `token_uri` are read). The Worker signs a short-lived JWT with that
+       key, changes it at Google's token endpoint for an access token that lives an hour, keeps the token in
+       memory only, and asks the model with it. `FEEDBACK_AI_URL` must be set (there is no default) and must be
+       an https address on `googleapis.com`: the address of Vertex AI's OpenAI-compatible endpoint, with the
+       project and the location in it. A key file that names another token address is refused.
+
+     **Learners' feedback is meant to go the second way, to Vertex AI's endpoint for the European Union,** so
+     that the text is processed in the EU. The defaults (`key`, OpenRouter's address) are left as they are for a
+     setup like the corpus review's.
+   - the Worker secret `FEEDBACK_AI_KEY`, set as the other secrets are (`wrangler secret put FEEDBACK_AI_KEY
+     --env production`, never pasted or committed; a key file is piped in from the file, and the file deleted).
+     A key or a service account made for this alone, with a spending limit and the least permission of its own,
+     is the safer choice. Without the secret there is no AI help, and the tab says so, naming the setting that
+     is missing or wrong.
+   - the other variables in `wrangler.jsonc`: `FEEDBACK_AI_URL`, the service's address (https;
+     `/chat/completions` is added to it); `FEEDBACK_AI_MODEL`, the model as that service names it;
+     `FEEDBACK_AI_DAILY_CALLS`, the most calls a UTC day (200); `FEEDBACK_READS`, the languages the coordinator
+     reads, which get no translation (`en,bg`).
    - **the switch**, *AI help*, in the Feedback tab. It is off until an admin switches it on, and with it off no
      message is sent anywhere. **Before it is switched on in production, the privacy policy must name the AI
-     service**: the service the model is reached through, the model's provider, and that they receive the text
-     of a feedback message without the contact address.
+     service** (the company that runs the model, and that it receives the text of a feedback message without
+     the contact address), **and the transfer of the text to it must be covered**: by the EU–US Data Privacy
+     Framework or by standard contractual clauses.
 
    What is sent: a message's text with email addresses, web addresses and phone numbers masked, the kind the
    learner chose, the interface language and the screen. Never the address for an answer, the browser or the
    versions. What is kept in D1: the AI's reading of each message (it holds a translation and a summary, text
    derived from the message), until the message is gone from the learner app's server or an admin chooses
    **Forget the AI's results**. When the AI is switched off, not set up, over the day's limit or failing, the
-   tab works as it does without it and says why in one line.
+   tab works as it does without it and says why in one line. A key file that cannot be read, a token Google
+   refuses and a call the model refuses are all "failing": the Worker's log has one line for each, with the
+   step (`key file`, `token` or `model`) and a status, and nothing of the secret, the token or a message.
 
 `scripts/check-config.ts` refuses to deploy while any of steps 1–4 is still a placeholder, a secret is written
-as a variable, or `FEEDBACK_AI_URL` is not an https address; it runs in
+as a variable, `FEEDBACK_AI_AUTH` is neither of its two values, or `FEEDBACK_AI_URL` is not an https address
+(on `googleapis.com`, when the sign-in is `google-service-account`); it runs in
 `deploy-review.yml` before the Worker is built.
 
 ### Running it locally

@@ -120,6 +120,23 @@ topic, which becomes its match.
   default). What only OpenRouter knows (who asks; no provider that keeps what it is sent) goes to OpenRouter alone. The key is a Worker secret, `FEEDBACK_AI_KEY`,
   set by the owner; a key made for this alone, with a limit of its own, is the safer choice, and the daily limit
   of calls (rule 7) holds whichever key is used.
+- **Added 2026-10-10: a second way to sign in.** The owner decided that learners' feedback goes to the model's
+  provider directly, at its endpoint for the European Union, so that the text is processed in the EU and passes
+  through no service between. `FEEDBACK_AI_AUTH` chooses the sign-in:
+  - `key` (the default): as above. `FEEDBACK_AI_KEY` is sent as it is; `FEEDBACK_AI_URL` is OpenRouter's when
+    unset.
+  - `google-service-account`: `FEEDBACK_AI_KEY` holds the content of a Google service account's JSON key file.
+    The Worker signs a JWT with its private key (RS256, WebCrypto), changes it at Google's token endpoint for an
+    access token that lives an hour, and asks the model with the token. The request to the model is the same
+    one. `FEEDBACK_AI_URL` has no default and must be an https address on `googleapis.com`.
+
+  Rules that hold for the second way: the token is kept in the Worker's memory until shortly before it ends, and
+  never in the database or the log; a token is asked for only when none is kept, so a call is at most one request
+  more, and the 20 seconds (§7) run over the token and the model together; a key file that names a token address
+  other than Google's is refused, since a file must not say where a secret is sent; a sign-in that is not one of
+  the two is "not set up", and never falls back to the other. A key file that cannot be used, a refused token
+  and a refused call are the failures of §7: the tab works without the AI and says so once, and the log names
+  the step and the status and nothing else. "Not set up" names the setting that is missing or wrong.
 - **A switch in the tab**, for admins: *AI help: on / off*, kept in the review app's database. Off, no call is
   made and stored results stay shown. It is off until someone switches it on.
 - Stored in the review app's database, by the message's id, as the coordinator's marks are:
@@ -143,6 +160,9 @@ carries sign-in codes only. Both stay true:
 - **Before the switch is turned on in production,** the policy lists the AI service among those companies: the
   service the model is reached through and the model's provider, what they receive (the text of a feedback
   message, without the contact address) and where. The switch (§4) says so beside it. Until then it stays off.
+  *(2026-10-10: with the second sign-in of §4 there is one company, the model's provider. The note beside the
+  switch now says what the policy asks for as it stands: the AI service is named, and the transfer of the text
+  to it is covered by the EU–US Data Privacy Framework or by standard contractual clauses.)*
 - The key is limited, in the provider's account, to model providers that neither keep the requests nor train on
   them.
 - The weekly mail holds nothing a learner wrote (§3.4), so the policy's sentence about the mail service stands.

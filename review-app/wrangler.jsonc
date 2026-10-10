@@ -17,8 +17,9 @@
     "GITHUB_INSTALLATION_ID": "",
     "MAIL_FROM": "Wordado Review <review@wordado.com>",
     "LEARNER_APP_URL": "",
-    // The AI help on feedback (spec 2026-10-10 §4): the service the model is reached through, the model, the calls a
-    // UTC day, the languages that need no translation.
+    // The AI help on feedback (spec 2026-10-10 §4): how the Worker signs in (key, or google-service-account), the
+    // service the model is reached through, the model, the calls a UTC day, the languages that need no translation.
+    "FEEDBACK_AI_AUTH": "key",
     "FEEDBACK_AI_URL": "https://openrouter.ai/api/v1",
     "FEEDBACK_AI_MODEL": "google/gemini-3.8-flash",
     "FEEDBACK_AI_DAILY_CALLS": "200",
@@ -48,10 +49,13 @@
         "MAIL_FROM": "Wordado Review <review@wordado.com>",
         // The learner app's server, for the Feedback tab (spec 2026-10-05 §16); its token, FEEDBACK_READ_TOKEN, is a secret.
         "LEARNER_APP_URL": "https://app.wordado.com",
-        // The AI help on feedback (spec 2026-10-10 §4): the service the model is reached through (https; any service
-        // that takes the same request), the model as that service names it, the calls a UTC day, the languages that
-        // need no translation. Its key, FEEDBACK_AI_KEY, is a secret; without it there is no AI help. With it, the
-        // help is still off until an admin switches it on in the Feedback tab.
+        // The AI help on feedback (spec 2026-10-10 §4): how the Worker signs in to the service the model is reached
+        // through, that service's address (https), the model as it names it, the calls a UTC day, the languages
+        // that need no translation. FEEDBACK_AI_AUTH is "key" (FEEDBACK_AI_KEY is the service's key; any service
+        // that takes the same request) or "google-service-account" (FEEDBACK_AI_KEY is the account's JSON key
+        // file, and FEEDBACK_AI_URL must be an address on googleapis.com). FEEDBACK_AI_KEY is a secret; without it
+        // there is no AI help. With it, the help is still off until an admin switches it on in the Feedback tab.
+        "FEEDBACK_AI_AUTH": "key",
         "FEEDBACK_AI_URL": "https://openrouter.ai/api/v1",
         "FEEDBACK_AI_MODEL": "google/gemini-3.8-flash",
         "FEEDBACK_AI_DAILY_CALLS": "200",
