@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Locator } from '@playwright/test'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { answer, expectAccessible, finishSetup, finishSetupAt, forwardConsole, heading, serveGlossedSample, serveTwoLevelSample, SETTLE_MS, studyNew, today } from './helpers'
@@ -565,6 +565,90 @@ test('Settings › About says the demo’s word list is Wordado’s own, from th
   await page.goto('/settings/about')
   await expect(page.getByRole('heading', { name: 'About' })).toBeVisible()
   await expect(page.getByText('This word list was prepared by Wordado.')).toBeVisible()
+})
+
+// The demo has no server: the feedback request is answered here, first with a failure and then with success.
+// Service workers are blocked, on the page's own context so a phone project keeps its screen: WebKit does not
+// show a request the app's service worker passes on to `page.route`.
+test.describe('feedback about the app (spec §8.12)', () => {
+  test.use({ serviceWorkers: 'block' })
+
+  test('is sent from the demo’s banner; a failed send keeps the text', async ({ page }) => {
+    await page.goto('/')
+    await finishSetup(page)
+    await page.goto('/progress')
+    const bodies: unknown[] = []
+    let failing = true
+    await page.route('**/v1/feedback', (route) => {
+      if (failing) return route.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"internal"}' })
+      bodies.push(route.request().postDataJSON())
+      return route.fulfill({ contentType: 'application/json', body: '{"ok":true}' })
+    })
+    /** A finger's room (spec §11.1): at least 44 px each way. */
+    const expectTapTarget = async (target: Locator) => {
+      const box = (await target.boundingBox())!
+      expect(box.height).toBeGreaterThanOrEqual(44)
+      expect(box.width).toBeGreaterThanOrEqual(44)
+    }
+    const open = page.getByRole('link', { name: 'Feedback', exact: true })
+    await expectTapTarget(open)
+    await open.click()
+    await expect(heading(page)).toHaveText('Send feedback')
+    // Nothing is sent unseen: the screen it was opened from is listed with the rest.
+    const details = page.getByRole('list', { name: 'Sent with your message' })
+    await expect(details.getByRole('listitem')).toHaveCount(5)
+    await expect(details.getByText('Opened from: /progress')).toBeVisible()
+    await expectAccessible(page, { dark: true })
+    for (const kind of ['Something isn’t working', 'I have an idea', 'Something else']) await expectTapTarget(page.locator('.feedback-form .choices label', { hasText: kind }))
+    await expectTapTarget(page.getByLabel('Your message', { exact: true }))
+    await expectTapTarget(page.getByLabel('Email, if you’d like an answer (optional)'))
+    const send = page.getByRole('button', { name: 'Send', exact: true })
+    await expectTapTarget(send)
+    // The field no person fills in takes no room and no focus.
+    await expect(page.locator('input[name="website"]')).toHaveAttribute('tabindex', '-1')
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
+
+    await page.getByRole('radio', { name: 'I have an idea' }).check()
+    await page.getByLabel('Your message', { exact: true }).fill('A dark theme, please.')
+    await send.click()
+    await expect(page.locator('.feedback-form [role="alert"]')).toHaveText('Wordado isn’t answering properly right now. Try again later.')
+    await expect(page.getByLabel('Your message', { exact: true })).toHaveValue('A dark theme, please.')
+    await expect(page.getByRole('radio', { name: 'I have an idea' })).toBeChecked()
+    await expectAccessible(page, { dark: true })
+
+    failing = false
+    await send.click()
+    const thanks = page.locator('.feedback-form [role="status"]')
+    await expect(thanks).toHaveText('Thank you! We’ve got your message.')
+    await expect(thanks).toBeFocused()
+    expect(bodies).toEqual([
+      {
+        kind: 'idea',
+        message: 'A dark theme, please.',
+        email: '',
+        appVersion: expect.stringMatching(/^[A-Za-z0-9_-]{6,}$/),
+        corpusVersion: expect.stringMatching(/^bg-\d+$/),
+        language: 'en',
+        screen: '/progress',
+        userAgent: await page.evaluate(() => navigator.userAgent),
+        website: '',
+      },
+    ])
+    await expectAccessible(page, { dark: true })
+    const back = page.getByRole('link', { name: 'Back', exact: true })
+    await expectTapTarget(back)
+    await back.click()
+    await expect(heading(page)).toHaveText('Progress')
+  })
+})
+
+test('Settings › About leads to feedback about the app', async ({ page }) => {
+  await page.goto('/')
+  await finishSetup(page)
+  await page.goto('/settings/about')
+  await page.getByRole('link', { name: 'Send feedback about the app' }).click()
+  await expect(heading(page)).toHaveText('Send feedback')
+  await expect(page.getByText('Opened from: /settings/about')).toBeVisible()
 })
 
 // Every screen is scanned, in two tests: one walk through every screen outgrew the 30 s test budget in Firefox

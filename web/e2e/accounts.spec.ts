@@ -263,6 +263,27 @@ test('signs out leaving nothing behind, then deletes the account (spec §11)', a
   await ctx.close()
 })
 
+test('sends feedback from the account menu, and the export holds it (spec §8.12, §11)', async ({ browser }) => {
+  const ctx = await context(browser)
+  const page = await ctx.newPage()
+  await signIn(page, address('feedback'))
+  await finishSetup(page)
+  await page.goto('/path')
+  await page.getByRole('button', { name: /^Account: / }).click()
+  await page.getByRole('link', { name: 'Feedback', exact: true }).click()
+  await expect(heading(page)).toHaveText('Send feedback')
+  await expectAccessible(page, { dark: true })
+  // The address is never filled in for the learner.
+  await expect(page.getByLabel('Email, if you’d like an answer (optional)')).toHaveValue('')
+  await page.getByLabel('Your message', { exact: true }).fill('The path does not open.')
+  await page.getByRole('button', { name: 'Send', exact: true }).click()
+  await expect(page.locator('.feedback-form [role="status"]')).toHaveText('Thank you! We’ve got your message.')
+  const { feedback } = (await exported(page)) as unknown as { feedback: Record<string, unknown>[] }
+  expect(feedback).toHaveLength(1)
+  expect(feedback[0]).toMatchObject({ kind: 'bug', message: 'The path does not open.', email: '', language: 'en', screen: '/path' })
+  await ctx.close()
+})
+
 test('meets WCAG 2.2 A and AA on the account screens, light and dark (spec §11.1)', async ({ browser }) => {
   const ctx = await context(browser)
   const page = await ctx.newPage()

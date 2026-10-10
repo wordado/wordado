@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { Link, navigate, parseRoute, routeHref, useRoute, type Route } from './router'
+import { Link, navigate, parseRoute, routeHref, routePath, useRoute, type Route } from './router'
 
 beforeEach(() => window.history.replaceState(null, '', '/'))
 afterEach(cleanup)
@@ -24,6 +24,9 @@ const ROUTES: Route[] = [
   { name: 'path' },
   { name: 'themes' },
   { name: 'progress' },
+  { name: 'feedback' },
+  { name: 'feedback', from: '/path' },
+  { name: 'feedback', from: '/settings/about' },
 ]
 
 describe('routes', () => {
@@ -74,6 +77,21 @@ describe('routes', () => {
     // Nothing deeper is a theme.
     expect(parseRoute('/themes/daily-life/words', '')).toEqual({ name: 'home' })
     expect(parseRoute('/themes', '')).toEqual({ name: 'themes' })
+  })
+
+  it('routes feedback, keeping where it was opened from only as the path of a screen the app has', () => {
+    expect(routeHref({ name: 'feedback', from: '/practice/words' })).toBe('/feedback?from=%2Fpractice%2Fwords')
+    expect(parseRoute('/feedback', '?from=%2Fpractice%2Fwords%3Funit%3Da1-02')).toEqual({ name: 'feedback', from: '/practice/words' })
+    expect(parseRoute('/feedback', '?from=/settings/about/')).toEqual({ name: 'feedback', from: '/settings/about' })
+    expect(parseRoute('/feedback', '?from=%2Fno-such-screen')).toEqual({ name: 'feedback', from: '/' })
+    expect(parseRoute('/feedback', '?from=https%3A%2F%2Fexample.com%2F')).toEqual({ name: 'feedback' })
+    expect(parseRoute('/feedback', '?from=%2Ffeedback')).toEqual({ name: 'feedback' })
+    expect(parseRoute('/feedback/', '')).toEqual({ name: 'feedback' })
+  })
+
+  it('names a route’s path without its query', () => {
+    expect(routePath({ name: 'practice-words', mode: 'flashcard', unit: 'a1-02' })).toBe('/practice/words')
+    expect(routePath({ name: 'home' })).toBe('/')
   })
 
   it('routes the sign-in screen', () => {

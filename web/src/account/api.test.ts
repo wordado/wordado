@@ -94,6 +94,30 @@ describe('httpApi (plan 5 contract)', () => {
     await expect(httpApi(refused.fetchFn, () => 'u1').putSubscription(body)).rejects.toMatchObject({ status: 409, code: 'wrong_user' })
   })
 
+  it('sends feedback signed in or not, naming the learner when one is known, and reports a refusal or no connection', async () => {
+    const body = {
+      kind: 'idea' as const,
+      message: 'A dark theme, please.',
+      email: '',
+      appVersion: 'B3kq9xZa',
+      corpusVersion: 'bg-6',
+      language: 'bg',
+      screen: '/path',
+      userAgent: 'Mozilla/5.0',
+      website: '',
+    }
+    const { fetchFn, calls } = fakeFetch({ 'POST /v1/feedback': [200, { ok: true }] })
+    await httpApi(fetchFn).sendFeedback(body)
+    await httpApi(fetchFn, () => 'u1').sendFeedback(body)
+    expect(bodyOf(calls[0]!)).toEqual(body)
+    expect(calls[0]!.init?.credentials).toBe('include')
+    expect(new Headers(calls[0]!.init?.headers).has('x-wordado-user')).toBe(false)
+    expect(new Headers(calls[1]!.init?.headers).get('x-wordado-user')).toBe('u1')
+    const refused = fakeFetch({ 'POST /v1/feedback': [429, { error: 'feedback_limit' }] })
+    await expect(httpApi(refused.fetchFn).sendFeedback(body)).rejects.toMatchObject({ status: 429, code: 'feedback_limit' })
+    await expect(httpApi(fakeFetch({}).fetchFn).sendFeedback(body)).rejects.toBeInstanceOf(OfflineError)
+  })
+
   it('treats reminders as unavailable when the server has no key', async () => {
     expect(await httpApi(fakeFetch({ 'GET /v1/push/public-key': [404, { error: 'not_configured' }] }).fetchFn).pushPublicKey()).toBeNull()
     expect(await httpApi(fakeFetch({ 'GET /v1/push/public-key': [200, { publicKey: 'BPk' }] }).fetchFn).pushPublicKey()).toBe('BPk')

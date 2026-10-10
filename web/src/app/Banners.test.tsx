@@ -29,6 +29,20 @@ describe('Banners', () => {
     expect(accounts.calls).toEqual(['leaveDemo'])
   })
 
+  it('offers feedback from the demo, naming the screen it is opened from without its query; a learner finds it in the account menu', async () => {
+    window.history.replaceState(null, '', '/practice/words?unit=a1-02&mode=flashcard')
+    try {
+      const ctx = await setup()
+      renderWith(<Banners />, { ...ctx })
+      expect(screen.getByRole('link', { name: 'Feedback' }).getAttribute('href')).toBe('/feedback?from=%2Fpractice%2Fwords')
+      cleanup()
+      renderWith(<Banners />, { ...ctx, account: ana })
+      expect(screen.queryByRole('link', { name: 'Feedback' })).toBeNull()
+    } finally {
+      window.history.replaceState(null, '', '/')
+    }
+  })
+
   it('shows why leaving failed, in the dialog', async () => {
     const ctx = await setup()
     const accounts = fakeAccounts({ leaveDemo: async () => Promise.reject(new Error('disk full')) })
