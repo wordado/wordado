@@ -1,4 +1,4 @@
-import type { StampedReviewEvent, WireDocument } from '@wordado/core'
+import type { FeedbackKind, StampedReviewEvent, WireDocument } from '@wordado/core'
 import type { Db } from '../db/db'
 import { EVENT_COLUMNS, toStampedEvent, toStoredEvent, type EventRow } from '../sync/events'
 import { DOCUMENT_COLUMNS, toWire, type DocumentRow } from '../sync/documents'
@@ -15,6 +15,21 @@ export interface AccountExport {
   readonly dayComplete: readonly string[]
   /** Every answer, as stamped, in replay order. */
   readonly reviewEvents: readonly StampedReviewEvent[]
+  /** What the learner sent about the app while signed in (spec §8.12), oldest first, with the details sent beside it. */
+  readonly feedback: readonly ExportedFeedback[]
+}
+
+export interface ExportedFeedback {
+  readonly kind: FeedbackKind
+  readonly message: string
+  /** The address given for an answer; empty when none was. */
+  readonly email: string
+  readonly receivedAt: number
+  readonly appVersion: string
+  readonly corpusVersion: string
+  readonly userAgent: string
+  readonly language: string
+  readonly screen: string
 }
 
 /**
@@ -36,6 +51,12 @@ export async function buildExport(db: Db, userId: string, now: number): Promise<
       `select ${EVENT_COLUMNS} from review_event where user_id = $1 order by effective_ts, device_id, device_seq, review_id`,
       [userId],
     )
+    const feedback = await tx.query<ExportedFeedback>(
+      `select kind, message, contact_email as email, received_at as "receivedAt", app_version as "appVersion", corpus_version as "corpusVersion",
+         user_agent as "userAgent", language, screen
+       from feedback where user_id = $1 order by received_at, id`,
+      [userId],
+    )
     return {
       format: EXPORT_FORMAT,
       exportedAt: now,
@@ -43,6 +64,7 @@ export async function buildExport(db: Db, userId: string, now: number): Promise<
       documents: documents.map((row) => toWire(row, null)),
       dayComplete: days.map((d) => d.local_date),
       reviewEvents: events.map((row) => toStampedEvent(toStoredEvent(row))),
+      feedback,
     }
   })
 }

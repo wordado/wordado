@@ -1,10 +1,16 @@
 import type { Fetch, Mailer } from './deps'
 
-/** Local development prints the code instead of sending it (spec §4.4). scripts/smoke.ts reads this line. */
+/**
+ * Local development prints the code instead of sending it (spec §4.4). scripts/smoke.ts reads this line.
+ * The feedback mail is printed whole, as it would have been sent.
+ */
 export function consoleMailer(log: (line: string) => void = (line) => console.log(line)): Mailer {
   return {
     async sendSignInCode(email, code) {
       log(`Sign-in code for ${email}: ${code}`)
+    },
+    async sendFeedback(to, mail) {
+      log(`Feedback mail for ${to}: ${mail.subject}\n${mail.text}`)
     },
   }
 }
@@ -16,25 +22,28 @@ export interface ResendOptions {
 }
 
 /**
- * Sign-in codes through Resend's HTTP API. The email carries the code and
+ * Mail through Resend's HTTP API. A sign-in email carries the code and
  * nothing else (spec §11), in each interface language, since the learner's
- * choice is not known before they sign in.
+ * choice is not known before they sign in. The feedback mail goes to the
+ * coordinator alone, in plain text (spec §8.12).
  */
 export function resendMailer(options: ResendOptions): Mailer {
-  const send: Fetch = options.fetch ?? ((input, init) => fetch(input, init))
+  const fetchFn: Fetch = options.fetch ?? ((input, init) => fetch(input, init))
+  const send = async (to: string, subject: string, text: string): Promise<void> => {
+    const response = await fetchFn('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${options.apiKey}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ from: options.from, to: [to], subject, text }),
+    })
+    if (!response.ok) throw new Error(`Resend refused the email: ${response.status}`)
+  }
   return {
-    async sendSignInCode(email, code) {
-      const response = await send('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: { authorization: `Bearer ${options.apiKey}`, 'content-type': 'application/json' },
-        body: JSON.stringify({
-          from: options.from,
-          to: [email],
-          subject: `Wordado: ${code}`,
-          text: `Your Wordado sign-in code is ${code}. It expires in 5 minutes.\n\nВашият код за вход в Wordado е ${code}. Валиден е 5 минути.\n\nDein Wordado-Anmeldecode ist ${code}. Er ist 5 Minuten gültig.\n\nTu código de inicio de sesión en Wordado es ${code}. Caduca en 5 minutos.`,
-        }),
-      })
-      if (!response.ok) throw new Error(`Resend refused the email: ${response.status}`)
-    },
+    sendSignInCode: (email, code) =>
+      send(
+        email,
+        `Wordado: ${code}`,
+        `Your Wordado sign-in code is ${code}. It expires in 5 minutes.\n\nВашият код за вход в Wordado е ${code}. Валиден е 5 минути.\n\nDein Wordado-Anmeldecode ist ${code}. Er ist 5 Minuten gültig.\n\nTu código de inicio de sesión en Wordado es ${code}. Caduca en 5 minutos.`,
+      ),
+    sendFeedback: (to, mail) => send(to, mail.subject, mail.text),
   }
 }

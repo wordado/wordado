@@ -32,6 +32,8 @@ export interface Harness {
   readonly clock: TestClock
   /** Every sign-in code the mailer was given. */
   readonly codes: { readonly email: string; readonly code: string }[]
+  /** Every feedback mail the mailer was given. */
+  readonly feedbackMails: { readonly to: string; readonly subject: string; readonly text: string }[]
   readonly jobs: Job[]
   /** Every endpoint the push sender was asked to wake. */
   readonly pushed: string[]
@@ -72,6 +74,7 @@ export function harness(options: HarnessOptions = {}): Harness {
   }
   const pending: Promise<unknown>[] = []
   const codes: { email: string; code: string }[] = []
+  const feedbackMails: { to: string; subject: string; text: string }[] = []
   const jobs: Job[] = []
   const pushed: string[] = []
   const deps: ServerDeps = {
@@ -83,12 +86,16 @@ export function harness(options: HarnessOptions = {}): Harness {
       minProtocolVersion: 1,
       google: null,
       vapid: null,
+      feedbackEmail: null,
       ...options.config,
     },
     now: options.now ?? (() => clock.now),
     mailer: {
       async sendSignInCode(email, code) {
         codes.push({ email, code })
+      },
+      async sendFeedback(to, mail) {
+        feedbackMails.push({ to, ...mail })
       },
     },
     jobs: {
@@ -136,6 +143,7 @@ export function harness(options: HarnessOptions = {}): Harness {
     deps,
     clock,
     codes,
+    feedbackMails,
     jobs,
     pushed,
     pushResult: 'sent',

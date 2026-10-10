@@ -1,4 +1,6 @@
 import type { ServerDeps } from '../deps'
+import { pruneFeedbackSends } from '../feedback/limit'
+import { mailNewFeedback } from '../feedback/mail'
 import { sendDueReminders } from '../reminders/schedule'
 import { pruneSignInLimits } from '../signInLimit'
 import { requestStaleRederivations } from './rederive'
@@ -22,6 +24,8 @@ export async function runScheduled(deps: ServerDeps): Promise<void> {
     () => cleanupPushWindows(deps),
     () => pruneSignInLimits(deps),
     () => sendDueReminders(deps),
+    () => pruneFeedbackSends(deps),
+    () => mailNewFeedback(deps),
   ]
   const results = await Promise.allSettled(steps.map((step) => step()))
   const failures = results.flatMap((r) => (r.status === 'rejected' ? [r.reason as unknown] : []))

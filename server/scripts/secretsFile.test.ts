@@ -9,6 +9,7 @@ describe('workerSecrets: what a deploy uploads (spec §4.4: secrets from the Git
       'BETTER_AUTH_SECRET',
       'RESEND_API_KEY',
       'EMAIL_FROM',
+      'FEEDBACK_EMAIL',
       'GOOGLE_CLIENT_ID',
       'GOOGLE_CLIENT_SECRET',
       'VAPID_PUBLIC_KEY',
@@ -35,5 +36,12 @@ describe('workerSecrets: what a deploy uploads (spec §4.4: secrets from the Git
       'GOOGLE_CLIENT_ID is set without GOOGLE_CLIENT_SECRET; VAPID_PRIVATE_KEY is set without VAPID_PUBLIC_KEY',
     )
     expect(() => workerSecrets({ BETTER_AUTH_SECRET: secret, RESEND_API_KEY: 're_x' })).toThrow('RESEND_API_KEY is set without EMAIL_FROM')
+  })
+
+  it('refuses the feedback address without the mailer that would use it, and takes the mailer without the address', () => {
+    expect(() => workerSecrets({ BETTER_AUTH_SECRET: secret, FEEDBACK_EMAIL: 'feedback@example.com' })).toThrow('FEEDBACK_EMAIL is set without RESEND_API_KEY')
+    const mailer = { BETTER_AUTH_SECRET: secret, RESEND_API_KEY: 're_x', EMAIL_FROM: 'Wordado <codes@example.com>' }
+    expect(workerSecrets(mailer)).toEqual(mailer)
+    expect(workerSecrets({ ...mailer, FEEDBACK_EMAIL: 'feedback@example.com' })).toEqual({ ...mailer, FEEDBACK_EMAIL: 'feedback@example.com' })
   })
 })
