@@ -92,6 +92,8 @@ export const en = {
   'settings.autoUpdateHint': 'Wordado moves to a new version by itself when you are not in the middle of anything. Switched off, it tells you when a new version is ready and waits for you. This applies to this device only.',
   'settings.autoUpdateNotKept': 'This browser could not keep the setting. It lasts until Wordado is closed.',
   'settings.about': 'About',
+  'about.aiChecked': 'Translations are checked by AI. If something looks wrong, tell us: it takes one tap.',
+  'about.howToReport': 'While you study, open the ⋯ menu on the card and choose “Report a problem”.',
   'about.sources': 'The word list is built from these sources:',
   'about.ownList': 'This word list was prepared by Wordado.',
   'about.unavailable': 'The word data’s sources appear here once the app has been online.',
@@ -438,6 +440,7 @@ export const en = {
 
   'report.open': 'Report a problem',
   'report.title': 'Report a problem with “{word}”',
+  'report.aiChecked': 'Translations are checked by AI. Tell us what looks wrong.',
   'report.field': 'What is wrong?',
   'report.translation': 'Wrong or odd translation',
   'report.example': 'Bad example sentence',

@@ -539,11 +539,14 @@ describe('RunView: reporting a problem', () => {
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Report a problem' })))
     await press(' ')
     expect(run.snapshot.phase).toBe('prompt')
+    // The dialog says what checked the translations (spec §8.10), until the report is sent.
+    expect(screen.getByText('Translations are checked by AI. Tell us what looks wrong.')).toBeTruthy()
     await act(async () => fireEvent.click(screen.getByRole('radio', { name: 'Bad audio' })))
     fireEvent.change(screen.getByRole('textbox', { name: 'Details (optional)' }), { target: { value: 'Too quiet' } })
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Send report' })))
     expect(report).toHaveBeenCalledWith({ wordId: run.snapshot.item!.wordId, field: 'audio', note: 'Too quiet', packVersion: 0 })
     expect(screen.getByText('Report saved. Thank you.')).toBeTruthy()
+    expect(screen.queryByText('Translations are checked by AI. Tell us what looks wrong.')).toBeNull()
     expect(document.activeElement?.textContent).toBe('Continue')
   })
 

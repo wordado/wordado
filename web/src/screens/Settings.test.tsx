@@ -460,6 +460,15 @@ describe('Settings: reminders (spec §8.11)', () => {
   })
 })
 
+describe('Settings: how the translations were checked (spec §8.10)', () => {
+  it('says on the About page that AI checked them, and how to report a fault', async () => {
+    const ctx = await setup()
+    renderWith(<Settings section="about" />, ctx)
+    expect(screen.getByText('Translations are checked by AI. If something looks wrong, tell us: it takes one tap.')).toBeTruthy()
+    expect(screen.getByText('While you study, open the ⋯ menu on the card and choose “Report a problem”.')).toBeTruthy()
+  })
+})
+
 describe('Settings: the privacy policy (spec §11)', () => {
   it('links to the policy', async () => {
     const ctx = await setup()

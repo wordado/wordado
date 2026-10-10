@@ -70,6 +70,7 @@ export function ReportDialog(props: { readonly wordId: WordId; readonly entry: C
         </>
       ) : (
         <form onSubmit={(event) => void submit(event)}>
+          <p className="note">{t('report.aiChecked')}</p>
           <fieldset>
             <legend>{t('report.field')}</legend>
             {REPORT_FIELDS.map((value) => (
