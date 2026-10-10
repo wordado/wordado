@@ -64,6 +64,37 @@ describe('checkProductionConfig', () => {
       expect(checkProductionConfig(config({ vars: { FEEDBACK_AI_URL: bad } })).join('\n')).toMatch(/FEEDBACK_AI_URL must be an https address/)
     }
   })
+  it('takes the AI help’s sign-in as key or google-service-account, and nothing else', () => {
+    for (const good of ['key', 'google-service-account']) expect(checkProductionConfig(config({ vars: { FEEDBACK_AI_AUTH: good, FEEDBACK_AI_URL: 'https://aiplatform.eu.rep.googleapis.com/v1/projects/a-project/locations/eu/endpoints/openapi' } }))).toEqual([])
+    for (const bad of ['', 'google', 'Key', 'service-account', ' key']) expect(checkProductionConfig(config({ vars: { FEEDBACK_AI_AUTH: bad } })).join('\n')).toMatch(/FEEDBACK_AI_AUTH must be key or google-service-account/)
+  })
+  it('takes, with a Google service account, an https address on googleapis.com and no other', () => {
+    const google = (url?: string) => checkProductionConfig(config({ vars: { FEEDBACK_AI_AUTH: 'google-service-account', ...(url === undefined ? {} : { FEEDBACK_AI_URL: url }) } }))
+    for (const good of [
+      'https://aiplatform.eu.rep.googleapis.com/v1/projects/a-project/locations/eu/endpoints/openapi',
+      'https://europe-west1-aiplatform.googleapis.com/v1/projects/a-project/locations/europe-west1/endpoints/openapi',
+      'https://aiplatform.googleapis.com/v1/projects/a-project/locations/global/endpoints/openapi',
+    ]) expect(google(good)).toEqual([])
+    for (const bad of [
+      'https://openrouter.ai/api/v1',
+      'https://ai.example.com/v1',
+      'https://googleapis.com.example.com/v1/projects/p/locations/eu/endpoints/openapi',
+      'https://example.com/aiplatform.eu.rep.googleapis.com',
+      'https://notgoogleapis.com/v1',
+      'https://aiplatform.eu.rep.googleapis.com:8443/v1',
+      'http://aiplatform.eu.rep.googleapis.com/v1/projects/p/locations/eu/endpoints/openapi',
+      'https://aiplatform.eu.rep.googleapis.com/v1/projects/p/locations/eu/endpoints/openapi/',
+      'https://aiplatform.eu.rep.googleapis.com/v1/projects/p/locations/eu/endpoints/openapi/chat/completions',
+      'https://aiplatform.eu.rep.googleapis.com/v1/projects/p/locations/eu/endpoints/openapi?key=1',
+      'http://127.0.0.1:4184',
+      '',
+    ]) expect(google(bad).join('\n')).toMatch(/FEEDBACK_AI_URL must be an https address on googleapis\.com/)
+    // There is no default to fall back to: the address must be written.
+    expect(google().join('\n')).toMatch(/FEEDBACK_AI_URL must be an https address on googleapis\.com/)
+    // By key, the rules are as they were: any https address, and none at all is the default.
+    expect(checkProductionConfig(config({ vars: { FEEDBACK_AI_AUTH: 'key', FEEDBACK_AI_URL: 'https://ai.example.com/v1' } }))).toEqual([])
+    expect(checkProductionConfig(config({ vars: { FEEDBACK_AI_AUTH: 'key' } }))).toEqual([])
+  })
   it('takes the AI help’s limit as digits and its languages as two-letter codes with commas, or neither at all', () => {
     expect(checkProductionConfig(config({ vars: { FEEDBACK_AI_MODEL: 'test/model', FEEDBACK_AI_DAILY_CALLS: '200', FEEDBACK_READS: 'en,bg' } }))).toEqual([])
     expect(checkProductionConfig(config({ vars: { FEEDBACK_AI_DAILY_CALLS: '0', FEEDBACK_READS: 'en' } }))).toEqual([])
