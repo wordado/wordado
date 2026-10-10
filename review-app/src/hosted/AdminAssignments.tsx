@@ -5,6 +5,7 @@ import { hostedApi } from '../hostedApi'
 import { assignmentLabel, queueLabel } from '../labels'
 import { type Act, count, dateOf, fileName, type PageNotice } from './adminUtil'
 import { doneLabel, isDone, ProgressBar } from './Assignments'
+import { resultLine, SPOT_CHECK_MAX, SPOT_CHECK_ROWS } from './spotCheck'
 
 type Queue = SnapshotStatus['queues'][number]
 
@@ -53,10 +54,11 @@ interface Props extends PageNotice {
   onAssigning(next: { readonly queue: string } | null): void
 }
 
-/** The Assignments tab: Assign work and Split a queue (dialogs), then the open and the closed assignments. */
+/** The Assignments tab: Assign work, Split a queue and Spot check (dialogs), then the open and the closed assignments. */
 export function AdminAssignments(props: Props) {
   const { assignments, reviewers, act, notice, assigning, onAssigning } = props
   const [splitting, setSplitting] = useState(false)
+  const [sampling, setSampling] = useState(false)
   const [reassigning, setReassigning] = useState<AssignmentView | null>(null)
   const open = (assignments ?? []).filter((a) => !a.closedAt)
   const closed = (assignments ?? []).filter((a) => a.closedAt)
@@ -73,6 +75,9 @@ export function AdminAssignments(props: Props) {
         </button>
         <button className="button" onClick={() => show(() => setSplitting(true))}>
           Split a queue
+        </button>
+        <button className="button" onClick={() => show(() => setSampling(true))}>
+          Spot check
         </button>
       </div>
       {assignments === undefined && <p className="note">Loading…</p>}
@@ -94,6 +99,9 @@ export function AdminAssignments(props: Props) {
       </Dialog>
       <Dialog open={splitting} title="Split a queue" onClose={() => setSplitting(false)} error={notice}>
         <SplitForm snapshot={props.snapshot} reviewers={reviewers} act={act} onDone={() => setSplitting(false)} />
+      </Dialog>
+      <Dialog open={sampling} title="Spot check" onClose={() => setSampling(false)} error={notice}>
+        <SpotCheckForm snapshot={props.snapshot} reviewers={reviewers} act={act} onDone={() => setSampling(false)} />
       </Dialog>
       <Dialog open={reassigning !== null} title="Reassign" onClose={() => setReassigning(null)} error={notice}>
         {reassigning && <ReassignForm assignment={reassigning} reviewers={reviewers} act={act} onDone={() => setReassigning(null)} />}
@@ -328,7 +336,89 @@ function SplitForm(props: FormProps) {
   )
 }
 
-/** One assignment, open or closed: its plain name, who has it, how far it is. */
+/**
+ * Spot check (spec §15): a reviewer, a queue in one of their languages and how many rows. The server draws the
+ * sample; when the queue has fewer rows that qualify than were asked for, the dialog stays to say how many it took.
+ */
+function SpotCheckForm(props: FormProps) {
+  const { snapshot, reviewers, act } = props
+  const [reviewer, setReviewer] = useState('')
+  const [queue, setQueue] = useState('')
+  const [rows, setRows] = useState(String(SPOT_CHECK_ROWS))
+  const [short, setShort] = useState<{ asked: number; drawn: number } | null>(null)
+
+  const who = active(reviewers).find((r) => r.email === reviewer)
+  const queues = (snapshot?.queues ?? []).filter((q) => who !== undefined && who.languages.includes(q.language))
+  const n = Number(rows)
+  const valid = queues.some((q) => q.queue === queue) && Number.isInteger(n) && n >= 1 && n <= SPOT_CHECK_MAX
+
+  const pickReviewer = (email: string) => {
+    setReviewer(email)
+    setQueue('')
+  }
+  const submit = (e: FormEvent) => {
+    e.preventDefault()
+    if (!valid) return
+    let made: { asked: number; drawn: number } | null = null
+    void act(async () => void (made = await hostedApi.admin.spotCheck({ reviewer, queue, rows: n }))).then((ok) => {
+      if (!ok) return
+      if (made && made.drawn < made.asked) setShort(made)
+      else props.onDone()
+    })
+  }
+
+  if (short) {
+    return (
+      <div className="form">
+        <p role="status">{`Only ${count(short.drawn, 'row')} of this queue passed the AI review with no objection and ${short.drawn === 1 ? 'is' : 'are'} free to check, not the ${short.asked} asked for. The spot check has ${short.drawn === 1 ? 'it' : `all ${short.drawn}`}.`}</p>
+        <span className="form-actions">
+          <button type="button" className="button primary" onClick={props.onDone}>
+            Done
+          </button>
+        </span>
+      </div>
+    )
+  }
+  return (
+    <form aria-label="Spot check" className="form" onSubmit={submit}>
+      <p className="note">A random sample of the rows the AI review passed with no objection, spread evenly over the levels. The reviewer keeps what is right, changes what is wrong and says how serious each fault was.</p>
+      <label className="field">
+        Reviewer
+        <select value={reviewer} onChange={(e) => pickReviewer(e.target.value)}>
+          <option value="">Choose a reviewer</option>
+          {active(reviewers).map((r) => (
+            <option key={r.email} value={r.email}>
+              {r.name} ({r.email})
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="field">
+        Queue
+        <select value={queue} onChange={(e) => setQueue(e.target.value)} disabled={!who}>
+          <option value="">Choose a queue</option>
+          {queues.map((q) => (
+            <option key={q.queue} value={q.queue}>
+              {queueLabel(q.queue)}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="field">
+        Rows in the sample
+        <input type="number" inputMode="numeric" min={1} max={SPOT_CHECK_MAX} step={1} value={rows} onChange={(e) => setRows(e.target.value)} />
+      </label>
+      <span className="form-actions">
+        <button type="submit" className="button primary" disabled={!valid}>
+          Draw the sample
+        </button>
+      </span>
+    </form>
+  )
+}
+
+/** One assignment, open or closed: its plain name, who has it, how far it is. A spot check says what it found
+ * instead: its sample, the rows checked and how they came out, and under that the rows with a serious fault. */
 function AssignmentItem(props: { assignment: AssignmentView; act: Act; onReassign(): void }) {
   const { assignment: a, act } = props
   const p = a.progress
@@ -340,7 +430,8 @@ function AssignmentItem(props: { assignment: AssignmentView; act: Act; onReassig
     <li className="settings-row assignment-row" title={a.queue}>
       <span className="settings-row-text">
         <span className="settings-row-title">{assignmentLabel(a)}</span>
-        <span className="note">{`${a.reviewerName} · ${countsOf(a)}${a.closedAt ? ` · closed ${dateOf(a.closedAt)}` : ''}`}</span>
+        <span className="note">{`${a.reviewerName} · ${a.spotCheck ? resultLine(a.spotCheck) : countsOf(a)}${a.closedAt ? ` · closed ${dateOf(a.closedAt)}` : ''}`}</span>
+        {a.spotCheck?.result && a.spotCheck.result.seriousKeys.length > 0 && <span className="note serious-rows">{`Serious: ${a.spotCheck.result.seriousKeys.join(', ')}`}</span>}
       </span>
       <ProgressBar progress={p} />
       <span className="row-actions">

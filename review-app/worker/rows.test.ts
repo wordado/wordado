@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { RowView } from '../server/types'
 import type { DecisionRow, SubmissionRow } from './db'
-import { assignmentRows, progress, rank, withDecisions } from './rows'
+import { assignmentRows, inScope, progress, rank, withDecisions } from './rows'
 import type { Snapshot } from './snapshotStore'
 
 const row = (key: string, over: Partial<RowView> = {}): RowView => ({
@@ -9,7 +9,7 @@ const row = (key: string, over: Partial<RowView> = {}): RowView => ({
   otherSenses: [], reports: '', ai: 'passed', severity: null, objections: [], decided: null, stale: false, rowHash: `h-${key}`, ...over,
 })
 const decision = (key: string, over: Partial<DecisionRow> = {}): DecisionRow => ({
-  assignment: 1, queue: 'translation-de', file: 'review/translation-de/a.csv', key, rowHash: `h-${key}`, action: 'keep', cells: {}, note: '', decidedAt: 't', submission: null, ...over,
+  assignment: 1, queue: 'translation-de', file: 'review/translation-de/a.csv', key, rowHash: `h-${key}`, action: 'keep', cells: {}, note: '', severity: null, decidedAt: 't', submission: null, ...over,
 })
 
 describe('withDecisions', () => {
@@ -52,7 +52,7 @@ describe('assignmentRows', () => {
     queue: () => ({ queue: 'level', language: 'en', columns: [], verdicts: [], files: [{ file, rows: rows.length, flagged: 1, reported: 1 }] }),
     file: async () => ({ file, version: 'v', rows }),
   }
-  const assignment = { id: 1, reviewer: 'r', queue: 'level', files: '*' as const, createdAt: 't', closedAt: null }
+  const assignment = { id: 1, reviewer: 'r', queue: 'level', files: '*' as const, spotCheck: null, createdAt: 't', closedAt: null }
 
   it('gives a flagged-only assignment the flagged, reported and stale rows, worst first', async () => {
     const got = await assignmentRows(snap, { ...assignment, flaggedOnly: true })
@@ -63,5 +63,35 @@ describe('assignmentRows', () => {
   it('gives an all-rows assignment every row in file order', async () => {
     const got = await assignmentRows(snap, { ...assignment, flaggedOnly: false })
     expect(got?.rows.map((r) => r.key)).toEqual(['passed', 'stale', 'flagged', 'reported'])
+  })
+
+  describe('a spot check', () => {
+    const other = 'review/level/b.csv'
+    const two: Snapshot = {
+      ...snap,
+      queue: () => ({ queue: 'level', language: 'en', columns: [], verdicts: [], files: [{ file, rows: rows.length, flagged: 1, reported: 1 }, { file: other, rows: 1, flagged: 0, reported: 0 }] }),
+      file: async (f) => (f === file ? { file, version: 'v', rows } : { file: other, version: 'v', rows: [row('second', { file: other })] }),
+    }
+    const sample = [{ file: other, key: 'second' }, { file, key: 'reported' }, { file, key: 'left' }, { file, key: 'passed' }, { file: 'review/level/retired.csv', key: 'old' }]
+    const spot = { ...assignment, files: [file, other, 'review/level/retired.csv'], flaggedOnly: false, spotCheck: { seed: 1, sample } }
+
+    it('gives exactly the sampled rows the snapshot still has, in the sample’s order and not worst first', async () => {
+      const got = await assignmentRows(two, spot)
+      expect(got?.rows.map((r) => r.key)).toEqual(['second', 'reported', 'passed'])
+      expect([...got!.keys].sort()).toEqual(['passed', 'reported', 'second'])
+    })
+
+    it('is null when a file of the sample cannot be read', async () => {
+      expect(await assignmentRows({ ...two, file: async () => null }, spot)).toBeNull()
+    })
+
+    it('has in scope the rows of its sample and no other row of their files', () => {
+      expect(inScope(two, spot, file, 'passed')).toBe(true)
+      expect(inScope(two, spot, file, 'flagged')).toBe(false)
+      expect(inScope(two, spot, other, 'passed')).toBe(false)
+      expect(inScope(two, spot, 'review/level/retired.csv', 'old')).toBe(false)
+      expect(inScope(two, { ...assignment, flaggedOnly: false }, file, 'anything')).toBe(true)
+      expect(inScope(two, { ...assignment, flaggedOnly: false }, 'review/level/retired.csv', 'old')).toBe(false)
+    })
   })
 })

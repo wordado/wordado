@@ -58,7 +58,10 @@ createServer((req, res) => {
 const keys = await testKeys()
 const env = { ACCESS_AUD: AUD, ACCESS_TEAM_DOMAIN: TEAM }
 mkdirSync(join(root, '.e2e'), { recursive: true })
-writeFileSync(join(root, '.e2e', 'tokens.json'), JSON.stringify({ admin: await keys.token('admin@example.com', env), reviewer: await keys.token('reviewer@example.com', env), phone: await keys.token('phone@example.com', env) }))
+const people = { admin: 'admin@example.com', reviewer: 'reviewer@example.com', phone: 'phone@example.com', hans: 'hans@example.com' }
+const tokens: Record<string, string> = {}
+for (const [who, email] of Object.entries(people)) tokens[who] = await keys.token(email, env)
+writeFileSync(join(root, '.e2e', 'tokens.json'), JSON.stringify(tokens))
 
 const vars = {
   ACCESS_JWKS: keys.jwks, ACCESS_TEAM_DOMAIN: TEAM, ACCESS_AUD: AUD, ADMIN_EMAIL: 'admin@example.com',

@@ -9,6 +9,7 @@ import type {
   RowsResponse,
   SnapshotStatus,
   SplitProposal,
+  SpotCheckCreated,
   SubmissionView,
   SubmitResult,
 } from '../shared/hosted'
@@ -67,6 +68,7 @@ export const hostedApi = {
     resendInvite: (email: string) => send<{ inviteSent: boolean; link: string }>('POST', `/api/admin/reviewers/${encodeURIComponent(email)}/invite`, {}),
     assignments: () => get<AssignmentView[]>('/api/admin/assignments'),
     assign: (b: { reviewer: string; queue: string; files: string[] | '*'; flaggedOnly: boolean }) => send<AssignmentView>('POST', '/api/admin/assignments', b),
+    spotCheck: (b: { reviewer: string; queue: string; rows: number }) => send<SpotCheckCreated>('POST', '/api/admin/spot-checks', b),
     close: (id: number) => send<AssignmentView>('POST', `/api/admin/assignments/${id}/close`, {}),
     reassign: (id: number, to: string, decisions: 'move' | 'discard') => send<AssignmentView>('POST', `/api/admin/assignments/${id}/reassign`, { to, decisions }),
     split: (b: { queue: string; flaggedOnly: boolean; reviewers: string[]; confirm?: boolean; proposal?: SplitProposal[] }) =>

@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState, type ReactNode } from 'react'
 import type { Action, RowView } from '../server/types'
+import type { Severity } from '../shared/hosted'
 import { HeaderSlot } from './AppHeader'
 import { RowCard } from './RowCard'
 import { RowDrawer } from './RowDrawer'
@@ -15,7 +16,7 @@ export function ReviewScreen(props: {
   loading?: boolean
   /** the last load failed (`notice` says why): an empty list then means "could not load", with Try again */
   loadFailed?: boolean
-  onDecide(row: RowView, action: Action, cells: Record<string, string>, note: string): Promise<string | null>
+  onDecide(row: RowView, action: Action, cells: Record<string, string>, note: string, severity?: Severity): Promise<string | null>
   onReload(): Promise<void>
   /** what is being reviewed, for the header */
   title?: string
@@ -26,6 +27,12 @@ export function ReviewScreen(props: {
   notice?: string
   /** the way back to the list this was opened from, offered when nothing is left (and, on a phone, in the row list) */
   onBack?: () => void
+  /** one line above the row about the work as a whole (a spot check says what it is for) */
+  lead?: string
+  /** a spot check: a decision that changes a row is asked how serious the fault was */
+  askSeverity?: boolean
+  /** a spot check: what was answered for the rows decided so far, by key */
+  ratings?: ReadonlyMap<string, Severity>
 }) {
   const { rows, loading = false, loadFailed = false } = props
   /** the row the reviewer (or the move after a decision) chose; null: none, the first undecided row is shown */
@@ -67,11 +74,11 @@ export function ReviewScreen(props: {
   const next = useCallback(() => move(1), [move])
   const prev = useCallback(() => move(-1), [move])
   const decide = useCallback(
-    async (action: Action, cells: Record<string, string>, note: string) => {
+    async (action: Action, cells: Record<string, string>, note: string, severity?: Severity) => {
       if (!row || saving) return
       setSaving(true)
       try {
-        const message = await props.onDecide(row, action, cells, note)
+        const message = await props.onDecide(row, action, cells, note, severity)
         setNotice(message ?? '')
         await props.onReload()
         if (message === null) move(1, true)
@@ -85,9 +92,10 @@ export function ReviewScreen(props: {
   )
   const openList = useCallback(() => setListOpen(true), [])
   const closeList = useCallback(() => setListOpen(false), [])
-  const keys = useMemo(() => ({ ...(editing ? {} : { l: openList }), ...(saving ? {} : { s: next, ArrowDown: next, ArrowUp: prev }) }), [editing, openList, next, prev, saving])
+  // The keys that leave the row are off while it is being edited (or asked about), as the row list is: the edit would be lost.
+  const keys = useMemo(() => ({ ...(editing ? {} : { l: openList }), ...(saving || editing ? {} : { s: next, ArrowDown: next, ArrowUp: prev }) }), [editing, openList, next, prev, saving])
   useKeys(keys)
-  const handleDecide = useCallback((action: Action, cells: Record<string, string>, note: string) => void decide(action, cells, note), [decide])
+  const handleDecide = useCallback((action: Action, cells: Record<string, string>, note: string, severity?: Severity) => void decide(action, cells, note, severity), [decide])
   const retry = async () => {
     setRetrying(true)
     try {
@@ -120,8 +128,20 @@ export function ReviewScreen(props: {
             {shownNotice}
           </p>
         )}
+        {props.lead && row && <p className="note review-lead">{props.lead}</p>}
         {row ? (
-          <RowCard key={`${row.key}:${row.version}`} row={row} position={{ index, total: shown.length }} onDecide={handleDecide} onSkip={next} onPrev={prev} saving={saving} onEditing={setEditing} />
+          <RowCard
+            key={`${row.key}:${row.version}`}
+            row={row}
+            position={{ index, total: shown.length }}
+            onDecide={handleDecide}
+            onSkip={next}
+            onPrev={prev}
+            saving={saving}
+            onEditing={setEditing}
+            askSeverity={props.askSeverity === true}
+            rated={props.ratings?.get(row.key) ?? null}
+          />
         ) : loading && rows.length === 0 ? (
           <p className="note loading">Loading…</p>
         ) : loadFailed && rows.length === 0 ? (

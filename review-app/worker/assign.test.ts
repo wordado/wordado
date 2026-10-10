@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { filesOverlap, proposeSplit, SplitError } from './assign'
+import { clashes, filesOverlap, proposeSplit, SplitError, type Coverage } from './assign'
 
 describe('filesOverlap', () => {
   it('treats * as every file', () => {
@@ -7,6 +7,33 @@ describe('filesOverlap', () => {
     expect(filesOverlap(['a'], '*')).toBe(true)
     expect(filesOverlap(['a', 'b'], ['c'])).toBe(false)
     expect(filesOverlap(['a', 'b'], ['b'])).toBe(true)
+  })
+})
+
+describe('clashes', () => {
+  const all = (files: Coverage['files']): Coverage => ({ files, flaggedOnly: false, spotCheck: false })
+  const flagged = (files: Coverage['files']): Coverage => ({ files, flaggedOnly: true, spotCheck: false })
+  const spot = (files: Coverage['files']): Coverage => ({ files, flaggedOnly: false, spotCheck: true })
+
+  it('keeps the rule for assignments of files: they clash when they share a file, flagged-only or not', () => {
+    expect(clashes(all(['a']), flagged('*'))).toBe(true)
+    expect(clashes(flagged(['a']), flagged(['a', 'b']))).toBe(true)
+    expect(clashes(all(['a']), all(['b']))).toBe(false)
+  })
+
+  it('lets a spot check stand beside a flagged-only assignment of its files', () => {
+    expect(clashes(spot(['a']), flagged('*'))).toBe(false)
+    expect(clashes(flagged(['a']), spot('*'))).toBe(false)
+  })
+
+  it('refuses a spot check beside an all-rows assignment that shares a file, either way round', () => {
+    expect(clashes(spot('*'), all(['a']))).toBe(true)
+    expect(clashes(all(['a', 'b']), spot(['b']))).toBe(true)
+    expect(clashes(all(['a']), spot(['b']))).toBe(false)
+  })
+
+  it('refuses a second spot check of the queue, whatever its files', () => {
+    expect(clashes(spot(['a']), spot(['b']))).toBe(true)
   })
 })
 

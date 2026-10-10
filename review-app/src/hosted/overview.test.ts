@@ -14,7 +14,7 @@ const snapshot: SnapshotStatus = {
 const reviewer = (name: string, over: Partial<ReviewerView> = {}): ReviewerView => ({ email: `${name.toLowerCase()}@example.com`, name, role: 'reviewer', languages: ['de'], invitedAt: 't', inviteSentAt: 't', disabledAt: null, ...over })
 const reviewers = [reviewer('Anna'), reviewer('Hans'), reviewer('Carmen', { languages: ['es'], disabledAt: 't' })]
 const assignment = (over: Partial<AssignmentView> = {}): AssignmentView => ({
-  id: 1, reviewer: 'anna@example.com', reviewerName: 'Anna', queue: 'translation-de', files: '*', flaggedOnly: true, createdAt: 't', closedAt: null,
+  id: 1, reviewer: 'anna@example.com', reviewerName: 'Anna', queue: 'translation-de', files: '*', flaggedOnly: true, spotCheck: null, createdAt: 't', closedAt: null,
   progress: { inScope: 9, decided: 2, changed: 0, submitted: 1, merged: 0, remaining: 6 }, ...over,
 })
 const submission = (over: Partial<SubmissionView> = {}): SubmissionView => ({ id: 1, assignment: 1, reviewer: 'anna@example.com', reviewerName: 'Anna', queue: 'translation-de', branch: 'b', pr: 3, url: 'https://github.com/x/pull/3', count: 1, leftOut: 0, status: 'open', createdAt: 't', ...over })
@@ -34,6 +34,12 @@ describe('overviewOf', () => {
     const [german, spanish] = o.languages
     expect(german).toEqual({ language: 'de', label: 'German', parts: '9 translations · 2 titles', reviewers: ['Anna'], flagged: 11, decided: 2, submitted: 1, state: 'on track' })
     expect(spanish).toEqual({ language: 'es', label: 'Spanish', parts: '4 translations', reviewers: [], flagged: 4, decided: 0, submitted: 0, state: 'unassigned' })
+  })
+
+  it('does not take a spot check for someone working on the language’s flagged rows', () => {
+    const spot = assignment({ id: 2, reviewer: 'hans@example.com', reviewerName: 'Hans', queue: 'translation-es', files: ['review/translation-es/a.csv'], flaggedOnly: false, spotCheck: { sample: 50, result: null } })
+    const spanish = overviewOf({ snapshot, assignments: [assignment(), spot], submissions: [], reviewers }).languages[1]!
+    expect(spanish).toMatchObject({ language: 'es', reviewers: [], decided: 0, state: 'unassigned' })
   })
 
   it('says one of a kind in the singular, and counts the levels as rows', () => {
