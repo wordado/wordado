@@ -4,8 +4,9 @@ import { fieldLabel } from './labels'
 /** The learner reports and the AI's objections, one line each: the category and the reason. When the row has more
  * than one objection each line has a tick and names its field and fix, so the reviewer chooses which fixes apply
  * (the caller keeps one tick per field); a single objection has none: Accept or Keep is the choice. Who objected is
- * said only when several did. */
-export function Objections(props: { objections: readonly ObjectionView[]; reports: string; ticked: ReadonlySet<number>; onTick: (i: number) => void; disabled?: boolean }) {
+ * said only when several did. With no objection, a row the AI review has not seen as it is now (`unreviewed`: a
+ * learner's report changes the row) does not read as one it passed. */
+export function Objections(props: { objections: readonly ObjectionView[]; reports: string; unreviewed?: boolean; ticked: ReadonlySet<number>; onTick: (i: number) => void; disabled?: boolean }) {
   const { objections } = props
   const choice = objections.length > 1
   const several = new Set(objections.map((o) => o.reviewer)).size > 1
@@ -17,7 +18,7 @@ export function Objections(props: { objections: readonly ObjectionView[]; report
           <p>{props.reports}</p>
         </div>
       )}
-      {objections.length === 0 && <p className="note">No AI objections.</p>}
+      {objections.length === 0 && <p className="note">{props.unreviewed ? 'Not yet reviewed by AI.' : 'No AI objections.'}</p>}
       {objections.map((o, i) => {
         const line = (
           <>
