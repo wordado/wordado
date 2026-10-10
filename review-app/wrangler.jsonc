@@ -16,7 +16,11 @@
     "GITHUB_APP_ID": "",
     "GITHUB_INSTALLATION_ID": "",
     "MAIL_FROM": "Wordado Review <review@wordado.com>",
-    "LEARNER_APP_URL": ""
+    "LEARNER_APP_URL": "",
+    // The AI help on feedback (spec 2026-10-10 §4): the model, the calls a UTC day, the languages that need no translation.
+    "FEEDBACK_AI_MODEL": "google/gemini-3.8-flash",
+    "FEEDBACK_AI_DAILY_CALLS": "200",
+    "FEEDBACK_READS": "en,bg"
   },
   // The weekly feedback mail (spec 2026-10-10 §3.4): Monday 06:00 UTC, and its second try on Tuesday. Each line has
   // its job in worker/index.ts. Written here and in env.production, so nothing depends on what an environment inherits.
@@ -27,7 +31,7 @@
       "name": "wordado-review",
       "routes": [{ "pattern": "review.wordado.com", "custom_domain": true }],
       // The operator's ids and values (review-app/README.md, "Hosted"); scripts/check-config.ts refuses
-      // a deploy while any is still the placeholder. ADMIN_EMAIL, FEEDBACK_READ_TOKEN and the keys are secrets, not vars.
+      // a deploy while any is still the placeholder. ADMIN_EMAIL, FEEDBACK_READ_TOKEN, FEEDBACK_AI_KEY and the keys are secrets, not vars.
       "d1_databases": [{ "binding": "DB", "database_name": "wordado-review", "database_id": "b52cb790-18a9-485d-8e40-4d78af13e324", "migrations_dir": "migrations" }],
       "r2_buckets": [{ "binding": "SNAPSHOTS", "bucket_name": "wordado-review" }],
       // The weekly feedback mail, Monday 06:00 UTC, and its second try on Tuesday (as at the top level).
@@ -41,7 +45,13 @@
         "GITHUB_INSTALLATION_ID": "168429558",
         "MAIL_FROM": "Wordado Review <review@wordado.com>",
         // The learner app's server, for the Feedback tab (spec 2026-10-05 §16); its token, FEEDBACK_READ_TOKEN, is a secret.
-        "LEARNER_APP_URL": "https://app.wordado.com"
+        "LEARNER_APP_URL": "https://app.wordado.com",
+        // The AI help on feedback (spec 2026-10-10 §4): the model, the calls a UTC day, the languages that need no
+        // translation. Its key, FEEDBACK_AI_KEY, is a secret; without it there is no AI help. With it, the help is
+        // still off until an admin switches it on in the Feedback tab.
+        "FEEDBACK_AI_MODEL": "google/gemini-3.8-flash",
+        "FEEDBACK_AI_DAILY_CALLS": "200",
+        "FEEDBACK_READS": "en,bg"
       }
     }
   }

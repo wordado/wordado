@@ -42,7 +42,7 @@ export function feedbackRoutes(app: Hono<AppEnv>, deps: Deps): void {
     const items: FeedbackView[] = page.items
       .map((item) => {
         const mark = marks.get(item.id)
-        return { ...item, state: mark?.state ?? 'new', note: mark?.note ?? '', markedAt: mark?.updatedAt ?? null }
+        return { ...item, state: mark?.state ?? 'new', note: mark?.note ?? '', markedAt: mark?.updatedAt ?? null, ai: null }
       })
       .filter((item) => shown.includes(item.state))
     return c.json({ connected: true, items, read: page.items.length, nextBefore: page.nextBefore } satisfies FeedbackList)

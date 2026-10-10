@@ -40,4 +40,14 @@ export interface Env {
   readonly LEARNER_APP_URL?: string
   /** A secret, the same value as that server's: what it answers to. Unset leaves the tab unconnected. */
   readonly FEEDBACK_READ_TOKEN?: string
+  /** A secret: the key the AI help on feedback reaches its model with (spec 2026-10-10 §4). Unset, there is no AI help and the tab says so. */
+  readonly FEEDBACK_AI_KEY?: string
+  /** The model, as the service names it; unset is the default of feedbackAiConfig.ts. */
+  readonly FEEDBACK_AI_MODEL?: string
+  /** How many calls to the model a UTC day may have: a whole number from 0 up; unset is 200. */
+  readonly FEEDBACK_AI_DAILY_CALLS?: string
+  /** The languages the coordinator reads, which need no translation: two-letter codes with commas; unset is `en,bg`. */
+  readonly FEEDBACK_READS?: string
+  /** Tests and the hosted e2e only: a stand-in model's address. Honoured only on a local or test APP_ORIGIN (feedbackAiConfig.ts); check-config refuses it in production. */
+  readonly FEEDBACK_AI_URL?: string
 }

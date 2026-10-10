@@ -22,6 +22,7 @@ const item = (id: number, over: Partial<FeedbackView> = {}): FeedbackView => ({
   state: 'new',
   note: '',
   markedAt: null,
+  ai: null,
   ...over,
 })
 const page = (items: FeedbackView[], more: Partial<{ read: number; nextBefore: number | null }> = {}): FeedbackList => ({ connected: true, items, read: more.read ?? items.length, nextBefore: more.nextBefore ?? null })

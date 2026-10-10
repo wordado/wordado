@@ -27,7 +27,7 @@ export function parseJsonc(text: string): unknown {
 interface Prod { d1_databases?: { database_id?: string }[]; vars?: Record<string, string>; routes?: { pattern?: string }[] }
 
 /** Settings that are secrets: set with `wrangler secret put`, never written in the config. */
-const SECRETS = new Set(['ADMIN_EMAIL', 'FEEDBACK_READ_TOKEN'])
+const SECRETS = new Set(['ADMIN_EMAIL', 'FEEDBACK_READ_TOKEN', 'FEEDBACK_AI_KEY'])
 
 /** What still stops a production deploy (spec 2026-10-05 §14). */
 export function checkProductionConfig(jsonc: string): string[] {
@@ -38,12 +38,18 @@ export function checkProductionConfig(jsonc: string): string[] {
   for (const name of ['ACCESS_TEAM_DOMAIN', 'ACCESS_AUD', 'GITHUB_APP_ID', 'GITHUB_INSTALLATION_ID']) {
     if (!prod.vars?.[name]) problems.push(`env.production vars.${name} is empty (review-app/README.md, "Hosted")`)
   }
-  for (const name of ['ACCESS_JWKS', 'GITHUB_API_URL', 'ADMIN_EMAIL', 'FEEDBACK_READ_TOKEN']) {
+  for (const name of ['ACCESS_JWKS', 'GITHUB_API_URL', 'FEEDBACK_AI_URL', 'ADMIN_EMAIL', 'FEEDBACK_READ_TOKEN', 'FEEDBACK_AI_KEY']) {
     if (prod.vars && name in prod.vars) problems.push(`env.production vars.${name} must not be set: ${SECRETS.has(name) ? 'it is a secret' : 'it is for tests only'}`)
   }
   // Optional: without it the Feedback tab says it is not connected. The token only ever goes to an https origin.
   const learnerApp = prod.vars?.['LEARNER_APP_URL'] ?? ''
   if (learnerApp !== '' && !/^https:\/\/[a-z0-9.-]+$/.test(learnerApp)) problems.push('env.production vars.LEARNER_APP_URL must be an https origin with no path, such as https://app.wordado.com')
+  // The AI help on feedback (spec 2026-10-10): both optional, and the Worker has a default for each. Written wrong, the
+  // Worker would quietly take the default, so a deploy says it instead.
+  const dailyCalls = prod.vars?.['FEEDBACK_AI_DAILY_CALLS']
+  if (dailyCalls !== undefined && !/^\d+$/.test(dailyCalls)) problems.push('env.production vars.FEEDBACK_AI_DAILY_CALLS must be a whole number, such as 200')
+  const reads = prod.vars?.['FEEDBACK_READS']
+  if (reads !== undefined && !/^[a-z]{2}(,[a-z]{2})*$/.test(reads)) problems.push('env.production vars.FEEDBACK_READS must be two-letter language codes with commas between, such as en,bg')
   if (prod.vars?.['APP_ORIGIN'] !== 'https://review.wordado.com') problems.push('env.production vars.APP_ORIGIN must be https://review.wordado.com')
   if (!prod.routes?.some((r) => r.pattern === 'review.wordado.com')) problems.push('env.production routes must include review.wordado.com')
   return problems

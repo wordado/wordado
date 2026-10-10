@@ -1,5 +1,5 @@
 import type { D1Database } from './bindings'
-import type { FeedbackState, Language, ReviewerView, Role, SampleRef, Severity } from '../shared/hosted'
+import type { FeedbackAi, FeedbackCategory, FeedbackSeverity, FeedbackState, Language, ReviewerView, Role, SampleRef, Severity } from '../shared/hosted'
 import type { Action } from '../server/types'
 
 export interface ReviewerRow {
@@ -251,4 +251,63 @@ export async function settleWeeklyMail(db: D1Database, week: string, messages: n
 /** The run failed: the week is free for the next try. */
 export async function releaseWeeklyMail(db: D1Database, week: string): Promise<void> {
   await db.prepare('DELETE FROM weekly_mails WHERE week = ? AND messages IS NULL').bind(week).run()
+}
+
+/** The AI's reading of a message as it is kept (spec 2026-10-10 §4): with the message's own time, the model and the prompt version that made it. */
+export interface FeedbackAiRow extends FeedbackAi { readonly receivedAt: number; readonly model: string; readonly promptVersion: number; readonly createdAt: string }
+interface FeedbackAiRecord { feedback_id: number; received_at: number; language: string; translation: string; category: FeedbackCategory; severity: FeedbackSeverity | null; summary: string; model: string; prompt_version: number; created_at: string }
+/** The AI's readings of these messages, by id; a message it has not read is not in it. At most a page of ids (D1 binds 100 values). */
+export async function feedbackAiRows(db: D1Database, ids: readonly number[]): Promise<Map<number, FeedbackAiRow>> {
+  const out = new Map<number, FeedbackAiRow>()
+  if (ids.length === 0) return out
+  const found = await db.prepare(`SELECT * FROM feedback_ai WHERE feedback_id IN (${ids.map(() => '?').join(', ')})`).bind(...ids).all<FeedbackAiRecord>()
+  for (const r of found.results) {
+    out.set(r.feedback_id, { language: r.language, translation: r.translation, category: r.category, severity: r.severity, summary: r.summary, receivedAt: r.received_at, model: r.model, promptVersion: r.prompt_version, createdAt: r.created_at })
+  }
+  return out
+}
+/** Keeps these readings, each in place of the one its message had: one batch. */
+export async function putFeedbackAi(db: D1Database, rows: ReadonlyMap<number, FeedbackAiRow>): Promise<void> {
+  if (rows.size === 0) return
+  const put = db.prepare(
+    `INSERT INTO feedback_ai (feedback_id, received_at, language, translation, category, severity, summary, model, prompt_version, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT (feedback_id) DO UPDATE SET received_at = excluded.received_at, language = excluded.language, translation = excluded.translation, category = excluded.category,
+       severity = excluded.severity, summary = excluded.summary, model = excluded.model, prompt_version = excluded.prompt_version, created_at = excluded.created_at`,
+  )
+  await db.batch([...rows].map(([id, r]) => put.bind(id, r.receivedAt, r.language, r.translation, r.category, r.severity, r.summary, r.model, r.promptVersion, r.createdAt)))
+}
+/** Drops the readings between two ids whose message the server no longer gives: how many. `kept` is at most a page of ids. */
+export async function dropFeedbackAiNotIn(db: D1Database, lowest: number, highest: number, kept: readonly number[]): Promise<number> {
+  const not = kept.length > 0 ? ` AND feedback_id NOT IN (${kept.map(() => '?').join(', ')})` : ''
+  return (await db.prepare(`DELETE FROM feedback_ai WHERE feedback_id BETWEEN ? AND ?${not}`).bind(lowest, highest, ...kept).run()).meta.changes
+}
+/** Drops every reading: how many. The marks and the count of calls stay. */
+export async function forgetFeedbackAi(db: D1Database): Promise<number> {
+  return (await db.prepare('DELETE FROM feedback_ai').run()).meta.changes
+}
+
+const utcDay = (now: Date) => now.toISOString().slice(0, 10)
+/** Counts a call for the UTC day when the day is under its limit: true when it may be made. One statement, so two
+ * requests at once cannot both pass the limit; counted before the call, so one that fails still counts. */
+export async function claimAiCall(db: D1Database, now: Date, what: string, messages: number, limit: number): Promise<boolean> {
+  const day = utcDay(now)
+  const claimed = await db
+    .prepare('INSERT INTO feedback_ai_calls (day, at, what, messages) SELECT ?, ?, ?, ? WHERE (SELECT COUNT(*) FROM feedback_ai_calls WHERE day = ?) < ?')
+    .bind(day, now.toISOString(), what, messages, day, limit)
+    .run()
+  return claimed.meta.changes === 1
+}
+export async function aiCallsToday(db: D1Database, now: Date): Promise<number> {
+  return (await db.prepare('SELECT COUNT(*) AS n FROM feedback_ai_calls WHERE day = ?').bind(utcDay(now)).first<{ n: number }>())?.n ?? 0
+}
+
+/** What an admin switched in the app itself, by name; null while nobody has. */
+export async function getSetting(db: D1Database, name: string): Promise<string | null> {
+  return (await db.prepare('SELECT value FROM settings WHERE name = ?').bind(name).first<{ value: string }>())?.value ?? null
+}
+export async function putSetting(db: D1Database, name: string, value: string, by: string, at: string): Promise<void> {
+  await db
+    .prepare('INSERT INTO settings (name, value, updated_at, updated_by) VALUES (?, ?, ?, ?) ON CONFLICT (name) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at, updated_by = excluded.updated_by')
+    .bind(name, value, at, by)
+    .run()
 }

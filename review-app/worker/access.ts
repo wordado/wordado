@@ -56,8 +56,8 @@ let cached: { url: string; at: number; keys: readonly JsonWebKey[] } | null = nu
 let lastRefresh: { url: string; at: number } | null = null
 let warnedProdJwks = false
 
-/** ACCESS_JWKS is honoured only where nobody but a developer or a test can reach the Worker. */
-function jwksAllowed(origin: string): boolean {
+/** A tests-only setting (ACCESS_JWKS, FEEDBACK_AI_URL) is honoured only where nobody but a developer or a test can reach the Worker. */
+export function localOrTestOrigin(origin: string): boolean {
   if (origin === 'https://review.test') return true
   try {
     const u = new URL(origin)
@@ -77,7 +77,7 @@ function jwksAllowed(origin: string): boolean {
 export function accessKeys(deps: Deps): AccessKeys {
   return async (opts) => {
     if (deps.env.ACCESS_JWKS) {
-      if (jwksAllowed(deps.env.APP_ORIGIN)) return (JSON.parse(deps.env.ACCESS_JWKS) as { keys: JsonWebKey[] }).keys
+      if (localOrTestOrigin(deps.env.APP_ORIGIN)) return (JSON.parse(deps.env.ACCESS_JWKS) as { keys: JsonWebKey[] }).keys
       if (!warnedProdJwks) {
         warnedProdJwks = true
         deps.log(`ACCESS_JWKS is set but ignored: ${deps.env.APP_ORIGIN} is not a local or test origin (production)`)

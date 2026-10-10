@@ -57,6 +57,16 @@ describe('checkProductionConfig', () => {
       expect(checkProductionConfig(config({ vars: { LEARNER_APP_URL: bad } })).join('\n')).toMatch(/LEARNER_APP_URL/)
     }
   })
+  it('refuses the AI help’s key and a stand-in model’s address in production vars', () => {
+    expect(checkProductionConfig(config({ vars: { FEEDBACK_AI_KEY: 'k'.repeat(40) } })).join('\n')).toMatch(/FEEDBACK_AI_KEY must not be set: it is a secret/)
+    expect(checkProductionConfig(config({ vars: { FEEDBACK_AI_URL: 'http://127.0.0.1:4184' } })).join('\n')).toMatch(/FEEDBACK_AI_URL must not be set: it is for tests only/)
+  })
+  it('takes the AI help’s limit as digits and its languages as two-letter codes with commas, or neither at all', () => {
+    expect(checkProductionConfig(config({ vars: { FEEDBACK_AI_MODEL: 'test/model', FEEDBACK_AI_DAILY_CALLS: '200', FEEDBACK_READS: 'en,bg' } }))).toEqual([])
+    expect(checkProductionConfig(config({ vars: { FEEDBACK_AI_DAILY_CALLS: '0', FEEDBACK_READS: 'en' } }))).toEqual([])
+    for (const bad of ['', 'many', '-1', '1.5', '2 00']) expect(checkProductionConfig(config({ vars: { FEEDBACK_AI_DAILY_CALLS: bad } })).join('\n')).toMatch(/FEEDBACK_AI_DAILY_CALLS/)
+    for (const bad of ['', 'english', 'en, bg', 'en;bg', 'EN', 'en,']) expect(checkProductionConfig(config({ vars: { FEEDBACK_READS: bad } })).join('\n')).toMatch(/FEEDBACK_READS/)
+  })
   it('refuses another origin', () => {
     expect(checkProductionConfig(config({ vars: { APP_ORIGIN: 'https://example.com' } })).join('\n')).toMatch(/APP_ORIGIN/)
   })
