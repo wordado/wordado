@@ -92,7 +92,9 @@ test('a multiple-choice question: the gloss on its own row, a right answer moves
       }
       if (!seen.has(q.direction)) await expectAccessible(page, { dark: true })
       seen.add(q.direction)
-      if (seen.size < 2) await answer(page)
+      // Asked again, the same word draws its direction afresh. Answering would use the session up: ten words, and a
+      // run of one direction has ended it before the checks below (seen once in CI, on Firefox).
+      if (seen.size < 2) await page.goto('/study?mode=multiple_choice')
     }
     expect([...seen].sort()).toEqual(['en_to_l1', 'l1_to_en'])
 
