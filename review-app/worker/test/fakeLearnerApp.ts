@@ -18,12 +18,14 @@ export function feedbackItem(id: number, over: Partial<FeedbackItem> = {}): Feed
   }
 }
 
-/** The learner app server's `GET /v1/admin/feedback`, in memory (spec §13): the token, the pages and the `kind` and `since` filters as the real route has them. */
+/** The learner app server's `GET /v1/admin/feedback`, in memory (spec §13): the token, the pages and the `kind`, `since` and `ids` filters as the real route has them. */
 export class FakeLearnerApp {
   /** Every request made, as `METHOD path?query`. */
   readonly requests: string[] = []
   /** Set, every request gets this instead: a status with a body, or an error thrown as when the server is not reached. */
   failure: { status: number; body: string } | Error | null = null
+  /** False: a server from before `ids`, which ignores the parameter and gives its newest page. */
+  knowsIds = true
   constructor(readonly token: string, public items: FeedbackItem[] = []) {}
 
   readonly fetch = async (input: string, init: RequestInit = {}): Promise<Response> => {
@@ -39,8 +41,11 @@ export class FakeLearnerApp {
     const before = url.searchParams.get('before')
     const kind = url.searchParams.get('kind')
     const since = url.searchParams.get('since')
+    const asked = this.knowsIds ? url.searchParams.get('ids') : null
+    if (asked !== null && !/^[1-9]\d{0,14}(,[1-9]\d{0,14}){0,99}$/.test(asked)) return json({ error: 'invalid', errors: ['ids must be 1 to 100 message ids'] }, 400)
+    const ids = asked === null ? null : asked.split(',').map(Number)
     const found = this.items
-      .filter((item) => (before === null || item.id < Number(before)) && (kind === null || item.kind === kind) && (since === null || item.receivedAt >= Number(since)))
+      .filter((item) => (before === null || item.id < Number(before)) && (kind === null || item.kind === kind) && (since === null || item.receivedAt >= Number(since)) && (ids === null || ids.includes(item.id)))
       .sort((a, b) => b.id - a.id)
     const items = found.slice(0, limit)
     return json({ items, nextBefore: found.length > limit ? items.at(-1)!.id : null } satisfies FeedbackPage)

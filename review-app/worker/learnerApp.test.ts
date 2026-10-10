@@ -53,6 +53,25 @@ describe('readFeedback', () => {
     expect(page.nextBefore).toBeNull()
   })
 
+  it('asks for messages by id, with `ids` last in the query, and gets them newest first', async () => {
+    const page = await readFeedback(deps(), source, { limit: 50, ids: [1, 3, 99] })
+    expect(server.requests).toEqual(['GET /v1/admin/feedback?limit=50&ids=1%2C3%2C99'])
+    expect(page.items.map((item) => item.id)).toEqual([3, 1])
+    expect(page).toMatchObject({ nextBefore: null, others: 0 })
+    await readFeedback(deps(), source, { limit: 50, kind: 'idea', before: 9, since: 5, ids: [2] })
+    expect(server.requests[1]).toBe('GET /v1/admin/feedback?limit=50&kind=idea&before=9&since=5&ids=2')
+  })
+
+  it('drops what was not asked for, and counts it: a server from before `ids` gives its newest page instead', async () => {
+    server.knowsIds = false
+    const page = await readFeedback(deps(), source, { limit: 50, ids: [1, 99] })
+    expect(page.items.map((item) => item.id)).toEqual([1])
+    expect(page.others).toBe(2)
+    // Without `ids`, nothing is dropped and nothing counted.
+    expect(await readFeedback(deps(), source, { limit: 50 })).toMatchObject({ others: 0, items: [{ id: 3 }, { id: 2 }, { id: 1 }] })
+    expect(await readFeedback(deps(), source, { limit: 50, ids: null })).toMatchObject({ others: 0, items: [{ id: 3 }, { id: 2 }, { id: 1 }] })
+  })
+
   it('says the feedback was not read, and logs the status only', async () => {
     server.failure = { status: 500, body: 'a body that must not be logged' }
     await expect(readFeedback(deps(), source, { limit: 100 })).rejects.toBeInstanceOf(FeedbackUnread)
