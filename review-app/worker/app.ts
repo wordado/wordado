@@ -5,6 +5,7 @@ import { getReviewer, insertReviewerIfAbsent, type ReviewerRow } from './db'
 import { adminRoutes } from './routes/admin'
 import { decisionRoutes } from './routes/decision'
 import { feedbackRoutes } from './routes/feedback'
+import { feedbackAiRoutes } from './routes/feedbackAi'
 import { meRoutes } from './routes/me'
 import { reviewerRoutes } from './routes/reviewer'
 import { reviewersRoutes } from './routes/reviewers'
@@ -82,6 +83,8 @@ export function createApp(deps: Deps): Hono<AppEnv> {
   decisionRoutes(app, deps)
   adminRoutes(app, deps)
   reviewersRoutes(app, deps)
+  // Before feedbackRoutes: the first route that matches is taken, and /api/admin/feedback/ai is not a message's mark.
+  feedbackAiRoutes(app, deps)
   feedbackRoutes(app, deps)
   // After adminRoutes, so /api/admin/submissions is behind the admin-only middleware.
   submitRoutes(app, deps)
