@@ -34,7 +34,7 @@ machine except the reviewer's API calls; and `release` enforces the parent spec'
 | The app's form | A local web app: a small Node server on the content checkout, a browser UI. Same stack as `web/` (React, Vite). |
 | The release gate | Included. It applies to every AI-reviewed queue, **including queues in `accept_unreviewed`** (that list means "ships without native review"). |
 | Default reviewer | Gemini 3.8 Flash (`google/gemini-3.8-flash`). Others are configurable: further OpenRouter models, or a local OpenAI-compatible server such as BgGPT under llama.cpp. |
-| Learner reports | Reopened rows (`corpus triage`) appear first in the app, with the learners' notes beside the AI's objections. The reviewer is shown the notes. Reports do not block a release by themselves. |
+| Learner reports | Reopened rows (`corpus triage`) appear first in the app, with the learners' suggestions and notes beside the AI's objections. The reviewer is shown both. Reports do not block a release by themselves. |
 | Queues in scope | `translation-*`, `title-*` and `level` (the level queue only, not all levels). `english` and `audio` later. |
 | Layout | A list of rows on the left, the selected row on the right (mockup B). |
 
@@ -110,7 +110,7 @@ every row is asked again). They state the same rules as the human reviewer guide
 Every objection carries: field, category, severity, a short reason in English, and the corrected value (which must
 differ from the current one; an objection whose fix equals the current value is dropped as invalid). The prompt
 asks for the errors before the verdict, says that "no errors" is normal, and that near-synonyms correct in this
-sense are fine. For a reopened row, the learners' notes from the `reopened` column are part of the input ("learners
+sense are fine. For a reopened row, the learners' suggestions and notes from the `reopened` column are part of the input ("learners
 reported: …"). The translation prompt includes the L1 guide the translate stage uses (`L1_GUIDES`). The level
 prompt judges from the CEFR descriptors only; it must not copy licensed lists (parent spec §5.4).
 

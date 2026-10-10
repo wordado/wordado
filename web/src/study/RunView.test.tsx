@@ -550,6 +550,58 @@ describe('RunView: reporting a problem', () => {
     expect(document.activeElement?.textContent).toBe('Continue')
   })
 
+  it('sends what the learner says it should be, trimmed, and nothing when the field is left empty', async () => {
+    const { run, client } = await start('flashcard')
+    const report = vi.spyOn(client, 'report')
+    more()
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Report a problem' })))
+    // The translation is the field chosen first, and one a text can be suggested for.
+    const suggestion = screen.getByRole('textbox', { name: 'What should it be? (optional)' }) as HTMLInputElement
+    expect(suggestion.maxLength).toBe(200)
+    fireEvent.change(suggestion, { target: { value: '  здравей ' } })
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Send report' })))
+    expect(report).toHaveBeenLastCalledWith({ wordId: run.snapshot.item!.wordId, field: 'translation', note: '', suggestion: 'здравей', packVersion: 0 })
+    cleanup()
+
+    const again = await start('flashcard')
+    const second = vi.spyOn(again.client, 'report')
+    more()
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Report a problem' })))
+    fireEvent.change(screen.getByRole('textbox', { name: 'What should it be? (optional)' }), { target: { value: '   ' } })
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Send report' })))
+    expect(second).toHaveBeenLastCalledWith({ wordId: again.run.snapshot.item!.wordId, field: 'translation', note: '', packVersion: 0 })
+  })
+
+  it('asks for a suggestion only where a text can be suggested, and sends none typed before the learner chose audio or level', async () => {
+    const { run, client } = await start('flashcard')
+    const report = vi.spyOn(client, 'report')
+    more()
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Report a problem' })))
+    const asked = () => screen.queryByRole('textbox', { name: 'What should it be? (optional)' }) !== null
+    for (const [name, shown] of [['Wrong or odd translation', true], ['Bad example sentence', true], ['Something else', true], ['Wrong level', false], ['Bad audio', false]] as const) {
+      await act(async () => fireEvent.click(screen.getByRole('radio', { name })))
+      expect([name, asked()]).toEqual([name, shown])
+    }
+    await act(async () => fireEvent.click(screen.getByRole('radio', { name: 'Wrong or odd translation' })))
+    fireEvent.change(screen.getByRole('textbox', { name: 'What should it be? (optional)' }), { target: { value: 'здравей' } })
+    await act(async () => fireEvent.click(screen.getByRole('radio', { name: 'Bad audio' })))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Send report' })))
+    expect(report).toHaveBeenCalledWith({ wordId: run.snapshot.item!.wordId, field: 'audio', note: '', packVersion: 0 })
+  })
+
+  it('asks for the suggestion in every interface language', async () => {
+    for (const [locale, open, label] of [['bg', 'Съобщете за проблем', 'Как трябва да бъде? (по желание)'], ['de', 'Problem melden', 'Wie sollte es heißen? (optional)'], ['es', 'Informar de un problema', '¿Cómo debería ser? (opcional)']] as const) {
+      const ctx = await setup()
+      const run = await StudyRun.start(ctx.client, ctx.env, { kind: 'session', mode: 'flashcard', cachedClips: () => new Set(), online: () => false })
+      renderWith(<RunView run={run} kind="session" />, { ...ctx, locale })
+      const moreButton = document.querySelector<HTMLButtonElement>('button[aria-expanded]')
+      await act(async () => fireEvent.click(moreButton!))
+      await act(async () => fireEvent.click(screen.getByRole('button', { name: open })))
+      expect(screen.getByRole('textbox', { name: label })).toBeTruthy()
+      cleanup()
+    }
+  })
+
   it('returns focus to the card when the dialog is cancelled', async () => {
     await start('flashcard')
     more()

@@ -23,7 +23,11 @@ export const SERVER_OWNED_DOCUMENT_TYPES: ReadonlySet<string> = new Set<string>(
 export const REPORT_FIELDS = ['translation', 'example', 'audio', 'level', 'other'] as const
 export type ReportField = (typeof REPORT_FIELDS)[number]
 
+/** The fields a learner can say the right text for (spec §8.10): a translation or a sentence, not a clip or a level. */
+export const REPORT_SUGGESTION_FIELDS: readonly ReportField[] = ['translation', 'example', 'other']
+
 export const MAX_REPORT_NOTE_LENGTH = 1000
+export const MAX_REPORT_SUGGESTION_LENGTH = 200
 export const MAX_UNLOCKED_UNITS = 2000
 /** Characters of JSON in one patch's fields. */
 export const MAX_DOCUMENT_BYTES = 16_384
@@ -92,16 +96,20 @@ function checkFields(type: string, key: string, fields: Readonly<Record<string, 
       ]
     }
     case DOCUMENT_TYPES.contentReport: {
-      const { wordId, field, note, packVersion, createdAt, l1 } = fields
+      const { wordId, field, note, suggestion, packVersion, createdAt, l1 } = fields
       return [
         ...(ID.test(key) ? [] : ['a report key must be an ID']),
         ...(typeof wordId === 'string' && isWordId(wordId) ? [] : ['wordId must be a word ID']),
         ...((REPORT_FIELDS as readonly unknown[]).includes(field) ? [] : ['field must be a report field']),
         ...(typeof note === 'string' && note.length <= MAX_REPORT_NOTE_LENGTH ? [] : [`note must be text of at most ${MAX_REPORT_NOTE_LENGTH} characters`]),
+        // A report from a client older than the suggestion carries none.
+        ...(suggestion === undefined || (typeof suggestion === 'string' && suggestion.length <= MAX_REPORT_SUGGESTION_LENGTH)
+          ? []
+          : [`suggestion must be text of at most ${MAX_REPORT_SUGGESTION_LENGTH} characters`]),
         ...(isCount(packVersion) && (packVersion as number) <= MAX_PACK_VERSION ? [] : [`packVersion must be an integer from 0 to ${MAX_PACK_VERSION}`]),
         ...(isCount(createdAt) ? [] : ['createdAt must be a time']),
         ...(l1 === undefined || isSupportedL1(l1) ? [] : ['l1 must be a supported L1']),
-        ...unknownFields(fields, ['wordId', 'field', 'note', 'packVersion', 'createdAt', 'l1']),
+        ...unknownFields(fields, ['wordId', 'field', 'note', 'suggestion', 'packVersion', 'createdAt', 'l1']),
       ]
     }
     default:

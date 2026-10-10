@@ -521,6 +521,13 @@ test('meets WCAG 2.2 A and AA on the study screens (spec §11.1)', async ({ page
   await expectAccessible(page)
   await page.getByRole('button', { name: 'Report a problem' }).click()
   await expect(page.getByRole('dialog')).toBeVisible()
+  // The suggestion is asked for the translation, the field chosen first; it is as tall as any control (2.5.8).
+  const suggestion = page.getByRole('textbox', { name: 'What should it be? (optional)' })
+  await suggestion.fill('a better word')
+  expect((await suggestion.boundingBox())!.height).toBeGreaterThanOrEqual(44)
+  await expectAccessible(page)
+  await page.getByRole('radio', { name: 'Bad audio' }).check()
+  await expect(suggestion).toBeHidden()
   await expectAccessible(page)
   await page.keyboard.press('Escape')
 

@@ -1387,11 +1387,20 @@ dialog.report label {
   gap: var(--space-2);
 }
 
-dialog.report label:has(textarea) {
+dialog.report label:has(textarea, input[type='text']) {
   display: block;
 }
 
-dialog.report textarea {
+dialog.report label:has(input[type='text']) {
+  margin-bottom: var(--space-3);
+}
+
+dialog.report input[type='text'] {
+  min-height: 2.75rem;
+}
+
+dialog.report textarea,
+dialog.report input[type='text'] {
   display: block;
   width: 100%;
   margin-top: var(--space-1);
