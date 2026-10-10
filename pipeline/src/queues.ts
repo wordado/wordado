@@ -183,10 +183,14 @@ export function aliveKeys(draft: Draft, l1s: readonly string[]): Map<string, Set
  * - The row's subject is not in `alive`: its entry left the course, or its unit has no live words. Left in the file
  *   it would be listed, and even flagged, for a decision that changes nothing (about 360 title rows per language
  *   after the same rebuild).
+ * - The row was reopened, by `triage` or by hand, since it was written (`reopened` is every pending item's text):
+ *   the file's row does not say so, and a reviewer, a person or the AI review, would not see the learners' reports
+ *   (a row nobody decided is already in a file, which is nearly every row of a queue that ships unreviewed).
+ *   `exportQueues` writes the row again, with the text.
  * A row that already has a verdict stays for `import`. So does a row that is merely no longer pending: the level
  * rows a `--rebuild` queued are not pending in a later plain draft, and are still to be reviewed.
  */
-function retireOutdated(dir: string, queue: string, current: ReadonlyMap<string, string>, alive: ReadonlySet<string> | undefined): Set<string> {
+function retireOutdated(dir: string, queue: string, current: ReadonlyMap<string, string>, alive: ReadonlySet<string> | undefined, reopened: ReadonlyMap<string, string>): Set<string> {
   const open = new Set<string>()
   for (const file of openFiles(dir, queue)) {
     const sidecar = readJson<Sidecar>(sidecarOf(file))
@@ -194,7 +198,9 @@ function retireOutdated(dir: string, queue: string, current: ReadonlyMap<string,
     const decided = new Set(rows.filter((r) => (r['verdict'] ?? '').trim() !== '').map((r) => (r['key'] ?? '').trim()))
     const gone = (key: string) => alive !== undefined && !alive.has(key)
     const changed = (i: Sidecar['items'][number]) => current.has(i.key) && current.get(i.key) !== canonicalJson(i.proposed)
-    const outdated = new Set(sidecar.items.filter((i) => !decided.has(i.key) && (gone(i.key) || changed(i))).map((i) => i.key))
+    const written = new Map(rows.map((r) => [(r['key'] ?? '').trim(), (r['reopened'] ?? '').trim()]))
+    const reported = (key: string) => reopened.has(key) && reopened.get(key) !== (written.get(key) ?? '')
+    const outdated = new Set(sidecar.items.filter((i) => !decided.has(i.key) && (gone(i.key) || changed(i) || reported(i.key))).map((i) => i.key))
     const items = sidecar.items.filter((i) => !outdated.has(i.key))
     for (const i of items) open.add(i.key)
     if (outdated.size === 0) continue
@@ -225,7 +231,8 @@ export function exportQueues(
   for (const [queue, all] of [...items].sort(([a], [b]) => (a < b ? -1 : 1))) {
     const spec = specs.get(queue)
     if (!spec) throw new Error(`no queue ${queue}`)
-    const open = retireOutdated(dir, queue, new Map(all.map((i) => [i.key, canonicalJson(i.proposed)])), opts.alive?.get(queue))
+    const reopened = new Map(all.flatMap((i) => (spec.context.includes('reopened') ? [[i.key, (i.context['reopened'] ?? '').trim()] as const] : [])))
+    const open = retireOutdated(dir, queue, new Map(all.map((i) => [i.key, canonicalJson(i.proposed)])), opts.alive?.get(queue), reopened)
     const fresh = all.filter((i) => !open.has(i.key))
     const qdir = contentPaths(dir).queueDir(queue)
     let n = 0
