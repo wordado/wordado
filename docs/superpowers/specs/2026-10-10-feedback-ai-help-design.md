@@ -82,12 +82,15 @@ match.
 
 ### 3.4 The week
 
-At the top of the tab and in the weekly mail of #139: how many messages came, by category; the topics with the
+At the top of the tab and in a weekly mail: how many messages came, by category; the topics with the
 most messages; the bugs marked `blocks`; the new topics. Counted from the stored results, with one model call for
 a short paragraph in words.
 
 **The mail is sent by the review app** to its admins, as its other mails are, and not by the learner app, which
-mails no feedback (#166). It holds the counts, the topic titles and the paragraph, all in our words, and a link to
+mails no feedback (#166). Since then it is also the only notice that feedback came, so it does not wait for #139:
+this work gives the review app its first timed job (once a week) and sends the mail from it, with the AI help on
+or off; off, it holds the count by the learner's own kind and the link. When #139 is built, its list joins the
+same mail. No mail in a week with no feedback. It holds the counts, the topic titles and the paragraph, all in our words, and a link to
 the tab. **No text a learner wrote and no contact address is in it:** a mail stays with the mail service, and the
 messages themselves are read in the tab only. The paragraph is written from the topic titles and the counts, not
 from the messages, so it cannot quote one.
@@ -123,8 +126,17 @@ topic, which becomes its match.
 
 ## 5. Privacy notice
 
-The notice (the site's repository) says: feedback may be read with the help of an AI service; the contact address
-is not sent to it.
+The policy (the site's repository) names every company that handles data for us, and says the mail service
+carries sign-in codes only. Both stay true:
+
+- **Before the switch is turned on in production,** the policy lists the AI service among those companies: the
+  service the model is reached through and the model's provider, what they receive (the text of a feedback
+  message, without the contact address) and where. The switch (§4) says so beside it. Until then it stays off.
+- The key is limited, in the provider's account, to model providers that neither keep the requests nor train on
+  them.
+- The weekly mail holds nothing a learner wrote (§3.4), so the policy's sentence about the mail service stands.
+- **A line under the feedback form** in the learner app, in the four languages: please write nothing personal
+  about yourself or others. A message is free text, and masking (rule 3) finds addresses and numbers, not names.
 
 ## 6. The working language
 
