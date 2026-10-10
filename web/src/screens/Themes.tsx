@@ -89,10 +89,8 @@ export function Themes() {
   return (
     <section className="themes-page" aria-labelledby="themes-title">
       <div className="themes-head">
-        <div>
-          <h1 id="themes-title">{t('themes.title')}</h1>
-          <p className="lede">{t('themes.intro')}</p>
-        </div>
+        <h1 id="themes-title">{t('themes.title')}</h1>
+        <p className="lede">{t('themes.intro')}</p>
         {offered.length > 0 && (
           <form role="search" className="themes-search" onSubmit={(e) => e.preventDefault()}>
             <label className="visually-hidden" htmlFor="themes-search">
@@ -140,6 +138,7 @@ export function Themes() {
                   theme={theme}
                   group={groupOf(theme)}
                   matches={entries}
+                  query={query.trim()}
                   focus={moved === theme.themeId}
                   onFocused={() => setMoved(null)}
                   onChoose={() => choose(theme, theme.themeId)}
@@ -189,6 +188,8 @@ function ThemeCard(props: {
   readonly group: ThemeGroup
   /** In a search: the theme's words that matched (none when its name did). The card then says which group it is of. */
   readonly matches?: readonly CorpusEntry[]
+  /** The search that found them, carried to the theme's page by "+N more". */
+  readonly query?: string
   /** The card has just moved here by the learner's choice: its title takes focus, once. */
   readonly focus: boolean
   onFocused(): void
@@ -231,7 +232,8 @@ function ThemeCard(props: {
         {/* Without the group headings of the full list, the card says where the theme stands. */}
         {matches && group !== 'now' && <p className="theme-state">{t(GROUP_TITLE[group])}</p>}
         <h3 ref={title} tabIndex={-1}>
-          {name}
+          {/* The theme's own page lists its words. */}
+          <Link to={{ name: 'theme', themeId: theme.themeId }}>{name}</Link>
         </h3>
         <p className="note">{localized(theme.description, locale, corpus!.l1)}</p>
         {aboveLevel && <p className="note">{t('themes.aboveLevel')}</p>}
@@ -242,7 +244,14 @@ function ThemeCard(props: {
                 <MatchedWord entry={entry} lang={corpus!.l1} />
               </li>
             ))}
-            {matches.length > MATCHES_SHOWN && <li className="note">{t('themes.searchMore', { count: matches.length - MATCHES_SHOWN })}</li>}
+            {matches.length > MATCHES_SHOWN && (
+              <li className="note">
+                {/* The rest stand on the theme's page, found by the same query. */}
+                <Link to={{ name: 'theme', themeId: theme.themeId, q: props.query }} aria-label={`${t('themes.searchMore', { count: matches.length - MATCHES_SHOWN })}: ${name}`}>
+                  {t('themes.searchMore', { count: matches.length - MATCHES_SHOWN })}
+                </Link>
+              </li>
+            )}
           </ul>
         )}
       </div>

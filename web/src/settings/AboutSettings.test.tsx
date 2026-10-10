@@ -1,7 +1,9 @@
-import { screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { cleanup, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it } from 'vitest'
 import { fakeCredits, renderWith, setup } from '../test/fixtures'
 import { AboutSettings } from './AboutSettings'
+
+afterEach(cleanup)
 
 const credits = { schema_version: 1 as const, corpus_version: 1, sources: [{ source: 'FineWeb', attribution: 'Word frequencies counted from FineWeb by Hugging Face (ODC-By 1.0).' }] }
 
@@ -18,6 +20,12 @@ describe('AboutSettings', () => {
     const ctx = await setup()
     renderWith(<AboutSettings />, { ...ctx, credits: fakeCredits({ manifestUrl: 'x', credits: { ...credits, sources: [] } }) })
     expect(screen.getByText('This word list was prepared by Wordado.')).toBeTruthy()
+  })
+
+  it('links to feedback about the app, opened from About', async () => {
+    const ctx = await setup()
+    renderWith(<AboutSettings />, { ...ctx, credits: fakeCredits() })
+    expect(screen.getByRole('link', { name: 'Send feedback about the app' }).getAttribute('href')).toBe('/feedback?from=%2Fsettings%2Fabout')
   })
 
   it('before it has ever been online, says the sources appear once it has', async () => {

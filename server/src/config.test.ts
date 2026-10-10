@@ -18,6 +18,7 @@ describe('configFromEnv', () => {
       minProtocolVersion: DEFAULT_MIN_PROTOCOL_VERSION,
       google: null,
       vapid: null,
+      feedbackEmail: null,
     })
   })
 
@@ -30,12 +31,14 @@ describe('configFromEnv', () => {
         GOOGLE_CLIENT_SECRET: 'secret',
         VAPID_PUBLIC_KEY: 'pub',
         VAPID_PRIVATE_KEY: 'priv',
+        FEEDBACK_EMAIL: ' feedback@example.com ',
       }),
     )
     expect(config.trustedOrigins).toEqual(['http://localhost:5173', 'https://preview.wordado.com'])
     expect(config.minProtocolVersion).toBe(2)
     expect(config.google).toEqual({ clientId: 'id', clientSecret: 'secret' })
     expect(config.vapid).toEqual({ publicKey: 'pub', privateKey: 'priv', subject: 'mailto:reminders@wordado.com' })
+    expect(config.feedbackEmail).toBe('feedback@example.com')
   })
 
   it('needs both halves of a Google client or a VAPID pair', () => {
@@ -51,5 +54,9 @@ describe('configFromEnv', () => {
 
   it('refuses an empty BASE_URL: a deploy that forgot --var BASE_URL must fail, not run with undefined', () => {
     expect(() => configFromEnv(env({ BASE_URL: '' }))).toThrow('BASE_URL must be set')
+  })
+
+  it('reads an empty FEEDBACK_EMAIL as none', () => {
+    expect(configFromEnv(env({ FEEDBACK_EMAIL: ' ' })).feedbackEmail).toBeNull()
   })
 })

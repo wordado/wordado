@@ -3,6 +3,7 @@ export const WORKER_SECRETS = [
   'BETTER_AUTH_SECRET',
   'RESEND_API_KEY',
   'EMAIL_FROM',
+  'FEEDBACK_EMAIL',
   'GOOGLE_CLIENT_ID',
   'GOOGLE_CLIENT_SECRET',
   'VAPID_PUBLIC_KEY',
@@ -16,6 +17,9 @@ const PAIRS: readonly (readonly [string, string])[] = [
   ['VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY'],
   ['RESEND_API_KEY', 'EMAIL_FROM'],
 ]
+
+/** Secrets that need another one, which is useful without them: the feedback mail needs the mailer. */
+const NEEDS: readonly (readonly [string, string])[] = [['FEEDBACK_EMAIL', 'RESEND_API_KEY']]
 
 /**
  * The secrets a deploy uploads with `wrangler deploy --secrets-file`, from
@@ -35,6 +39,9 @@ export function workerSecrets(env: Readonly<Record<string, string | undefined>>)
   for (const [a, b] of PAIRS) {
     if (a in out && !(b in out)) problems.push(`${a} is set without ${b}`)
     if (b in out && !(a in out)) problems.push(`${b} is set without ${a}`)
+  }
+  for (const [a, b] of NEEDS) {
+    if (a in out && !(b in out)) problems.push(`${a} is set without ${b}`)
   }
   if (problems.length > 0) throw new Error(problems.join('; '))
   return out

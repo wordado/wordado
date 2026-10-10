@@ -1,8 +1,9 @@
 import { useApp } from '../app/context'
 import { useT } from '../i18n/i18n'
+import { Link } from '../router'
 import { useStore } from '../useStore'
 
-/** About (plan 8b): how the translations were checked (spec §8.10), and the attributions the word data's licences require, shown verbatim in English (Decision 3). */
+/** About (plan 8b): how the translations were checked (spec §8.10), the way to feedback about the app (spec §8.12), and the attributions the word data's licences require, shown verbatim in English (Decision 3). */
 export function AboutSettings() {
   const { t } = useT()
   const { credits } = useApp()
@@ -14,6 +15,10 @@ export function AboutSettings() {
       {/* Said plainly (spec §8.10): what checked the translations, and how to tell us of a fault. */}
       <p>{t('about.aiChecked')}</p>
       <p className="note">{t('about.howToReport')}</p>
+      {/* Anything about the app itself, not a word (spec §8.12). */}
+      <p>
+        <Link to={{ name: 'feedback', from: '/settings/about' }}>{t('feedback.aboutLink')}</Link>
+      </p>
       {sources === null ? (
         <p className="note">{t('about.unavailable')}</p>
       ) : sources.length === 0 ? (

@@ -20,6 +20,8 @@ export interface Env {
   readonly GOOGLE_CLIENT_SECRET?: string
   readonly RESEND_API_KEY?: string
   readonly EMAIL_FROM?: string
+  /** Where the daily feedback mail goes (spec §8.12). A secret: an address is never written in the repository. */
+  readonly FEEDBACK_EMAIL?: string
   readonly VAPID_PUBLIC_KEY?: string
   readonly VAPID_PRIVATE_KEY?: string
   readonly VAPID_SUBJECT?: string
@@ -45,5 +47,6 @@ export function configFromEnv(env: Env): ServerConfig {
       env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY
         ? { publicKey: env.VAPID_PUBLIC_KEY, privateKey: env.VAPID_PRIVATE_KEY, subject: env.VAPID_SUBJECT ?? 'mailto:reminders@wordado.com' }
         : null,
+    feedbackEmail: env.FEEDBACK_EMAIL?.trim() || null,
   }
 }

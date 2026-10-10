@@ -23,10 +23,14 @@ export interface ServerConfig {
   readonly google: { readonly clientId: string; readonly clientSecret: string } | null
   /** Null disables reminders. */
   readonly vapid: VapidKeys | null
+  /** Where the daily feedback mail goes (spec §8.12). Null keeps the feedback and mails nothing. */
+  readonly feedbackEmail: string | null
 }
 
 export interface Mailer {
   sendSignInCode(email: string, code: string): Promise<void>
+  /** The day's feedback, to the coordinator (spec §8.12). Throws when it was not sent. */
+  sendFeedback(to: string, mail: { readonly subject: string; readonly text: string }): Promise<void>
 }
 
 /** A queue message (spec §4.4): one learner's work, small and safe to retry. */

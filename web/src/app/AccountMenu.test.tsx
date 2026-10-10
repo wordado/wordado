@@ -1,9 +1,10 @@
 import { act, cleanup, fireEvent, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { SignOutOffline } from '../account/controller'
 import { fakeAccounts, renderWith, setup } from '../test/fixtures'
 import { AccountMenu } from './AccountMenu'
 
+beforeEach(() => window.history.replaceState(null, '', '/'))
 afterEach(cleanup)
 
 const ana = { userId: 'u1', email: 'ana@example.com' }
@@ -14,6 +15,23 @@ describe('AccountMenu', () => {
     renderWith(<AccountMenu />, { ...ctx })
     expect(screen.getByRole('link', { name: 'Sign in' }).getAttribute('href')).toBe('/signin')
     expect(screen.queryByRole('button', { name: /Account/ })).toBeNull()
+  })
+
+  it('offers feedback in the menu when signed in, and from the form itself keeps the screen before', async () => {
+    window.history.replaceState(null, '', '/progress')
+    const ctx = await setup()
+    renderWith(<AccountMenu />, { ...ctx, account: ana })
+    const circle = screen.getByRole('button', { name: 'Account: ana@example.com' })
+    fireEvent.click(circle)
+    const items = screen.getAllByRole('listitem').map((item) => item.firstElementChild?.textContent)
+    expect(items).toEqual(['Account settings', 'Feedback', 'Sign out'])
+    const link = screen.getByRole('link', { name: 'Feedback' })
+    expect(link.getAttribute('href')).toBe('/feedback?from=%2Fprogress')
+    fireEvent.click(link)
+    expect(window.location.pathname + window.location.search).toBe('/feedback?from=%2Fprogress')
+    expect(screen.queryByRole('link', { name: 'Feedback' })).toBeNull()
+    fireEvent.click(circle)
+    expect(screen.getByRole('link', { name: 'Feedback' }).getAttribute('href')).toBe('/feedback?from=%2Fprogress')
   })
 
   it('shows who is signed in as a circle with the first letter of the email', async () => {

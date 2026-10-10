@@ -6,7 +6,8 @@ import { HTTPException } from 'hono/http-exception'
 import { accountRoutes } from './account/routes'
 import { createAuth } from './auth'
 import type { ServerDeps } from './deps'
-import { checkUpdateUser, requireUser, sameUser, type AppEnv } from './http'
+import { feedbackRoutes } from './feedback/routes'
+import { checkUpdateUser, optionalUser, requireUser, sameUser, type AppEnv } from './http'
 import { reminderRoutes } from './reminders/routes'
 import { signInEmailLimit } from './signInLimit'
 import { syncRoutes } from './sync/routes'
@@ -41,6 +42,7 @@ export function createApp(deps: ServerDeps): Hono<AppEnv> {
   accountRoutes(app, deps, user, owner)
   syncRoutes(app, deps, owner)
   reminderRoutes(app, deps, user, owner)
+  feedbackRoutes(app, deps, optionalUser(auth))
 
   app.notFound((c) => c.json({ error: 'not_found' }, 404))
   app.onError((error, c) => {
