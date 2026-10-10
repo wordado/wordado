@@ -1796,13 +1796,23 @@ dialog.report input[type='text'] {
   max-width: none;
 }
 
-/* The heading, and the search beside it; under it on a phone. */
+/* The heading with the search on its row, and what choosing a theme does under both. On a phone the search comes
+   last, next to what it finds. */
 .themes-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: var(--space-3) var(--space-4);
+  display: grid;
+  grid-template-areas:
+    'title'
+    'lede'
+    'search';
+  gap: var(--space-2);
+}
+
+.themes-head h1 {
+  grid-area: title;
+}
+
+.themes-head .lede {
+  grid-area: lede;
 }
 
 .themes-head h1 {
@@ -1811,7 +1821,8 @@ dialog.report input[type='text'] {
 
 .themes-search {
   position: relative;
-  flex: 1 1 16rem;
+  grid-area: search;
+  margin-top: var(--space-1);
 }
 
 .themes-search svg {
@@ -1966,7 +1977,7 @@ ul.theme-words > li:first-child {
 }
 
 .themes-head .lede {
-  margin: var(--space-2) 0 0;
+  margin: 0;
 }
 
 .theme-group h2 {
@@ -2137,8 +2148,17 @@ ul.theme-words > li:first-child {
 }
 
 @media (min-width: 48rem) {
+  .themes-head {
+    grid-template-columns: minmax(0, 1fr) 20rem;
+    grid-template-areas:
+      'title search'
+      'lede lede';
+    align-items: center;
+    column-gap: var(--space-4);
+  }
+
   .themes-search {
-    flex: 0 1 20rem;
+    margin-top: 0;
   }
 
   .theme-grid {

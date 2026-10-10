@@ -89,10 +89,8 @@ export function Themes() {
   return (
     <section className="themes-page" aria-labelledby="themes-title">
       <div className="themes-head">
-        <div>
-          <h1 id="themes-title">{t('themes.title')}</h1>
-          <p className="lede">{t('themes.intro')}</p>
-        </div>
+        <h1 id="themes-title">{t('themes.title')}</h1>
+        <p className="lede">{t('themes.intro')}</p>
         {offered.length > 0 && (
           <form role="search" className="themes-search" onSubmit={(e) => e.preventDefault()}>
             <label className="visually-hidden" htmlFor="themes-search">
