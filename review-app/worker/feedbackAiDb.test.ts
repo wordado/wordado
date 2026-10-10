@@ -42,6 +42,8 @@ const row = (over: Partial<FeedbackAiRow> = {}): FeedbackAiRow => ({
   createdAt: '2026-10-05T12:00:00.000Z',
   ...over,
 })
+/** A reading as it is read back when its message is in no topic. */
+const untopiced = { topicId: null, topicBy: 'ai', topicTitle: null }
 const stored = async () => (await base.DB.prepare('SELECT feedback_id FROM feedback_ai ORDER BY feedback_id').all<{ feedback_id: number }>()).results.map((r) => r.feedback_id)
 const at = (iso: string) => new Date(iso)
 
@@ -51,8 +53,8 @@ describe('the AI’s reading of a message, kept by its id (spec 2026-10-10 §4)'
     await putFeedbackAi(base.DB, new Map([[7, row()], [9, praise]]))
     const found = await feedbackAiRows(base.DB, [7, 8, 9])
     expect([...found.keys()].sort()).toEqual([7, 9])
-    expect(found.get(7)).toEqual(row())
-    expect(found.get(9)).toEqual(praise)
+    expect(found.get(7)).toEqual({ ...row(), ...untopiced })
+    expect(found.get(9)).toEqual({ ...praise, ...untopiced })
     expect((await feedbackAiRows(base.DB, [])).size).toBe(0)
     await putFeedbackAi(base.DB, new Map())
   })
@@ -62,7 +64,7 @@ describe('the AI’s reading of a message, kept by its id (spec 2026-10-10 §4)'
     const again = row({ category: 'idea', severity: null, summary: 'Wants the sound once.', promptVersion: 1, model: 'test/other', createdAt: '2026-10-06T12:00:00.000Z' })
     await putFeedbackAi(base.DB, new Map([[7, again]]))
     expect(await stored()).toEqual([7])
-    expect((await feedbackAiRows(base.DB, [7])).get(7)).toEqual(again)
+    expect((await feedbackAiRows(base.DB, [7])).get(7)).toEqual({ ...again, ...untopiced })
   })
 
   it('drops the results between two ids whose message is no longer given, and no other', async () => {

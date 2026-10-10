@@ -201,7 +201,7 @@ describe('POST /api/admin/feedback/ai/read (spec 2026-10-10 §3.1)', () => {
       why: null,
     })
     expect(await storedIds()).toEqual([1, 2, 3, 4, 5])
-    expect((await rows())[2]).toEqual({ feedback_id: 3, received_at: feedbackItem(3).receivedAt, language: 'de', translation: 'The sound plays twice.', category: 'bug', severity: 'annoys', summary: 'The sound of a word plays twice.', model: 'test/model', prompt_version: PROMPT_VERSION, created_at: '2026-10-05T12:00:00.000Z' })
+    expect((await rows())[2]).toEqual({ feedback_id: 3, received_at: feedbackItem(3).receivedAt, language: 'de', translation: 'The sound plays twice.', category: 'bug', severity: 'annoys', summary: 'The sound of a word plays twice.', model: 'test/model', prompt_version: PROMPT_VERSION, created_at: '2026-10-05T12:00:00.000Z', topic_id: null, topic_by: 'ai' })
     expect(await calls()).toEqual([{ day: '2026-10-05', what: 'messages', messages: 3 }])
     // Everything has a result now: the page is read, and the model is not asked.
     expect(await read()).toEqual({ results: {}, asked: 0, left: 0, why: null })

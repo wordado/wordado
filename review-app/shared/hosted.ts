@@ -191,6 +191,32 @@ export interface FeedbackAi {
   readonly summary: string
 }
 
+/** A topic's title: one line, in our words. It is shown in the tab and may be named in a mail. */
+export const MIN_TOPIC_TITLE_LENGTH = 3
+export const MAX_TOPIC_TITLE_LENGTH = 80
+/** A topic's match with a known issue (spec 2026-10-10 §3.3): none, proposed by the AI, confirmed by the coordinator
+ * (or a number they typed), or removed by the coordinator, after which the AI proposes none for the topic again. */
+export type TopicIssueState = 'none' | 'proposed' | 'confirmed' | 'removed'
+
+/** The topic a message is in (spec 2026-10-10 §3.2). */
+export interface FeedbackTopicRef {
+  readonly id: number
+  readonly title: string
+}
+
+/** A topic as the By topic view lists it. `count`, `newestAt` and `worst` are of its messages that have a reading;
+ * the last two are null when it has none, or no bug. `issueTitle` is the issue's title while it is among the open ones last read. */
+export interface FeedbackTopicView extends FeedbackTopicRef {
+  readonly state: FeedbackState
+  readonly note: string
+  readonly issue: number | null
+  readonly issueState: TopicIssueState
+  readonly issueTitle: string | null
+  readonly count: number
+  readonly newestAt: number | null
+  readonly worst: FeedbackSeverity | null
+}
+
 /** A message as the learner app's server gives it, with the coordinator's mark and, when there is one, the AI's reading. */
 export type FeedbackView = FeedbackItem & FeedbackMark & { readonly ai: FeedbackAi | null }
 
