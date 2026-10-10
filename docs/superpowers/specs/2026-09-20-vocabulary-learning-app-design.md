@@ -1268,14 +1268,18 @@ Phase 1a. Five other parts of this design rely on it — translation quality
 is a feature, not an afterthought.
 
 From any card the learner can report a problem: wrong or odd translation, bad
-example sentence, bad audio, wrong level, or other, with an optional note. A
-`content_report` records the `word_id`, the field, the pack or enrichment
-version, and the reporter. Reports work offline and sync like any other
-document.
+example sentence, bad audio, wrong level, or other, with an optional note. For
+a translation, an example sentence or "other" the dialog also asks "What
+should it be?": one optional line of at most 200 characters, the learner's
+suggestion. It is not asked for audio or a level, where there is no text to
+put right. A `content_report` records the `word_id`, the field, the note, the
+suggestion, the pack or enrichment version, and the reporter. Reports work
+offline and sync like any other document.
 
 Triage happens in the content pipeline, not in the app. Reports are grouped by
 entry and field; an entry crossing a small threshold of independent reports
-enters the native-speaker review queue, and a bad-audio report re-generates the
+enters the native-speaker review queue, with the learners' suggestions and
+notes beside it for the reviewer, and a bad-audio report re-generates the
 clip automatically. During the beta, while most content is AI-reviewed only
 (§5.4), the threshold is one report: a single report reopens the field. Corrections ship in the next corpus version (§5.1), or, for
 enriched words, as a re-enrichment (§8.2). The reporter is told, in the app,
@@ -2169,6 +2173,13 @@ product owner.
   wrong, tell us: it takes one tap." on the About page, with where the report
   action is, and a short form of it in the report dialog. It replaces the
   beta notice that named a native-speaker review.
+
+**2026-10-10 — a suggestion with a report.** Decided by the product owner.
+
+- **Reporting (§8.10):** for a translation, an example sentence or "other",
+  the report dialog asks "What should it be?": one optional line of at most
+  200 characters. It is stored with the report and reaches the reviewer
+  before the learners' notes.
 
 ### Approval status
 
