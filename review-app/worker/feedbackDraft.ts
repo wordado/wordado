@@ -37,16 +37,58 @@ export function draftRequest(topic: { readonly title: string; readonly count: nu
 /** The words of a text, in lower case: letters and digits of any script; everything between them is a break. */
 const wordsOf = (text: string): string[] => text.normalize('NFKC').toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []
 
-/** Whether `draft` repeats QUOTE_WORDS words in a row of any of `sources`: case, punctuation and spacing aside. */
+/** What the place of a word in a run is worth in the run's number, and what the first of QUOTE_WORDS places is worth. */
+const PLACE = 1_000_003
+const FIRST_PLACE = Array.from({ length: QUOTE_WORDS - 1 }).reduce<number>((worth) => Math.imul(worth, PLACE), 1)
+
+/**
+ * Whether `draft` repeats QUOTE_WORDS words in a row of any of `sources`: case, punctuation and spacing aside.
+ * One pass over each text, with no text made on the way: a Worker on the Free plan has ten milliseconds of
+ * processor time for a request, and the sources are thirty messages with their translations. The draft's words
+ * are numbered, each run of the draft is one number made of its words' numbers, and a source is walked with the
+ * number of its last QUOTE_WORDS words, which is looked up; a word the draft does not have starts the count anew.
+ * Two runs can share a number, so a run that is found is compared word for word before it counts.
+ */
 export function quotes(draft: string, sources: readonly string[]): boolean {
-  const runs = new Set<string>()
-  for (const source of sources) {
-    const words = wordsOf(source)
-    for (let at = 0; at + QUOTE_WORDS <= words.length; at += 1) runs.add(words.slice(at, at + QUOTE_WORDS).join(' '))
+  const said = wordsOf(draft)
+  if (said.length < QUOTE_WORDS) return false
+  const numbers = new Map<string, number>()
+  const ids = said.map((word) => numbers.get(word) ?? (numbers.set(word, numbers.size + 1), numbers.size))
+  /** The number of a run from the one before it: the word that left is taken out, the word that came is put in. */
+  const roll = (run: number, left: number, came: number) => (Math.imul(run - Math.imul(left, FIRST_PLACE), PLACE) + came) | 0
+  // Where in the draft each run starts, by the run's number.
+  const runs = new Map<number, number[]>()
+  let run = 0
+  for (let at = 0; at < ids.length; at += 1) {
+    run = roll(run, at >= QUOTE_WORDS ? ids[at - QUOTE_WORDS]! : 0, ids[at]!)
+    if (at + 1 < QUOTE_WORDS) continue
+    const starts = runs.get(run)
+    if (starts) starts.push(at + 1 - QUOTE_WORDS)
+    else runs.set(run, [at + 1 - QUOTE_WORDS])
   }
-  if (runs.size === 0) return false
-  const words = wordsOf(draft)
-  for (let at = 0; at + QUOTE_WORDS <= words.length; at += 1) if (runs.has(words.slice(at, at + QUOTE_WORDS).join(' '))) return true
+  for (const source of sources) {
+    const theirs = wordsOf(source).map((word) => numbers.get(word) ?? 0)
+    // How many words in a row, up to this one, are words of the draft, and the number of the last QUOTE_WORDS of them.
+    let together = 0
+    run = 0
+    for (let at = 0; at < theirs.length; at += 1) {
+      const id = theirs[at]!
+      if (id === 0) {
+        together = 0
+        run = 0
+        continue
+      }
+      run = roll(run, together >= QUOTE_WORDS ? theirs[at - QUOTE_WORDS]! : 0, id)
+      together += 1
+      if (together < QUOTE_WORDS) continue
+      const first = at + 1 - QUOTE_WORDS
+      for (const start of runs.get(run) ?? []) {
+        let same = true
+        for (let k = 0; same && k < QUOTE_WORDS; k += 1) same = ids[start + k] === theirs[first + k]
+        if (same) return true
+      }
+    }
+  }
   return false
 }
 

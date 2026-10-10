@@ -36,6 +36,29 @@ describe('quotes: a run of words shared with what a learner wrote (spec 2026-10-
     expect(quotes('it doesn’t play the sound at all', ["It doesn't play the sound at all"])).toBe(true)
   })
 
+  it('finds the one shared run in the most a draft is checked against, wherever it stands, and none when there is none', () => {
+    // Words drawn from a small vocabulary in an order of each text's own: many shared words, no shared run of six.
+    const text = (seed: number, words: number) => {
+      let n = (seed + 1) * 2654435761
+      const next = () => ((n ^= n << 13), (n ^= n >>> 17), (n ^= n << 5), (n >>> 0) % 300)
+      return Array.from({ length: words }, () => `w${next()}`).join(' ')
+    }
+    // Thirty messages of 2,000 characters, each with a translation of twice that.
+    const many = Array.from({ length: 30 }, (_, i) => [text(i, 380), text(i + 100, 760)]).flat()
+    const draft = text(999, 700)
+    expect(quotes(draft, many)).toBe(false)
+    const run = 'one two three four five six'
+    for (const at of [0, 31, 59]) {
+      const sources = many.map((source, i) => (i === at ? `${source} ${run}` : source))
+      expect(quotes(`${draft} ${run}`, sources)).toBe(true)
+      expect(quotes(`${run}. ${draft}`, sources)).toBe(true)
+      // Every word of the run is in the draft, but never six in a row.
+      expect(quotes(`${draft} one two three four five. ${draft} two three four five six`, sources)).toBe(false)
+    }
+    // A run that starts in the middle of a longer stretch of shared words is found too.
+    expect(quotes('zero one two three four five six seven', ['nine zero one two eight. x one two three four five six y'])).toBe(true)
+  })
+
   it('finds nothing in a source shorter than the run, or with no sources', () => {
     expect(quotes('The sound plays twice.', ['The sound plays twice.'])).toBe(false)
     expect(quotes(GOOD.body, [])).toBe(false)
