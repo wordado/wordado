@@ -16,6 +16,9 @@ export function foldText(text: string): string {
 /** The words of a text, folded. */
 const tokens = (text: string): string[] => foldText(text).split(/[^\p{L}\p{N}]+/u).filter((token) => token !== '')
 
+/** What a word is found by: its headword and variants, its translations and its sense note. */
+const entryTokens = (entry: CorpusEntry): string[] => [entry.headword, ...entry.variants, ...entry.translations, entry.sense].flatMap(tokens)
+
 interface IndexedEntry {
   readonly entry: CorpusEntry
   readonly tokens: readonly string[]
@@ -39,7 +42,7 @@ export function searchIndex(corpus: Corpus): SearchIndex {
   const index = (entry: CorpusEntry): IndexedEntry => {
     let known = indexed.get(entry.entryId)
     if (!known) {
-      known = { entry, tokens: [entry.headword, ...entry.variants, ...entry.translations, entry.sense].flatMap(tokens) }
+      known = { entry, tokens: entryTokens(entry) }
       indexed.set(entry.entryId, known)
     }
     return known
@@ -96,4 +99,10 @@ export function searchThemes(index: SearchIndex, query: string): ThemeSearch | n
   // Array.prototype.sort is stable, so equal themes keep the pack's order.
   themes.sort((a, b) => Number(b.nameMatch) - Number(a.nameMatch) || b.entries.length - a.entries.length)
   return { themes, unthemed: index.unthemed.filter((e) => matches(words, e.tokens)).map((e) => e.entry) }
+}
+
+/** The words of a list a query keeps, in the list's order (null: no query, so every word stays). */
+export function searchEntries(entries: readonly CorpusEntry[], query: string): CorpusEntry[] | null {
+  const words = searchWords(query)
+  return words && entries.filter((entry) => matches(words, entryTokens(entry)))
 }

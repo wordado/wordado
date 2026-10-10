@@ -11,6 +11,7 @@ import { Progress } from '../screens/Progress'
 import { Settings } from '../screens/Settings'
 import { SignIn } from '../screens/SignIn'
 import { Study } from '../screens/Study'
+import { ThemeWords } from '../screens/Theme'
 import { Themes } from '../screens/Themes'
 import { LanguageStep } from '../setup/LanguageStep'
 import { Setup } from '../setup/Setup'
@@ -44,6 +45,8 @@ function Screen(props: { readonly route: Route }) {
       return <Path />
     case 'themes':
       return <Themes />
+    case 'theme':
+      return <ThemeWords themeId={route.themeId} query={route.q ?? ''} />
     case 'progress':
       return <Progress />
     case 'signin':
@@ -157,7 +160,9 @@ export function App(props: { readonly resumed: boolean; readonly setup: boolean;
                     <Link
                       to={item.route}
                       aria-current={
-                        item.route.name === route.name || (item.route.name === 'settings' && (route.name === 'placement' || route.name === 'native-language'))
+                        item.route.name === route.name ||
+                        (item.route.name === 'settings' && (route.name === 'placement' || route.name === 'native-language')) ||
+                        (item.route.name === 'themes' && route.name === 'theme')
                           ? 'page'
                           : undefined
                       }

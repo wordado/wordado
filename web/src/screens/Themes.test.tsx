@@ -15,6 +15,8 @@ const themesIn = (name: string) =>
     .map((h) => h.textContent)
 const card = (title: string) => screen.getByRole('heading', { level: 3, name: title }).closest('li')!
 const status = () => screen.getByRole('status').textContent
+/** A card's links and buttons, without its title (a link to the theme's page). */
+const cardActions = (title: string) => [...card(title).querySelectorAll('a, button')].filter((el) => !el.closest('h3'))
 
 describe('Themes', () => {
   it('lists only the themes big enough to offer, with their size', async () => {
@@ -126,7 +128,7 @@ describe('Themes: three groups', () => {
     expect(themesIn('Studied')).toEqual(['First words'])
     expect(themesIn('Not started')).toEqual(['Daily life'])
 
-    const actions = (title: string) => [...card(title).querySelectorAll('a, button')].map((el) => [el.getAttribute('aria-label') ?? el.textContent, el.classList.contains('is-quiet')])
+    const actions = (title: string) => cardActions(title).map((el) => [el.getAttribute('aria-label') ?? el.textContent, el.classList.contains('is-quiet')])
 
     // The chosen theme: the chip, practice though nothing of it is started, and the way back to the path.
     const now = within(group('Studying now'))
@@ -171,7 +173,7 @@ describe('Themes: three groups', () => {
     renderWith(<Themes />, ctx)
     expect(themesIn('Not started')).toEqual(['Daily life'])
     expect(screen.getAllByRole('link', { name: /^Practise this theme/ }).map((a) => a.getAttribute('aria-label'))).toEqual(['Practise this theme: Later words', 'Practise this theme: First words'])
-    expect([...card('Daily life').querySelectorAll('a, button')].map((el) => el.getAttribute('aria-label'))).toEqual(['Study this next: Daily life'])
+    expect(cardActions('Daily life').map((el) => el.getAttribute('aria-label'))).toEqual(['Study this next: Daily life'])
     // Practice starts nothing, so it moves no theme to another group.
     expect(groups()).toEqual(['Studying now', 'Studied', 'Not started'])
   })
@@ -370,6 +372,16 @@ describe('Themes: search', () => {
     fireEvent.change(screen.getByRole('searchbox', { name: 'Търсене в темите' }), { target: { value: 'КЛЮЧ' } })
     expect(groups()).toEqual(['Намерена е 1 тема'])
     expect(found()).toEqual(['Всекидневие'])
+  })
+
+  it('links a theme’s name to its page of words, and "+N more" to that page with the search', async () => {
+    const ctx = await setup()
+    renderWith(<Themes />, ctx)
+    expect(screen.getByRole('link', { name: 'Daily life' }).getAttribute('href')).toBe('/themes/daily-life')
+    tagEveryWord(ctx, 'zqx')
+    type(' zqx ')
+    expect(screen.getByRole('link', { name: '+22 more: Daily life' }).getAttribute('href')).toBe('/themes/daily-life?q=zqx')
+    expect(screen.getByRole('link', { name: 'Daily life' }).getAttribute('href')).toBe('/themes/daily-life')
   })
 
   it('has no search when there is no theme to find', async () => {
