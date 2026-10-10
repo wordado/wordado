@@ -113,6 +113,12 @@ describe('checkProductionConfig', () => {
     for (const bad of ['', 'many', '-1', '1.5', '2 00']) expect(checkProductionConfig(config({ vars: { FEEDBACK_AI_DAILY_CALLS: bad } })).join('\n')).toMatch(/FEEDBACK_AI_DAILY_CALLS/)
     for (const bad of ['', 'english', 'en, bg', 'en;bg', 'EN', 'en,']) expect(checkProductionConfig(config({ vars: { FEEDBACK_READS: bad } })).join('\n')).toMatch(/FEEDBACK_READS/)
   })
+  it('takes the app’s repository as owner/name, or none at all', () => {
+    expect(checkProductionConfig(config({ vars: { APP_REPO: 'wordado/wordado' } }))).toEqual([])
+    expect(checkProductionConfig(config({ vars: {} }))).toEqual([])
+    for (const bad of ['', 'wordado', 'https://github.com/wordado/wordado', 'wordado/wordado/issues', 'wordado/ wordado']) expect(checkProductionConfig(config({ vars: { APP_REPO: bad } })).join('\n')).toMatch(/APP_REPO must be the public app repository as owner\/name/)
+  })
+
   it('refuses another origin', () => {
     expect(checkProductionConfig(config({ vars: { APP_ORIGIN: 'https://example.com' } })).join('\n')).toMatch(/APP_ORIGIN/)
   })

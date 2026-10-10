@@ -44,6 +44,9 @@ export function checkProductionConfig(jsonc: string): string[] {
   // Optional: without it the Feedback tab says it is not connected. The token only ever goes to an https origin.
   const learnerApp = prod.vars?.['LEARNER_APP_URL'] ?? ''
   if (learnerApp !== '' && !/^https:\/\/[a-z0-9.-]+$/.test(learnerApp)) problems.push('env.production vars.LEARNER_APP_URL must be an https origin with no path, such as https://app.wordado.com')
+  // Optional: without it no open issues are read, and the AI help proposes no match. Written wrong, the Worker would quietly read none.
+  const appRepo = prod.vars?.['APP_REPO']
+  if (appRepo !== undefined && !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(appRepo)) problems.push('env.production vars.APP_REPO must be the public app repository as owner/name, such as wordado/wordado')
   // The AI help on feedback (spec 2026-10-10): all optional, and the Worker has a default for each. The key and the
   // messages only ever go to an https address; to one written wrong the Worker sends nothing, so a deploy says it.
   // The sign-in: a key (the default), or a Google service account. Written wrong, the Worker has no AI help at all.
