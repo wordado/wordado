@@ -2,7 +2,7 @@ import { type ChildProcess, spawn } from 'node:child_process'
 import { mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { type Browser, chromium, type Page, type Route } from '@playwright/test'
-import { AI_ANSWERS, AI_TOPICS, FEEDBACK, KNOWN_ISSUES, PATH_TOPIC, SOUND_TOPIC, WORDS_TOPIC } from '../e2e/hosted/feedbackFixture'
+import { AI_ANSWERS, AI_TOPICS, FEEDBACK, KNOWN_ISSUES, PATH_TOPIC, SOUND_DRAFT, SOUND_TOPIC, WEEK_PARAGRAPH, WORDS_TOPIC } from '../e2e/hosted/feedbackFixture'
 
 /* Screenshots of every screen, for a pull request description and for a look at the whole app after a change to its
  * styles: `pnpm --filter @wordado/review-app screenshots`. It starts the two fixture servers the browser runs use
@@ -97,6 +97,28 @@ const topicOpened = (id: number, over: Row = {}): Row => ({
   ...over,
 })
 
+/** The week at the top of the tab (spec 2026-10-10 §3.4), without asking the server: what the stand-in model read of the fixture's messages, a long title among the new topics, and the paragraph. */
+const WEEK: Row = {
+  since: 0,
+  until: 1,
+  read: 9,
+  byCategory: { bug: 3, idea: 3, question: 0, praise: 2, junk: 1 },
+  blockingBugs: 1,
+  topTopics: [{ id: 1, title: SOUND_TOPIC, count: 2 }, { id: 2, title: WORDS_TOPIC, count: 2 }, { id: 3, title: PATH_TOPIC, count: 1 }],
+  blocking: [{ id: 3, title: PATH_TOPIC, count: 1 }],
+  newTopics: [{ id: 4, title: TOPICS[3]!['title'] }, { id: 3, title: PATH_TOPIC }],
+  paragraph: WEEK_PARAGRAPH,
+}
+const week = (over: Row = {}): Api => answer(/\/api\/admin\/feedback\/week$/, { ...WEEK, ...over })
+/** What asking for a draft of the first topic answers. */
+const draft = (json: Row): Api => answer(/\/api\/admin\/feedback\/topics\/1\/draft$/, json)
+/** Opens the first topic's draft, and waits until the AI has answered. */
+async function openDraft(page: Page): Promise<void> {
+  const topic = await openTopic(page, SOUND_TOPIC)
+  await topic.getByRole('button', { name: 'Draft an issue' }).click()
+  await page.getByRole('dialog', { name: 'Draft an issue' }).getByRole('link', { name: 'Open on GitHub' }).waitFor()
+}
+
 /** The Feedback tab with the AI help on and every message read: the stand-in model's readings are put on the list's
  * answer, with the topics it made, and the AI is told nothing is left to read, so nothing is kept on the server.
  * `why` is what a reading answers. */
@@ -109,6 +131,7 @@ const aiRead = (why: string | null = null, left = 0): readonly Api[] => [
       await route.fulfill({ response, json: { ...body, items: body.items.map((item) => ({ ...item, ai: left > 0 ? null : aiOf(item['id'] as number) })) } })
     }),
   answer(/\/api\/admin\/feedback\/ai\/read$/, { results: {}, asked: 0, left, why }),
+  week(left > 0 ? { read: 0, paragraph: null } : {}),
   answer(/\/api\/admin\/feedback\/topics$/, left > 0 ? [] : TOPICS),
   answer(/\/api\/admin\/feedback\/topics\/1$/, topicOpened(1)),
   answer(/\/api\/admin\/feedback\/topics\/2$/, topicOpened(2, { more: 12, incomplete: true })),
@@ -118,13 +141,14 @@ const aiRead = (why: string | null = null, left = 0): readonly Api[] => [
 async function byTopic(page: Page): Promise<void> {
   await page.getByLabel('View').selectOption({ label: 'By topic' })
   await page.getByLabel('Show').selectOption({ label: 'All' })
-  await page.getByRole('list', { name: 'Topics' }).waitFor()
+  await page.getByRole('list', { name: 'Topics', exact: true }).waitFor()
 }
 /** Opens a topic of the By topic view, and waits for its messages. */
 async function openTopic(page: Page, title: string) {
   await byTopic(page)
-  await page.getByRole('button', { name: title }).click()
-  const topic = page.getByRole('list', { name: 'Topics' }).locator('> li').filter({ hasText: title })
+  // By its own title: an opened topic names the others where it offers to merge, and the week names them above.
+  const topic = page.getByRole('list', { name: 'Topics', exact: true }).locator('> li').filter({ has: page.locator('.topic-title', { hasText: title }) })
+  await topic.locator('.topic-open').click()
   await topic.getByRole('list', { name: 'Messages of the topic' }).waitFor()
   return topic
 }
@@ -413,6 +437,31 @@ const SHOTS_ADMIN: readonly Shot[] = [
     },
   },
   { name: 'hosted-admin-feedback-topics-older', who: 'admin', path: '/#feedback', api: aiRead(), steps: async (page) => void (await openTopic(page, WORDS_TOPIC)) },
+  // The week (spec 2026-10-10 §3.4): the summary above the filters, and the same with no paragraph, when the AI wrote none.
+  { name: 'hosted-admin-feedback-week', who: 'admin', path: '/#feedback', api: aiRead(), steps: async (page) => void (await page.getByRole('region', { name: 'This week' }).getByText('Written by the AI').waitFor()) },
+  {
+    name: 'hosted-admin-feedback-week-no-paragraph',
+    who: 'admin',
+    path: '/#feedback',
+    api: [...aiRead(), week({ paragraph: null }), answer(/\/api\/admin\/feedback\/week\/paragraph$/, { paragraph: null, why: 'late' })],
+    steps: async (page) => void (await page.getByText(/The AI wrote nothing about the week this time/).waitFor()),
+  },
+  // Draft an issue (§3.5): the draft in its two fields, a draft that was dropped, and a text too long for a link.
+  { name: 'hosted-admin-feedback-draft', who: 'admin', path: '/#feedback', api: [...aiRead(), draft({ ok: true, ...SOUND_DRAFT, messages: 2 })], steps: openDraft },
+  {
+    name: 'hosted-admin-feedback-draft-refused',
+    who: 'admin',
+    path: '/#feedback',
+    api: [...aiRead(), draft({ ok: false, why: 'quoted' })],
+    steps: async (page) => (await openDraft(page), void (await page.getByText(/repeated a learner’s words and was dropped/).waitFor())),
+  },
+  {
+    name: 'hosted-admin-feedback-draft-long',
+    who: 'admin',
+    path: '/#feedback',
+    api: [...aiRead(), draft({ ok: true, title: SOUND_DRAFT.title, body: `${SOUND_DRAFT.body}\n\n${'Звукът на думата се чува два пъти подред на телефон. '.repeat(24)}`.trim(), messages: 2 })],
+    steps: async (page) => (await openDraft(page), void (await page.getByRole('button', { name: 'Copy the text' }).waitFor())),
+  },
   { name: 'hosted-admin-feedback-topics-none', who: 'admin', path: '/#feedback', api: [aiStatus({ on: false }), answer(/\/api\/admin\/feedback\/topics$/, [])], steps: async (page) => (await page.getByLabel('View').selectOption({ label: 'By topic' }), void (await page.getByText(/Topics are made by the AI help/).waitFor())) },
   { name: 'hosted-admin-feedback-ai-limit', who: 'admin', path: '/#feedback', api: aiRead('limit', 9), steps: async (page) => void (await page.getByText(/Today’s limit of 200 AI calls is reached/).waitFor()) },
   { name: 'hosted-admin-feedback-ai-not-set-up', who: 'admin', path: '/#feedback', api: [aiStatus({ setUp: false, needs: 'FEEDBACK_AI_KEY', on: false })], steps: async (page) => void (await page.getByText(/AI help is not set up/).waitFor()) },

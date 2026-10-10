@@ -191,6 +191,22 @@ as a pull request against the content repository, with no local checkout and no 
    messages by id): deploy that server first (`docs/deploy.md`). With an older server a topic opens with
    messages missing and says so.
 
+   Above the filters the tab then shows **the week**: how many messages of the last seven days the AI read, by
+   its category, the topics with the most messages, the bugs it reads as blocking, the new topics, and a few
+   sentences it wrote from those numbers and titles alone (asked for once a day). The weekly mail gains the
+   same for its week: the job has the AI read up to 100 of the week's messages that nobody opened, in at most
+   four calls, and makes one more for the paragraph, all counted against the day's limit. When the help is
+   off, a call fails or the limit is reached, the mail is the plain one.
+
+   On an opened topic, **Draft an issue** has the AI write a title and a text from the topic's messages, in its
+   own words: a draft that repeats a learner's words, or holds an address, a link or an account's name, is
+   dropped, and the dialog says so. Read the draft and change it; **Open on GitHub** opens the new-issue page
+   of `APP_REPO` in your own browser with the title and the text filled in, and you file it under your own
+   name. **The review app has no permission to write to that repository and never asks GitHub to:** the link
+   is all there is. A text too long for a link is copied with **Copy the text** and pasted there. When the
+   issue is filed, paste its number or its address into the dialog: it becomes the topic's match. The draft
+   is kept nowhere; closing the dialog loses it.
+
    What is sent: a message's text with email addresses, web addresses and phone numbers masked, the kind the
    learner chose, the interface language and the screen, and with them the titles of the topics so far and of
    the open issues. Never the address for an answer, the browser or the

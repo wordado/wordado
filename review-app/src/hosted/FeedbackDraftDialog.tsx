@@ -125,7 +125,7 @@ function DraftForm(props: { topic: FeedbackTopicView; repo: string; dailyCalls: 
       <label className="field">
         Text
         <textarea
-          rows={12}
+          rows={10}
           value={body}
           disabled={writing}
           onChange={(e) => {

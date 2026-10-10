@@ -596,7 +596,7 @@ async function readsTopics(browser: Browser, mine: 'sound' | 'words') {
     await expect(panel.getByRole('list', { name: 'Feedback' })).toHaveCount(0)
   }
   await byTopic()
-  const topics = panel.getByRole('list', { name: 'Topics' }).locator('> li')
+  const topics = panel.getByRole('list', { name: 'Topics', exact: true }).locator('> li')
   await expect(topics).toHaveCount(3)
   // The topic nobody changes: one message, the worst a bug can be, no match.
   const untouched = topics.filter({ hasText: 'Path stays white after a unit' })
@@ -681,6 +681,118 @@ test('an admin reads the feedback by topic, confirms a proposed match, opens a t
 
 test('@phone an admin reads the feedback by topic on a phone, and notes and marks a topic', async ({ browser }) => {
   await readsTopics(browser, 'words')
+})
+
+/** The week at the top of the Feedback tab (spec 2026-10-10 §3.4) and the draft of an issue (§3.5), from the stand-in
+ * model. Both runs read the week, which changes nothing. The desktop run drafts an issue for its own topic, the one
+ * about the sound, changes the draft, looks at where Open on GitHub leads without going there, and pastes the
+ * number of the filed issue; the phone run opens the draft of its own topic, about the number of words, and closes it. */
+async function readsWeekAndDrafts(browser: Browser, mine: 'sound' | 'words') {
+  const page = await as(browser, 'admin')
+  await page.goto('/#feedback')
+  const panel = page.getByRole('tabpanel', { name: 'Feedback' })
+  const toggle = panel.getByRole('region', { name: 'AI help' }).getByRole('switch', { name: 'AI help' })
+  await expect(toggle).toBeEnabled()
+  if (!(await toggle.isChecked())) await toggle.click()
+  await expect(toggle).toBeChecked()
+  // Every message read by the AI: the week is counted from what it read.
+  await panel.getByLabel('Show').selectOption({ label: 'All' })
+  await expect(panel.getByRole('list', { name: 'Feedback' }).getByRole('listitem').locator('.feedback-ai')).toHaveCount(9)
+
+  const week = panel.getByRole('region', { name: 'This week' })
+  await expect(week.getByText('9 messages read by the AI in the last 7 days')).toBeVisible()
+  await expect(week.getByText('Written by the AI')).toBeVisible()
+  await expect(week.getByText(/^Most of the week’s messages were about the sound playing twice/)).toBeVisible()
+  await expect(week.getByRole('list', { name: 'By the AI’s category' }).getByRole('listitem')).toHaveText(['Bug 3', 'Idea 3', 'Question 0', 'Praise 2', 'Junk 1'])
+  const most = week.getByRole('list', { name: 'Most messages' }).getByRole('listitem')
+  await expect(most).toHaveCount(3)
+  await expect(most.filter({ hasText: 'Choose the number of new words' })).toHaveText('Choose the number of new words 2')
+  await expect(week.getByRole('list', { name: 'Blocking bugs' }).getByRole('listitem')).toHaveText(['Path stays white after a unit 1'])
+  await expect(week.getByRole('list', { name: 'New topics' }).getByRole('listitem')).toHaveCount(3)
+  await expectFits(page, '.admin *')
+
+  // What the stand-in model was sent for the paragraph: numbers and the topics' titles, and nothing a learner wrote.
+  const { requests } = (await (await fetch('http://127.0.0.1:4184/_state')).json()) as { requests: { body: { messages: { role: string; content: string }[]; response_format: { json_schema: { name: string } } } }[] }
+  const named = (name: string) => requests.filter((r) => r.body.response_format.json_schema.name === name)
+  expect(named('feedback_week').length).toBeGreaterThan(0)
+  for (const asked of named('feedback_week')) {
+    const input = JSON.parse(asked.body.messages.find((m) => m.role === 'user')!.content) as Record<string, unknown>
+    expect(Object.keys(input).sort()).toEqual(['blockingBugs', 'byCategory', 'messages', 'newTopics', 'topTopics'])
+    for (const theirs of ['Der Ton', 'Me gustaría', 'my phone', 'played twice', 'white screen', 'example.com', '[email]']) expect(JSON.stringify(input)).not.toContain(theirs)
+  }
+
+  // A topic of the week opens By topic at that topic, with its messages.
+  await most.filter({ hasText: 'Choose the number of new words' }).getByRole('button').click()
+  await expect(panel.getByLabel('View')).toHaveValue('topics')
+  const topics = panel.getByRole('list', { name: 'Topics', exact: true }).locator('> li')
+  const words = topics.filter({ hasText: 'Choose the number of new words' })
+  await expect(words.getByRole('list', { name: 'Messages of the topic' }).getByRole('listitem')).toHaveCount(2)
+  const dialog = page.getByRole('dialog', { name: 'Draft an issue' })
+
+  if (mine === 'words') {
+    await words.getByRole('button', { name: 'Draft an issue' }).tap()
+    await expect(dialog.getByLabel('Title', { exact: true })).toHaveValue('Let learners set their daily amount of fresh vocabulary')
+    await expect(dialog.getByLabel('Text')).toHaveValue(/^## What happens\nLearners ask for a setting/)
+    await expect(dialog.getByText('Written by the AI from 2 messages. Read it before you file it: it becomes public under your name.')).toBeVisible()
+    await expectFits(page)
+    // Both fields can be reached and written in, and so can the way out.
+    await dialog.getByLabel('Title', { exact: true }).fill('Daily amount of new words')
+    await dialog.getByLabel('Text').fill('Changed on a phone.')
+    await dialog.getByRole('link', { name: 'Open on GitHub' }).scrollIntoViewIfNeeded()
+    await expect(dialog.getByRole('link', { name: 'Open on GitHub' })).toBeInViewport({ ratio: 1 })
+    await expect(dialog.getByLabel('When the issue is filed, paste its number or its address here')).toBeEditable()
+    await expectFits(page)
+    await dialog.getByRole('button', { name: 'Close' }).tap()
+    await expect(dialog).toHaveCount(0)
+    // Nothing was kept: the topic has the match it had.
+    await expect(words.getByRole('link', { name: '#95', exact: true })).toHaveCount(0)
+    return
+  }
+
+  // The desktop run's own topic, whatever it is called by now.
+  const sound = topics.filter({ has: page.locator('.topic-title', { hasText: /sound/i }) })
+  await sound.locator('.topic-open').click()
+  await expect(sound.getByRole('list', { name: 'Messages of the topic' }).getByRole('listitem')).toHaveCount(2)
+  await sound.getByRole('button', { name: 'Draft an issue' }).click()
+  await expect(dialog.getByLabel('Title', { exact: true })).toHaveValue('Audio for a word is heard two times on handsets')
+  await expect(dialog.getByLabel('Text')).toHaveValue(/^## What happens\nLearners hear the audio for a word two times in a row\./)
+  await expectFits(page)
+  // The link follows the fields. It is looked at, not followed: GitHub is never asked.
+  await dialog.getByLabel('Title', { exact: true }).fill('Audio of a word plays twice & more')
+  const link = dialog.getByRole('link', { name: 'Open on GitHub' })
+  const href = (await link.getAttribute('href'))!
+  expect(href.startsWith('https://github.com/wordado/wordado/issues/new?')).toBe(true)
+  expect(new URL(href).searchParams.get('title')).toBe('Audio of a word plays twice & more')
+  expect(new URL(href).searchParams.get('body')).toContain('## How serious it sounds')
+  await expect(link).toHaveAttribute('target', '_blank')
+  await expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+  // What is not an issue of this repository is refused in place.
+  const filed = dialog.getByLabel('When the issue is filed, paste its number or its address here')
+  await filed.fill('https://github.com/someone/else/issues/95')
+  await dialog.getByRole('button', { name: 'Save' }).click()
+  await expect(dialog.getByRole('alert')).toHaveText('That is not the number or the address of an issue of wordado/wordado.')
+  // The number of the filed issue becomes the topic's match.
+  await filed.fill('#95')
+  await dialog.getByRole('button', { name: 'Save' }).click()
+  await expect(dialog).toHaveCount(0)
+  await expect(sound.getByRole('link', { name: '#95', exact: true })).toHaveAttribute('href', 'https://github.com/wordado/wordado/issues/95')
+  await page.reload()
+  await panel.getByLabel('View').selectOption({ label: 'By topic' })
+  await panel.getByLabel('Show').selectOption({ label: 'All' })
+  await expect(sound.getByRole('link', { name: '#95', exact: true })).toBeVisible()
+  // The model was asked for the draft with the topic and its messages as it gets any message: no address for an answer.
+  const after = (await (await fetch('http://127.0.0.1:4184/_state')).json()) as { requests: { body: { messages: { role: string; content: string }[]; response_format: { json_schema: { name: string } } } }[] }
+  const drafts = after.requests.filter((r) => r.body.response_format.json_schema.name === 'feedback_draft').map((r) => r.body.messages.find((m) => m.role === 'user')!.content)
+  expect(drafts.length).toBeGreaterThan(0)
+  for (const sent of drafts) for (const theirs of ['answer-me@example.com', 'lerner@example.com', 'Mozilla', 'B3kq9xZa']) expect(sent).not.toContain(theirs)
+}
+
+test('an admin reads the week’s summary, drafts an issue for a topic, and pastes the filed issue’s number', async ({ browser }) => {
+  await readsWeekAndDrafts(browser, 'sound')
+})
+
+test('@phone an admin reads the week’s summary and opens a draft on a phone', async ({ browser }) => {
+  await readsWeekAndDrafts(browser, 'words')
 })
 
 test('the daily job reads the open issues of the app’s repository once a day, with no token', async () => {

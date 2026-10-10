@@ -64,7 +64,8 @@ createServer((req, res) => {
 
 // The fake learner app server: the feedback the Feedback tab reads (feedbackFixture.ts).
 const FEEDBACK_TOKEN = 'e2e-feedback-read-token-0123456789abcdef'
-const learnerApp = new FakeLearnerApp(FEEDBACK_TOKEN, [...FEEDBACK])
+// The messages came in the last hours, whenever this runs: the week at the top of the tab counts the last seven days.
+const learnerApp = new FakeLearnerApp(FEEDBACK_TOKEN, FEEDBACK.map((item) => ({ ...item, receivedAt: Date.now() - (30 - item.id) * 10 * 60_000 })))
 createServer((req, res) => {
   void (async () => {
     // What the review app has asked of it, for the test of the timed job.

@@ -1564,9 +1564,9 @@ kbd {
   display: none;
 }
 
-/* The AI help on the Feedback tab (spec 2026-10-10): a panel above the filters with the switch, how it stands and
-   while it is off, the note on the privacy policy. On a card, what the AI says stands under the learner's words, set apart by a
-   rule at its side and named as the AI's each time: it is advice, and never the message. */
+/* The AI help on the Feedback tab (spec 2026-10-10): a panel above the filters with the switch, how it stands and,
+   while it is off, the note on the privacy policy. On a card, what the AI says stands under the learner's words,
+   set apart by a rule at its side and named as the AI's each time: it is advice, and never the message. */
 .feedback-ai-panel {
   display: grid;
   gap: var(--space-2);
@@ -1814,10 +1814,13 @@ kbd {
   min-width: 0;
 }
 
-/* Draft an issue (spec 2026-10-10 §3.5): a dialog wider than the others, since it holds a text to read. The two
+/* Draft an issue (spec 2026-10-10 §3.5): a dialog wider than the others, since it holds a text to read (on a phone
+   it is the whole screen, as every dialog is). The two
    fields, then the way to GitHub, then, set apart by a rule, where the filed issue's number is pasted. */
-.dialog:has(.draft) {
-  width: min(44rem, calc(100% - 2rem));
+@media (min-width: 40.0625rem) {
+  .dialog:has(.draft) {
+    width: min(44rem, calc(100% - 2rem));
+  }
 }
 
 .draft {
