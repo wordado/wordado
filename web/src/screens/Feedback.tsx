@@ -33,6 +33,7 @@ export function Feedback(props: { readonly from?: string | undefined; readonly v
   const online = useOnline()
   const messageId = useId()
   const messageErrorId = useId()
+  const privateId = useId()
   const emailId = useId()
   const emailErrorId = useId()
   const detailsId = useId()
@@ -126,9 +127,13 @@ export function Feedback(props: { readonly from?: string | undefined; readonly v
               maxLength={MAX_FEEDBACK_MESSAGE_LENGTH}
               required
               aria-invalid={messageError !== null}
-              aria-describedby={messageError !== null ? messageErrorId : undefined}
+              aria-describedby={messageError !== null ? `${privateId} ${messageErrorId}` : privateId}
               onChange={(event) => setMessage(event.target.value)}
             />
+            {/* A message is free text that people read: the learner is asked to keep personal details out of it. */}
+            <p className="note" id={privateId}>
+              {t('feedback.private')}
+            </p>
             {messageError !== null && (
               <p className="field-error" role="alert" id={messageErrorId}>
                 {t(messageError)}

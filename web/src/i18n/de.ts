@@ -484,6 +484,7 @@ export const de: Messages = {
   'feedback.kind.other': 'Etwas anderes',
   'feedback.message': 'Deine Nachricht',
   'feedback.messageEmpty': 'Schreib zuerst deine Nachricht.',
+  'feedback.private': 'Bitte schreib keine persönlichen Daten über dich oder andere Personen.',
   'feedback.email': 'E-Mail, falls du eine Antwort möchtest (optional)',
   'feedback.sentWith': 'Wird mit deiner Nachricht gesendet',
   'feedback.account': 'Dein Konto: {email}',

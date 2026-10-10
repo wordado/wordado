@@ -464,6 +464,7 @@ export const bg: Messages = {
   'feedback.kind.other': 'Нещо друго',
   'feedback.message': 'Вашето съобщение',
   'feedback.messageEmpty': 'Първо напишете съобщението си.',
+  'feedback.private': 'Моля, не пишете лични данни за себе си или за други хора.',
   'feedback.email': 'Имейл, ако искате отговор (по желание)',
   'feedback.sentWith': 'Изпраща се заедно със съобщението',
   'feedback.account': 'Вашият профил: {email}',
