@@ -34,6 +34,15 @@ describe('RowCard', () => {
     expect(screen.getByText('wrong-sense')).toBeTruthy()
   })
 
+  it('says a row with no objection was passed by the AI review, or not reviewed yet, whichever is true', () => {
+    const view = show(bankClean)
+    expect(screen.getByText('No AI objections.')).toBeTruthy()
+    // A learner's report changes the row: the AI review has not seen it as it is now.
+    view.rerender({ row: { ...bankClean, ai: 'unreviewed', reports: '1 reports (translation): suggested: „банка“' } })
+    expect(screen.getByText('Not yet reviewed by AI.')).toBeTruthy()
+    expect(screen.queryByText('No AI objections.')).toBeNull()
+  })
+
   it('shows where the row is among the shown rows, and its chips', () => {
     show({ ...bank, reports: 'wrong word' }, { position: { index: 12, total: 624 } })
     expect(screen.getByText('13 of 624')).toBeTruthy()
