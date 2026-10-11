@@ -439,6 +439,9 @@ export const bg: Messages = {
   'search.sample': { one: 'Примерът има {count} дума. Влезте, за да търсите в целия курс.', other: 'Примерът има {count} думи. Влезте, за да търсите в целия курс.' },
   'search.more': 'Покажете още',
   'search.unitLocked': '{title}, заключен',
+  'search.whereLevel': 'Ниво',
+  'search.whereUnit': 'Урок:',
+  'search.whereThemes': 'Теми:',
 
   'progress.title': 'Напредък',
   'progress.tiers': 'Вашите думи',

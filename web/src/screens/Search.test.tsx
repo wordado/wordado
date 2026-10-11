@@ -54,6 +54,20 @@ describe('Search', () => {
     expect(within(where).getByRole('link', { name: 'Daily life' }).getAttribute('href')).toBe('/themes/daily-life')
   })
 
+  it('names the parts of that line for a screen reader: the level, the unit, the themes', async () => {
+    const ctx = await setup()
+    renderWith(<Search q="key" />, ctx)
+    const corpus = ctx.client.snapshot.corpus!
+    const entry = [...corpus.entries.values()].find((e) => e.headword === 'key')!
+    const unit = corpus.units.find((u) => u.unitId === entry.unitId)!
+    const themes = entry.themes.map((themeId) => corpus.themes.find((theme) => theme.themeId === themeId)!.name.en)
+    const where = rows().find((r) => r.querySelector('.word-head')!.textContent === 'key')!.querySelector<HTMLElement>('.word-where')!
+    // Read in order, as a screen reader does; the labels and the commas are hidden from sight.
+    expect(where.textContent).toBe(`Level A1Unit: ${unit.title.en}Themes: ${themes.join(', ')}`)
+    const hidden = [...where.querySelectorAll('.visually-hidden')].map((el) => el.textContent)
+    expect(hidden).toEqual(['Level ', 'Unit: ', 'Themes: ', ...themes.slice(1).map(() => ', ')])
+  })
+
   it('names a theme too small to offer without linking to it, and says a locked unit is locked', async () => {
     const ctx = await setup()
     renderWith(<Search q="teacher" />, ctx)

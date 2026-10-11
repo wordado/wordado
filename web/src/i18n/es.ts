@@ -457,6 +457,9 @@ export const es: Messages = {
   'search.sample': { one: 'La muestra tiene {count} palabra. Inicia sesión para buscar en todo el curso.', other: 'La muestra tiene {count} palabras. Inicia sesión para buscar en todo el curso.' },
   'search.more': 'Mostrar más',
   'search.unitLocked': '{title}, sin desbloquear',
+  'search.whereLevel': 'Nivel',
+  'search.whereUnit': 'Unidad:',
+  'search.whereThemes': 'Temas:',
 
   'progress.title': 'Progreso',
   'progress.tiers': 'Tus palabras',
