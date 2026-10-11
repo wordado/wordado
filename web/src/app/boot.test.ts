@@ -407,6 +407,24 @@ describe('Boot with accounts (spec §8.6, §9.1)', () => {
     expect(server.events.size).toBe(1)
   })
 
+  it('hands the account’s owed level question to the app, and forgets it once asked', async () => {
+    const d = disk()
+    const env = testEnv()
+    const server = new FakeServer({ now: env.now })
+    const accounts = accountStorage(memoryStorage())
+    accounts.save({ userId: 'u1', email: 'ana@example.com', askLevel: true })
+    const { boot: b } = boot({ env, accounts, openDriver: d.openDriver, deleteDatabase: d.deleteDatabase, transport: () => server })
+    await b.start()
+    expect(b.store.get()).toMatchObject({ status: 'ready', account: { userId: 'u1', askLevel: true } })
+    b.levelAsked()
+    expect(b.store.get()).toMatchObject({ status: 'ready', account: { userId: 'u1', askLevel: false } })
+    expect(accounts.read()).toEqual({ userId: 'u1', email: 'ana@example.com', askLevel: false })
+    // Nothing owed: nothing written.
+    const save = vi.spyOn(accounts, 'save')
+    b.levelAsked()
+    expect(save).not.toHaveBeenCalled()
+  })
+
   it('finishes a carry-over the last session could not, then deletes the demo (spec §8.6)', async () => {
     const d = disk()
     const env = testEnv()

@@ -180,6 +180,8 @@ export const es: Messages = {
   'setup.level.title': 'Tu nivel de inglés',
   'setup.level.unsure': '¿No lo tienes claro? Una prueba corta de unas veinte palabras encuentra tu nivel.',
   'setup.level.placed': 'La prueba te ha situado en {level}. Todavía puedes cambiarlo.',
+  'levelAsk.title': '¿Por dónde empiezas?',
+  'levelAsk.lead': 'Tu cuenta ya tiene el curso completo, en todos los niveles.',
   'setup.goal.title': 'Un objetivo diario',
   'setup.goal.hint': 'Opcional. Puedes fijarlo o cambiarlo cuando quieras en los ajustes.',
   'setup.language.title': '¿Qué idioma hablas?',

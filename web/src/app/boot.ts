@@ -423,6 +423,16 @@ export class Boot {
     if (state.account) void state.client.sync().catch(() => undefined)
   }
 
+  /** The learner was asked for a level after the demo was carried over, or needs no asking: the record forgets it. */
+  levelAsked(): void {
+    const state = this.store.get()
+    if (state.status !== 'ready' || !state.account?.askLevel) return
+    const account = { ...state.account, askLevel: false }
+    this.deps.accounts?.save(account)
+    this.account = account
+    this.store.set({ ...state, account })
+  }
+
   /**
    * Opens the recorded account's file (or the demo's), after sweeping the
    * files no account owns and finishing any owed carry-over, then the Client
