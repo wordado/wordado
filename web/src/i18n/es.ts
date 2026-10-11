@@ -65,6 +65,10 @@ export const es: Messages = {
   'fixed.field.example': 'la frase de ejemplo',
   'fixed.field.audio': 'la pronunciación',
   'fixed.field.level': 'el nivel',
+  'legal.terms.changed': 'Las condiciones de uso han cambiado.',
+  'legal.terms.link': 'Leer las condiciones',
+  'legal.privacy.changed': 'La política de privacidad ha cambiado.',
+  'legal.privacy.link': 'Leer la política de privacidad',
 
   'sync.syncing': 'Sincronizando…',
   'sync.synced': 'Todo tu progreso está guardado en tu cuenta',

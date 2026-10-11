@@ -65,6 +65,10 @@ export const en = {
   'fixed.field.example': 'example sentence',
   'fixed.field.audio': 'pronunciation',
   'fixed.field.level': 'level',
+  'legal.terms.changed': 'The terms of use have changed.',
+  'legal.terms.link': 'Read the terms',
+  'legal.privacy.changed': 'The privacy policy has changed.',
+  'legal.privacy.link': 'Read the privacy policy',
 
   'sync.syncing': 'Syncing…',
   'sync.synced': 'All progress saved to your account',

@@ -5,7 +5,7 @@ import { testEnv } from '@wordado/client-data/src/testing/testEnv'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { I18nProvider } from '../i18n/i18n'
 import { createStore } from '@wordado/client-data'
-import { fakeAccounts, fakeAudio, fakeCredits, fakeFixNotices, fakeLifecycle, fakePacks, fakeReminders } from '../test/fixtures'
+import { fakeAccounts, fakeAudio, fakeCredits, fakeFixNotices, fakeLegalNotice, fakeLifecycle, fakePacks, fakeReminders } from '../test/fixtures'
 import { chosenL1 } from '../test/disk'
 import { fakeApi } from '../test/fakeApi'
 import type { Backend } from '../storage/protocol'
@@ -43,7 +43,7 @@ async function renderRoot(
   )
   render(
     <I18nProvider storage={{ getItem: () => 'en', setItem: () => undefined }}>
-      <Root boot={boot} services={{ env, audio: fakeAudio(), afterRun: () => undefined, api: fakeApi(), accounts: options.accounts ?? fakeAccounts(), reminders: fakeReminders(), lifecycle: options.lifecycle ?? fakeLifecycle(), credits: fakeCredits(), fixNotices: fakeFixNotices(), packs: options.packs ?? (options.fresh ? samplePacks() : fakePacks()) }} />
+      <Root boot={boot} services={{ env, audio: fakeAudio(), afterRun: () => undefined, api: fakeApi(), accounts: options.accounts ?? fakeAccounts(), reminders: fakeReminders(), lifecycle: options.lifecycle ?? fakeLifecycle(), credits: fakeCredits(), fixNotices: fakeFixNotices(), legalNotice: fakeLegalNotice(), packs: options.packs ?? (options.fresh ? samplePacks() : fakePacks()) }} />
     </I18nProvider>,
   )
   await act(() => boot.start())
@@ -69,7 +69,7 @@ describe('Root', () => {
       drop: () => undefined,
     }))
     const download = createStore<OpeningDownload | null>(null)
-    const services = { env: testEnv(), audio: fakeAudio(), afterRun: () => undefined, api: fakeApi(), accounts: fakeAccounts(), reminders: fakeReminders(), lifecycle: fakeLifecycle(), credits: fakeCredits(), fixNotices: fakeFixNotices(), packs: fakePacks() }
+    const services = { env: testEnv(), audio: fakeAudio(), afterRun: () => undefined, api: fakeApi(), accounts: fakeAccounts(), reminders: fakeReminders(), lifecycle: fakeLifecycle(), credits: fakeCredits(), fixNotices: fakeFixNotices(), legalNotice: fakeLegalNotice(), packs: fakePacks() }
     render(
       <I18nProvider storage={{ getItem: () => 'en', setItem: () => undefined }}>
         <Root boot={boot} download={download} services={services} />
@@ -268,7 +268,7 @@ describe('Root', () => {
     )
     render(
       <I18nProvider storage={{ getItem: () => 'en', setItem: () => undefined }}>
-        <Root boot={boot} services={{ env, audio: fakeAudio(), afterRun: () => undefined, api: fakeApi(), accounts: fakeAccounts(), reminders: fakeReminders(), lifecycle: fakeLifecycle(), credits: fakeCredits(), fixNotices: fakeFixNotices(), packs: fakePacks() }} />
+        <Root boot={boot} services={{ env, audio: fakeAudio(), afterRun: () => undefined, api: fakeApi(), accounts: fakeAccounts(), reminders: fakeReminders(), lifecycle: fakeLifecycle(), credits: fakeCredits(), fixNotices: fakeFixNotices(), legalNotice: fakeLegalNotice(), packs: fakePacks() }} />
       </I18nProvider>,
     )
     await act(() => boot.start())
@@ -292,7 +292,7 @@ describe('Root', () => {
     )
     render(
       <I18nProvider storage={{ getItem: () => 'en', setItem: () => undefined }}>
-        <Root boot={boot} services={{ env, audio: fakeAudio(), afterRun: () => undefined, api: fakeApi(), accounts: fakeAccounts(), reminders: fakeReminders(), lifecycle: fakeLifecycle(), credits: fakeCredits(), fixNotices: fakeFixNotices(), packs: fakePacks() }} />
+        <Root boot={boot} services={{ env, audio: fakeAudio(), afterRun: () => undefined, api: fakeApi(), accounts: fakeAccounts(), reminders: fakeReminders(), lifecycle: fakeLifecycle(), credits: fakeCredits(), fixNotices: fakeFixNotices(), legalNotice: fakeLegalNotice(), packs: fakePacks() }} />
       </I18nProvider>,
     )
     await act(() => boot.start())
