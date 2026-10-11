@@ -12,7 +12,7 @@ import { httpApi, OfflineError, type Api, type Me } from './api'
 import { AccountController, NotReady, SignOutOffline } from './controller'
 import { accountStorage, DEMO_FILE, learnerFile, memoryStorage } from './storage'
 
-const ANA: Me = { userId: 'u1', email: 'ana@example.com', createdAt: 0 }
+const ANA: Me = { userId: 'u1', email: 'ana@example.com', createdAt: 0, newsConsent: 'none' }
 
 /** A booted app on disk over a fake server, and its controller. */
 async function app(options: { env?: TestEnv; server?: FakeServer; transport?: SyncTransport; session?: Me | null; api?: Api } = {}) {

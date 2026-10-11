@@ -190,6 +190,9 @@ export const de: Messages = {
 
   'settings.account': 'Konto',
   'settings.signedInAs': 'Angemeldet als {email}',
+  'news.consent': 'Ich möchte Neuigkeiten über Wordado und seine neuen Funktionen per E-Mail erhalten. Ich kann sie jederzeit abbestellen.',
+  'settings.newsHint': 'Mitteilungen zum Dienst selbst, etwa über geänderte Nutzungsbedingungen, kommen in jedem Fall.',
+  'settings.newsOffline': 'Stell eine Verbindung her, um das zu ändern.',
   'settings.export': 'Deine Daten herunterladen (JSON)',
   'settings.exportOffline': 'Stell eine Verbindung her, um deine Daten herunterzuladen.',
   'settings.exporting': 'Deine Daten werden vorbereitet …',

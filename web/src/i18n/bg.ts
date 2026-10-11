@@ -181,6 +181,9 @@ export const bg: Messages = {
 
   'settings.account': 'Профил',
   'settings.signedInAs': 'Влезли сте като {email}',
+  'news.consent': 'Искам да получавам по имейл новини за Wordado и новите му функции. Мога да се откажа по всяко време.',
+  'settings.newsHint': 'Съобщенията за самата услуга, например при промяна на условията, се изпращат във всички случаи.',
+  'settings.newsOffline': 'Свържете се, за да промените това.',
   'settings.export': 'Изтеглете данните си (JSON)',
   'settings.exportOffline': 'Свържете се, за да изтеглите данните си.',
   'settings.exporting': 'Данните ви се подготвят…',

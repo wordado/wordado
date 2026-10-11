@@ -186,6 +186,10 @@ export const en = {
 
   'settings.account': 'Account',
   'settings.signedInAs': 'Signed in as {email}',
+  // The wording a learner consents to (#186). Changing what it means, in any language, needs a new NEWS_CONSENT_WORDING in core.
+  'news.consent': 'I would like to receive news about Wordado and its new features by email. I can opt out at any time.',
+  'settings.newsHint': 'Notices about the service itself, such as a change to the terms, are sent either way.',
+  'settings.newsOffline': 'Connect to change this.',
   'settings.export': 'Download your data (JSON)',
   'settings.exportOffline': 'Connect to download your data.',
   'settings.exporting': 'Preparing your data…',

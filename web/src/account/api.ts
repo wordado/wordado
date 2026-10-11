@@ -1,4 +1,4 @@
-import type { FeedbackInput } from '@wordado/core'
+import type { FeedbackInput, NewsConsent } from '@wordado/core'
 import type { Fetch } from '../content/packs'
 import type { Locale } from '../i18n/i18n'
 import { expectedUserHeader } from './transport'
@@ -27,6 +27,8 @@ export interface Me {
   readonly userId: string
   readonly email: string
   readonly createdAt: number
+  /** News by email (#186): whether the learner said yes, took it back, or was never asked. */
+  readonly newsConsent: NewsConsent
 }
 
 /** `PUT /v1/push/subscription` (plan 5, spec §8.11). */
@@ -55,13 +57,16 @@ export interface FeedbackBody extends FeedbackInput {
 /** Everything the app asks of the server beside sync (spec §8.6, §8.11, §8.12, §11). */
 export interface Api {
   sendCode(email: string): Promise<void>
-  verifyCode(email: string, code: string): Promise<void>
+  /** `newsConsent` is the wording of the news box when the learner ticked it (#186); the server records it only where no choice is recorded yet. */
+  verifyCode(email: string, code: string, newsConsent?: string | null): Promise<void>
   /** The signed-in learner, or null without a valid session. */
   me(): Promise<Me | null>
   /** The request's country as the host reads it, to pre-fill the age gate; null when unknown. */
   requestCountry(): Promise<string | null>
   signOut(): Promise<void>
   deleteAccount(): Promise<void>
+  /** The news switch (#186), for the recorded learner only: `text` is the wording on it, recorded when the consent is given. Answers what the server now holds. */
+  setNewsConsent(consent: boolean, text: string): Promise<NewsConsent>
   /** The data export, for the recorded learner only (409 when the session is someone else's). */
   exportData(): Promise<ExportFile>
   /** The VAPID key, or null when this server sends no reminders. */
@@ -80,8 +85,8 @@ const codeOf = (body: unknown): string | null => {
 
 /**
  * The app's calls to its own origin: `/api/auth` (Better Auth) and `/v1` (plan 5), with the session cookie.
- * `expectedUser` names the recorded learner on the push-subscription calls, the account deletion and
- * the export, so a session that is someone else's is refused (409) rather than acted on; on feedback,
+ * `expectedUser` names the recorded learner on the push-subscription calls, the account deletion, the news
+ * switch and the export, so a session that is someone else's is refused (409) rather than acted on; on feedback,
  * so such a session's account is not attached to it.
  */
 export function httpApi(fetchFn: Fetch = (input, init) => fetch(input, init), expectedUser: () => string | null = () => null): Api {
@@ -129,8 +134,8 @@ export function httpApi(fetchFn: Fetch = (input, init) => fetch(input, init), ex
     sendCode: async (email) => {
       await call('POST', '/api/auth/email-otp/send-verification-otp', { email, type: 'sign-in' })
     },
-    verifyCode: async (email, code) => {
-      await call('POST', '/api/auth/sign-in/email-otp', { email, otp: code })
+    verifyCode: async (email, code, newsConsent = null) => {
+      await call('POST', '/api/auth/sign-in/email-otp', { email, otp: code, ...(newsConsent === null ? {} : { newsConsent }) })
     },
     me: () => unauthorizedAsNull(call('GET', '/v1/me') as Promise<Me>),
     requestCountry: async () => {
@@ -142,6 +147,10 @@ export function httpApi(fetchFn: Fetch = (input, init) => fetch(input, init), ex
     },
     deleteAccount: async () => {
       await call('DELETE', '/v1/account', { confirm: true }, expectedUserHeader(expectedUser()))
+    },
+    setNewsConsent: async (consent, text) => {
+      const body = consent ? { consent, text } : { consent }
+      return ((await call('PUT', '/v1/account/news-consent', body, expectedUserHeader(expectedUser()))) as { newsConsent: NewsConsent }).newsConsent
     },
     exportData: async () => {
       const { response, text } = await request('GET', '/v1/export', undefined, expectedUserHeader(expectedUser()))

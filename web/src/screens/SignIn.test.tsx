@@ -263,6 +263,48 @@ describe('SignIn: a code by email (spec §8.6)', () => {
   })
 })
 
+describe('SignIn: news by email (#186)', () => {
+  const NEWS = 'I would like to receive news about Wordado and its new features by email. I can opt out at any time.'
+
+  async function signInWithCode() {
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'ana@example.com' } })
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Email me a code' })))
+    fireEvent.change(screen.getByLabelText('Code'), { target: { value: '123456' } })
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Sign in' })))
+  }
+
+  it('asks under the age confirmation, unticked, and the account does not wait for it', async () => {
+    const { api, accounts } = await render()
+    const news = screen.getByRole('checkbox', { name: NEWS }) as HTMLInputElement
+    expect(news.checked).toBe(false)
+    const boxes = screen.getAllByRole('checkbox')
+    expect(boxes.indexOf(news)).toBe(boxes.indexOf(screen.getByRole('checkbox', { name: /^I’m \d+ or older$/ })) + 1)
+    await passGate('BG')
+    await signInWithCode()
+    expect(api.calls).toContain('verifyCode ana@example.com 123456')
+    expect(accounts.calls).toEqual(['completeSignIn'])
+  })
+
+  it('sends the wording that was ticked, in the language it was read in, with the code', async () => {
+    const { api } = await render()
+    fireEvent.click(screen.getByRole('checkbox', { name: NEWS }))
+    await passGate('BG')
+    await signInWithCode()
+    expect(api.calls).toContain('verifyCode ana@example.com 123456 news-1.en')
+  })
+
+  it('does not untick the box when the country changes, and sends nothing once the learner unticks it', async () => {
+    const { api } = await render()
+    fireEvent.click(screen.getByRole('checkbox', { name: NEWS }))
+    fireEvent.change(screen.getByLabelText('Country where you live'), { target: { value: 'DE' } })
+    expect((screen.getByRole('checkbox', { name: NEWS }) as HTMLInputElement).checked).toBe(true)
+    fireEvent.click(screen.getByRole('checkbox', { name: NEWS }))
+    await passGate('DE')
+    await signInWithCode()
+    expect(api.calls).toContain('verifyCode ana@example.com 123456')
+  })
+})
+
 describe('SignIn: the privacy policy (spec §11)', () => {
   it('links to the policy where the email address is asked for', async () => {
     await render()

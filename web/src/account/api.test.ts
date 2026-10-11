@@ -39,13 +39,33 @@ describe('httpApi (plan 5 contract)', () => {
     expect(err).toMatchObject({ status: 400, code: 'INVALID_OTP' })
   })
 
+  it('sends the wording of a ticked news box with the code, and nothing of it when the box was left alone (#186)', async () => {
+    const { fetchFn, calls } = fakeFetch({ 'POST /api/auth/sign-in/email-otp': [200, { token: 't' }] })
+    await httpApi(fetchFn).verifyCode('ana@example.com', '123456')
+    await httpApi(fetchFn).verifyCode('ana@example.com', '123456', 'news-1.bg')
+    expect(bodyOf(calls[0]!)).toEqual({ email: 'ana@example.com', otp: '123456' })
+    expect(bodyOf(calls[1]!)).toEqual({ email: 'ana@example.com', otp: '123456', newsConsent: 'news-1.bg' })
+  })
+
+  it('gives and withdraws the consent to news for the recorded learner, and reads back what the server holds (#186)', async () => {
+    const { fetchFn, calls } = fakeFetch({ 'PUT /v1/account/news-consent': [200, { newsConsent: 'withdrawn' }] })
+    const api = httpApi(fetchFn, () => 'u1')
+    expect(await api.setNewsConsent(true, 'news-1.en')).toBe('withdrawn')
+    expect(await api.setNewsConsent(false, 'news-1.en')).toBe('withdrawn')
+    expect(bodyOf(calls[0]!)).toEqual({ consent: true, text: 'news-1.en' })
+    expect(bodyOf(calls[1]!)).toEqual({ consent: false })
+    expect(new Headers(calls[0]!.init?.headers).get('x-wordado-user')).toBe('u1')
+    const refused = fakeFetch({ 'PUT /v1/account/news-consent': [409, { error: 'wrong_user' }] })
+    await expect(httpApi(refused.fetchFn, () => 'u1').setNewsConsent(false, 'news-1.en')).rejects.toMatchObject({ status: 409, code: 'wrong_user' })
+  })
+
   it('reports no answer at all as OfflineError', async () => {
     const { fetchFn } = fakeFetch({})
     await expect(httpApi(fetchFn).sendCode('a@b.c')).rejects.toBeInstanceOf(OfflineError)
   })
 
   it('reads the signed-in learner, and null without a session', async () => {
-    const me = { userId: 'u1', email: 'ana@example.com', createdAt: 1 }
+    const me = { userId: 'u1', email: 'ana@example.com', createdAt: 1, newsConsent: 'none' }
     expect(await httpApi(fakeFetch({ 'GET /v1/me': [200, me] }).fetchFn).me()).toEqual(me)
     expect(await httpApi(fakeFetch({ 'GET /v1/me': [401, { error: 'unauthorized' }] }).fetchFn).me()).toBeNull()
   })
