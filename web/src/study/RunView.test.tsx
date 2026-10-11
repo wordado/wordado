@@ -461,6 +461,22 @@ describe('RunView: the end of a run', () => {
     expect(screen.getByText('New unit open: Food and drink')).toBeTruthy()
   })
 
+  it('puts a translation’s explanation on a line of its own under it on a flashcard’s answer, without brackets', async () => {
+    const audio = fakeAudio()
+    const ctx = await setup({ audio })
+    // The first word of the session, given an explanation the sample's words do not have.
+    const first = ctx.client.entry(ctx.client.snapshot.plan!.newWords[0]!) as { sense: string }
+    first.sense = 'за действие'
+    const run = await StudyRun.start(ctx.client, ctx.env, { kind: 'session', mode: 'flashcard', cachedClips: () => audio.cachedClips(), online: () => audio.streamable() })
+    renderWith(<RunView run={run} kind="session" />, ctx)
+    ctx.env.advance(ITEM_SETTLE_MS)
+    await press(' ')
+    const answer = document.querySelector('.revealed .prompt-text .translation')!
+    expect(answer.classList.contains('is-stacked')).toBe(true)
+    expect(answer.querySelector('.sense')!.textContent).toBe('за действие')
+    expect(answer.textContent).not.toContain('(')
+  })
+
   it('stops on request and says what was done', async () => {
     const { run, env } = await start('flashcard')
     env.advance(ITEM_SETTLE_MS)
