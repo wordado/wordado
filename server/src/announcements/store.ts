@@ -141,15 +141,18 @@ const quoted = (values: readonly string[]): string => values.map((v) => `'${v}'`
  * device and does not send it as such, so it is read from what the app did send, the most direct first: the
  * language the account's newest device asks its reminders in (the interface language at that moment); the
  * language it read the question about news in (`news-1.bg`, 0009); its native language from the synced settings,
- * which the interface speaks unless the learner chose English. An account that left none of these gets English.
- * The lists are this module's own constants, never a request's text.
+ * which the interface speaks unless the learner chose English. Null for an account that left none of these: the
+ * counts by language (account/stats.ts) show it as not known. The lists are this module's own constants, never a
+ * request's text.
  */
-const LANGUAGE_OF = `coalesce(
+export const KNOWN_LANGUAGE_OF = `coalesce(
   (select p.language from push_subscription p where p.user_id = u.id and p.language in (${quoted(ANNOUNCEMENT_LANGUAGES)}) order by p.created_at desc, p.endpoint limit 1),
   case when right(u.news_consent_text, 3) in (${quoted(ANNOUNCEMENT_LANGUAGES.map((l) => `.${l}`))}) then right(u.news_consent_text, 2) end,
   (select s.fields->>'l1' from document s where s.user_id = u.id and s.type = '${DOCUMENT_TYPES.settings}' and s.key = '' and not s.deleted
-     and s.fields->>'l1' in (${quoted(SUPPORTED_L1S.filter((l) => (ANNOUNCEMENT_LANGUAGES as readonly string[]).includes(l)))})),
-  '${ANNOUNCEMENT_FALLBACK_LANGUAGE}')`
+     and s.fields->>'l1' in (${quoted(SUPPORTED_L1S.filter((l) => (ANNOUNCEMENT_LANGUAGES as readonly string[]).includes(l)))})))`
+
+/** The language an account `u` is written to in: its own (above), or English when it left no sign of one. */
+const LANGUAGE_OF = `coalesce(${KNOWN_LANGUAGE_OF}, '${ANNOUNCEMENT_FALLBACK_LANGUAGE}')`
 
 /** Whether an account `u` gets an announcement of kind `$1`: every account a service notice, only one whose consent stands the news. */
 const RECIPIENT = `($1 = 'service' or u.news_consent = 'given')`

@@ -302,10 +302,34 @@ export type FeedbackList =
   | { readonly connected: false }
   | { readonly connected: true; readonly items: readonly FeedbackView[]; readonly read: number; readonly nextBefore: number | null }
 
+/** What the lookup says of how an account is used (#209): its study, its consent to news, its reminders, its
+ * devices, and when the sweep could take it. Times are epoch milliseconds. */
+export interface AccountDetails {
+  /** When its last answer was given; null when it never studied. */
+  readonly lastStudiedAt: number | null
+  /** On how many of the last 30 UTC days, today among them, it gave at least one answer. */
+  readonly daysStudied30: number
+  /** What it said to news by email, when, and in which language it read the question; the last two null when it
+   * said nothing (the language also when the server does not know it). */
+  readonly newsConsent: 'none' | 'given' | 'withdrawn'
+  readonly newsConsentAt: number | null
+  readonly newsConsentLanguage: AnnouncementLanguage | null
+  /** Its reminders, the newest device first: the minute of the day, the device's offset from UTC in minutes, and
+   * whether the app stopped sending after reminders were ignored. Empty: reminders are off. */
+  readonly reminders: readonly { readonly minute: number; readonly tzOffsetMin: number; readonly paused: boolean }[]
+  /** The devices it has synced answers from. */
+  readonly devices: number
+  /** The earliest moment the sweep of inactive accounts could take it; null when it has no date of a last sign-in. */
+  readonly sweepNotBefore: number | null
+}
+
 /** What the Accounts tab is told of the account an address names (#187): that there is none, or when it was made
- * and last signed in (epoch milliseconds; null when no sign-in was ever recorded). Nothing else of an account
- * leaves the learner app's server. */
-export type AccountFound = { readonly found: false } | { readonly found: true; readonly createdAt: number; readonly lastSignInAt: number | null }
+ * and last signed in (epoch milliseconds; null when no sign-in was ever recorded) and how it is used (#209).
+ * `details` is null when the learner app's server is from before it said so. Nothing else of an account leaves
+ * that server. */
+export type AccountFound =
+  | { readonly found: false }
+  | { readonly found: true; readonly createdAt: number; readonly lastSignInAt: number | null; readonly details: AccountDetails | null }
 
 /** The sweep of inactive accounts, as the learner app's server counts it (#187): numbers and times only. */
 export interface AccountSweep {
@@ -347,6 +371,36 @@ export interface AccountStats {
 
 /** `GET /api/admin/accounts/stats`. Not connected: the token or the server's address is not set. */
 export type AccountStatsView = { readonly connected: false } | { readonly connected: true; readonly stats: AccountStats }
+
+/** What is behind the counts over time (#209): the accounts by the week they were made and by the day they
+ * studied. Weeks (Monday first) and days are UTC ones; numbers only. */
+export interface AccountSeries {
+  readonly readAt: number
+  /** The accounts there are: those made before the first week are these less the weeks. */
+  readonly accounts: number
+  /** The accounts that exist now by the week they were made, oldest first; the last week began at `weekStart`
+   * (epoch milliseconds) and is not over. */
+  readonly weekStart: number
+  readonly madeByWeek: readonly number[]
+  /** The accounts with at least one answer on each day, oldest first; the last day began at `dayStart` and is not over. */
+  readonly dayStart: number
+  readonly studiedByDay: readonly number[]
+}
+
+/** `GET /api/admin/accounts/series`. Not connected: the token or the server's address is not set. */
+export type AccountSeriesView = { readonly connected: false } | { readonly connected: true; readonly series: AccountSeries }
+
+/** What is behind the counts by language (#209); a language is null where the server does not know it. */
+export interface AccountSplits {
+  readonly readAt: number
+  /** The accounts by what they said to news, by the language an announcement would be written to them in. */
+  readonly news: readonly { readonly language: AnnouncementLanguage | null; readonly given: number; readonly withdrawn: number; readonly none: number }[]
+  /** The accounts with reminders on, by the language they ask them in: those still sent to, and those paused. */
+  readonly reminders: readonly { readonly language: AnnouncementLanguage | null; readonly sending: number; readonly paused: number }[]
+}
+
+/** `GET /api/admin/accounts/splits`. Not connected: the token or the server's address is not set. */
+export type AccountSplitsView = { readonly connected: false } | { readonly connected: true; readonly splits: AccountSplits }
 
 export type AnnouncementStatus = 'draft' | 'sending' | 'stopped' | 'sent'
 /** Why the last run of a send sent nothing or stopped early: the day's own allowance of announcement mails is used,

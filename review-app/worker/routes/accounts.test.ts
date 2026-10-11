@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import type { AccountStats, AccountStatsView, AccountSweepView } from '../../shared/hosted'
+import type { AccountDetails, AccountSeries, AccountSplits, AccountStats, AccountStatsView, AccountSweepView } from '../../shared/hosted'
 import { createApp } from '../app'
 import type { Env } from '../bindings'
 import { insertReviewer } from '../db'
@@ -12,6 +12,18 @@ const WRITE_TOKEN = 'w'.repeat(40)
 const SERVER = 'https://app.test'
 const CREATED = Date.parse('2026-01-05T09:00:00Z')
 const SIGNED_IN = Date.parse('2026-09-30T18:00:00Z')
+
+const DETAILS: AccountDetails = {
+  lastStudiedAt: SIGNED_IN, daysStudied30: 19, newsConsent: 'given', newsConsentAt: CREATED, newsConsentLanguage: 'bg',
+  reminders: [{ minute: 1170, tzOffsetMin: 180, paused: false }, { minute: 480, tzOffsetMin: -300, paused: true }], devices: 2, sweepNotBefore: SIGNED_IN + 731 * 86_400_000,
+}
+const UNUSED: AccountDetails = { lastStudiedAt: null, daysStudied30: 0, newsConsent: 'none', newsConsentAt: null, newsConsentLanguage: null, reminders: [], devices: 0, sweepNotBefore: null }
+const SERIES: AccountSeries = { readAt: SIGNED_IN, accounts: 120, weekStart: Date.parse('2026-09-28T00:00:00Z'), madeByWeek: [3, 0, 5], dayStart: Date.parse('2026-09-30T00:00:00Z'), studiedByDay: [7, 9, 0, 4] }
+const SPLITS: AccountSplits = {
+  readAt: SIGNED_IN,
+  news: [{ language: 'bg', given: 6, withdrawn: 1, none: 40 }, { language: null, given: 0, withdrawn: 0, none: 8 }],
+  reminders: [{ language: 'bg', sending: 5, paused: 2 }],
+}
 
 let base: Env
 let env: Env
@@ -34,8 +46,10 @@ beforeEach(async () => {
   env = { ...base, LEARNER_APP_URL: `${SERVER}/`, FEEDBACK_READ_TOKEN: READ_TOKEN, ADMIN_WRITE_TOKEN: WRITE_TOKEN }
   server = new FakeLearnerApp(READ_TOKEN)
   server.writeToken = WRITE_TOKEN
-  server.accounts.set('ana@example.com', { createdAt: CREATED, lastSignInAt: SIGNED_IN })
-  server.accounts.set('ben@example.com', { createdAt: CREATED, lastSignInAt: null })
+  server.accounts.set('ana@example.com', { createdAt: CREATED, lastSignInAt: SIGNED_IN, details: DETAILS })
+  server.accounts.set('ben@example.com', { createdAt: CREATED, lastSignInAt: null, details: UNUSED })
+  server.series = SERIES
+  server.splits = SPLITS
   logged = []
   calls = []
   await insertReviewer(env.DB, { email: 'ivan@example.com', name: 'Ivan', languages: ['bg'], role: 'reviewer', invitedAt: 't', inviteSentAt: null, disabledAt: null })
@@ -63,20 +77,41 @@ describe('the Accounts tab’s routes (#187)', () => {
   it('are for admins only', async () => {
     expect((await as('ivan@example.com', 'GET', '/api/admin/accounts/sweep')).status).toBe(403)
     expect((await as('ivan@example.com', 'GET', '/api/admin/accounts/stats')).status).toBe(403)
+    expect((await as('ivan@example.com', 'GET', '/api/admin/accounts/series')).status).toBe(403)
+    expect((await as('ivan@example.com', 'GET', '/api/admin/accounts/splits')).status).toBe(403)
     expect((await as('ivan@example.com', 'POST', '/api/admin/accounts/lookup', { email: 'ana@example.com' })).status).toBe(403)
     expect((await as('ivan@example.com', 'POST', '/api/admin/accounts/delete', { email: 'ana@example.com', confirm: true })).status).toBe(403)
     expect(server.requests).toEqual([])
     expect(server.accounts.has('ana@example.com')).toBe(true)
   })
 
-  it('looks an account up by its address: when it was made and last signed in, and nothing else', async () => {
-    expect(await answer(await admin('POST', '/api/admin/accounts/lookup', { email: ' Ana@Example.com ' }))).toEqual({ status: 200, body: { found: true, createdAt: CREATED, lastSignInAt: SIGNED_IN } })
-    expect(await answer(await admin('POST', '/api/admin/accounts/lookup', { email: 'ben@example.com' }))).toEqual({ status: 200, body: { found: true, createdAt: CREATED, lastSignInAt: null } })
+  it('looks an account up by its address: when it was made and last signed in, how it is used, and nothing else', async () => {
+    expect(await answer(await admin('POST', '/api/admin/accounts/lookup', { email: ' Ana@Example.com ' }))).toEqual({ status: 200, body: { found: true, createdAt: CREATED, lastSignInAt: SIGNED_IN, details: DETAILS } })
+    expect(await answer(await admin('POST', '/api/admin/accounts/lookup', { email: 'ben@example.com' }))).toEqual({ status: 200, body: { found: true, createdAt: CREATED, lastSignInAt: null, details: UNUSED } })
     expect(await answer(await admin('POST', '/api/admin/accounts/lookup', { email: 'nobody@example.com' }))).toEqual({ status: 200, body: { found: false } })
     // Anything more the server might say of an account is not passed on.
-    const chatty = createApp(testDeps(env, { fetch: async () => new Response(JSON.stringify({ found: true, createdAt: CREATED, lastSignInAt: null, id: 'user-1', email: 'ana@example.com' }), { status: 200 }) }))
+    const said = { found: true, createdAt: CREATED, lastSignInAt: null, id: 'user-1', email: 'ana@example.com', details: { ...DETAILS, id: 'user-1', endpoints: ['https://push.example.com/a'], reminders: [{ minute: 60, tzOffsetMin: 0, paused: false, endpoint: 'https://push.example.com/a' }] } }
+    const chatty = createApp(testDeps(env, { fetch: async () => new Response(JSON.stringify(said), { status: 200 }) }))
     const res = await chatty.request('/api/admin/accounts/lookup', { method: 'POST', headers: { 'cf-access-jwt-assertion': await keys.token('admin@example.com', env), origin: env.APP_ORIGIN, 'content-type': 'application/json' }, body: JSON.stringify({ email: 'ana@example.com' }) })
-    expect(await res.json()).toEqual({ found: true, createdAt: CREATED, lastSignInAt: null })
+    expect(await res.json()).toEqual({ found: true, createdAt: CREATED, lastSignInAt: null, details: { ...DETAILS, reminders: [{ minute: 60, tzOffsetMin: 0, paused: false }] } })
+  })
+
+  it('passes on the two dates of an account from a server that says no more, and refuses details that are not details (#209)', async () => {
+    // A server from before #209: the lookup works as it did, and the page is told there is no more.
+    server.accounts.set('ana@example.com', { createdAt: CREATED, lastSignInAt: SIGNED_IN })
+    expect(await answer(await admin('POST', '/api/admin/accounts/lookup', { email: 'ana@example.com' }))).toEqual({ status: 200, body: { found: true, createdAt: CREATED, lastSignInAt: SIGNED_IN, details: null } })
+    expect(logged).toEqual([])
+    const wrong: unknown[] = [
+      null, 'none', [],
+      { ...DETAILS, daysStudied30: undefined }, { ...DETAILS, lastStudiedAt: 'yesterday' }, { ...DETAILS, newsConsent: 'maybe' }, { ...DETAILS, newsConsentLanguage: 'xx' },
+      { ...DETAILS, devices: -1 }, { ...DETAILS, reminders: {} }, { ...DETAILS, reminders: [{ minute: 1440, tzOffsetMin: 0, paused: false }] },
+      { ...DETAILS, reminders: [{ minute: 60, tzOffsetMin: 900, paused: false }] }, { ...DETAILS, reminders: [{ minute: 60, tzOffsetMin: 0 }] },
+      { ...DETAILS, reminders: Array.from({ length: 11 }, () => ({ minute: 60, tzOffsetMin: 0, paused: false })) },
+    ]
+    for (const details of wrong) {
+      server.failure = { status: 200, body: JSON.stringify({ found: true, createdAt: CREATED, lastSignInAt: null, details }) }
+      expect(await answer(await admin('POST', '/api/admin/accounts/lookup', { email: 'ana@example.com' }))).toEqual({ status: 502, body: { message: 'The app’s server gave an answer the review app does not understand.' } })
+    }
   })
 
   it('sends the address in the body and the token in a header, to the server it was made for and with the token that changes things', async () => {
@@ -137,11 +172,48 @@ describe('the Accounts tab’s routes (#187)', () => {
     expect(await answer(await admin('GET', '/api/admin/accounts/stats'))).toEqual({ status: 502, body: { message: 'The app’s server could not be reached.' } })
   })
 
+  it('gives the accounts by week and by day and by language, and nothing more the server might say (#209)', async () => {
+    expect(await answer(await admin('GET', '/api/admin/accounts/series'))).toEqual({ status: 200, body: { connected: true, series: SERIES } })
+    expect(await answer(await admin('GET', '/api/admin/accounts/splits'))).toEqual({ status: 200, body: { connected: true, splits: SPLITS } })
+    expect(server.requests).toEqual(['GET /v1/admin/accounts/series', 'GET /v1/admin/accounts/splits'])
+    expect(new Headers(calls[0]!.init.headers).get('authorization')).toBe(`Bearer ${WRITE_TOKEN}`)
+    expect(logged).toEqual([])
+    server.failure = { status: 200, body: JSON.stringify({ ...SERIES, newest: 'ana@example.com', ids: ['user-1'] }) }
+    expect(await answer(await admin('GET', '/api/admin/accounts/series'))).toEqual({ status: 200, body: { connected: true, series: SERIES } })
+    server.failure = { status: 200, body: JSON.stringify({ ...SPLITS, news: SPLITS.news.map((row) => ({ ...row, ids: ['user-1'] })), newest: 'ana@example.com' }) }
+    expect(await answer(await admin('GET', '/api/admin/accounts/splits'))).toEqual({ status: 200, body: { connected: true, splits: SPLITS } })
+    // A series or a split that is not one is an answer it does not understand.
+    const unfit = { status: 502, body: { message: 'The app’s server gave an answer the review app does not understand.' } }
+    for (const wrong of [{ ...SERIES, madeByWeek: undefined }, { ...SERIES, madeByWeek: [] }, { ...SERIES, studiedByDay: [1, -1] }, { ...SERIES, studiedByDay: [1, 'ana@example.com'] }, { ...SERIES, studiedByDay: Array.from({ length: 401 }, () => 0) }, { ...SERIES, weekStart: null }]) {
+      server.failure = { status: 200, body: JSON.stringify(wrong) }
+      expect(await answer(await admin('GET', '/api/admin/accounts/series'))).toEqual(unfit)
+    }
+    for (const wrong of [{ ...SPLITS, news: undefined }, { ...SPLITS, news: [{ language: 'xx', given: 1, withdrawn: 0, none: 0 }] }, { ...SPLITS, news: [{ language: 'bg', given: 1, withdrawn: 0 }] }, { ...SPLITS, reminders: [{ language: 'bg', sending: '5', paused: 2 }] }, { ...SPLITS, reminders: ['bg'] }]) {
+      server.failure = { status: 200, body: JSON.stringify(wrong) }
+      expect(await answer(await admin('GET', '/api/admin/accounts/splits'))).toEqual(unfit)
+    }
+  })
+
+  it('says so when the server is from before it had the series and the splits; the counts and the lookup answer as before (#209)', async () => {
+    server.series = null
+    server.splits = null
+    server.accounts.set('ana@example.com', { createdAt: CREATED, lastSignInAt: SIGNED_IN })
+    const older = { status: 502, body: { message: 'The app’s server answered 404. It may be from before it had these numbers: deploy it too.' } }
+    expect(await answer(await admin('GET', '/api/admin/accounts/series'))).toEqual(older)
+    expect(await answer(await admin('GET', '/api/admin/accounts/splits'))).toEqual(older)
+    expect((await answer(await admin('GET', '/api/admin/accounts/stats'))).body).toMatchObject({ connected: true })
+    expect((await answer(await admin('GET', '/api/admin/accounts/sweep'))).body).toMatchObject({ connected: true })
+    expect(await answer(await admin('POST', '/api/admin/accounts/lookup', { email: 'ana@example.com' }))).toEqual({ status: 200, body: { found: true, createdAt: CREATED, lastSignInAt: SIGNED_IN, details: null } })
+    expect(await answer(await admin('POST', '/api/admin/accounts/delete', { email: 'ana@example.com', confirm: true }))).toEqual({ status: 200, body: { deleted: true } })
+  })
+
   it('says it is not connected while the address or the token is not set, and asks the server nothing', async () => {
     for (const missing of [{ ADMIN_WRITE_TOKEN: '' }, { ADMIN_WRITE_TOKEN: '  ' }, { LEARNER_APP_URL: '' }] as Partial<Env>[]) {
       env = { ...env, LEARNER_APP_URL: SERVER, ADMIN_WRITE_TOKEN: WRITE_TOKEN, ...missing }
       expect(await answer(await admin('GET', '/api/admin/accounts/sweep'))).toEqual({ status: 200, body: { connected: false } })
       expect(await answer(await admin('GET', '/api/admin/accounts/stats'))).toEqual({ status: 200, body: { connected: false } })
+      expect(await answer(await admin('GET', '/api/admin/accounts/series'))).toEqual({ status: 200, body: { connected: false } })
+      expect(await answer(await admin('GET', '/api/admin/accounts/splits'))).toEqual({ status: 200, body: { connected: false } })
       expect((await admin('POST', '/api/admin/accounts/lookup', { email: 'ana@example.com' })).status).toBe(503)
       expect((await admin('POST', '/api/admin/accounts/delete', { email: 'ana@example.com', confirm: true })).status).toBe(503)
     }

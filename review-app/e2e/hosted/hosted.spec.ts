@@ -804,6 +804,50 @@ test('@phone an admin reads the week’s summary and opens a draft on a phone', 
 /** The accounts the fake learner app server still has. */
 const accountsLeft = async () => ((await (await fetch('http://127.0.0.1:4183/_state')).json()) as { accounts: string[] }).accounts
 
+test('an admin opens what is behind the counts of accounts: a chart over time with its numbers as text, and a split by language (#209)', async ({ browser }) => {
+  const page = await as(browser, 'admin')
+  await page.goto('/#accounts')
+  const panel = page.getByRole('tabpanel', { name: 'Accounts' })
+  const counts = panel.getByRole('list', { name: 'Accounts and their use' })
+  // One count is pressed from the start, and the panel under the counts is about it.
+  await expect(counts.getByRole('button', { pressed: true })).toHaveText(/^75\s*studied in the last 30 days$/)
+  const studied = panel.getByRole('region', { name: 'Accounts that studied, per day' })
+  await expect(studied.getByRole('img')).toHaveAccessibleName(/^Accounts that studied, per day, 90 days, .+: between 14 and 43, 14 at the end\./)
+  // The numbers are text too, for whoever opens them: a row a day.
+  await studied.getByText('The numbers').click()
+  await expect(studied.getByRole('row')).toHaveCount(91)
+  await expect(studied.getByRole('row').last()).toHaveText(/14$/)
+  await studied.getByRole('button', { name: '30 days' }).click()
+  await expect(studied.getByRole('row')).toHaveCount(31)
+  // Pointing at the chart reads one day.
+  await studied.getByRole('img').hover({ position: { x: 300, y: 80 } })
+  await expect(studied.locator('.chart-at text')).toHaveText(/^.+: \d+$/)
+
+  // Another count: it is the pressed one now, and the panel is its chart, with its own periods.
+  await counts.getByRole('button', { name: /made in the last 7 days$/ }).click()
+  await expect(counts.getByRole('button', { pressed: true })).toHaveText(/^4\s*made in the last 7 days$/)
+  const made = panel.getByRole('region', { name: 'New accounts per week' })
+  await expect(made.getByRole('button', { name: '12 weeks' })).toHaveAttribute('aria-pressed', 'true')
+  await expect(made.locator('.chart-bar')).toHaveCount(12)
+  await made.getByRole('button', { name: '26 weeks' }).click()
+  await expect(made.locator('.chart-bar')).toHaveCount(26)
+  await counts.getByRole('button', { name: /accounts$/ }).first().click()
+  await expect(panel.getByRole('region', { name: 'Accounts in total' }).getByRole('img')).toHaveAccessibleName(/1,204 at the end/)
+
+  // By language, in words: the largest first, the accounts whose language is not known last.
+  await counts.getByRole('button', { name: /agreed to news$/ }).click()
+  const news = panel.getByRole('region', { name: 'News by email, by language' }).getByRole('listitem')
+  await expect(news).toHaveText([/^Bulgarian\s*673\s*31 agreed\s*2 withdrew\s*640 said nothing$/, /^English\s*211/, /^German\s*126/, /^Spanish\s*102/, /^Not known\s*92\s*0 agreed\s*0 withdrew\s*92 said nothing$/])
+  await counts.getByRole('button', { name: /with reminders on$/ }).click()
+  const reminders = panel.getByRole('region', { name: 'Reminders, by language' }).getByRole('listitem')
+  await expect(reminders.first()).toHaveText(/^Bulgarian\s*14\s*11 sending\s*3 paused$/)
+  await expect(reminders).toHaveCount(4)
+  // The series and the splits were each asked for once, and nothing in what was asked names an account.
+  const asked = ((await (await fetch('http://127.0.0.1:4183/_state')).json()) as { requests: string[] }).requests
+  expect(asked.filter((r) => r === 'GET /v1/admin/accounts/series').length).toBeGreaterThanOrEqual(1)
+  expect(asked.filter((r) => r.startsWith('GET /v1/admin/accounts/')).every((r) => !r.includes('?') && !r.includes('@'))).toBe(true)
+})
+
 test('an admin reads the counts of accounts and the sweep’s, looks an account up and deletes it after typing its address again (#187, #206)', async ({ browser }) => {
   const page = await as(browser, 'admin')
   await page.goto('/#accounts')
@@ -831,13 +875,21 @@ test('an admin reads the counts of accounts and the sweep’s, looks an account 
   await panel.getByRole('button', { name: 'Look up' }).click()
   await expect(panel.getByText('No account has the address nobody@example.com.')).toBeVisible()
 
-  // The account: when it was made and last signed in, and nothing else.
+  // The account: when it was made and last signed in, and how it is used (#209).
   await panel.getByLabel('Email address').fill('Leaving@example.com')
   await panel.getByLabel('Email address').press('Enter')
   const account = panel.getByRole('region', { name: 'The account' })
-  await expect(account.getByText('leaving@example.com')).toBeVisible()
-  await expect(account.getByText(/^Created .*\d{4}$/)).toBeVisible()
-  await expect(account.getByText(/^Last sign-in .*\d{4}$/)).toBeVisible()
+  await expect(account.getByRole('heading', { name: 'leaving@example.com' })).toBeVisible()
+  await expect(account.locator('dl > div')).toHaveText([
+    /^Created.*\d{4}$/,
+    /^Last sign-in.*\d{4}$/,
+    /^Last studied.*\d{4}$/,
+    /^Days studied, last 3019$/,
+    /^News by emailAgreed .*\d{4}, in Bulgarian$/,
+    /^RemindersOn 19:30 \(UTC\+3\)Paused 08:00 \(UTC\+3\)$/,
+    /^Devices2$/,
+    /^Deleted for inactivitynot before \D+ \d{4}$/,
+  ])
 
   // The question: closed, nothing is deleted.
   await account.getByRole('button', { name: 'Delete this account…' }).click()
@@ -885,7 +937,18 @@ test('@phone an admin reads the Accounts tab and opens the question on a phone (
   await panel.getByLabel('Email address').fill('staying@example.com')
   await panel.getByRole('button', { name: 'Look up' }).tap()
   const account = panel.getByRole('region', { name: 'The account' })
-  await expect(account.getByText('Last sign-in not recorded')).toBeVisible()
+  await expect(account.locator('dl > div').nth(1)).toHaveText('Last sign-innot recorded')
+  await expect(account.locator('dl > div').last()).toHaveText('Deleted for inactivitynever: it has no date of a last sign-in')
+  await expectFits(page, '.admin *')
+  // What is behind a count, at the width of the phone: the chart, then a split, and nothing sticks out.
+  const chart = panel.getByRole('region', { name: 'Accounts that studied, per day' }).getByRole('img')
+  await expect(chart).toBeVisible()
+  expect((await chart.boundingBox())!.width).toBeLessThanOrEqual(390)
+  await chart.tap({ position: { x: 120, y: 80 } })
+  await expect(panel.locator('.chart-at text')).toHaveText(/^.+: \d+$/)
+  await expectFits(page, '.admin *')
+  await panel.getByRole('button', { name: /agreed to news$/ }).tap()
+  await expect(panel.getByRole('region', { name: 'News by email, by language' }).getByRole('listitem')).toHaveCount(5)
   await expectFits(page, '.admin *')
   // The question is the whole screen, and closing it deletes nothing.
   await account.getByRole('button', { name: 'Delete this account…' }).tap()
