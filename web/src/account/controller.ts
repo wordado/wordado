@@ -84,10 +84,11 @@ export class AccountController {
   private async carryOver(client: Client, record: AccountRecord): Promise<void> {
     const { accounts, boot } = this.deps
     await client.attachUser(record.userId, this.deps.transport())
-    accounts.save({ ...record, carryOver: true })
+    // The demo never asked for a level (its sample has one): the learner's own course will, once.
+    accounts.save({ ...record, carryOver: true, askLevel: true })
     await client.sync({ force: true })
     const carryOver = await client.hasUnsynced()
-    accounts.save({ ...record, carryOver })
+    accounts.save({ ...record, carryOver, askLevel: true })
     this.announce(await boot.switchTo(carryOver ? {} : { deleteFiles: [DEMO_FILE] }), { expired: false, notice: 'carried-over' })
   }
 

@@ -1,4 +1,5 @@
 import { ChartColumn, LayoutGrid, Route as RouteIcon, Search as SearchIcon, SlidersVertical, Sun, type LucideIcon } from 'lucide-react'
+import { useClientSnapshot } from '@wordado/client-data'
 import { useEffect, useRef, useState } from 'react'
 import { useT, type MessageKey } from '../i18n/i18n'
 import { Link, navigate, useRoute, type Route } from '../router'
@@ -16,6 +17,7 @@ import { Study } from '../screens/Study'
 import { ThemeWords } from '../screens/Theme'
 import { Themes } from '../screens/Themes'
 import { LanguageStep } from '../setup/LanguageStep'
+import { hasLevels, LevelAsk } from '../setup/LevelAsk'
 import { Setup } from '../setup/Setup'
 import { AccountMenu } from './AccountMenu'
 import { useInterfaceLocales } from './interfaceLanguage'
@@ -97,7 +99,14 @@ const WORDMARK = (
  * a setup that does not work), under the
  * masthead's first row alone; `onFinishSetup` ends it.
  */
-export function App(props: { readonly resumed: boolean; readonly setup: boolean; onFinishSetup(): void }) {
+export function App(props: {
+  readonly resumed: boolean
+  readonly setup: boolean
+  onFinishSetup(): void
+  /** The demo was carried into this account and nobody asked for a level: Today gives way to that question once. */
+  readonly askLevel?: boolean
+  onLevelAsked?(): void
+}) {
   const { t } = useT()
   useInterfaceLocales()
   useUpdateSafety(props.setup)
@@ -114,6 +123,9 @@ export function App(props: { readonly resumed: boolean; readonly setup: boolean;
   }, [props.setup])
 
   const inSetup = props.setup && route.name !== 'signin' && route.name !== 'feedback'
+  const { corpus } = useClientSnapshot()
+  // Asked on Today only, and only of a course with a level to choose: every other screen stays within reach.
+  const asking = !props.setup && props.askLevel === true && route.name === 'home' && hasLevels(corpus)
 
   // After an in-app navigation, focus the new screen, as a page load would
   // (spec §11.1). The shell itself also mounts fresh after a take-over or a
@@ -126,7 +138,7 @@ export function App(props: { readonly resumed: boolean; readonly setup: boolean;
     // A screen may name what takes focus on arrival (`data-route-focus`): the unit a search led to, the search
     // field. The setup names its step's heading. Otherwise the screen itself.
     const target = (): HTMLElement | null =>
-      main.current?.querySelector<HTMLElement>(inSetup ? '.setup h2[tabindex="-1"]' : '[data-route-focus]') ?? main.current
+      main.current?.querySelector<HTMLElement>(inSetup || asking ? '.setup h2[tabindex="-1"]' : '[data-route-focus]') ?? main.current
     if (first.current) {
       first.current = false
       if (props.resumed) target()?.focus()
@@ -140,7 +152,7 @@ export function App(props: { readonly resumed: boolean; readonly setup: boolean;
   // The setup is never a study session, whatever the address says: it keeps the masthead.
   // The setup's placement test takes the whole screen, as it does from Settings.
   const [setupFocus, setSetupFocus] = useState(false)
-  const focus = inSetup ? setupFocus : FOCUS.has(route.name)
+  const focus = inSetup || asking ? setupFocus : FOCUS.has(route.name)
   // Whatever address the setup was reached on, it ends on today.
   const finishSetup = () => {
     props.onFinishSetup()
@@ -212,7 +224,13 @@ export function App(props: { readonly resumed: boolean; readonly setup: boolean;
         </aside>
       )}
       <main id="main" ref={main} tabIndex={-1}>
-        {inSetup ? <Setup onFinish={finishSetup} onFocus={setSetupFocus} /> : <Screen route={route} />}
+        {inSetup ? (
+          <Setup onFinish={finishSetup} onFocus={setSetupFocus} />
+        ) : asking ? (
+          <LevelAsk onDone={() => props.onLevelAsked?.()} onFocus={setSetupFocus} />
+        ) : (
+          <Screen route={route} />
+        )}
       </main>
     </div>
   )

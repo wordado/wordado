@@ -29,7 +29,13 @@ export function Root(props: {
       return (
         <ClientProvider client={state.client}>
           <AppProvider value={{ ...props.services, backend: state.backend, account: state.account }}>
-            <App resumed={state.resumed} setup={state.setup} onFinishSetup={() => props.boot.finishSetup()} />
+            <App
+              resumed={state.resumed}
+              setup={state.setup}
+              onFinishSetup={() => props.boot.finishSetup()}
+              askLevel={state.account?.askLevel === true}
+              onLevelAsked={() => props.boot.levelAsked()}
+            />
           </AppProvider>
         </ClientProvider>
       )
