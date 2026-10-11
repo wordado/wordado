@@ -47,6 +47,13 @@ export function checkProductionConfig(jsonc: string): string[] {
   // Optional: without it no open issues are read, and the AI help proposes no match. Written wrong, the Worker would quietly read none.
   const appRepo = prod.vars?.['APP_REPO']
   if (appRepo !== undefined && !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(appRepo)) problems.push('env.production vars.APP_REPO must be the public app repository as owner/name, such as wordado/wordado')
+  // Optional, and only together: the repository and the folder of the prepared notices the Mail tab offers (#215). Empty, nothing is read.
+  // Written wrong, the Worker would quietly offer nothing.
+  const noticesRepo = prod.vars?.['NOTICES_REPO'] ?? ''
+  const noticesPath = prod.vars?.['NOTICES_PATH'] ?? ''
+  if (noticesRepo !== '' && !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(noticesRepo)) problems.push('env.production vars.NOTICES_REPO must be the repository of the prepared notices as owner/name, or empty')
+  if (noticesPath !== '' && !/^[A-Za-z0-9_.-]+(\/[A-Za-z0-9_.-]+)*$/.test(noticesPath)) problems.push('env.production vars.NOTICES_PATH must be the folder of the prepared notices with no slash at either end, such as docs/notices, or empty')
+  if ((noticesRepo === '') !== (noticesPath === '')) problems.push('env.production vars.NOTICES_REPO and NOTICES_PATH must both be set, or both be empty')
   // The AI help on feedback (spec 2026-10-10): all optional, and the Worker has a default for each. The key and the
   // messages only ever go to an https address; to one written wrong the Worker sends nothing, so a deploy says it.
   // The sign-in: a key (the default), or a Google service account. Written wrong, the Worker has no AI help at all.

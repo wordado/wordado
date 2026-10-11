@@ -41,6 +41,17 @@ describe('GitHub', () => {
     expect(await gh.readTexts([], head)).toEqual(new Map())
   })
 
+  it('lists the files of a folder at a commit by name, without its own folders; null when there is no such folder', async () => {
+    const fake = new FakeGitHub({ 'notes/b.md': 'b', 'notes/a.md': 'a', 'notes/old/c.md': 'c', 'other/d.md': 'd' })
+    const gh = await make(fake)
+    const head = await gh.headSha()
+    expect((await gh.listFiles('notes', head))?.sort()).toEqual(['a.md', 'b.md'])
+    expect(fake.requests.at(-1)).toBe('GET /repos/wordado/wordado-content/contents/notes')
+    expect(await gh.listFiles('none', head)).toBeNull()
+    // A path that names a file is not a folder.
+    expect(await gh.listFiles('notes/a.md', head)).toBeNull()
+  })
+
   it('says what GitHub said when the many-file read is refused', async () => {
     const fake = new FakeGitHub({ 'review/a.csv': 'old' })
     const gh = new GitHub({ api: 'https://api.github.test', appId: '1', installationId: '2', privateKeyPem: (await testAppKey()).pem, repo: 'wordado/other' }, (i, init) => fake.fetch(String(i), init), () => new Date('2026-10-05T10:00:00Z'))

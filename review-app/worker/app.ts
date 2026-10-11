@@ -88,7 +88,7 @@ export function createApp(deps: Deps): Hono<AppEnv> {
   reviewersRoutes(app, deps)
   // After adminRoutes, so every route of the Accounts tab is behind the admin-only middleware.
   accountsRoutes(app, deps)
-  // The same for the Announcements tab (#185).
+  // The same for the Mail tab's announcements (#185).
   announcementsRoutes(app, deps)
   // Before feedbackRoutes: the first route that matches is taken, and /api/admin/feedback/ai is not a message's mark,
   // nor is /api/admin/feedback/topics.

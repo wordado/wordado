@@ -76,6 +76,11 @@ export const WORDS_DRAFT = {
  * Asked about a week or for a draft, it answers what is written down above. */
 export function standInAnswer(name: string, input: unknown): unknown {
   if (name === 'feedback_week') return { paragraph: WEEK_PARAGRAPH }
+  // A translation (#215): the English as it came, with the language before it, so the page shows whose text it is.
+  if (name === 'announcement_translation') {
+    const { language, subject, body } = input as { language: string; subject: string; body: string }
+    return { subject: `[${language}] ${subject}`, body: `[${language}] ${body}` }
+  }
   if (name === 'feedback_draft') return /sound/i.test((input as { topic?: { title?: string } }).topic?.title ?? '') ? SOUND_DRAFT : WORDS_DRAFT
   const { messages = [], topics = [], issues = [] } = input as { messages?: { id: number }[]; topics?: { id: number; title: string }[]; issues?: { number: number }[] }
   return {

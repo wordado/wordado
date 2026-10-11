@@ -1,9 +1,21 @@
-import { ANNOUNCEMENT_LANGUAGES, MAX_ANNOUNCEMENT_BODY, MAX_ANNOUNCEMENT_SUBJECT, type AnnouncementKind, type AnnouncementLanguage, type AnnouncementText, type AnnouncementTexts } from '@wordado/core'
-import { type FormEvent, useCallback, useEffect, useState } from 'react'
-import { announcementConfirmation, type Announcement, type AnnouncementLimits, type AnnouncementPreview } from '../../shared/hosted'
+import {
+  ANNOUNCEMENT_LANGUAGES,
+  MAX_ANNOUNCEMENT_BODY,
+  MAX_ANNOUNCEMENT_SUBJECT,
+  isAnnouncementKind,
+  isAnnouncementLanguage,
+  validateAnnouncementTexts,
+  type AnnouncementKind,
+  type AnnouncementLanguage,
+  type AnnouncementText,
+  type AnnouncementTexts,
+} from '@wordado/core'
+import { type FormEvent, useCallback, useEffect, useId, useRef, useState } from 'react'
+import { announcementConfirmation, type Announcement, type AnnouncementLimits, type AnnouncementPreview, type AnnouncementTranslationWhy, type PreparedNotice } from '../../shared/hosted'
 import { Dialog } from '../Dialog'
 import { hostedApi } from '../hostedApi'
 import { dayWithYear } from './AdminAccounts'
+import { AI_WHY } from './AdminFeedbackAi'
 import { count, messageOf } from './adminUtil'
 
 /** What the tab has of the announcements: nothing yet, that they are not connected, that they could not be read, or the list. */
@@ -14,6 +26,12 @@ type Loaded =
   | { readonly kind: 'list'; readonly announcements: readonly Announcement[]; readonly limits: AnnouncementLimits }
 
 const KIND_NAMES: Readonly<Record<AnnouncementKind, string>> = { service: 'Service notice', news: 'News' }
+/** The kinds as the selection box names them, with who gets each, and the line under the box for the one chosen. */
+const KIND_OPTIONS: Readonly<Record<AnnouncementKind, string>> = { service: 'Service notice: to every account holder', news: 'News: only to the accounts that agreed to news by email' }
+const KIND_HINTS: Readonly<Record<AnnouncementKind, string>> = {
+  service: 'For what is part of the service: changed terms, planned downtime, a shutdown. There is nothing to unsubscribe from.',
+  news: 'For new features. Every mail carries a link that stops it. Nothing is prepared for news: write it in English and translate.',
+}
 const STATUS_NAMES: Readonly<Record<Announcement['status'], string>> = { draft: 'Draft', sending: 'Sending', stopped: 'Stopped', sent: 'Sent' }
 const LANGUAGE_NAMES: Readonly<Record<AnnouncementLanguage, string>> = { en: 'English', bg: 'Bulgarian', de: 'German', es: 'Spanish' }
 /** English first: it is the one every announcement has. */
@@ -46,7 +64,7 @@ function datesOf(a: Announcement): string {
 }
 
 /**
- * The Announcements tab (#185): a mail to learners' account holders, written here and sent by the learner app's
+ * The Mail tab (#185, called Announcements until #215): a mail to learners' account holders, written here and sent by the learner app's
  * server. Two kinds, kept apart: a service notice goes to every account holder; news goes only to the accounts
  * that agreed to it, each mail with a link that stops it. The list shows what was written and sent, when, and to
  * how many: counts only, nothing of an account. Sending cannot be taken back, so it is behind a test send of the
@@ -108,7 +126,7 @@ export function AdminAnnouncements() {
   }
   return (
     <>
-      <p className="eyebrow">Announcements</p>
+      <p className="eyebrow">Mail</p>
       <p className="note">
         A service notice goes to every account holder. News goes only to the accounts that agreed to news by email, each mail with a link to stop it. At most {n(limits.perDay)} announcement mails go out a day (
         {n(limits.sentToday)} so far today), {n(limits.batch)} every 15 minutes.
@@ -190,34 +208,84 @@ type Fields = Readonly<Record<AnnouncementLanguage, AnnouncementText>>
 
 const EMPTY: AnnouncementText = { subject: '', body: '' }
 const fieldsOf = (texts: AnnouncementTexts | null): Fields => ({ en: texts?.en ?? EMPTY, bg: texts?.bg ?? EMPTY, de: texts?.de ?? EMPTY, es: texts?.es ?? EMPTY })
+/** Whether a language has anything written: a subject or a text. One that has is never written over by a translation. */
+const written = (fields: Fields, language: AnnouncementLanguage): boolean => fields[language].subject.trim() !== '' || fields[language].body.trim() !== ''
 /** What is sent to be saved: every language with something written. English always, so the server can say what it lacks. */
 const textsOf = (fields: Fields): Partial<AnnouncementTexts> =>
-  Object.fromEntries(LANGUAGE_ORDER.filter((l) => l === 'en' || fields[l].subject.trim() !== '' || fields[l].body.trim() !== '').map((l) => [l, { subject: fields[l].subject.trim(), body: fields[l].body.trim() }]))
+  Object.fromEntries(LANGUAGE_ORDER.filter((l) => l === 'en' || written(fields, l)).map((l) => [l, { subject: fields[l].subject.trim(), body: fields[l].body.trim() }]))
 const same = (a: Fields, b: Fields): boolean => LANGUAGE_ORDER.every((l) => a[l].subject.trim() === b[l].subject.trim() && a[l].body.trim() === b[l].body.trim())
+/** How a language stands, for its mark and for its line in the language box. */
+const standing = (fields: Fields, language: AnnouncementLanguage): 'written' | 'needed' | 'empty' => (written(fields, language) ? 'written' : language === 'en' ? 'needed' : 'empty')
+const MARK_CHIPS: Readonly<Record<ReturnType<typeof standing>, string>> = { written: 'ok', needed: 'major', empty: 'off' }
+/** "English, Bulgarian and German". */
+const named = (languages: readonly AnnouncementLanguage[]): string => new Intl.ListFormat('en-GB', { type: 'conjunction' }).format(languages.map((l) => LANGUAGE_NAMES[l]))
+/** The day a notice's file is named after, in words: "11 October 2026". */
+const dayOfChange = (date: string): string => new Date(`${date}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
+
+/** Why a language was not translated, to follow its name: "German was not translated: …". */
+function notTranslated(why: AnnouncementTranslationWhy): string {
+  if (why === 'not-set-up') return 'AI help is not set up.'
+  if (why === 'off') return 'AI help is off. It is switched on in the Feedback tab.'
+  if (why === 'limit') return 'today’s limit of AI calls is reached.'
+  if (why === 'too-long') return 'the translation came out longer than an announcement may be, and nothing was cut from it. Shorten the English text, or write the translation yourself.'
+  if (why === 'address') return 'the translation changed or left out a web address of the English text, and was dropped.'
+  return `the AI gave no translation this time (${AI_WHY[why]}).`
+}
 
 /**
- * One announcement: written and changed while it is a draft, read once its sending has started. Under the texts,
- * the three steps before a send, in order: the preview (each language as it is mailed, and to how many), the test
- * send of this version to one address, and the send, which stays closed until that test went and nothing has been
- * changed since.
+ * One announcement: written and changed while it is a draft, read once its sending has started. The kind, then
+ * one editor for the language chosen in its box; the marks under the box say which languages are written, and
+ * switch to them too. What is typed in a language stays when another is shown. Two things bring text and save
+ * nothing (#215): a service notice is offered the notice prepared with a change, and Translate fills the empty
+ * languages from the English one. Under the texts, the three steps before a send, in order: the preview (each
+ * language as it is mailed, and to how many), the test send of this version to one address, and the send, which
+ * stays closed until that test went and nothing has been changed since.
  */
 function Editor(props: { announcement: Announcement | null; limits: AnnouncementLimits; onClose(): void }) {
   // What the server has: null until a new announcement is first saved.
   const [saved, setSaved] = useState<Announcement | null>(props.announcement)
   const [kind, setKind] = useState<AnnouncementKind>(props.announcement?.kind ?? 'service')
   const [fields, setFields] = useState<Fields>(() => fieldsOf(props.announcement?.texts ?? null))
+  // The language the editor shows.
+  const [language, setLanguage] = useState<AnnouncementLanguage>('en')
+  // The languages a machine wrote since the form was opened: said beside each until it is closed.
+  const [machine, setMachine] = useState<readonly AnnouncementLanguage[]>([])
+  // The prepared notice the server offers, and whether its text was taken here or the question before that is open.
+  const [notice, setNotice] = useState<PreparedNotice | null>(null)
+  const [taken, setTaken] = useState(false)
+  const [replacing, setReplacing] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [status, setStatus] = useState('')
   const [preview, setPreview] = useState<AnnouncementPreview | null>(null)
   const [email, setEmail] = useState('')
   const [asking, setAsking] = useState(false)
+  const ids = useId()
+  // The fields as they are now, for what comes back after a wait.
+  const latest = useRef(fields)
+  useEffect(() => {
+    latest.current = fields
+  }, [fields])
 
   const draft = saved === null || saved.status === 'draft'
   const dirty = saved === null || kind !== saved.kind || !same(fields, fieldsOf(saved.texts))
   const tested = saved !== null && saved.testedVersion === saved.version
+  const empty = LANGUAGE_ORDER.filter((l) => l !== 'en' && !written(fields, l))
+  const english = fields.en.subject.trim() !== '' && fields.en.body.trim() !== ''
 
-  const write = (language: AnnouncementLanguage, part: keyof AnnouncementText, value: string) => {
+  // The prepared notice is asked for once, when a draft is first a service notice. No answer is no offer.
+  const sought = useRef(false)
+  useEffect(() => {
+    if (!draft || kind !== 'service' || sought.current) return
+    sought.current = true
+    hostedApi.admin.preparedNotice().then(
+      (view) => setNotice(view.notice),
+      () => undefined,
+    )
+  }, [draft, kind])
+  const offered = draft && kind === 'service' && !taken ? notice : null
+
+  const write = (part: keyof AnnouncementText, value: string) => {
     setFields((f) => ({ ...f, [language]: { ...f[language], [part]: value } }))
     setStatus('')
   }
@@ -239,6 +307,13 @@ function Editor(props: { announcement: Announcement | null; limits: Announcement
   const save = (e: FormEvent) => {
     e.preventDefault()
     if (!draft || busy) return
+    // The editor may be showing another language: English is shown, so what is missing is in view.
+    if (!english) {
+      setLanguage('en')
+      setStatus('')
+      setError('English is needed: write its subject and its text.')
+      return
+    }
     void run(async () => {
       const { announcement } = await hostedApi.admin.saveAnnouncement({ id: saved?.id ?? null, kind, texts: textsOf(fields) })
       setSaved(announcement)
@@ -262,6 +337,46 @@ function Editor(props: { announcement: Announcement | null; limits: Announcement
       setStatus(`The test of version ${sent.announcement.version} was sent: ${count(sent.mails, 'mail')}. Read it before sending.`)
     })
 
+  /** Puts the prepared notice in the form, in place of what is there: every language it has, and none it has not. Nothing is saved by it. */
+  const use = () => {
+    if (!notice) return
+    setFields(fieldsOf(notice.texts))
+    setLanguage('en')
+    setMachine([])
+    setTaken(true)
+    setReplacing(false)
+    setError('')
+    setStatus(`${named(LANGUAGE_ORDER.filter((l) => notice.texts[l]))} filled from the prepared notice. Read each one, then save.`)
+  }
+
+  /** Fills the empty languages from the English text. A language is filled only if it is still empty when its text comes, and only with a text that may be saved. */
+  const translate = () =>
+    void run(async () => {
+      const from = { subject: fields.en.subject.trim(), body: fields.en.body.trim() }
+      const answer = await hostedApi.admin.translateAnnouncement(from, empty)
+      const filled: AnnouncementLanguage[] = []
+      const failed: string[] = []
+      const next = { ...latest.current }
+      for (const l of empty) {
+        const text = answer.texts[l]
+        const checked = text ? validateAnnouncementTexts({ en: from, [l]: text }) : null
+        const fits = checked?.ok ? checked.texts[l] : undefined
+        if (written(next, l)) continue
+        if (fits) {
+          next[l] = fits
+          filled.push(l)
+        } else failed.push(`${LANGUAGE_NAMES[l]} was not translated: ${notTranslated(answer.failed[l] ?? 'unfit')}`)
+      }
+      setFields(next)
+      setMachine((m) => [...new Set([...m, ...filled])])
+      // One reason for every language is said once.
+      const whys = new Set(empty.map((l) => answer.failed[l]))
+      const [why] = whys
+      if (filled.length === 0 && whys.size === 1 && why !== undefined) setError(`Nothing was translated: ${notTranslated(why)}`)
+      else if (failed.length > 0) setError(failed.join(' '))
+      if (filled.length > 0) setStatus(`Translated into ${named(filled)}. A machine wrote ${filled.length === 1 ? 'it' : 'these'}: read ${filled.length === 1 ? 'it' : 'each one'} before the test send.`)
+    })
+
   const why = dirty ? 'Save the changes first.' : tested ? '' : 'This version has not been sent as a test yet.'
 
   return (
@@ -273,39 +388,105 @@ function Editor(props: { announcement: Announcement | null; limits: Announcement
         </p>
       )}
       <form aria-label="Announcement" className="form announcement" onSubmit={save}>
-        <fieldset className="announcement-kind" disabled={!draft}>
-          <legend>Kind</legend>
-          <label className="check">
-            <input type="radio" name="announcement-kind" checked={kind === 'service'} onChange={() => setKind('service')} />
-            <span>
-              <b>Service notice</b>: to every account holder. For what is part of the service: changed terms, planned downtime, a shutdown.
-            </span>
-          </label>
-          <label className="check">
-            <input type="radio" name="announcement-kind" checked={kind === 'news'} onChange={() => setKind('news')} />
-            <span>
-              <b>News</b>: only to the accounts that agreed to news by email. Every mail carries a link that stops it.
-            </span>
-          </label>
-        </fieldset>
-        {LANGUAGE_ORDER.map((language) => (
-          <fieldset key={language} className="announcement-text">
-            <legend>{language === 'en' ? 'English (needed)' : LANGUAGE_NAMES[language]}</legend>
-            <label className="field">
-              Subject
-              <input type="text" lang={language} autoComplete="off" maxLength={MAX_ANNOUNCEMENT_SUBJECT} readOnly={!draft} required={language === 'en'} value={fields[language].subject} onChange={(e) => write(language, 'subject', e.target.value)} />
-            </label>
-            <label className="field">
-              Text
-              <textarea lang={language} rows={8} maxLength={MAX_ANNOUNCEMENT_BODY} readOnly={!draft} required={language === 'en'} value={fields[language].body} onChange={(e) => write(language, 'body', e.target.value)} />
-            </label>
-          </fieldset>
-        ))}
-        {draft && (
-          <p className="note">
-            Plain text: a link is its address written out. An account gets the text in its own language where there is one, and the English one otherwise. Why the mail came, and who sent it, is added under the text.
-          </p>
+        <label className="field">
+          Kind
+          <select value={kind} disabled={!draft} aria-describedby={`${ids}-kind`} onChange={(e) => isAnnouncementKind(e.target.value) && setKind(e.target.value)}>
+            {(['service', 'news'] as const).map((k) => (
+              <option key={k} value={k}>
+                {KIND_OPTIONS[k]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <p id={`${ids}-kind`} className="note">
+          {KIND_HINTS[kind]}
+        </p>
+        {offered && (
+          <section aria-label="Prepared notice" className="notice announcement-offer">
+            <p>
+              <b>A notice was prepared with the change of {dayOfChange(offered.date)}</b>
+              <span className="note">
+                {offered.title} · {named(LANGUAGE_ORDER.filter((l) => offered.texts[l]))} · no announcement has used it yet
+              </span>
+            </p>
+            <button type="button" className="button primary small" disabled={busy} onClick={() => (LANGUAGE_ORDER.some((l) => written(fields, l)) ? setReplacing(true) : use())}>
+              Use this text
+            </button>
+          </section>
         )}
+        <div className="announcement-editor">
+          <div className="announcement-editor-head">
+            <label className="field">
+              Language
+              <select value={language} onChange={(e) => isAnnouncementLanguage(e.target.value) && setLanguage(e.target.value)}>
+                {LANGUAGE_ORDER.map((l) => (
+                  <option key={l} value={l}>
+                    {LANGUAGE_NAMES[l]}
+                    {l === 'en' ? ' (needed)' : ''} · {written(fields, l) ? 'written' : 'empty'}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {draft && (
+              <button type="button" className="button small" disabled={busy || !english || empty.length === 0} onClick={translate}>
+                Translate from English into the empty languages
+              </button>
+            )}
+          </div>
+          <div role="group" aria-label="Which languages have text" className="announcement-marks">
+            {LANGUAGE_ORDER.map((l) => (
+              <button key={l} type="button" className={`chip ${MARK_CHIPS[standing(fields, l)]}`} aria-pressed={l === language} onClick={() => setLanguage(l)}>
+                {LANGUAGE_NAMES[l]}: {standing(fields, l)}
+                {machine.includes(l) && written(fields, l) ? ', by a machine' : ''}
+              </button>
+            ))}
+          </div>
+          <div className="field">
+            <span className="announcement-field-head">
+              <label htmlFor={`${ids}-subject`}>Subject</label>
+              <span id={`${ids}-subject-count`} className="note">
+                {n(fields[language].subject.length)} / {n(MAX_ANNOUNCEMENT_SUBJECT)}
+              </span>
+            </span>
+            <input
+              id={`${ids}-subject`}
+              type="text"
+              lang={language}
+              autoComplete="off"
+              maxLength={MAX_ANNOUNCEMENT_SUBJECT}
+              readOnly={!draft}
+              required={language === 'en'}
+              aria-describedby={`${ids}-subject-count`}
+              value={fields[language].subject}
+              onChange={(e) => write('subject', e.target.value)}
+            />
+          </div>
+          <div className="field">
+            <span className="announcement-field-head">
+              <label htmlFor={`${ids}-body`}>Text</label>
+              <span id={`${ids}-body-count`} className="note">
+                {n(fields[language].body.length)} / {n(MAX_ANNOUNCEMENT_BODY)}
+              </span>
+            </span>
+            <textarea
+              id={`${ids}-body`}
+              lang={language}
+              rows={11}
+              maxLength={MAX_ANNOUNCEMENT_BODY}
+              readOnly={!draft}
+              required={language === 'en'}
+              aria-describedby={`${ids}-body-count`}
+              value={fields[language].body}
+              onChange={(e) => write('body', e.target.value)}
+            />
+          </div>
+          {draft && machine.includes(language) && written(fields, language) && <p className="note">A machine translated this from the English text. Read it before the test send.</p>}
+          {draft && (
+            <p className="note">
+              Plain text: a link is its address written out. An account gets the text in its own language where there is one, and the English one otherwise. Why the mail came, and who sent it, is added under the text.
+            </p>
+          )}
+        </div>
         {error && (
           <p role="alert" className="notice">
             {error}
@@ -354,6 +535,19 @@ function Editor(props: { announcement: Announcement | null; limits: Announcement
         )}
       </form>
       {asking && saved && <SendQuestion announcement={saved} limits={props.limits} onClose={() => setAsking(false)} onDone={props.onClose} />}
+      {replacing && (
+        <Dialog open title="Replace what is written?" onClose={() => setReplacing(false)}>
+          <p>The prepared notice takes the place of every language in the form. What is written there now is not kept, unless it was saved.</p>
+          <span className="form-actions">
+            <button type="button" className="button primary" onClick={use}>
+              Replace with the prepared notice
+            </button>
+            <button type="button" className="button ghost" onClick={() => setReplacing(false)}>
+              Cancel
+            </button>
+          </span>
+        </Dialog>
+      )}
     </>
   )
 }

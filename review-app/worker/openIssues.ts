@@ -10,12 +10,17 @@ export const MAX_ISSUE_TITLE = 200
 /** How long GitHub has to answer one page. */
 const TIMEOUT_MS = 10_000
 
-/** The public app repository, `owner/name`, or null when the setting is not one. */
-export function appRepo(env: Pick<Env, 'APP_REPO'>): string | null {
-  const repo = (env.APP_REPO ?? '').trim()
+/** A repository as a setting names it, `owner/name`, or null when the setting is not one. */
+export function repoOf(setting: string | undefined): string | null {
+  const repo = (setting ?? '').trim()
   const name = /^[A-Za-z0-9_.-]+$/
   const [owner = '', repoName = '', ...more] = repo.split('/')
   return more.length === 0 && name.test(owner) && name.test(repoName) && !/^\.+$/.test(owner) && !/^\.+$/.test(repoName) ? repo : null
+}
+
+/** The public app repository, `owner/name`, or null when the setting is not one. */
+export function appRepo(env: Pick<Env, 'APP_REPO'>): string | null {
+  return repoOf(env.APP_REPO)
 }
 
 /** GitHub did not give the issues: `message` is for the log, and holds nothing of an answer. */
