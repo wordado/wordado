@@ -442,6 +442,10 @@ test('searches the whole course from the top row, and goes from a result to its 
   await expect(heading(page)).toHaveText('Search')
   const field = page.getByRole('searchbox', { name: 'Search the course' })
   await expect(field).toBeFocused()
+  // Pressed again on the empty search, the button gives the cursor back to the field.
+  await field.blur()
+  await page.getByRole('link', { name: 'Search', exact: true }).click()
+  await expect(field).toBeFocused()
   // Typing rewrites the address and never takes the cursor from the field.
   await field.pressSequentially('teach')
   await expect(field).toBeFocused()
@@ -458,7 +462,18 @@ test('searches the whole course from the top row, and goes from a result to its 
   await expect(page).toHaveURL(/\/path\?unit=/)
   const unit = page.getByRole('heading', { level: 3, name: title })
   await expect(unit).toBeFocused()
-  await expect(page.locator('li.unit', { has: unit }).locator('details')).toHaveAttribute('open', '')
+  const words = page.locator('li.unit', { has: unit }).locator('details')
+  await expect(words).toHaveAttribute('open', '')
+  // Folded, left for the plain path and come back to: the same unit opens a second time.
+  await words.locator('summary').click()
+  await expect(words).not.toHaveAttribute('open', '')
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Path' }).click()
+  await expect(page).toHaveURL(/\/path$/)
+  await page.goBack()
+  await expect(page).toHaveURL(/\/path\?unit=/)
+  await expect(words).toHaveAttribute('open', '')
+  await expect(unit).toBeFocused()
+  await expect(unit).toBeInViewport()
   // Back: the same query and the same result.
   await page.goBack()
   await expect(field).toHaveValue('teach')
@@ -1081,3 +1096,72 @@ for (const width of [390, 1280]) {
     }
   })
 }
+
+// The website's dates are answered here: the demo has no website beside it. Service workers are blocked, on the
+// page's own context, as for feedback above: WebKit does not show a request the app's worker passes on to `page.route`.
+test.describe('a notice when the terms or the privacy policy change (#184)', () => {
+  test.use({ serviceWorkers: 'block' })
+
+  test('tells nothing at the first visit; a later change is announced once, read by a link and dismissed by keyboard', async ({ page }) => {
+    const every = (date: string) => ({ bg: date, de: date, en: date, es: date })
+    let dates: unknown = { schema_version: 1, terms: every('2026-10-11'), privacy: every('2026-10-11') }
+    let asked = 0
+    await page.route('https://wordado.com/legal.json', (route) => {
+      asked += 1
+      return route.fulfill({ contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(dates) })
+    })
+    const stored = () => page.evaluate(() => localStorage.getItem('wordado.legal'))
+    const notice = page.getByText('The terms of use have changed.')
+
+    await page.goto('/')
+    await finishSetup(page)
+    await expect.poll(stored).toContain('"seen":{"terms":"2026-10-11","privacy":"2026-10-11"}')
+    await expect(notice).toHaveCount(0)
+
+    // The terms change. The same day the app does not look again; a day later it does.
+    dates = { schema_version: 1, terms: every('2026-11-01'), privacy: every('2026-10-11') }
+    await page.reload()
+    await expect(today(page)).toBeVisible()
+    expect(asked).toBe(1)
+    await page.evaluate(() => {
+      const saved = JSON.parse(localStorage.getItem('wordado.legal')!) as { checkedAt: number }
+      localStorage.setItem('wordado.legal', JSON.stringify({ ...saved, checkedAt: saved.checkedAt - 24 * 60 * 60_000 }))
+    })
+    await page.reload()
+    await expect(notice).toBeVisible()
+    await expect(page.getByRole('status').filter({ has: notice })).toHaveCount(1)
+    await expect(page.getByText('The privacy policy has changed.')).toHaveCount(0)
+    const link = page.getByRole('link', { name: 'Read the terms' })
+    await expect(link).toHaveAttribute('href', 'https://wordado.com/en/terms/')
+    await expectAccessible(page, { dark: true })
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+
+    // It waits across a visit, and offline: it is shown from what the device kept.
+    await page.unroute('https://wordado.com/legal.json')
+    await page.route('https://wordado.com/legal.json', (route) => route.abort())
+    await page.reload()
+    await expect(notice).toBeVisible()
+
+    // By keyboard: the link and Dismiss both take focus (Safari's Tab passes links by unless its user asks, so the
+    // test places the focus itself), and Enter dismisses.
+    await link.focus()
+    await expect(link).toBeFocused()
+    const dismiss = page.getByRole('button', { name: 'Dismiss' }).and(page.locator('[aria-describedby="legal-terms-changed"]'))
+    await dismiss.focus()
+    await expect(dismiss).toBeFocused()
+    await page.keyboard.press('Enter')
+    await expect(notice).toHaveCount(0)
+    await page.reload()
+    await expect(today(page)).toBeVisible()
+    await expect(notice).toHaveCount(0)
+  })
+
+  test('says nothing, and shows no error, when the website cannot be reached', async ({ page }) => {
+    await page.route('https://wordado.com/legal.json', (route) => route.abort())
+    await page.goto('/')
+    await finishSetup(page)
+    await expect(page.getByText(/have changed|has changed/)).toHaveCount(0)
+    await expect(page.getByRole('alert')).toHaveCount(0)
+    expect(await page.evaluate(() => localStorage.getItem('wordado.legal'))).toBeNull()
+  })
+})

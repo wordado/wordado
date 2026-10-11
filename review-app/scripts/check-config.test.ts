@@ -53,6 +53,7 @@ describe('checkProductionConfig', () => {
     expect(checkProductionConfig(config({ vars: { GITHUB_API_URL: 'http://127.0.0.1:4182' } })).join('\n')).toMatch(/GITHUB_API_URL/)
     expect(checkProductionConfig(config({ vars: { ADMIN_EMAIL: 'admin@example.com' } })).join('\n')).toMatch(/ADMIN_EMAIL must not be set: it is a secret/)
     expect(checkProductionConfig(config({ vars: { FEEDBACK_READ_TOKEN: 't'.repeat(40) } })).join('\n')).toMatch(/FEEDBACK_READ_TOKEN must not be set: it is a secret/)
+    expect(checkProductionConfig(config({ vars: { ADMIN_WRITE_TOKEN: 'w'.repeat(40) } })).join('\n')).toMatch(/ADMIN_WRITE_TOKEN must not be set: it is a secret/)
   })
   it('takes the learner app’s server as an https origin, or none at all', () => {
     expect(checkProductionConfig(config({ vars: { LEARNER_APP_URL: 'https://app.example.com' } }))).toEqual([])

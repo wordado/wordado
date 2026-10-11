@@ -22,6 +22,13 @@ export interface Settings {
   readonly latencyGrading: boolean
   /** The learner's L1 (spec §6.2, §8.6); null until chosen. An account without one studies Bulgarian, the only L1 before plan 10. */
   readonly l1: L1 | null
+  /**
+   * The date of the terms of use whose notice the learner last dismissed (#184), as the website dates them
+   * (`YYYY-MM-DD`); null until one is dismissed. In the account, so one dismissal covers every device.
+   */
+  readonly termsSeen: string | null
+  /** The same for the privacy policy. */
+  readonly privacySeen: string | null
 }
 
 export const MAX_REVIEW_CAP = 1000
@@ -36,6 +43,8 @@ export const DEFAULT_SETTINGS: Settings = {
   audio: true,
   latencyGrading: true,
   l1: null,
+  termsSeen: null,
+  privacySeen: null,
 }
 
 export type SettingsValidation =
@@ -44,6 +53,9 @@ export type SettingsValidation =
 
 const isInt = (v: unknown, min: number, max: number): v is number =>
   typeof v === 'number' && Number.isInteger(v) && v >= min && v <= max
+
+/** A calendar date as the website writes one: `YYYY-MM-DD`. Such dates compare as text. */
+const isDate = (v: unknown): v is string => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)
 
 /**
  * Checks a settings patch field by field (roadmap contract: settings are
@@ -71,7 +83,9 @@ export function validateSettingsPatch(patch: Record<string, unknown>): SettingsV
                     ? typeof value === 'boolean'
                     : key === 'l1'
                       ? value === null || isSupportedL1(value)
-                      : false
+                      : key === 'termsSeen' || key === 'privacySeen'
+                        ? value === null || isDate(value)
+                        : false
     if (valid) fields[key] = value
     else errors.push(key)
   }

@@ -60,6 +60,10 @@ export const bg: Messages = {
   'fixed.field.example': 'примерното изречение',
   'fixed.field.audio': 'произношението',
   'fixed.field.level': 'нивото',
+  'legal.terms.changed': 'Условията за ползване са променени.',
+  'legal.terms.link': 'Прочетете условията',
+  'legal.privacy.changed': 'Политиката за поверителност е променена.',
+  'legal.privacy.link': 'Прочетете политиката за поверителност',
 
   'sync.syncing': 'Синхронизиране…',
   'sync.synced': 'Целият напредък е запазен в профила ви',
@@ -184,6 +188,9 @@ export const bg: Messages = {
 
   'settings.account': 'Профил',
   'settings.signedInAs': 'Влезли сте като {email}',
+  'news.consent': 'Искам да получавам по имейл новини за Wordado и новите му функции. Мога да се откажа по всяко време.',
+  'settings.newsHint': 'Съобщенията за самата услуга, например при промяна на условията, се изпращат във всички случаи.',
+  'settings.newsOffline': 'Свържете се, за да промените това.',
   'settings.export': 'Изтеглете данните си (JSON)',
   'settings.exportOffline': 'Свържете се, за да изтеглите данните си.',
   'settings.exporting': 'Данните ви се подготвят…',
@@ -238,7 +245,7 @@ export const bg: Messages = {
 
   'signin.title': 'Създайте профил или влезте',
   'signin.againTitle': 'Влезте отново',
-  'signin.gateIntro': 'Законът определя възраст за собствен профил според това къде живеете. Пазим само държавата ви.',
+  'signin.gateIntro': 'Законът определя възраст за собствен профил според това къде живеете. Държавата ви остава на това устройство и не се изпраща. Ако отметнете новините, този избор се запазва с профила ви.',
   'signin.country': 'Държава, в която живеете',
   'signin.countryUnknown': 'Предпочитам да не казвам',
   'signin.continue': 'Напред',
@@ -436,6 +443,9 @@ export const bg: Messages = {
   'search.sample': { one: 'Примерът има {count} дума. Влезте, за да търсите в целия курс.', other: 'Примерът има {count} думи. Влезте, за да търсите в целия курс.' },
   'search.more': 'Покажете още',
   'search.unitLocked': '{title}, заключен',
+  'search.whereLevel': 'Ниво',
+  'search.whereUnit': 'Урок:',
+  'search.whereThemes': 'Теми:',
 
   'progress.title': 'Напредък',
   'progress.tiers': 'Вашите думи',

@@ -21,6 +21,7 @@ import { runWeekly, WEEKLY_AI_CALLS, WEEKLY_PAGES } from './weekly'
 const BUDGET = 40
 
 const TOKEN = 't'.repeat(40)
+const WRITE_TOKEN = 'w'.repeat(40)
 const KEY = 'k'.repeat(40)
 const SERVER = 'https://app.test'
 const MODEL = 'https://model.test'
@@ -163,6 +164,50 @@ describe('the statements one invocation runs against D1, in the worst case (Free
       console.log(`D1 statements, ${what}: ${counted.statements()}`)
       expect(counted.statements()).toBeLessThanOrEqual(BUDGET)
     }
+  })
+
+  it('the Accounts tab: the sweep’s counts, a lookup and a delete, which keep nothing here (#187)', async () => {
+    env = { ...env, ADMIN_WRITE_TOKEN: WRITE_TOKEN }
+    server.writeToken = WRITE_TOKEN
+    server.accounts.set('ana@example.com', { createdAt: WEEK_START, lastSignInAt: WEEK_START })
+    const paths: [string, 'GET' | 'POST', string, unknown?][] = [
+      ['the sweep’s counts', 'GET', '/api/admin/accounts/sweep'],
+      ['a lookup', 'POST', '/api/admin/accounts/lookup', { email: 'ana@example.com' }],
+      ['a delete', 'POST', '/api/admin/accounts/delete', { email: 'ana@example.com', confirm: true }],
+    ]
+    for (const [what, method, path, body] of paths) {
+      counted = countedDb(base.DB)
+      expect((await admin(method, path, body)).status).toBe(200)
+      console.log(`D1 statements, ${what}: ${counted.statements()}`)
+      // The sign-in's own read of the reviewer, and nothing more.
+      expect(counted.statements()).toBeLessThanOrEqual(1)
+    }
+    expect(server.accounts.size).toBe(0)
+  })
+
+  it('the Announcements tab: the list, a draft, its preview, the test send, the send, a stop and a resume, which keep nothing here (#185)', async () => {
+    env = { ...env, ADMIN_WRITE_TOKEN: WRITE_TOKEN }
+    server.writeToken = WRITE_TOKEN
+    const texts = { en: { subject: 'The terms change', body: 'Hello.' } }
+    const paths: [string, 'GET' | 'POST', string, unknown?][] = [
+      ['a draft', 'POST', '/api/admin/announcements/save', { kind: 'service', texts }],
+      ['the list', 'GET', '/api/admin/announcements'],
+      ['a preview', 'POST', '/api/admin/announcements/preview', { id: 1 }],
+      ['the test send', 'POST', '/api/admin/announcements/test', { id: 1, version: 1, email: 'owner@example.com' }],
+      ['the send', 'POST', '/api/admin/announcements/send', { id: 1, version: 1, kind: 'service', recipients: 3, confirm: 'service 3' }],
+      ['a stop', 'POST', '/api/admin/announcements/stop', { id: 1 }],
+      ['a resume', 'POST', '/api/admin/announcements/resume', { id: 1 }],
+      ['another draft', 'POST', '/api/admin/announcements/save', { kind: 'news', texts }],
+      ['its deletion', 'POST', '/api/admin/announcements/delete', { id: 2 }],
+    ]
+    for (const [what, method, path, body] of paths) {
+      counted = countedDb(base.DB)
+      expect((await admin(method, path, body)).status).toBe(200)
+      console.log(`D1 statements, ${what}: ${counted.statements()}`)
+      // The sign-in's own read of the reviewer, and nothing more.
+      expect(counted.statements()).toBeLessThanOrEqual(1)
+    }
+    expect(server.announcements.map((a) => a.status)).toEqual(['sending'])
   })
 })
 

@@ -122,7 +122,7 @@ describe('data export (spec §11)', () => {
     expect(reply.headers.get('content-disposition')).toMatch(/^attachment; filename="wordado-export-\d{4}-\d{2}-\d{2}\.json"$/)
     const exported = reply.body
     expect(exported.format).toBe(EXPORT_FORMAT)
-    expect(exported.account).toEqual({ userId: s.userId, email: s.email, createdAt: expect.any(Number) })
+    expect(exported.account).toEqual({ userId: s.userId, email: s.email, createdAt: expect.any(Number), newsConsent: { state: 'none', at: null, text: null } })
     expect(exported).not.toHaveProperty('feedback')
     const stored = (await loadEvents(h.deps.db, s.userId)).map(toStampedEvent)
     expect(exported.reviewEvents).toHaveLength(stored.length)

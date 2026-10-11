@@ -1,10 +1,10 @@
 import { useClientSnapshot } from '@wordado/client-data'
 import { offeredThemes, searchWordIndex, type CorpusEntry } from '@wordado/core'
 import { Lock, Search as SearchIcon, X } from 'lucide-react'
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { useApp } from '../app/context'
 import { localized, useT } from '../i18n/i18n'
-import { Link, navigate } from '../router'
+import { Link, navigate, onNavigation, parseRoute } from '../router'
 import { courseIndex } from '../study/wordIndex'
 import { WordRow } from '../study/WordRow'
 
@@ -39,6 +39,16 @@ export function Search(props: { readonly q: string }) {
     setShown(RESULTS_STEP)
     if (outside && props.q === '') input.current?.focus()
   }, [props.q])
+  // The magnifier pressed on a search that is already empty changes nothing in the address: the field takes focus
+  // all the same.
+  useEffect(
+    () =>
+      onNavigation(() => {
+        const route = parseRoute(window.location.pathname, window.location.search)
+        if (route.name === 'search' && route.q === '') input.current?.focus()
+      }),
+    [],
+  )
   // "Show more" puts focus on the first of the rows it added (spec §11.1).
   useEffect(() => {
     if (added.current === null) return
@@ -72,27 +82,30 @@ export function Search(props: { readonly q: string }) {
     const unit = places.units.get(entry.unitId)
     const title = unit && localized(unit.title, locale, corpus.l1)
     const locked = unit !== undefined && path !== null && !path.unlocked.has(unit.unitId)
+    const themes = entry.themes.flatMap((themeId) => {
+      const theme = places.themes.get(themeId)
+      return theme ? [{ themeId, name: localized(theme.name, locale, corpus.l1) }] : []
+    })
+    // The labels and the commas are for a screen reader, which would otherwise read the line as one run of words.
     return (
       <>
-        <span className="word-level">{entry.level}</span>
+        <span className="word-level">
+          <span className="visually-hidden">{t('search.whereLevel')} </span>
+          {entry.level}
+        </span>
+        {unit && <span className="visually-hidden">{t('search.whereUnit')} </span>}
         {unit && (
           <Link to={{ name: 'path', unit: unit.unitId }} {...(locked ? { className: 'is-locked', 'aria-label': t('search.unitLocked', { title: title! }) } : {})}>
             {locked && <Lock aria-hidden="true" size={14} />}
             {title}
           </Link>
         )}
-        {entry.themes.map((themeId) => {
-          const theme = places.themes.get(themeId)
-          if (!theme) return null
-          const name = localized(theme.name, locale, corpus.l1)
-          return places.offered.has(themeId) ? (
-            <Link key={themeId} to={{ name: 'theme', themeId }}>
-              {name}
-            </Link>
-          ) : (
-            <span key={themeId}>{name}</span>
-          )
-        })}
+        {themes.map(({ themeId, name }, i) => (
+          <Fragment key={themeId}>
+            <span className="visually-hidden">{i === 0 ? `${t('search.whereThemes')} ` : ', '}</span>
+            {places.offered.has(themeId) ? <Link to={{ name: 'theme', themeId }}>{name}</Link> : <span>{name}</span>}
+          </Fragment>
+        ))}
       </>
     )
   }

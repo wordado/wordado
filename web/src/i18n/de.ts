@@ -65,6 +65,10 @@ export const de: Messages = {
   'fixed.field.example': 'den Beispielsatz',
   'fixed.field.audio': 'die Aussprache',
   'fixed.field.level': 'das Niveau',
+  'legal.terms.changed': 'Die Nutzungsbedingungen haben sich geändert.',
+  'legal.terms.link': 'Nutzungsbedingungen lesen',
+  'legal.privacy.changed': 'Die Datenschutzerklärung hat sich geändert.',
+  'legal.privacy.link': 'Datenschutzerklärung lesen',
 
   'sync.syncing': 'Wird synchronisiert …',
   'sync.synced': 'Der gesamte Fortschritt ist in deinem Konto gespeichert',
@@ -193,6 +197,9 @@ export const de: Messages = {
 
   'settings.account': 'Konto',
   'settings.signedInAs': 'Angemeldet als {email}',
+  'news.consent': 'Ich möchte Neuigkeiten über Wordado und seine neuen Funktionen per E-Mail erhalten. Ich kann sie jederzeit abbestellen.',
+  'settings.newsHint': 'Mitteilungen zum Dienst selbst, etwa über geänderte Nutzungsbedingungen, kommen in jedem Fall.',
+  'settings.newsOffline': 'Stell eine Verbindung her, um das zu ändern.',
   'settings.export': 'Deine Daten herunterladen (JSON)',
   'settings.exportOffline': 'Stell eine Verbindung her, um deine Daten herunterzuladen.',
   'settings.exporting': 'Deine Daten werden vorbereitet …',
@@ -252,7 +259,7 @@ export const de: Messages = {
 
   'signin.title': 'Konto erstellen oder anmelden',
   'signin.againTitle': 'Erneut anmelden',
-  'signin.gateIntro': 'Das Gesetz legt je nach Land ein Alter für ein eigenes Konto fest. Nur dein Land wird gespeichert.',
+  'signin.gateIntro': 'Das Gesetz legt je nach Land ein Alter für ein eigenes Konto fest. Dein Land bleibt auf diesem Gerät und wird nicht gesendet. Wenn du das Kästchen für Neuigkeiten ankreuzt, wird diese Wahl mit deinem Konto gespeichert.',
   'signin.country': 'Land, in dem du lebst',
   'signin.countryUnknown': 'Das möchte ich nicht angeben',
   'signin.continue': 'Weiter',
@@ -456,6 +463,9 @@ export const de: Messages = {
   'search.sample': { one: 'Das Beispiel hat {count} Wort. Melde dich an, um im ganzen Kurs zu suchen.', other: 'Das Beispiel hat {count} Wörter. Melde dich an, um im ganzen Kurs zu suchen.' },
   'search.more': 'Mehr anzeigen',
   'search.unitLocked': '{title}, gesperrt',
+  'search.whereLevel': 'Niveau',
+  'search.whereUnit': 'Einheit:',
+  'search.whereThemes': 'Themen:',
 
   'progress.title': 'Fortschritt',
   'progress.tiers': 'Deine Wörter',

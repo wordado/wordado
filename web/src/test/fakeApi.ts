@@ -20,8 +20,8 @@ export function fakeApi(over: Partial<Api> = {}, session: Me | null = null): Fak
     sendCode: async (email) => {
       calls.push(`sendCode ${email}`)
     },
-    verifyCode: async (email, code) => {
-      calls.push(`verifyCode ${email} ${code}`)
+    verifyCode: async (email, code, newsConsent = null) => {
+      calls.push(`verifyCode ${email} ${code}${newsConsent === null ? '' : ` ${newsConsent}`}`)
     },
     me: async () => {
       calls.push('me')
@@ -36,6 +36,12 @@ export function fakeApi(over: Partial<Api> = {}, session: Me | null = null): Fak
     },
     deleteAccount: async () => {
       calls.push('deleteAccount')
+    },
+    setNewsConsent: async (consent, text) => {
+      calls.push(`setNewsConsent ${consent}${consent ? ` ${text}` : ''}`)
+      const newsConsent = consent ? 'given' : api.session?.newsConsent === 'given' ? 'withdrawn' : (api.session?.newsConsent ?? 'none')
+      if (api.session) api.session = { ...api.session, newsConsent }
+      return newsConsent
     },
     exportData: async () => {
       calls.push('exportData')

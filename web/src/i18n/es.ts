@@ -65,6 +65,10 @@ export const es: Messages = {
   'fixed.field.example': 'la frase de ejemplo',
   'fixed.field.audio': 'la pronunciación',
   'fixed.field.level': 'el nivel',
+  'legal.terms.changed': 'Las condiciones de uso han cambiado.',
+  'legal.terms.link': 'Leer las condiciones',
+  'legal.privacy.changed': 'La política de privacidad ha cambiado.',
+  'legal.privacy.link': 'Leer la política de privacidad',
 
   'sync.syncing': 'Sincronizando…',
   'sync.synced': 'Todo tu progreso está guardado en tu cuenta',
@@ -193,6 +197,9 @@ export const es: Messages = {
 
   'settings.account': 'Cuenta',
   'settings.signedInAs': 'Has iniciado sesión como {email}',
+  'news.consent': 'Quiero recibir por correo electrónico novedades sobre Wordado y sus nuevas funciones. Puedo darme de baja en cualquier momento.',
+  'settings.newsHint': 'Los avisos sobre el propio servicio, como un cambio en las condiciones, se envían en cualquier caso.',
+  'settings.newsOffline': 'Conéctate para cambiarlo.',
   'settings.export': 'Descargar tus datos (JSON)',
   'settings.exportOffline': 'Conéctate para descargar tus datos.',
   'settings.exporting': 'Preparando tus datos…',
@@ -250,7 +257,7 @@ export const es: Messages = {
 
   'signin.title': 'Crea una cuenta o inicia sesión',
   'signin.againTitle': 'Vuelve a iniciar sesión',
-  'signin.gateIntro': 'La ley fija una edad mínima para tener una cuenta propia, según dónde vivas. Solo guardamos tu país.',
+  'signin.gateIntro': 'La ley fija una edad mínima para tener una cuenta propia, según dónde vivas. Tu país se queda en este dispositivo y no se envía. Si marcas la casilla de novedades, esa elección se guarda con tu cuenta.',
   'signin.country': 'País en el que vives',
   'signin.countryUnknown': 'Prefiero no decirlo',
   'signin.continue': 'Continuar',
@@ -454,6 +461,9 @@ export const es: Messages = {
   'search.sample': { one: 'La muestra tiene {count} palabra. Inicia sesión para buscar en todo el curso.', other: 'La muestra tiene {count} palabras. Inicia sesión para buscar en todo el curso.' },
   'search.more': 'Mostrar más',
   'search.unitLocked': '{title}, sin desbloquear',
+  'search.whereLevel': 'Nivel',
+  'search.whereUnit': 'Unidad:',
+  'search.whereThemes': 'Temas:',
 
   'progress.title': 'Progreso',
   'progress.tiers': 'Tus palabras',

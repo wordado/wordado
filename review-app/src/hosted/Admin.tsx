@@ -2,6 +2,8 @@ import { type KeyboardEvent, useCallback, useEffect, useRef, useState } from 're
 import type { AssignmentView, Language, ReviewerView, SnapshotStatus, SubmissionView } from '../../shared/hosted'
 import { HeaderSlot } from '../AppHeader'
 import { hostedApi } from '../hostedApi'
+import { AdminAccounts } from './AdminAccounts'
+import { AdminAnnouncements } from './AdminAnnouncements'
 import { AdminAssignments } from './AdminAssignments'
 import { AdminFeedback } from './AdminFeedback'
 import { AdminOverview } from './AdminOverview'
@@ -15,6 +17,8 @@ const TABS = [
   ['assignments', 'Assignments'],
   ['submissions', 'Submissions'],
   ['feedback', 'Feedback'],
+  ['accounts', 'Accounts'],
+  ['announcements', 'Announcements'],
 ] as const
 type Tab = (typeof TABS)[number][0]
 
@@ -23,9 +27,10 @@ export function adminTabOf(hash: string): Tab | null {
   return TABS.find(([id]) => `#${id}` === hash)?.[0] ?? null
 }
 
-/** The admin page: Overview, Reviewers, Assignments, Submissions and Feedback as tabs in the header, one shown at a
- * time. The tab is kept in the address (`#reviewers`), so a reload stays put. The Feedback tab reads what it shows
- * itself, when it is opened: it comes from another server, a page at a time. */
+/** The admin page: Overview, Reviewers, Assignments, Submissions, Feedback, Accounts and Announcements as tabs in
+ * the header, one shown at a time. The tab is kept in the address (`#reviewers`), so a reload stays put. The
+ * Feedback tab reads what it shows itself, when it is opened: it comes from another server, a page at a time. So
+ * do the Accounts and the Announcements tabs. */
 export function Admin() {
   const [snapshot, setSnapshot] = useState<SnapshotStatus | null | undefined>(undefined)
   const [reviewers, setReviewers] = useState<ReviewerView[] | undefined>(undefined)
@@ -114,6 +119,8 @@ export function Admin() {
         )}
         {tab === 'submissions' && <AdminSubmissions submissions={submissions} />}
         {tab === 'feedback' && <AdminFeedback />}
+        {tab === 'accounts' && <AdminAccounts />}
+        {tab === 'announcements' && <AdminAnnouncements />}
       </section>
     </div>
   )

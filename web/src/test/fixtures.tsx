@@ -10,6 +10,7 @@ import type { AccountRecord } from '../account/storage'
 import { AppProvider } from '../app/context'
 import type { CreditsPort, CreditsView } from '../app/credits'
 import type { FixNotice, FixNoticesPort } from '../app/fixNotices'
+import type { LegalNoticePort, LegalState } from '../app/legalNotice'
 import { type LifecycleState, type LifecyclePort } from '../app/lifecycle'
 import { PackSwitcher } from '../app/packSwitch'
 import type { AudioPort } from '../content/audio'
@@ -59,6 +60,7 @@ export interface RenderContext {
   readonly lifecycle?: LifecyclePort
   readonly credits?: CreditsPort
   readonly fixNotices?: FixNoticesPort
+  readonly legalNotice?: LegalNoticePort
   readonly packs?: PackSwitcher
 }
 
@@ -191,6 +193,20 @@ export function fakeFixNotices(notices: readonly FixNotice[] = []): FixNoticesPo
   return port
 }
 
+/** The legal pages' dates as the banner sees them: nothing known yet, unless a test says so; logs dismissals. */
+export function fakeLegalNotice(state: LegalState = { published: null, seen: { terms: null, privacy: null } }): LegalNoticePort & { dismissed: string[] } {
+  const store = createStore<LegalState>(state)
+  const port: LegalNoticePort & { dismissed: string[] } = {
+    store,
+    dismissed: [],
+    dismiss(doc, date) {
+      port.dismissed.push(`${doc} ${date}`)
+      store.set({ ...store.get(), seen: { ...store.get().seen, [doc]: date } })
+    },
+  }
+  return port
+}
+
 /** Renders inside every provider the app has, in English unless told otherwise. */
 export function renderWith(ui: ReactElement, ctx: RenderContext): RenderResult {
   return render(withProviders(ui, ctx))
@@ -215,6 +231,7 @@ export function withProviders(ui: ReactElement, ctx: RenderContext): ReactElemen
             lifecycle: ctx.lifecycle ?? fakeLifecycle(),
             credits: ctx.credits ?? fakeCredits(),
             fixNotices: ctx.fixNotices ?? fakeFixNotices(),
+            legalNotice: ctx.legalNotice ?? fakeLegalNotice(),
             packs: ctx.packs ?? fakePacks(),
           }}
         >

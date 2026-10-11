@@ -24,10 +24,33 @@ export interface ServerConfig {
   readonly vapid: VapidKeys | null
   /** What a request to `GET /v1/admin/feedback` must carry (spec §8.12). Null closes the route. */
   readonly feedbackReadToken: string | null
+  /** What a request to the routes that change something for the review app must carry (`/v1/admin/accounts/*`, #187). Null closes them. */
+  readonly adminWriteToken: string | null
+  /** The announcement mails sent in one UTC day at most (#185): a part of the mail provider's daily allowance, the rest of which is the sign-in codes'. */
+  readonly announcementMailsPerDay: number
+}
+
+/** One announcement as one account gets it (#185, src/announcements/text.ts). */
+export interface AnnouncementMail {
+  readonly to: string
+  readonly subject: string
+  /** Plain text: an announcement has no other form. */
+  readonly text: string
+  /** The unsubscribe pair of a news mail; none on a service notice. */
+  readonly headers: Readonly<Record<string, string>>
+  /** Where an answer goes: the sending address has no mailbox. */
+  readonly replyTo: string
+  /** Names this mail to the provider, which sends one mail for one key however often it is asked within a day. */
+  readonly idempotencyKey: string
 }
 
 export interface Mailer {
   sendSignInCode(email: string, code: string): Promise<void>
+  /**
+   * Throws MailNotSent (src/mail.ts) when the provider answered that it did not send, with why. Anything else
+   * thrown means the outcome is not known: the mail may have gone, and is asked for again only with the same key.
+   */
+  sendAnnouncement(mail: AnnouncementMail): Promise<void>
 }
 
 /** A queue message (spec §4.4): one learner's work, small and safe to retry. */
