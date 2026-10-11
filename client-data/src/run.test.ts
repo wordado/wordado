@@ -131,7 +131,7 @@ describe('StudyRun', () => {
     expect(client.snapshot.states).toEqual(states)
   })
 
-  it('draws a unit’s practice only from that unit’s started words, and leaves the schedule alone', async () => {
+  it('draws a unit’s practice from all the unit’s words, started or not, and leaves the schedule alone', async () => {
     const env = testEnv()
     const client = await openSampleClient(env)
     await client.updateSettings({ newWordLimit: 30 })
@@ -143,22 +143,22 @@ describe('StudyRun', () => {
     env.advance(3_600_000)
     const [first, second, third] = client.snapshot.corpus!.units
     const states = client.snapshot.states
-    const seen: WordId[] = []
-    const run = await StudyRun.start(client, env, options({ kind: 'practice', mode: 'flashcard', scope: { kind: 'unit', id: second!.unitId } }))
-    expect(run.snapshot.remaining).toBe(5)
-    for (let guard = 0; guard < 20 && run.snapshot.item; guard += 1) {
-      seen.push(run.snapshot.item.wordId)
-      env.advance(ITEM_SETTLE_MS)
-      run.reveal()
-      env.advance(ITEM_SETTLE_MS)
-      await run.rate(Grade.Again)
+    for (const unit of [first!, second!, third!]) {
+      const seen: WordId[] = []
+      const run = await StudyRun.start(client, env, options({ kind: 'practice', mode: 'flashcard', scope: { kind: 'unit', id: unit.unitId } }))
+      expect(run.snapshot.remaining).toBe(PRACTICE_RUN_SIZE)
+      for (let guard = 0; guard < 20 && run.snapshot.item; guard += 1) {
+        seen.push(run.snapshot.item.wordId)
+        env.advance(ITEM_SETTLE_MS)
+        run.reveal()
+        env.advance(ITEM_SETTLE_MS)
+        await run.rate(Grade.Again)
+      }
+      expect(seen).toHaveLength(PRACTICE_RUN_SIZE)
+      expect(seen.every((wordId) => unit.wordIds.includes(wordId))).toBe(true)
+      expect(client.snapshot.states).toEqual(states)
     }
-    expect(seen).toHaveLength(5)
-    expect(seen.every((wordId) => second!.wordIds.includes(wordId) && states.has(wordId))).toBe(true)
-    expect(client.snapshot.states).toEqual(states)
-    // A larger unit still gives a run of the usual size; a unit with nothing started gives none.
-    expect((await StudyRun.start(client, env, options({ kind: 'practice', scope: { kind: 'unit', id: first!.unitId } }))).snapshot.remaining).toBe(PRACTICE_RUN_SIZE)
-    expect((await StudyRun.start(client, env, options({ kind: 'practice', scope: { kind: 'unit', id: third!.unitId } }))).snapshot.phase).toBe('done')
+    expect(client.snapshot.states.size).toBe(25)
   })
 
   it('draws the practice of a skipped level’s unit from all its words, and an answer starts none of them (spec §7.2, §7.4)', async () => {
@@ -283,7 +283,7 @@ describe('StudyRun', () => {
     expect(run.snapshot).toMatchObject({ phase: 'done', setAside: 1, toLearn: 2 })
   })
 
-  it('never starts empty while the scope has started words: when all are due today, practice uses them and leaves the schedule alone', async () => {
+  it('never starts empty while there are started words: when all are due today, practice over everything uses them, and a unit’s practice prefers its words outside the session, leaving the schedule alone', async () => {
     const env = testEnv()
     const client = await openSampleClient(env)
     for (const wordId of client.snapshot.plan!.newWords.slice(0, 6)) {
@@ -296,13 +296,17 @@ describe('StudyRun', () => {
     expect(due.size).toBe(6)
     const states = client.snapshot.states
     const first = client.snapshot.corpus!.units[0]!
-    for (const scope of [undefined, { kind: 'unit', id: first.unitId } as const]) {
-      const run = await StudyRun.start(client, env, options({ kind: 'practice', mode: 'flashcard', ...(scope && { scope }) }))
-      expect(run.snapshot.remaining).toBe(6)
-      expect(due.has(run.snapshot.item!.wordId)).toBe(true)
-      await playThrough(run, env, Grade.Again)
-      expect(run.snapshot).toMatchObject({ phase: 'done', answered: 6 })
-    }
+    const everything = await StudyRun.start(client, env, options({ kind: 'practice', mode: 'flashcard' }))
+    expect(everything.snapshot.remaining).toBe(6)
+    expect(due.has(everything.snapshot.item!.wordId)).toBe(true)
+    await playThrough(everything, env, Grade.Again)
+    expect(everything.snapshot).toMatchObject({ phase: 'done', answered: 6 })
+    // The unit is practised whole: the 6 due words and today's new words are kept out, so the other 4 are dealt.
+    const inUnit = await StudyRun.start(client, env, options({ kind: 'practice', mode: 'flashcard', scope: { kind: 'unit', id: first.unitId } }))
+    expect(inUnit.snapshot.remaining).toBe(4)
+    expect(states.has(inUnit.snapshot.item!.wordId) || due.has(inUnit.snapshot.item!.wordId)).toBe(false)
+    await playThrough(inUnit, env, Grade.Again)
+    expect(inUnit.snapshot).toMatchObject({ phase: 'done', answered: 4 })
     expect(client.snapshot.states).toEqual(states)
     expect(client.snapshot.plan!.reviews).toHaveLength(6)
   })
@@ -418,10 +422,12 @@ describe('StudyRun', () => {
     vi.spyOn(client, 'snapshot', 'get').mockReturnValue({ ...snapshot, corpus: { ...corpus, entries, retired: new Set([only]) } })
     vi.spyOn(client, 'startSession').mockResolvedValue([])
     const unit = corpus.units.find((u) => u.wordIds.includes(only))!
-    for (const scope of [undefined, { kind: 'unit', id: unit.unitId } as const]) {
-      const run = await StudyRun.start(client, env, options({ kind: 'practice', ...(scope && { scope }) }))
-      expect(run.snapshot).toMatchObject({ phase: 'done', remaining: 0, item: null })
-    }
+    const everything = await StudyRun.start(client, env, options({ kind: 'practice' }))
+    expect(everything.snapshot).toMatchObject({ phase: 'done', remaining: 0, item: null })
+    // A unit is practised whole, but never its retired word: the other nineteen are dealt.
+    const inUnit = await StudyRun.start(client, env, options({ kind: 'practice', mode: 'flashcard', scope: { kind: 'unit', id: unit.unitId } }))
+    expect(inUnit.snapshot.remaining).toBe(PRACTICE_RUN_SIZE)
+    expect(inUnit.snapshot.item!.wordId).not.toBe(only)
     // The theme is practised whole, but never its retired word: three rounds show the other twenty-four.
     const seen = new Set<WordId>()
     for (let round = 0; round < 3; round += 1) {

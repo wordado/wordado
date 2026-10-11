@@ -77,9 +77,9 @@ const INITIAL: RunSnapshot = {
 
 /** What a practice run draws from now: the learner's words, without today's session, kept to the scope if the corpus holds it. */
 function practiceInput(snapshot: ClientSnapshot, scope: PracticeScope | undefined): Omit<PracticeInput, 'count' | 'rng' | 'shown'> {
-  const { states, flags, plan, corpus, settings } = snapshot
+  const { states, flags, plan, corpus } = snapshot
   const exclude = new Set<WordId>([...(plan?.reviews ?? []), ...(plan?.newWords ?? [])])
-  return { states, flags, retired: corpus?.retired ?? new Set(), exclude, ...scopePool(corpus, settings.declaredLevel, scope) }
+  return { states, flags, retired: corpus?.retired ?? new Set(), exclude, ...scopePool(corpus, scope) }
 }
 
 /**
@@ -307,7 +307,7 @@ export class StudyRun {
 
   /**
    * "Learn this word" for the word on screen, or taking it back (spec §7.4): the daily session will serve it as a
-   * new word. Offered in practice of a theme or of a skipped level's unit, on a word that was never started; allowed at any
+   * new word. Offered in practice of a theme or of a unit, on a word that was never started; allowed at any
    * point of the item, the feedback after an answer included. The run itself goes on as it was.
    */
   async setLearn(on: boolean): Promise<void> {

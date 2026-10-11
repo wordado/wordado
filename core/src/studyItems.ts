@@ -4,10 +4,9 @@ import { masteryTier } from './mastery'
 import { chooseMode } from './modeSelection'
 import { isLive } from './path'
 import { pickUnseenFirst, practiceWeight } from './practiceWeight'
-import { isSkippedLevel } from './progress'
 import { shuffle, type Rng } from './rng'
 import type { ReviewState } from './scheduler'
-import type { CefrLevel, CorpusEntry, Direction, Mode, WordFlag } from './types'
+import type { CorpusEntry, Direction, Mode, WordFlag } from './types'
 import { corpusWordId, parseWordId, type WordId } from './wordId'
 
 /** Options shown in a choice item, the answer included (spec §8.1). Tuning (§15). */
@@ -120,15 +119,15 @@ export interface ScopePool {
 
 /**
  * The words of the unit or theme being practised, and whether the never-started ones are among them (spec §7.4):
- * a theme is practised whole, and so is a unit of a level the learner skipped (§7.2), whose words are never
- * introduced; any other unit keeps to its started words. Undefined for practice over everything, and for a unit
- * or theme the corpus does not hold. The one place that decides it.
+ * a theme and a unit are both practised whole, the unit whether it is open, still locked or of a level the
+ * learner skipped (§7.2). Undefined for practice over everything, and for a unit or theme the corpus does not
+ * hold. The one place that decides it.
  */
-export function scopePool(corpus: Corpus | null, declaredLevel: CefrLevel, scope: PracticeScope | undefined): ScopePool | undefined {
+export function scopePool(corpus: Corpus | null, scope: PracticeScope | undefined): ScopePool | undefined {
   if (!scope || !corpus) return undefined
   if (scope.kind === 'unit') {
     const unit = corpus.units.find((u) => u.unitId === scope.id)
-    return unit && { within: new Set(unit.wordIds), unstarted: isSkippedLevel(unit.level, declaredLevel) }
+    return unit && { within: new Set(unit.wordIds), unstarted: true }
   }
   if (!corpus.themes.some((t) => t.themeId === scope.id)) return undefined
   return { within: new Set(themeEntries(corpus, scope.id).map((e) => corpusWordId(e.entryId))), unstarted: true }

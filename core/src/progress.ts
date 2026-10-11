@@ -74,11 +74,11 @@ export function isSkippedLevel(level: CefrLevel, declaredLevel: CefrLevel): bool
 }
 
 /**
- * How many of a unit's words practice may use (spec §7.4), from the path's own counts: its started live words, or
- * every live word when its level was skipped. The words `practisable` admits; above zero, the unit can be practised.
+ * How many of a unit's words practice may use (spec §7.4), from the path's own counts: every live word, started or
+ * not, since a unit is practised whole. The words `practisable` admits; above zero, the unit can be practised.
  */
-export function unitPractisable(progress: Pick<UnitProgress, 'live' | 'introduced'>, skipped: boolean): number {
-  return skipped ? progress.live : progress.introduced
+export function unitPractisable(progress: Pick<UnitProgress, 'live'>): number {
+  return progress.live
 }
 
 export type LevelCompletion =

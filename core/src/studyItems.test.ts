@@ -260,35 +260,32 @@ describe('scopePool: which practice takes its scope whole (spec §7.4)', () => {
   }
 
   it('takes a theme whole, whatever the learner’s level: every live word of the theme, started or not', () => {
-    for (const declared of ['A1', 'A2', 'B1'] as const) {
-      expect(scopePool(scoped, declared, { kind: 'theme', id: 'travel' })).toEqual({ within: new Set([apple, cheese].map(id)), unstarted: true })
-    }
+    expect(scopePool(scoped, { kind: 'theme', id: 'travel' })).toEqual({ within: new Set([apple, cheese].map(id)), unstarted: true })
   })
 
-  it('takes a unit whole only when its level was skipped', () => {
-    expect(scopePool(scoped, 'A1', { kind: 'unit', id: 'a1-01' })).toEqual({ within: new Set([id(apple), id(bread)]), unstarted: false })
-    expect(scopePool(scoped, 'A2', { kind: 'unit', id: 'a1-01' })).toEqual({ within: new Set([id(apple), id(bread)]), unstarted: true })
-    expect(scopePool(scoped, 'A2', { kind: 'unit', id: 'a2-01' })).toMatchObject({ unstarted: false })
-    expect(scopePool(scoped, 'A1', { kind: 'unit', id: 'a2-01' })).toMatchObject({ unstarted: false })
+  it('takes a unit whole too, whichever level it is of', () => {
+    expect(scopePool(scoped, { kind: 'unit', id: 'a1-01' })).toEqual({ within: new Set([id(apple), id(bread)]), unstarted: true })
+    expect(scopePool(scoped, { kind: 'unit', id: 'a2-01' })).toMatchObject({ unstarted: true })
   })
 
   it('is nothing for practice over everything, without a corpus, and for a unit or theme the corpus does not hold', () => {
-    expect(scopePool(scoped, 'A1', undefined)).toBeUndefined()
-    expect(scopePool(null, 'A1', { kind: 'theme', id: 'travel' })).toBeUndefined()
-    expect(scopePool(scoped, 'A1', { kind: 'theme', id: 'nowhere' })).toBeUndefined()
-    expect(scopePool(scoped, 'A1', { kind: 'unit', id: 'nowhere' })).toBeUndefined()
+    expect(scopePool(scoped, undefined)).toBeUndefined()
+    expect(scopePool(null, { kind: 'theme', id: 'travel' })).toBeUndefined()
+    expect(scopePool(scoped, { kind: 'theme', id: 'nowhere' })).toBeUndefined()
+    expect(scopePool(scoped, { kind: 'unit', id: 'nowhere' })).toBeUndefined()
   })
 
-  it('gives a theme’s practice its live, unflagged words, started or not, and practice over everything the started ones', () => {
+  it('gives a theme’s or a unit’s practice its live, unflagged words, started or not, and practice over everything the started ones', () => {
     const states = new Map([apple, bread].map((e) => [id(e), state(id(e), 10)]))
     const flags = new Map<WordId, WordFlag>([[id(milk), 'known']])
     const ctx = { states, flags, retired: scoped.retired, exclude: new Set<WordId>() }
-    const theme = scopePool(scoped, 'A1', { kind: 'theme', id: 'travel' })
+    const theme = scopePool(scoped, { kind: 'theme', id: 'travel' })
     // Cheese was never started and is practised all the same; the theme's retired word is not.
     expect(new Set(practiceCandidates({ ...ctx, ...theme }))).toEqual(new Set([id(apple), id(cheese)]))
     expect(matchingCandidates(scoped, states, flags, theme?.within, theme?.unstarted).map(id)).toEqual([id(apple), id(cheese)])
     expect(new Set(practiceCandidates(ctx))).toEqual(new Set([id(apple), id(bread)]))
-    expect(new Set(practiceCandidates({ ...ctx, ...scopePool(scoped, 'A1', { kind: 'unit', id: 'a2-01' }) }))).toEqual(new Set())
+    // A unit none of whose words is started, as one still locked: its live words that are not marked known.
+    expect(new Set(practiceCandidates({ ...ctx, ...scopePool(scoped, { kind: 'unit', id: 'a2-01' }) }))).toEqual(new Set([id(cheese)]))
   })
 })
 

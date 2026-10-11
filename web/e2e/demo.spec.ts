@@ -253,19 +253,45 @@ test('practises one unit from the path, finishes, and comes back to the path', a
   await page.getByRole('link', { name: 'Practise this unit: People and greetings' }).click()
   await expect(heading(page)).toHaveText('Practice')
   await expect(page.getByText('Unit: People and greetings')).toBeVisible()
+  // The unit is practised whole: five of its words are started, the rest are not.
+  await expect(page.getByText('This covers the whole unit, including words you have not started.')).toBeVisible()
   await page.getByRole('link', { name: 'Flashcards' }).click()
   await expect(page).toHaveURL(/\/practice\/words\?unit=[^&]+&mode=flashcard$/)
-  // The unit's five started words, and no more.
-  await expect(page.getByRole('progressbar', { name: 'Session progress' })).toHaveAttribute('aria-valuemax', '5')
-  for (let i = 0; i < 10 && !(await page.locator('.done').isVisible()); i += 1) await answer(page)
+  // A full run, drawn from all the unit's words.
+  await expect(page.getByRole('progressbar', { name: 'Session progress' })).toHaveAttribute('aria-valuemax', '10')
+  for (let i = 0; i < 20 && !(await page.locator('.done').isVisible()); i += 1) await answer(page)
   await expect(heading(page)).toHaveText('Practice complete')
-  await expect(page.getByText('You answered 5 words.')).toBeVisible()
+  await expect(page.getByText('You answered 10 words.')).toBeVisible()
   await page.getByRole('link', { name: 'Practise more' }).click()
   await expect(page.getByText('Unit: People and greetings')).toBeVisible()
   await page.getByRole('link', { name: 'Back to the path' }).click()
   await expect(heading(page)).toHaveText('Your path')
   // Five of the day's ten new words are still to come, so the path still offers the session.
   await expect(page.getByRole('link', { name: 'Start studying' })).toBeVisible()
+})
+
+test('practises a unit that is still locked, and it stays locked', async ({ page }) => {
+  await page.goto('/')
+  await finishSetup(page)
+  await page.goto('/path')
+  const unit = page.locator('li.unit', { has: page.getByRole('heading', { level: 3, name: 'Food and drink' }) })
+  await expect(unit.getByText('Locked')).toBeVisible()
+  await unit.getByRole('link', { name: 'Practise this unit: Food and drink' }).click()
+  await expect(heading(page)).toHaveText('Practice')
+  await expect(page.getByText('Unit: Food and drink')).toBeVisible()
+  await expect(page.getByText('This covers the whole unit, including words you have not started.')).toBeVisible()
+  await expectAccessible(page, { dark: true })
+  await page.getByRole('link', { name: 'Flashcards' }).click()
+  await expect(page.getByRole('progressbar', { name: 'Session progress' })).toHaveAttribute('aria-valuemax', '10')
+  // None of its words is started: each card says so.
+  await expect(page.getByText('New to you')).toBeVisible()
+  for (let i = 0; i < 20 && !(await page.locator('.done').isVisible()); i += 1) await answer(page)
+  await expect(heading(page)).toHaveText('Practice complete')
+  await expect(page.getByText(/^New unit open/)).toHaveCount(0)
+  await page.getByRole('link', { name: 'Back to the path' }).click()
+  // Practice started nothing and opened nothing.
+  await expect(unit.getByText('Locked')).toBeVisible()
+  await expect(page.getByText('0 of 60 words learned well')).toBeVisible()
 })
 
 test('practises a unit of a level the learner placed above, and the level stays skipped', async ({ browser }) => {

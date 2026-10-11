@@ -16,7 +16,7 @@ export interface PracticeScopeView {
   /** What the practice routes carry on, so the learner stays in the scope. */
   readonly params: ScopeParams
   readonly title: LocalizedText
-  /** How many words practice draws on: every live word of a theme or of a skipped level's unit, the started ones of any other unit; none of them set aside. */
+  /** How many words practice draws on: every live word of the theme or unit, started or not; none of them set aside. */
   readonly words: number
   /** How many of those were never started: above zero only where the scope is practised whole. */
   readonly unstarted: number
@@ -35,15 +35,15 @@ export interface PracticeScopeView {
 
 /**
  * The unit or theme a practice route names (spec §7.4), or null for practice over everything: nothing in the
- * address, a unit the corpus does not hold or that is still locked, or a theme that is not offered.
+ * address, a unit the corpus does not hold, or a theme that is not offered. A unit that is still locked can be practised.
  */
 export function usePracticeScope(params: ScopeParams): PracticeScopeView | null {
-  const { corpus, settings, path, progress, states, flags } = useClientSnapshot()
+  const { corpus, progress, states, flags } = useClientSnapshot()
   const { unit: unitId, theme: themeId } = params
   return useMemo((): PracticeScopeView | null => {
     if (!corpus) return null
     if (unitId !== undefined) {
-      const unit = path?.unlocked.has(unitId) ? corpus.units.find((u) => u.unitId === unitId) : undefined
+      const unit = corpus.units.find((u) => u.unitId === unitId)
       if (!unit) return null
       const skipped = progress?.levels[unit.level]?.kind === 'skipped'
       const unitProgress = progress?.units.get(unitId)
@@ -52,12 +52,12 @@ export function usePracticeScope(params: ScopeParams): PracticeScopeView | null 
         params: { unit: unitId },
         title: unit.title,
         // The path's own count, by the same rule as `practisable`.
-        words: unitProgress ? unitPractisable(unitProgress, skipped) : 0,
-        unstarted: unitProgress && skipped ? unitProgress.live - unitProgress.introduced : 0,
+        words: unitProgress ? unitPractisable(unitProgress) : 0,
+        unstarted: unitProgress ? unitProgress.live - unitProgress.introduced : 0,
         skipped,
         label: 'practice.unit',
         start: 'path.practiseUnit',
-        needWords: skipped ? 'practice.needWordsSkippedUnit' : 'practice.needWordsUnit',
+        needWords: 'practice.needWordsUnit',
         back: { name: 'path' },
         backLabel: 'practice.toPath',
       }
@@ -69,7 +69,7 @@ export function usePracticeScope(params: ScopeParams): PracticeScopeView | null 
       scope,
       params: { theme: theme.themeId },
       title: theme.name,
-      ...scopeWords({ corpus, settings, states, flags }, scope),
+      ...scopeWords({ corpus, states, flags }, scope),
       skipped: false,
       label: 'practice.theme',
       start: 'themes.practise',
@@ -77,7 +77,7 @@ export function usePracticeScope(params: ScopeParams): PracticeScopeView | null 
       back: { name: 'themes' },
       backLabel: 'practice.toThemes',
     }
-  }, [corpus, settings, path, progress, states, flags, unitId, themeId])
+  }, [corpus, progress, states, flags, unitId, themeId])
 }
 
 /** How many of these words practice may use (started unless the scope is practised whole, not set aside, not retired): something can be practised once this is above zero. */
@@ -91,9 +91,9 @@ export function practisableCount(wordIds: Iterable<WordId>, ctx: PracticeContext
  * The same count for one unit or theme, by the rule its practice draws by (`scopePool`): a theme is counted whole.
  * With it, how many of those words were never started.
  */
-export function scopeWords(snapshot: Pick<ClientSnapshot, 'corpus' | 'settings' | 'states' | 'flags'>, scope: PracticeScope): { readonly words: number; readonly unstarted: number } {
-  const { corpus, settings, states, flags } = snapshot
-  const pool = scopePool(corpus, settings.declaredLevel, scope)
+export function scopeWords(snapshot: Pick<ClientSnapshot, 'corpus' | 'states' | 'flags'>, scope: PracticeScope): { readonly words: number; readonly unstarted: number } {
+  const { corpus, states, flags } = snapshot
+  const pool = scopePool(corpus, scope)
   if (!corpus || !pool) return { words: 0, unstarted: 0 }
   const ctx = { states, flags, retired: corpus.retired }
   const words = practisableCount(pool.within, { ...ctx, unstarted: pool.unstarted })
