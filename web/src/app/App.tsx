@@ -1,4 +1,4 @@
-import { ChartColumn, LayoutGrid, Route as RouteIcon, SlidersVertical, Sun, type LucideIcon } from 'lucide-react'
+import { ChartColumn, LayoutGrid, Route as RouteIcon, Search as SearchIcon, SlidersVertical, Sun, type LucideIcon } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { useT, type MessageKey } from '../i18n/i18n'
 import { Link, navigate, useRoute, type Route } from '../router'
@@ -89,8 +89,8 @@ const WORDMARK = (
 )
 
 /**
- * The shell: the masthead's first row (the icon and wordmark, the language,
- * the account), the navigation (a second row, or the tab bar on a phone),
+ * The shell: the masthead's first row (the icon and wordmark, the search, the
+ * language, the account), the navigation (a second row, or the tab bar on a phone),
  * banners, and the routed screen. While studying, only the screen. While the
  * first-run setup is owed (`setup`, plan 11), the setup instead of the routed
  * screen (except Sign in, which a returning learner needs, and Feedback, for
@@ -104,6 +104,7 @@ export function App(props: { readonly resumed: boolean; readonly setup: boolean;
   const route = useRoute()
   const main = useRef<HTMLElement>(null)
   const first = useRef(true)
+  const before = useRef(route.name)
   const setupBefore = useRef(props.setup)
 
   // The setup gave way to today without a navigation: focus the new screen, as a navigation would (spec §11.1).
@@ -120,6 +121,8 @@ export function App(props: { readonly resumed: boolean; readonly setup: boolean;
   // In the setup, the current step's heading takes focus instead (plan 11): the
   // step has already focused it (child effects run first), and main must not take it back.
   useEffect(() => {
+    const from = before.current
+    before.current = route.name
     // A screen may name what takes focus on arrival (`data-route-focus`): the unit a search led to, the search
     // field. The setup names its step's heading. Otherwise the screen itself.
     const target = (): HTMLElement | null =>
@@ -129,6 +132,8 @@ export function App(props: { readonly resumed: boolean; readonly setup: boolean;
       if (props.resumed) target()?.focus()
       return
     }
+    // The search rewrites its own address as the learner types: that is not an arrival, and the field keeps focus.
+    if (from === 'search' && route.name === 'search') return
     target()?.focus()
   }, [route])
 
@@ -157,6 +162,12 @@ export function App(props: { readonly resumed: boolean; readonly setup: boolean;
               </Link>
             )}
             <div className="masthead-actions">
+              {/* Not while the setup is owed, on its Sign in and Feedback pages either: there is no course to search yet. */}
+              {!props.setup && (
+                <Link className="search-circle" to={{ name: 'search', q: '' }} aria-label={t('search.open')} aria-current={route.name === 'search' ? 'page' : undefined}>
+                  <SearchIcon aria-hidden="true" size={20} />
+                </Link>
+              )}
               <LanguageMenu />
               <AccountMenu />
             </div>

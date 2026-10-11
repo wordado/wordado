@@ -324,6 +324,22 @@ p {
   border-color: var(--ink);
 }
 
+/* The way to the search: a circle like the language's, with a magnifier. */
+.search-circle {
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  color: var(--ink);
+  background: var(--paper-raised);
+  border: 1.5px solid var(--rule);
+  border-radius: 50%;
+}
+
+.search-circle[aria-current='page'] {
+  border-color: var(--ink);
+}
+
 .account-circle {
   font: 600 var(--step-0) / 1 var(--font-ui);
   color: var(--rose-ink);
@@ -348,6 +364,15 @@ p {
 
 .account-signin {
   min-height: 2.75rem;
+  white-space: nowrap;
+}
+
+/* Signed out on a narrow phone, the search, the language and "Sign in" leave no room for the name: the icon
+   stands alone. The link keeps its name for a screen reader. */
+@media (max-width: 24.99rem) {
+  .masthead-top:has(.account-signin) .wordmark-name {
+    display: none;
+  }
 }
 
 .popover-panel {
