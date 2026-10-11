@@ -245,9 +245,17 @@ function UnitItem(props: {
   return (
     <li id={`unit-${unit.unitId}`} className={`unit unit-${status}`}>
       <div className="unit-track" aria-hidden="true">
-        <span className="unit-marker">
-          <Icon size={20} strokeWidth={2.25} />
-        </span>
+        {/* The current unit's play mark starts the session, as Start studying beside it does: a shortcut for a
+            pointer, so it is no second stop for the keyboard or a screen reader. */}
+        {status === 'current' && props.today === 'something' ? (
+          <Link className="unit-marker" to={{ name: 'study', mode: null }} tabIndex={-1}>
+            <Icon size={20} strokeWidth={2.25} />
+          </Link>
+        ) : (
+          <span className="unit-marker">
+            <Icon size={20} strokeWidth={2.25} />
+          </span>
+        )}
         {props.line !== null && <span className={`unit-line${props.line ? ' is-done' : ''}`} />}
       </div>
       <div className="unit-card">
