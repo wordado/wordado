@@ -166,12 +166,13 @@ describe('the statements one invocation runs against D1, in the worst case (Free
     }
   })
 
-  it('the Accounts tab: the sweep’s counts, a lookup and a delete, which keep nothing here (#187)', async () => {
+  it('the Accounts tab: the sweep’s counts, the counts of accounts, a lookup and a delete, which keep nothing here (#187, #206)', async () => {
     env = { ...env, ADMIN_WRITE_TOKEN: WRITE_TOKEN }
     server.writeToken = WRITE_TOKEN
     server.accounts.set('ana@example.com', { createdAt: WEEK_START, lastSignInAt: WEEK_START })
     const paths: [string, 'GET' | 'POST', string, unknown?][] = [
       ['the sweep’s counts', 'GET', '/api/admin/accounts/sweep'],
+      ['the counts of accounts', 'GET', '/api/admin/accounts/stats'],
       ['a lookup', 'POST', '/api/admin/accounts/lookup', { email: 'ana@example.com' }],
       ['a delete', 'POST', '/api/admin/accounts/delete', { email: 'ana@example.com', confirm: true }],
     ]

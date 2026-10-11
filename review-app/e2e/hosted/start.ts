@@ -70,11 +70,13 @@ const WRITE_TOKEN = 'e2e-admin-write-token-0123456789abcdef'
 // The messages came in the last hours, whenever this runs: the week at the top of the tab counts the last seven days.
 const learnerApp = new FakeLearnerApp(FEEDBACK_TOKEN, FEEDBACK.map((item) => ({ ...item, receivedAt: Date.now() - (30 - item.id) * 10 * 60_000 })))
 learnerApp.writeToken = WRITE_TOKEN
-// One account for the desktop run to delete, one for the phone run to look up, and a sweep that has run.
+// One account for the desktop run to delete, one for the phone run to look up, a sweep that has run, and the counts
+// of accounts and their use (#206).
 const DAY = 86_400_000
 learnerApp.accounts.set('leaving@example.com', { createdAt: Date.now() - 400 * DAY, lastSignInAt: Date.now() - 30 * DAY })
 learnerApp.accounts.set('staying@example.com', { createdAt: Date.now() - 900 * DAY, lastSignInAt: null })
 learnerApp.sweep = { months: 24, batch: 50, due: 70, undated: 1, taken: 12, lastRunAt: Date.now() - DAY, lastTaken: 2 }
+learnerApp.stats = { readAt: Date.now(), accounts: 1204, made7: 4, made30: 31, studied7: 40, studied30: 75, newsGiven: 50, newsWithdrawn: 3, newsNone: 1151, reminders: 22 }
 createServer((req, res) => {
   void (async () => {
     // What the review app has asked of it, for the test of the timed job, the accounts it still has, and its announcements.

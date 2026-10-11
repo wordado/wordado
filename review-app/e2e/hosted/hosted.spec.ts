@@ -804,10 +804,23 @@ test('@phone an admin reads the week’s summary and opens a draft on a phone', 
 /** The accounts the fake learner app server still has. */
 const accountsLeft = async () => ((await (await fetch('http://127.0.0.1:4183/_state')).json()) as { accounts: string[] }).accounts
 
-test('an admin reads the sweep’s counts, looks an account up and deletes it after typing its address again (#187)', async ({ browser }) => {
+test('an admin reads the counts of accounts and the sweep’s, looks an account up and deletes it after typing its address again (#187, #206)', async ({ browser }) => {
   const page = await as(browser, 'admin')
   await page.goto('/#accounts')
   const panel = page.getByRole('tabpanel', { name: 'Accounts' })
+  // How many accounts there are and how many are used: numbers, and when they were counted.
+  const counts = panel.getByRole('list', { name: 'Accounts and their use' }).getByRole('listitem')
+  await expect(counts).toHaveText([
+    /^1,204\s*accounts$/,
+    /^4\s*made in the last 7 days$/,
+    /^31\s*made in the last 30 days$/,
+    /^22\s*with reminders on$/,
+    /^40\s*studied in the last 7 days$/,
+    /^75\s*studied in the last 30 days$/,
+    /^50\s*agreed to news$/,
+    /^3\s*withdrew from news$/,
+  ])
+  await expect(panel.getByText(/1,151 accounts have said nothing about news yet\. Counted .+\./)).toBeVisible()
   const stats = panel.getByRole('list', { name: 'The sweep of inactive accounts' }).getByRole('listitem')
   await expect(stats).toHaveText([/^70\s*past 24 months now$/, /^50\s*the next run deletes$/, /^2\s*deleted by the last run$/, /^12\s*deleted so far$/])
   await expect(panel.getByText(/An account not signed in to for 24 months is deleted, at most 50 a day, with no mail first\. Last run: .+\./)).toBeVisible()
@@ -862,6 +875,13 @@ test('@phone an admin reads the Accounts tab and opens the question on a phone (
   const [first, second, third] = await Promise.all([0, 1, 2].map(async (i) => (await stats.nth(i).boundingBox())!))
   expect(second!.y).toBe(first!.y)
   expect(third!.y).toBeGreaterThan(first!.y)
+  // The counts of accounts above them, two by two as well.
+  const counts = panel.getByRole('list', { name: 'Accounts and their use' }).getByRole('listitem')
+  await expect(counts).toHaveCount(8)
+  const [one, two, three] = await Promise.all([0, 1, 2].map(async (i) => (await counts.nth(i).boundingBox())!))
+  expect(two!.y).toBe(one!.y)
+  expect(three!.y).toBeGreaterThan(one!.y)
+  expect(first!.y).toBeGreaterThan(three!.y)
   await panel.getByLabel('Email address').fill('staying@example.com')
   await panel.getByRole('button', { name: 'Look up' }).tap()
   const account = panel.getByRole('region', { name: 'The account' })

@@ -218,8 +218,8 @@ as a pull request against the content repository, with no local checkout and no 
    refuses and a call the model refuses are all "failing": the Worker's log has one line for each, with the
    step (`key file`, `token` or `model`) and a status, and nothing of the secret, the token or a message.
 
-10. Optional, for the Accounts tab (deleting a learner's account by hand, and the counts of the sweep of
-    inactive accounts; spec §17): the Worker secret `ADMIN_WRITE_TOKEN`, the same value as the learner app
+10. Optional, for the Accounts tab (deleting a learner's account by hand, the counts of the sweep of
+    inactive accounts, and the counts of accounts and their use; spec §17): the Worker secret `ADMIN_WRITE_TOKEN`, the same value as the learner app
     server's secret of that name and **not** the value of `FEEDBACK_READ_TOKEN` (`docs/deploy.md`, step 6, has
     the commands), and `LEARNER_APP_URL` as in step 8. While either is missing the tab says accounts are not
     connected, and the rest of the app works. **This needs the learner app's server from the same change**:
@@ -276,8 +276,8 @@ language with its progress and **Assign** where nobody holds it), **Reviewers**,
 **Submissions**, **Feedback** (what learners wrote about the app, read from the learner app's server each
 time the tab is opened; the coordinator marks each message New, Looked at, Done or Not doing and can keep a note
 on it; those marks are stored here, and, with the AI help switched on, the AI's reading of each message: spec §16),
-**Accounts** (spec §17: how many accounts the sweep of inactive accounts would delete next and how many it
-deleted, and one account deleted by hand, for an erasure asked for by mail or an account closed. The account is
+**Accounts** (spec §17: how many accounts there are and how many are used, in counts only; how many accounts the
+sweep of inactive accounts would delete next and how many it deleted; and one account deleted by hand, for an erasure asked for by mail or an account closed. The account is
 looked up by its whole address, which shows only when it was made and last signed in, and is deleted after a
 question answered by typing the address again. Nothing of an account is stored here) and **Announcements** (spec §18:
 a mail to learners' account holders, written here for each language and sent by the learner app's server. A

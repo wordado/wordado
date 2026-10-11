@@ -3,6 +3,7 @@ import { requireAdminWriteToken } from '../adminToken'
 import type { ServerDeps } from '../deps'
 import { invalid, readJson, type AppEnv } from '../http'
 import { deleteAccount } from './deletion'
+import { accountStats } from './stats'
 import { accountSweepStatus } from './sweep'
 
 /** The longest address looked for; a longer one is no address. */
@@ -24,10 +25,10 @@ interface AccountRow {
 
 /**
  * The provider's own handling of accounts, for the review app's Accounts tab (#187): an erasure asked for by
- * mail, an account closed, and the counts of the sweep. The caller is the review app's server, with
- * `ADMIN_WRITE_TOKEN` (src/adminToken.ts) and no cookie. The address travels in the body, never in the path
- * or the query, which are logged. Nothing is answered about an account beyond when it was made and last
- * signed in, and the log has no address and no id.
+ * mail, an account closed, the counts of the sweep, and the counts of accounts and their use (#206). The caller
+ * is the review app's server, with `ADMIN_WRITE_TOKEN` (src/adminToken.ts) and no cookie. The address travels in
+ * the body, never in the path or the query, which are logged. Nothing is answered about an account beyond when
+ * it was made and last signed in, and the log has no address and no id.
  */
 export function accountAdminRoutes(app: Hono<AppEnv>, deps: ServerDeps): void {
   const admin = requireAdminWriteToken(deps)
@@ -63,5 +64,11 @@ export function accountAdminRoutes(app: Hono<AppEnv>, deps: ServerDeps): void {
   app.get('/v1/admin/accounts/sweep', admin, async (c) => {
     c.header('cache-control', 'no-store')
     return c.json(await accountSweepStatus(deps))
+  })
+
+  /** How many accounts there are and how many are used (stats.ts): numbers only, and nothing is logged. */
+  app.get('/v1/admin/accounts/stats', admin, async (c) => {
+    c.header('cache-control', 'no-store')
+    return c.json(await accountStats(deps))
   })
 }

@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import type { AccountSweepView } from '../../shared/hosted'
+import type { AccountStats, AccountStatsView, AccountSweepView } from '../../shared/hosted'
 import { createApp } from '../app'
 import type { Env } from '../bindings'
 import { insertReviewer } from '../db'
@@ -62,6 +62,7 @@ const answer = async (res: Response) => ({ status: res.status, body: (await res.
 describe('the Accounts tab’s routes (#187)', () => {
   it('are for admins only', async () => {
     expect((await as('ivan@example.com', 'GET', '/api/admin/accounts/sweep')).status).toBe(403)
+    expect((await as('ivan@example.com', 'GET', '/api/admin/accounts/stats')).status).toBe(403)
     expect((await as('ivan@example.com', 'POST', '/api/admin/accounts/lookup', { email: 'ana@example.com' })).status).toBe(403)
     expect((await as('ivan@example.com', 'POST', '/api/admin/accounts/delete', { email: 'ana@example.com', confirm: true })).status).toBe(403)
     expect(server.requests).toEqual([])
@@ -117,10 +118,30 @@ describe('the Accounts tab’s routes (#187)', () => {
     expect(server.requests).toEqual(['GET /v1/admin/accounts/sweep'])
   })
 
+  it('gives the counts of accounts and their use, and nothing more the server might say (#206)', async () => {
+    const stats: AccountStats = { readAt: SIGNED_IN, accounts: 120, made7: 4, made30: 31, studied7: 40, studied30: 75, newsGiven: 50, newsWithdrawn: 3, newsNone: 67, reminders: 22 }
+    server.stats = stats
+    const res = await admin('GET', '/api/admin/accounts/stats')
+    expect((await res.json()) as AccountStatsView).toEqual({ connected: true, stats })
+    expect(server.requests).toEqual(['GET /v1/admin/accounts/stats'])
+    expect(new Headers(calls[0]!.init.headers).get('authorization')).toBe(`Bearer ${WRITE_TOKEN}`)
+    expect(logged).toEqual([])
+    server.failure = { status: 200, body: JSON.stringify({ ...stats, newest: 'ana@example.com', ids: ['user-1'] }) }
+    expect(await answer(await admin('GET', '/api/admin/accounts/stats'))).toEqual({ status: 200, body: { connected: true, stats } })
+    // A count that is missing or is no count is an answer it does not understand.
+    for (const wrong of [{ ...stats, studied7: undefined }, { ...stats, accounts: '120' }, { ...stats, reminders: -1 }, { ...stats, readAt: null }]) {
+      server.failure = { status: 200, body: JSON.stringify(wrong) }
+      expect(await answer(await admin('GET', '/api/admin/accounts/stats'))).toEqual({ status: 502, body: { message: 'The app’s server gave an answer the review app does not understand.' } })
+    }
+    server.failure = new TypeError('fetch failed')
+    expect(await answer(await admin('GET', '/api/admin/accounts/stats'))).toEqual({ status: 502, body: { message: 'The app’s server could not be reached.' } })
+  })
+
   it('says it is not connected while the address or the token is not set, and asks the server nothing', async () => {
     for (const missing of [{ ADMIN_WRITE_TOKEN: '' }, { ADMIN_WRITE_TOKEN: '  ' }, { LEARNER_APP_URL: '' }] as Partial<Env>[]) {
       env = { ...env, LEARNER_APP_URL: SERVER, ADMIN_WRITE_TOKEN: WRITE_TOKEN, ...missing }
       expect(await answer(await admin('GET', '/api/admin/accounts/sweep'))).toEqual({ status: 200, body: { connected: false } })
+      expect(await answer(await admin('GET', '/api/admin/accounts/stats'))).toEqual({ status: 200, body: { connected: false } })
       expect((await admin('POST', '/api/admin/accounts/lookup', { email: 'ana@example.com' })).status).toBe(503)
       expect((await admin('POST', '/api/admin/accounts/delete', { email: 'ana@example.com', confirm: true })).status).toBe(503)
     }

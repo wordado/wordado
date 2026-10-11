@@ -326,6 +326,28 @@ export interface AccountSweep {
 /** `GET /api/admin/accounts/sweep`. Not connected: the token or the server's address is not set. */
 export type AccountSweepView = { readonly connected: false } | { readonly connected: true; readonly sweep: AccountSweep }
 
+/** The accounts and their use, as the learner app's server counts them now (#206): numbers only, never a list. */
+export interface AccountStats {
+  /** When the counts were read (epoch milliseconds): the 7 and 30 days are counted back from it. */
+  readonly readAt: number
+  /** The accounts there are, and those made in the last 7 and 30 days. */
+  readonly accounts: number
+  readonly made7: number
+  readonly made30: number
+  /** The accounts with at least one answer in the last 7 and 30 days. */
+  readonly studied7: number
+  readonly studied30: number
+  /** The accounts by what they said to news by email; the three add up to `accounts`. */
+  readonly newsGiven: number
+  readonly newsWithdrawn: number
+  readonly newsNone: number
+  /** The accounts with reminders on. */
+  readonly reminders: number
+}
+
+/** `GET /api/admin/accounts/stats`. Not connected: the token or the server's address is not set. */
+export type AccountStatsView = { readonly connected: false } | { readonly connected: true; readonly stats: AccountStats }
+
 export type AnnouncementStatus = 'draft' | 'sending' | 'stopped' | 'sent'
 /** Why the last run of a send sent nothing or stopped early: the day's own allowance of announcement mails is used,
  * the mail service says its allowance is, or the mail service takes nothing now. */
