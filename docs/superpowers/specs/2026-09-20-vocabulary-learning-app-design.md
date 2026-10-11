@@ -555,7 +555,7 @@ where it can run: enough words of the first two levels at least.
 
 A learner who came through the demo was never asked: its sample has one level.
 When the demo is carried into an account (§8.6), the account's device remembers
-that the question is owed, and the first time Today opens on a course with more
+that the question is owed, and the first time the home screen opens on a course with more
 than one level, the level step stands in its place, alone, with the test. Continue
 ends it for good, whatever was chosen; the other screens stay within reach
 meanwhile.

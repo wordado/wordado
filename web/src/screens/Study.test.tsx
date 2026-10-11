@@ -261,7 +261,7 @@ describe('Study', () => {
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Stop for now' })))
     const links = [...document.querySelectorAll('.done-actions a')].map((a) => [a.textContent, a.getAttribute('href')])
     expect(links).toEqual([
-      ['Back to today', '/'],
+      ['Done', '/'],
       ['Practise more', '/practice'],
     ])
   })
@@ -286,6 +286,6 @@ describe('Study', () => {
     const alert = await screen.findByRole('alert')
     expect(alert.textContent).toBe('Your answer wasn’t saved: Something went wrong. Try again.')
     // Focus mode hides the navigation: the failure offers the way back itself.
-    expect(screen.getByRole('link', { name: 'Back to today' }).getAttribute('href')).toBe('/')
+    expect(screen.getByRole('link', { name: 'Back to Study' }).getAttribute('href')).toBe('/')
   })
 })

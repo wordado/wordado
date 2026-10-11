@@ -116,7 +116,7 @@ export function Placement(props: { readonly source?: PlacementSource; readonly s
           ) : (
             !props.setup && (
               <Link className="button primary study-main" to={{ name: 'home' }}>
-                {t('placement.home')}
+                {t('home.back')}
               </Link>
             )
           )}

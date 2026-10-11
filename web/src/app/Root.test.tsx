@@ -109,7 +109,7 @@ describe('Root', () => {
     await renderRoot()
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('10 new words')
     expect(screen.getByText('You are trying Wordado. Your progress stays on this device.')).toBeTruthy()
-    expect(screen.getByRole('link', { name: 'Today' }).getAttribute('aria-current')).toBe('page')
+    expect(screen.getByRole('link', { name: 'Study' }).getAttribute('aria-current')).toBe('page')
   })
 
   it('says when the database is open in another tab, and takes it over', async () => {
@@ -162,7 +162,7 @@ describe('Root', () => {
     expect(screen.queryByRole('banner')).toBeNull()
     expect(screen.queryByText(/You are trying Wordado/)).toBeNull()
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Stop for now' })))
-    await act(async () => fireEvent.click(screen.getByRole('link', { name: 'Back to today' })))
+    await act(async () => fireEvent.click(screen.getByRole('link', { name: 'Done' })))
     expect(screen.getByRole('navigation', { name: 'Main' })).toBeTruthy()
   })
 
@@ -239,7 +239,7 @@ describe('Root', () => {
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Start studying' })))
     expect(window.location.pathname).toBe('/')
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('10 new words')
-    expect(screen.getByRole('link', { name: 'Today' }).getAttribute('aria-current')).toBe('page')
+    expect(screen.getByRole('link', { name: 'Study' }).getAttribute('aria-current')).toBe('page')
   })
 
   it('renders today after finishSetup()', async () => {

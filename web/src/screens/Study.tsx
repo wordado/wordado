@@ -51,7 +51,7 @@ export function Study(props: { readonly kind: RunKind; readonly mode: Mode | nul
       <section className="study">
         <p role="alert">{t('study.error', { message: error })}</p>
         <Link className="button" to={{ name: 'home' }}>
-          {t('done.home')}
+          {t('home.back')}
         </Link>
       </section>
     )

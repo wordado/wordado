@@ -445,11 +445,11 @@ describe('RunView: the end of a run', () => {
     expect(screen.getByText('You answered 1 word.')).toBeTruthy()
     expect(screen.getByText('Today counts toward your streak.')).toBeTruthy()
     expect(screen.getByText('New unit open: People and greetings')).toBeTruthy()
-    expect(screen.getByRole('link', { name: 'Back to today' }).getAttribute('href')).toBe('/')
-    // Back to today is the main action, Practise more the second.
+    expect(screen.getByRole('link', { name: 'Done' }).getAttribute('href')).toBe('/')
+    // Done is the main action, Practise more the second.
     const links = [...document.querySelectorAll('.done-actions a')].map((a) => [a.textContent, a.classList.contains('primary')])
     expect(links).toEqual([
-      ['Back to today', true],
+      ['Done', true],
       ['Practise more', false],
     ])
   })
