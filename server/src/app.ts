@@ -6,6 +6,8 @@ import { HTTPException } from 'hono/http-exception'
 import { accountAdminRoutes } from './account/admin'
 import { newsConsentAtSignIn } from './account/newsConsent'
 import { accountRoutes } from './account/routes'
+import { announcementAdminRoutes } from './announcements/admin'
+import { newsUnsubscribeRoutes } from './announcements/unsubscribe'
 import { createAuth } from './auth'
 import type { ServerDeps } from './deps'
 import { feedbackAdminRoutes } from './feedback/admin'
@@ -41,6 +43,9 @@ export function createApp(deps: ServerDeps): Hono<AppEnv> {
   // and no Origin. It is a GET that reads no cookie, so there is nothing of a learner's for another site to ride on,
   // and every other method on its path still meets the guard below.
   feedbackAdminRoutes(app, deps)
+  // Before the guard too: a mail program's unsubscribe button posts a form with no Origin (RFC 8058). The token
+  // in the link is all it goes by; it reads no cookie either (src/announcements/unsubscribe.ts).
+  newsUnsubscribeRoutes(app, deps)
 
   // JSON bodies already need a CORS preflight cross-site, which this app never
   // grants; csrf() closes the form-post route that needs none.
@@ -51,6 +56,8 @@ export function createApp(deps: ServerDeps): Hono<AppEnv> {
   // After the /v1 guard, unlike the feedback's: these change something, so a body is limited and a form post from
   // another site refused like any other. They answer to a token of their own and read no cookie (src/adminToken.ts).
   accountAdminRoutes(app, deps)
+  // The same for the announcements: writing one, the test send and the send itself are all changes (#185).
+  announcementAdminRoutes(app, deps)
   syncRoutes(app, deps, owner)
   reminderRoutes(app, deps, user, owner)
   feedbackRoutes(app, deps, optionalUser(auth))

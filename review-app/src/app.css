@@ -2511,3 +2511,83 @@ kbd {
     border-radius: 0;
   }
 }
+
+/* The Announcements tab (issue 185): the kind, then a block for each language, the text as wide as a mail is read. */
+.form.announcement > fieldset {
+  display: grid;
+  gap: var(--space-2);
+  width: 100%;
+  max-width: 44rem;
+  min-width: 0;
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--rule);
+  border-radius: 0.875rem;
+}
+
+.form.announcement legend {
+  padding: 0 var(--space-1);
+  font-size: var(--step--1);
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.announcement-kind .check {
+  align-items: flex-start;
+}
+
+.announcement-kind input[type='radio'] {
+  flex-shrink: 0;
+  width: 1.125rem;
+  height: 1.125rem;
+  margin: 0.2rem 0 0;
+  accent-color: var(--rose);
+}
+
+.announcement-text textarea {
+  width: 100%;
+  min-height: 8rem;
+  padding: var(--space-2) var(--space-3);
+  font: 400 var(--step-0) / 1.5 var(--font-ui);
+  color: var(--ink);
+  background: var(--paper-inset);
+  border: 1px solid var(--rule);
+  border-radius: 0.625rem;
+  resize: vertical;
+}
+
+.announcement-text textarea:hover {
+  border-color: var(--ink-soft);
+}
+
+.announcement-text :is(input, textarea):read-only {
+  opacity: 0.75;
+}
+
+.announcement-preview {
+  display: grid;
+  gap: var(--space-3);
+  width: 100%;
+  max-width: 44rem;
+  min-width: 0;
+}
+
+.announcement-mail {
+  min-width: 0;
+  padding: var(--space-3);
+  background: var(--paper-raised);
+  border: 1px solid var(--rule);
+  border-radius: 0.875rem;
+}
+
+.announcement-mail > p {
+  margin: 0 0 var(--space-2);
+}
+
+/* As a mail program shows plain text: the lines as written, wrapped at the edge, long addresses broken. */
+.announcement-mail pre {
+  margin: 0;
+  font: 400 var(--step--1) / 1.5 var(--font-ui);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
