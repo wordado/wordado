@@ -1471,6 +1471,281 @@ kbd {
   color: var(--ink);
 }
 
+/* A count that opens what is behind it (the Accounts tab): the tile is a button, and the pressed one is marked by
+   its ground, its edge and a line along its foot. */
+.stats button.stat {
+  display: block;
+  width: 100%;
+  height: 100%;
+  font-family: inherit;
+  line-height: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.stats button.stat:hover {
+  border-color: var(--blue);
+}
+
+.stats button.stat[aria-pressed='true'] {
+  background: var(--blue-soft);
+  border-color: var(--blue);
+  box-shadow: inset 0 -3px 0 var(--blue);
+}
+
+/* What is behind the pressed count: a title with its period switch, a line about the numbers, then a chart or a split. */
+.stat-panel {
+  min-width: 0;
+  margin: 0 0 var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--paper-raised);
+  border: 1px solid var(--rule);
+  border-radius: 0.875rem;
+  box-shadow: var(--lift);
+}
+
+.stat-panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+  margin-bottom: var(--space-1);
+}
+
+/* A chart is drawn at the width it has, so its text is the same size on a phone. A finger moving up or down on it
+   still scrolls the page. */
+.chart svg {
+  display: block;
+  touch-action: pan-y;
+}
+
+.chart text {
+  font: 400 0.75rem var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  fill: var(--ink-soft);
+}
+
+.chart .chart-value {
+  font-weight: 600;
+  fill: var(--ink);
+}
+
+.chart-grid {
+  stroke: var(--rule);
+  stroke-width: 1;
+}
+
+.chart-bar {
+  fill: var(--blue);
+}
+
+/* The week that is not over. */
+.chart-bar.unfinished {
+  fill-opacity: 0.45;
+}
+
+.chart-bar.at {
+  stroke: var(--ink);
+  stroke-width: 1.5;
+}
+
+.chart-wash {
+  fill: var(--blue);
+  fill-opacity: 0.12;
+}
+
+.chart-line {
+  fill: none;
+  stroke: var(--blue);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* A ring of the card's own colour keeps the dot apart from the line it sits on. */
+.chart-dot {
+  fill: var(--blue);
+  stroke: var(--paper-raised);
+  stroke-width: 2;
+}
+
+/* The step pointed at: on a line a hairline, on bars the bar's edge; its number is written over whatever is behind it. */
+.chart-at line {
+  stroke: var(--ink-soft);
+  stroke-width: 1;
+}
+
+.chart-at text {
+  paint-order: stroke;
+  stroke: var(--paper-raised);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
+
+.chart-numbers {
+  margin-top: var(--space-2);
+  font-size: var(--step--1);
+}
+
+.chart-numbers summary {
+  width: fit-content;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.chart-numbers table {
+  margin-top: var(--space-2);
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-numbers th,
+.chart-numbers td {
+  padding: 0.125rem 0;
+  text-align: start;
+}
+
+.chart-numbers tbody th {
+  padding-right: var(--space-5);
+  font-weight: 400;
+}
+
+.chart-numbers thead th {
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.chart-numbers td,
+.chart-numbers thead th + th {
+  text-align: end;
+}
+
+/* Accounts by language: a name, a bar cut into its parts, the total, and under the bar each part in words. */
+.split {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.split li {
+  display: grid;
+  grid-template-columns: 6.5rem minmax(0, 1fr) auto;
+  grid-template-areas:
+    'name track total'
+    '. parts parts';
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+}
+
+.split-name {
+  grid-area: name;
+  font-weight: 600;
+}
+
+.split-total {
+  grid-area: total;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-soft);
+}
+
+/* The parts are kept apart by a gap, not by an edge drawn round them. */
+.split-track {
+  grid-area: track;
+  display: flex;
+  gap: 2px;
+  min-width: 0.25rem;
+  height: 0.875rem;
+}
+
+.split-track i {
+  flex-basis: 0;
+  min-width: 2px;
+  border-radius: 2px;
+}
+
+.split-parts {
+  grid-area: parts;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-3);
+  font-size: var(--step--1);
+  color: var(--ink-soft);
+}
+
+.split-part::before {
+  content: '';
+  display: inline-block;
+  width: 0.625rem;
+  height: 0.625rem;
+  margin-right: 0.375rem;
+  border-radius: 2px;
+}
+
+.split-track .on,
+.split-part.on::before {
+  background: var(--blue);
+}
+
+.split-track .stopped,
+.split-part.stopped::before {
+  background: var(--amber);
+}
+
+.split-track .silent,
+.split-part.silent::before {
+  background: var(--rule);
+}
+
+/* One account that was looked up: its address with what can be done to it, then what is known of its use. */
+.account-found {
+  margin-top: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--paper-raised);
+  border: 1px solid var(--rule);
+  border-radius: 1.125rem;
+  box-shadow: var(--lift);
+}
+
+.account-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+  margin-bottom: var(--space-3);
+}
+
+.account-head h3 {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: var(--space-3) var(--space-4);
+  margin: 0 0 var(--space-3);
+}
+
+.facts dt {
+  font-size: 0.8125rem;
+  color: var(--ink-soft);
+}
+
+.facts dd {
+  margin: 0;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.account-found > .note:last-child {
+  margin-bottom: 0;
+}
+
 /* A row: its name with its chips, a line or two about it, then the bar and what can be done with it. */
 .admin .settings-row-text {
   gap: 0.125rem;
@@ -2389,6 +2664,10 @@ kbd {
 
   .stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .split li {
+    grid-template-columns: 5.25rem minmax(0, 1fr) auto;
   }
 
   /* An admin row: the text, the bar across, the actions under it. */

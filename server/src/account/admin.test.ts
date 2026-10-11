@@ -18,14 +18,17 @@ const ask = (h: Harness, path: string, body?: unknown, authorization: string | n
 
 const users = async (h: Harness): Promise<string[]> => (await h.deps.db.query<{ email: string }>('select email from "user" order by email')).map((r) => r.email)
 
+/** What the lookup says of an account that was only ever signed in to. */
+const unused = { lastStudiedAt: null, daysStudied30: 0, newsConsent: 'none', newsConsentAt: null, newsConsentLanguage: null, reminders: [], devices: 0 }
+
 describe('the accounts routes of the review app (#187)', () => {
-  it('looks an account up by its address: when it was made and last signed in, and nothing else', async () => {
+  it('looks an account up by its address: when it was made and last signed in, how it is used, and nothing else', async () => {
     const h = withToken()
     const s = await h.signIn('ana@example.com')
     const reply = await ask(h, 'lookup', { email: 'ana@example.com' })
     expect(reply.status).toBe(200)
     expect(reply.headers.get('cache-control')).toBe('no-store')
-    expect(reply.body).toEqual({ found: true, createdAt: expect.any(Number), lastSignInAt: h.clock.now })
+    expect(reply.body).toEqual({ found: true, createdAt: expect.any(Number), lastSignInAt: h.clock.now, details: { ...unused, sweepNotBefore: h.clock.now + INACTIVE_ACCOUNT_MS } })
     expect(JSON.stringify(reply.body)).not.toContain(s.userId)
     // As a person writes it: spaces round it, capitals in it.
     expect((await ask(h, 'lookup', { email: '  Ana@Example.com ' })).body).toMatchObject({ found: true })
@@ -37,7 +40,59 @@ describe('the accounts routes of the review app (#187)', () => {
   it('gives an account with no date as one with none', async () => {
     const h = withToken()
     await h.deps.db.query(`insert into "user" (id, name, email, "emailVerified", "updatedAt") values ('u1', '', 'old@example.com', true, now())`)
-    expect((await ask(h, 'lookup', { email: 'old@example.com' })).body).toEqual({ found: true, createdAt: expect.any(Number), lastSignInAt: null })
+    // The sweep never takes it, so there is no moment it could.
+    expect((await ask(h, 'lookup', { email: 'old@example.com' })).body).toEqual({ found: true, createdAt: expect.any(Number), lastSignInAt: null, details: { ...unused, sweepNotBefore: null } })
+  })
+
+  it('says how the account is used: its study, its consent to news, its reminders and its devices (#209)', async () => {
+    const h = withToken()
+    h.clock.now = Date.parse('2026-10-14T10:00:00Z')
+    const today = Date.parse('2026-10-14T00:00:00Z')
+    const s = await h.signIn('ana@example.com')
+    const other = await h.signIn('ben@example.com')
+    const answer = (userId: string, n: number, ts: number, deviceId: string) =>
+      h.deps.db.query(
+        `insert into review_event (user_id, review_id, word_id, mode, direction, grade, latency_ms, practice, client_ts, client_tz_offset_min, device_id, device_seq,
+           scheduler_version, received_at, effective_ts, xp_eligible, client_local_day, local_day, utc_day)
+         values ($1, $2, 'c:hello-1', 'multiple_choice', 'en_to_l1', 3, 1500, false, $3, 0, $4, $5, 'v', $3, $3, true, $6, $6, $6)`,
+        [userId, `answer-${n}`, ts, deviceId, n, Math.floor(ts / DAY)],
+      )
+    // Twice today, once on the first of the 30 days, once the day before it; and somebody else's answers, which are not its.
+    const studied = [today + 60_000, today + 120_000, today - 29 * DAY, today - 29 * DAY - 1]
+    for (const [n, ts] of studied.entries()) await answer(s.userId, n, ts, n === 0 ? 'phone' : 'laptop')
+    await answer(other.userId, 9, today - DAY, 'phone')
+    await h.deps.db.query(`insert into device (user_id, device_id, device_seq, effective_ts) values ($1, 'phone', 1, $2), ($1, 'laptop', 3, $3), ($4, 'phone', 1, $2)`, [s.userId, today + 60_000, today + 120_000, other.userId])
+    const agreed = Date.parse('2026-09-03T08:00:00Z')
+    await h.deps.db.query(`update "user" set news_consent = 'withdrawn', news_consent_at = $2, news_consent_text = 'news-1.bg' where id = $1`, [s.userId, new Date(agreed)])
+    // Two devices with reminders, the newer first; the older was ignored until the app stopped sending.
+    await h.deps.db.query(
+      `insert into push_subscription (endpoint, user_id, p256dh, auth, reminder_minute, tz_offset_min, language, ignored, created_at) values
+         ('https://push.example.com/old', $1, 'key', 'auth', 540, 180, 'bg', 3, 1), ('https://push.example.com/new', $1, 'key', 'auth', 1170, -300, 'bg', 2, 2),
+         ('https://push.example.com/other', $2, 'key', 'auth', 600, 0, 'en', 0, 3)`,
+      [s.userId, other.userId],
+    )
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+    try {
+      const reply = await ask(h, 'lookup', { email: 'ana@example.com' })
+      expect(reply.body.details).toEqual({
+        lastStudiedAt: today + 120_000,
+        daysStudied30: 2,
+        newsConsent: 'withdrawn',
+        newsConsentAt: agreed,
+        newsConsentLanguage: 'bg',
+        reminders: [{ minute: 1170, tzOffsetMin: -300, paused: false }, { minute: 540, tzOffsetMin: 180, paused: true }],
+        devices: 2,
+        sweepNotBefore: h.clock.now + INACTIVE_ACCOUNT_MS,
+      })
+      // Nothing that names the account or a device, and nothing in the log.
+      for (const secret of [s.userId, 'phone', 'laptop', 'push.example.com', 'news-1']) expect(JSON.stringify(reply.body)).not.toContain(secret)
+      expect(log.mock.calls).toEqual([])
+    } finally {
+      log.mockRestore()
+    }
+    // The 30 days move with the clock: a day on, the first of them is out.
+    h.clock.advance(DAY)
+    expect((await ask(h, 'lookup', { email: 'ana@example.com' })).body.details).toMatchObject({ daysStudied30: 1 })
   })
 
   it('deletes by address as the learner’s own deletion does, and only when the request confirms it', async () => {
@@ -97,7 +152,7 @@ describe('the accounts routes of the review app (#187)', () => {
     const h = withToken()
     await h.signIn('ana@example.com')
     const unknown = await h.request('/v1/no-such-route')
-    const tries: [string, unknown?][] = [['lookup', { email: 'ana@example.com' }], ['delete', { email: 'ana@example.com', confirm: true }], ['sweep'], ['stats']]
+    const tries: [string, unknown?][] = [['lookup', { email: 'ana@example.com' }], ['delete', { email: 'ana@example.com', confirm: true }], ['sweep'], ['stats'], ['series'], ['splits']]
     for (const authorization of [null, '', 'Bearer ', `Bearer ${readToken}`, `Bearer ${token}x`, `bearer ${token}`, `Basic ${token}`, token]) {
       for (const [path, body] of tries) {
         const reply = await ask(h, path, body, authorization)

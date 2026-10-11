@@ -223,7 +223,9 @@ as a pull request against the content repository, with no local checkout and no 
     server's secret of that name and **not** the value of `FEEDBACK_READ_TOKEN` (`docs/deploy.md`, step 6, has
     the commands), and `LEARNER_APP_URL` as in step 8. While either is missing the tab says accounts are not
     connected, and the rest of the app works. **This needs the learner app's server from the same change**:
-    deploy that server first.
+    deploy that server first. Against a server from before the charts (#209) the counts, the lookup and the
+    deletion work as before; the panel under the counts says its numbers could not be read, and the lookup
+    shows the two dates only.
 
 11. Optional, for the Announcements tab (a mail to learners' account holders: a service notice to everyone, or
     news to those who agreed to it; spec §18): nothing more than step 10. The tab uses the same
@@ -276,9 +278,11 @@ language with its progress and **Assign** where nobody holds it), **Reviewers**,
 **Submissions**, **Feedback** (what learners wrote about the app, read from the learner app's server each
 time the tab is opened; the coordinator marks each message New, Looked at, Done or Not doing and can keep a note
 on it; those marks are stored here, and, with the AI help switched on, the AI's reading of each message: spec §16),
-**Accounts** (spec §17: how many accounts there are and how many are used, in counts only; how many accounts the
+**Accounts** (spec §17: how many accounts there are and how many are used, in counts only, each count opening
+what is behind it: the accounts over time as a chart, or by language; how many accounts the
 sweep of inactive accounts would delete next and how many it deleted; and one account deleted by hand, for an erasure asked for by mail or an account closed. The account is
-looked up by its whole address, which shows only when it was made and last signed in, and is deleted after a
+looked up by its whole address, which shows when it was made and last signed in and how it is used (its study,
+its consent to news, its reminders, its devices), and is deleted after a
 question answered by typing the address again. Nothing of an account is stored here) and **Announcements** (spec §18:
 a mail to learners' account holders, written here for each language and sent by the learner app's server. A
 service notice goes to every account holder; news goes only to the accounts that agreed to it, with a link to
