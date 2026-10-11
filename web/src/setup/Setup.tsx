@@ -1,6 +1,7 @@
 import { useClient } from '@wordado/client-data'
-import { offeredThemes, type Corpus } from '@wordado/core'
+import { offeredThemes, type CefrLevel, type Corpus } from '@wordado/core'
 import { useState } from 'react'
+import { Placement } from '../screens/Placement'
 import { useT } from '../i18n/i18n'
 import { GoalStep } from './GoalStep'
 import { LanguageStep } from './LanguageStep'
@@ -26,8 +27,11 @@ function stepsFor(corpus: Corpus | null): readonly StepName[] {
  * words are installed (the corpus is null before), and the counter counts only those. Every later step has Skip and
  * Start studying, which calls `onFinish`. This owns the page's h1, above the one card the steps take turns on (in
  * Settings' look: `form-section` shares `settings-section`'s rules); each step's h2 takes focus as it appears.
+ *
+ * The level step offers the placement test, which takes the whole screen while it runs, as it does from Settings
+ * (`onFocus` tells the shell); leaving it or taking its result comes back to the level step.
  */
-export function Setup(props: { onFinish(): void }) {
+export function Setup(props: { onFinish(): void; onFocus?(on: boolean): void }) {
   const { t } = useT()
   const client = useClient()
   /** Null until the language is installed: until then nobody knows which steps will show, so there is no counter. */
@@ -37,6 +41,27 @@ export function Setup(props: { onFinish(): void }) {
   const last = steps !== null && index === steps.length - 1
   const next = () => setIndex((i) => (steps === null ? i : Math.min(i + 1, steps.length - 1)))
   const stepProps = { last, next, finish: () => props.onFinish() }
+  const [testing, setTesting] = useState(false)
+  /** The level the test gave, once the learner took it. */
+  const [placed, setPlaced] = useState<CefrLevel | null>(null)
+  const test = (on: boolean) => {
+    setTesting(on)
+    props.onFocus?.(on)
+  }
+
+  if (testing) {
+    return (
+      <Placement
+        setup={{
+          leave: () => test(false),
+          taken: () => {
+            setPlaced(client.snapshot.settings.declaredLevel)
+            test(false)
+          },
+        }}
+      />
+    )
+  }
 
   return (
     <section className="setup" aria-labelledby="setup-title">
@@ -55,7 +80,7 @@ export function Setup(props: { onFinish(): void }) {
             }}
           />
         )}
-        {step === 'level' && <LevelStep key="level" {...stepProps} />}
+        {step === 'level' && <LevelStep key="level" {...stepProps} placed={placed} onTest={() => test(true)} />}
         {step === 'theme' && <ThemeStep key="theme" {...stepProps} />}
         {step === 'goal' && <GoalStep key="goal" {...stepProps} />}
       </div>

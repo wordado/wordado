@@ -165,7 +165,8 @@ export const bg: Messages = {
   'setup.skip': 'Пропуснете',
   'setup.start': 'Започнете да учите',
   'setup.level.title': 'Вашето ниво на английски',
-  'setup.level.later': 'Не сте сигурни? По-късно можете да направите кратък тест за ниво в Настройки.',
+  'setup.level.unsure': 'Не сте сигурни? Кратък тест от около двадесет думи ще намери нивото ви.',
+  'setup.level.placed': 'Тестът ви постави на {level}. Можете да го промените.',
   'setup.goal.title': 'Дневна цел',
   'setup.goal.hint': 'По желание. Можете да я зададете или промените по всяко време в Настройки.',
   'setup.language.title': 'Кой език говорите?',
@@ -230,6 +231,7 @@ export const bg: Messages = {
   'placement.acceptedTitle': 'Нивото ви вече е {level}',
   'placement.unavailableTitle': 'Тестът за ниво още не е достъпен',
   'placement.back': 'Обратно към настройките',
+  'placement.backToSetup': 'Обратно към настройването',
   'placement.home': 'Обратно към днес',
 
   'signin.title': 'Създайте профил или влезте',

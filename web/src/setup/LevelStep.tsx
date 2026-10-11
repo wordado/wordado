@@ -1,4 +1,4 @@
-import { useClient, useClientSnapshot } from '@wordado/client-data'
+import { placementAvailable, useClient, useClientSnapshot } from '@wordado/client-data'
 import type { CefrLevel } from '@wordado/core'
 import { useState } from 'react'
 import { errorMessageKey } from '../errors'
@@ -9,9 +9,11 @@ import { StepActions, useStepHeading, type StepProps } from './step'
 /**
  * The learner's English level (plan 11), in Settings' segmented level control: a radio per level the installed words
  * come in, the declared level (A1 for a new learner) preselected. Choosing one saves it at once, as Settings does;
- * Continue and Skip move on either way.
+ * Continue and Skip move on either way. Under the choice, the placement test (spec §7.2) for who is not sure:
+ * `onTest` opens it inside the setup, and `placed` is the level it gave when the learner took its result. It is
+ * offered only where it can run (enough words of the first levels), as in Settings.
  */
-export function LevelStep(props: StepProps) {
+export function LevelStep(props: StepProps & { readonly placed: CefrLevel | null; onTest(): void }) {
   const { t } = useT()
   const client = useClient()
   const { settings, corpus } = useClientSnapshot()
@@ -46,13 +48,27 @@ export function LevelStep(props: StepProps) {
             </label>
           ))}
         </div>
-        <p className="note">
-          {t(`level.${settings.declaredLevel}` as MessageKey)}. {t('setup.level.later')}
-        </p>
+        <p className="note">{t(`level.${settings.declaredLevel}` as MessageKey)}</p>
       </fieldset>
+      {placementAvailable(corpus) && (
+        <div className="setup-test">
+          {props.placed !== null && props.placed === settings.declaredLevel ? (
+            <p className="note" role="status">
+              {t('setup.level.placed', { level: props.placed })}
+            </p>
+          ) : (
+            <p className="note">{t('setup.level.unsure')}</p>
+          )}
+          <button type="button" className="button" onClick={props.onTest}>
+            {t('placement.link')}
+          </button>
+        </div>
+      )}
       {error !== null && <p role="alert">{error}</p>}
       <StepActions
-        {...props}
+        last={props.last}
+        next={props.next}
+        finish={props.finish}
         primary={
           <button type="button" className="button primary" onClick={props.next}>
             {t('setup.continue')}
