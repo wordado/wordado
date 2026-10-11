@@ -1,5 +1,5 @@
 import { createApp } from '../src/app'
-import type { Job, ServerConfig, ServerDeps } from '../src/deps'
+import type { AnnouncementMail, Job, ServerConfig, ServerDeps } from '../src/deps'
 import { testDb } from './db'
 
 export const BASE_URL = 'http://localhost:8787'
@@ -32,6 +32,10 @@ export interface Harness {
   readonly clock: TestClock
   /** Every sign-in code the mailer was given. */
   readonly codes: { readonly email: string; readonly code: string }[]
+  /** Every announcement mail the mailer sent (#185); one it was made to fail is not among them. */
+  readonly announcements: AnnouncementMail[]
+  /** What the mailer does with an announcement mail instead of sending it: throws what this returns. Null sends. */
+  mailFailure: ((mail: AnnouncementMail) => Error | null) | null
   /** Every feedback mail the mailer was given. */
   readonly jobs: Job[]
   /** Every endpoint the push sender was asked to wake. */
@@ -74,6 +78,7 @@ export function harness(options: HarnessOptions = {}): Harness {
   }
   const pending: Promise<unknown>[] = []
   const codes: { email: string; code: string }[] = []
+  const announcements: AnnouncementMail[] = []
   const jobs: Job[] = []
   const pushed: string[] = []
   const deps: ServerDeps = {
@@ -86,12 +91,18 @@ export function harness(options: HarnessOptions = {}): Harness {
       vapid: null,
       feedbackReadToken: null,
       adminWriteToken: null,
+      announcementMailsPerDay: 50,
       ...options.config,
     },
     now: options.now ?? (() => clock.now),
     mailer: {
       async sendSignInCode(email, code) {
         codes.push({ email, code })
+      },
+      async sendAnnouncement(mail) {
+        const failure = h.mailFailure?.(mail) ?? null
+        if (failure) throw failure
+        announcements.push(mail)
       },
     },
     jobs: {
@@ -139,6 +150,8 @@ export function harness(options: HarnessOptions = {}): Harness {
     deps,
     clock,
     codes,
+    announcements,
+    mailFailure: null,
     jobs,
     pushed,
     pushResult: 'sent',

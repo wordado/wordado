@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { configFromEnv, DEFAULT_MIN_PROTOCOL_VERSION, MIN_ADMIN_WRITE_TOKEN_LENGTH, MIN_FEEDBACK_READ_TOKEN_LENGTH, type Env } from './config'
+import { configFromEnv, DEFAULT_ANNOUNCEMENT_MAILS_PER_DAY, DEFAULT_MIN_PROTOCOL_VERSION, MIN_ADMIN_WRITE_TOKEN_LENGTH, MIN_FEEDBACK_READ_TOKEN_LENGTH, type Env } from './config'
 
 const env = (over: Partial<Env> = {}): Env => ({
   HYPERDRIVE: { connectionString: 'postgres://localhost/x' },
@@ -19,6 +19,7 @@ describe('configFromEnv', () => {
       vapid: null,
       feedbackReadToken: null,
       adminWriteToken: null,
+      announcementMailsPerDay: DEFAULT_ANNOUNCEMENT_MAILS_PER_DAY,
     })
   })
 
@@ -64,5 +65,13 @@ describe('configFromEnv', () => {
     expect(configFromEnv(env({ ADMIN_WRITE_TOKEN: 'w'.repeat(MIN_ADMIN_WRITE_TOKEN_LENGTH - 1) })).adminWriteToken).toBeNull()
     const same = configFromEnv(env({ FEEDBACK_READ_TOKEN: 't'.repeat(40), ADMIN_WRITE_TOKEN: ` ${'t'.repeat(40)}` }))
     expect(same).toMatchObject({ feedbackReadToken: 't'.repeat(40), adminWriteToken: null })
+  })
+
+  it('holds a day’s announcement mails to half of the provider’s free allowance unless told another number (#185)', () => {
+    expect(DEFAULT_ANNOUNCEMENT_MAILS_PER_DAY).toBe(50)
+    expect(configFromEnv(env({ ANNOUNCEMENT_MAILS_PER_DAY: '' })).announcementMailsPerDay).toBe(50)
+    expect(configFromEnv(env({ ANNOUNCEMENT_MAILS_PER_DAY: '2000' })).announcementMailsPerDay).toBe(2000)
+    expect(configFromEnv(env({ ANNOUNCEMENT_MAILS_PER_DAY: '0' })).announcementMailsPerDay).toBe(0)
+    for (const bad of ['-1', '1.5', 'many']) expect(() => configFromEnv(env({ ANNOUNCEMENT_MAILS_PER_DAY: bad }))).toThrow('ANNOUNCEMENT_MAILS_PER_DAY')
   })
 })

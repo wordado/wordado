@@ -50,6 +50,9 @@ describe('migrate', () => {
       expect(rows.map((r) => r.tablename)).toEqual([
         'account',
         'account_sweep',
+        'announcement',
+        'announcement_delivery',
+        'announcement_mail_day',
         'content_report',
         'day_complete',
         'device',
