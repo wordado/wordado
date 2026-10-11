@@ -389,3 +389,90 @@ describe('Path', () => {
     expect(ctx.client.snapshot.flags.size).toBe(0)
   })
 })
+
+describe('Path, opened at a unit', () => {
+  const unitId = (ctx: Awaited<ReturnType<typeof setup>>, title: string) => ctx.client.snapshot.corpus!.units.find((u) => u.title.en === title)!.unitId
+
+  it('opens the unit’s word list and marks its heading as where focus goes', async () => {
+    const ctx = await setup()
+    const id = unitId(ctx, 'Food and drink')
+    renderWith(<Path unit={id} />, ctx)
+    const item = unit('Food and drink')
+    expect(item.id).toBe(`unit-${id}`)
+    expect(item.querySelector('details')!.open).toBe(true)
+    expect(within(item).getAllByRole('listitem').length).toBeGreaterThan(0)
+    expect(within(item).getByRole('heading', { name: 'Food and drink' }).hasAttribute('data-route-focus')).toBe(true)
+    // The unit is still locked: arriving at it unlocks nothing.
+    expect(within(item).getByText('Locked')).toBeTruthy()
+  })
+
+  it('lets the learner fold the unit again: it opens once, on arrival', async () => {
+    const ctx = await setup()
+    renderWith(<Path unit={unitId(ctx, 'Food and drink')} />, ctx)
+    const details = unit('Food and drink').querySelector('details')!
+    details.open = false
+    fireEvent(details, new Event('toggle'))
+    expect(unit('Food and drink').querySelector('details')!.open).toBe(false)
+  })
+
+  it('opens as usual for an ID no unit has', async () => {
+    const ctx = await setup()
+    renderWith(<Path unit="no-such-unit" />, ctx)
+    expect(document.querySelector('details[open]')).toBeNull()
+    expect(document.querySelector('[data-route-focus]')).toBeNull()
+    expect(within(unit('People and greetings')).getByText('Current')).toBeTruthy()
+  })
+
+  describe('on a path with a second level and a unit beyond the next few', () => {
+    // A1: one finished unit, the current one, then five more; A2: one locked unit. The sample's three units are the first three.
+    const tall = async () => {
+      const ctx = await setup()
+      const snapshot = ctx.client.snapshot
+      const corpus = snapshot.corpus!
+      const [first, second] = corpus.units
+      const more = (id: string, level: 'A1' | 'A2', order: number) => ({ unitId: id, level, order, title: { en: `Extra ${id}`, l1: `Extra ${id}` }, wordIds: [] })
+      const units = [...corpus.units, more('x4', 'A1', 4), more('x5', 'A1', 5), more('x6', 'A1', 6), more('b1', 'A2', 7)]
+      const progress = { ...snapshot.progress!, units: new Map(snapshot.progress!.units).set(first!.unitId, { ...snapshot.progress!.units.get(first!.unitId)!, complete: true }) }
+      const path = { unlocked: new Set([first!.unitId, second!.unitId]), currentUnitId: second!.unitId }
+      ctx.client.store.set({ ...snapshot, corpus: { ...corpus, units }, progress, path })
+      return { ctx, first: first!.unitId, third: corpus.units[2]!.unitId }
+    }
+
+    it('opens another level when the unit is in it', async () => {
+      const { ctx } = await tall()
+      renderWith(<Path />, ctx)
+      expect(screen.getByRole('button', { name: /A2/ }).getAttribute('aria-expanded')).toBe('false')
+      cleanup()
+      renderWith(<Path unit="b1" />, ctx)
+      expect(screen.getByRole('button', { name: /A2/ }).getAttribute('aria-expanded')).toBe('true')
+      expect(screen.getByRole('heading', { name: 'Extra b1' }).hasAttribute('data-route-focus')).toBe(true)
+    })
+
+    it('shows every unit of the level being studied when the unit lies beyond the next few', async () => {
+      const { ctx } = await tall()
+      renderWith(<Path />, ctx)
+      expect(screen.queryByRole('heading', { name: 'Extra x6' })).toBeNull()
+      cleanup()
+      renderWith(<Path unit="x6" />, ctx)
+      for (const id of ['x4', 'x5', 'x6']) expect(screen.getByRole('heading', { name: `Extra ${id}` })).toBeTruthy()
+      expect(screen.getByRole('heading', { name: 'Extra x6' }).hasAttribute('data-route-focus')).toBe(true)
+    })
+
+    it('opens the finished units when the unit is one of them', async () => {
+      const { ctx, first } = await tall()
+      renderWith(<Path />, ctx)
+      expect(document.getElementById(`unit-${first}`)).toBeNull()
+      cleanup()
+      renderWith(<Path unit={first} />, ctx)
+      expect(document.getElementById(`unit-${first}`)).toBeTruthy()
+      expect(document.getElementById(`unit-${first}`)!.querySelector('details')!.open).toBe(true)
+    })
+  })
+
+  it('gives every unit an ID and marks none without a unit to open at', async () => {
+    const ctx = await setup()
+    renderWith(<Path />, ctx)
+    expect(unit('People and greetings').id).toBe(`unit-${unitId(ctx, 'People and greetings')}`)
+    expect(document.querySelector('[data-route-focus]')).toBeNull()
+  })
+})

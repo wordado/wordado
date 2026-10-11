@@ -149,14 +149,17 @@ export function Themes() {
           )}
           {result.unthemed.length > 0 && (
             <p className="note theme-unthemed">
-              {t('themes.searchNoTheme')}{' '}
-              {result.unthemed.slice(0, UNTHEMED_SHOWN).map((entry, i) => (
-                <span key={entry.entryId}>
-                  {i > 0 && ', '}
-                  <MatchedWord entry={entry} lang={corpus.l1} />
-                </span>
-              ))}
-              {result.unthemed.length > UNTHEMED_SHOWN && `, ${t('themes.searchMore', { count: result.unthemed.length - UNTHEMED_SHOWN })}`}
+              {/* The words of no theme are found by the search for the whole course, with the same query. */}
+              <Link to={{ name: 'search', q: query.trim() }}>
+                {t('themes.searchNoTheme')}{' '}
+                {result.unthemed.slice(0, UNTHEMED_SHOWN).map((entry, i) => (
+                  <span key={entry.entryId}>
+                    {i > 0 && ', '}
+                    <MatchedWord entry={entry} lang={corpus.l1} />
+                  </span>
+                ))}
+                {result.unthemed.length > UNTHEMED_SHOWN && `, ${t('themes.searchMore', { count: result.unthemed.length - UNTHEMED_SHOWN })}`}
+              </Link>
             </p>
           )}
         </section>

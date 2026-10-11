@@ -324,6 +324,22 @@ p {
   border-color: var(--ink);
 }
 
+/* The way to the search: a circle like the language's, with a magnifier. */
+.search-circle {
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  color: var(--ink);
+  background: var(--paper-raised);
+  border: 1.5px solid var(--rule);
+  border-radius: 50%;
+}
+
+.search-circle[aria-current='page'] {
+  border-color: var(--ink);
+}
+
 .account-circle {
   font: 600 var(--step-0) / 1 var(--font-ui);
   color: var(--rose-ink);
@@ -348,6 +364,19 @@ p {
 
 .account-signin {
   min-height: 2.75rem;
+}
+
+/* Where the wordmark gives up its name for the search, "Sign in" stays on one line. */
+.masthead-top:has(.search-circle) .account-signin {
+  white-space: nowrap;
+}
+
+/* Signed out on a narrow phone, the search, the language and "Sign in" leave no room for the name: the icon
+   stands alone. The link keeps its name for a screen reader. */
+@media (max-width: 24.99rem) {
+  .masthead-top:has(.search-circle):has(.account-signin) .wordmark-name {
+    display: none;
+  }
 }
 
 .popover-panel {
@@ -1605,6 +1634,8 @@ dialog.report input[type='text'] {
   display: grid;
   grid-template-columns: 2.75rem minmax(0, 1fr);
   gap: var(--space-3);
+  /* A search result leads to a unit: it comes to rest a little below the top of the screen. */
+  scroll-margin-top: var(--space-4);
 }
 
 .unit-track {
@@ -1928,6 +1959,119 @@ ul.theme-words > li:first-child {
 
 .level-card > ul.theme-words > li:first-child {
   border-top: 1px solid var(--rule);
+}
+
+/* The search for the whole course */
+
+.search-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin-inline: auto;
+}
+
+.search-page h1 {
+  margin: 0;
+}
+
+.search-field {
+  position: relative;
+}
+
+.search-field > svg {
+  position: absolute;
+  top: 50%;
+  left: var(--space-3);
+  color: var(--ink-soft);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.search-field input {
+  display: block;
+  width: 100%;
+  min-height: 3rem;
+  padding: var(--space-2) 3rem var(--space-2) 2.5rem;
+  font: inherit;
+  color: var(--ink);
+  background: var(--paper-raised);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+}
+
+/* One way to clear the field: the app's own button. */
+.search-field input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.search-clear {
+  position: absolute;
+  top: 50%;
+  right: 0.125rem;
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  color: var(--ink-soft);
+  background: none;
+  border: 0;
+  border-radius: 50%;
+  transform: translateY(-50%);
+  cursor: pointer;
+}
+
+.search-status {
+  margin: 0;
+  font-weight: 600;
+}
+
+ul.search-words.panel {
+  padding: 0 1.25rem;
+}
+
+ul.search-words > li:first-child {
+  border-top: 0;
+}
+
+.search-more {
+  align-self: center;
+}
+
+/* Where a found word is in the course: its level, its unit, its themes; a line of its own under the word. */
+.word-where {
+  display: flex;
+  flex-basis: 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-4);
+  padding-bottom: var(--space-2);
+  padding-left: 3.5rem;
+  font-size: var(--step--1);
+  color: var(--ink-soft);
+}
+
+.word-where a {
+  padding-block: 0.125rem;
+  color: var(--ink);
+}
+
+/* A row without a listen button starts its word at the edge, and so does its line. */
+li:not(:has(> .play-word)) > .word-where {
+  padding-left: 0;
+}
+
+.word-where .is-locked {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.word-level {
+  padding: 0.0625rem 0.5rem;
+  font-weight: 600;
+  color: var(--paper);
+  background: var(--ink);
+  border-radius: 999px;
 }
 
 /* What a search found in a theme: its matching words, under the description. */
@@ -3520,6 +3664,12 @@ ul.unit-words {
     grid-area: 1 / 3 / span 2;
     align-self: center;
     margin-left: var(--space-2);
+  }
+
+  .unit-words li:has(> .word-menu) > .word-where {
+    grid-area: 3 / 2 / auto / -1;
+    padding-top: var(--space-1);
+    padding-left: 0;
   }
 
   .unit-words li:has(> .word-menu) > .word-menu {

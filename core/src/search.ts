@@ -16,8 +16,14 @@ export function foldText(text: string): string {
 /** The words of a text, folded. */
 const tokens = (text: string): string[] => foldText(text).split(/[^\p{L}\p{N}]+/u).filter((token) => token !== '')
 
+/** The words of an entry's headword. */
+const headTokens = (entry: CorpusEntry): string[] => tokens(entry.headword)
+
+/** The words an entry is also found by: its variants, its translations and its sense note. */
+const otherTokens = (entry: CorpusEntry): string[] => [...entry.variants, ...entry.translations, entry.sense].flatMap(tokens)
+
 /** What a word is found by: its headword and variants, its translations and its sense note. */
-const entryTokens = (entry: CorpusEntry): string[] => [entry.headword, ...entry.variants, ...entry.translations, entry.sense].flatMap(tokens)
+const entryTokens = (entry: CorpusEntry): string[] => [...headTokens(entry), ...otherTokens(entry)]
 
 interface IndexedEntry {
   readonly entry: CorpusEntry
@@ -105,4 +111,51 @@ export function searchThemes(index: SearchIndex, query: string): ThemeSearch | n
 export function searchEntries(entries: readonly CorpusEntry[], query: string): CorpusEntry[] | null {
   const words = searchWords(query)
   return words && entries.filter((entry) => matches(words, entryTokens(entry)))
+}
+
+/** One word of the course, ready to be matched. */
+interface IndexedWord {
+  readonly entryId: string
+  readonly level: number
+  /** The folded headword, whole: for the exact match and the alphabetical order. */
+  readonly head: string
+  readonly headTokens: readonly string[]
+  readonly otherTokens: readonly string[]
+}
+
+/** Every word of a corpus that is not retired, folded once: what the search for the whole course looks through. */
+export interface WordIndex {
+  readonly words: readonly IndexedWord[]
+}
+
+export function wordIndex(corpus: Corpus): WordIndex {
+  const words = [...corpus.entries.values()]
+    .filter((entry) => !entry.retired)
+    .map((entry) => {
+      const head = headTokens(entry)
+      return { entryId: entry.entryId, level: levelIndex(entry.level), head: head.join(' '), headTokens: head, otherTokens: otherTokens(entry) }
+    })
+  return { words }
+}
+
+/** Code-point order: the same on every device and in every interface language. */
+const byText = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0)
+
+/**
+ * The words a query finds, as entry IDs, best match first (null: no query): the word itself, then words whose
+ * headword holds every word of the query, then words found by a variant, a translation or the sense note.
+ * Within each, by level, then by the word, then by the ID.
+ */
+export function searchWordIndex(index: WordIndex, query: string): readonly string[] | null {
+  const words = searchWords(query)
+  if (!words) return null
+  const whole = words.join(' ')
+  const found: { readonly word: IndexedWord; readonly rank: number }[] = []
+  for (const word of index.words) {
+    if (word.head === whole) found.push({ word, rank: 0 })
+    else if (matches(words, word.headTokens)) found.push({ word, rank: 1 })
+    else if (matches(words, [...word.headTokens, ...word.otherTokens])) found.push({ word, rank: 2 })
+  }
+  found.sort((a, b) => a.rank - b.rank || a.word.level - b.word.level || byText(a.word.head, b.word.head) || byText(a.word.entryId, b.word.entryId))
+  return found.map(({ word }) => word.entryId)
 }

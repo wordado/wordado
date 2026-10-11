@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { loadCorpus, MIN_THEME_SIZE } from './corpus'
 import type { Pack, PackEntry } from './pack'
-import { foldText, searchEntries, searchIndex, searchThemes, searchWords } from './search'
+import { foldText, searchEntries, searchIndex, searchThemes, searchWordIndex, searchWords, wordIndex } from './search'
 
 function entry(over: Partial<PackEntry> & Pick<PackEntry, 'entry_id'>): PackEntry {
   return {
@@ -156,5 +156,72 @@ describe('searchEntries', () => {
 
   it('keeps every word without a query', () => {
     expect(ids(' r ')).toBeUndefined()
+  })
+})
+
+describe('searchWordIndex', () => {
+  const find = (entries: PackEntry[], query: string) => {
+    const ids = searchWordIndex(wordIndex(corpus(entries)), query)
+    // The fillers that make the themes big enough are not what these tests are about.
+    return ids && ids.filter((id) => !id.includes('x'))
+  }
+
+  it('takes a query under two letters as no query', () => {
+    expect(find(bank, 'b')).toBeNull()
+    expect(find(bank, '  ')).toBeNull()
+  })
+
+  it('puts the word itself first, then words that begin with it, then matches in a translation or note', () => {
+    const entries = [
+      entry({ entry_id: 'flow-1', translation: 'тека', sense: 'run' }),
+      entry({ entry_id: 'runway-1' }),
+      entry({ entry_id: 'run-1' }),
+      entry({ entry_id: 'jog-1', translation: 'run slowly' }),
+    ]
+    expect(find(entries, 'run')).toEqual(['run-1', 'runway-1', 'flow-1', 'jog-1'])
+  })
+
+  it('orders a group by level, then by the word, then by the ID', () => {
+    const entries = [
+      entry({ entry_id: 'runner-1', level: 'B1' }),
+      entry({ entry_id: 'runway-1', level: 'A2' }),
+      entry({ entry_id: 'rune-2', headword: 'rune', level: 'A2', sense: 'ancient letter' }),
+      entry({ entry_id: 'rune-1', headword: 'rune', level: 'A2', sense: 'mystical symbol' }),
+    ]
+    expect(find(entries, 'run')).toEqual(['rune-1', 'rune-2', 'runway-1', 'runner-1'])
+  })
+
+  it('finds a word by a variant, a translation or the sense note, whatever the accents and the case', () => {
+    const entries = [
+      entry({ entry_id: 'cafe-1', headword: 'café' }),
+      entry({ entry_id: 'colour-1', variants: ['color'] }),
+      entry({ entry_id: 'may-1', translation: 'Май' }),
+    ]
+    expect(find(entries, 'CAFE')).toEqual(['cafe-1'])
+    expect(find(entries, 'color')).toEqual(['colour-1'])
+    expect(find(entries, 'маи')).toEqual(['may-1'])
+  })
+
+  it('wants every word of the query, each at the start of a word', () => {
+    const entries = [entry({ entry_id: 'ice-1', headword: 'ice cream' }), entry({ entry_id: 'cream-1' }), entry({ entry_id: 'scream-1' })]
+    expect(find(entries, 'ice cr')).toEqual(['ice-1'])
+    expect(find(entries, 'cream')).toEqual(['cream-1', 'ice-1'])
+  })
+
+  it('ranks a headword of several words as the word itself when the query is that headword', () => {
+    const entries = [entry({ entry_id: 'thanks-1', headword: 'thank you' }), entry({ entry_id: 'thank-1' })]
+    expect(find(entries, ' Thank  you ')).toEqual(['thanks-1'])
+    expect(find(entries, 'thank')).toEqual(['thank-1', 'thanks-1'])
+  })
+
+  it('does not find a retired word', () => {
+    expect(find([entry({ entry_id: 'old-1', retired: true }), entry({ entry_id: 'older-1' })], 'old')).toEqual(['older-1'])
+  })
+
+  it('takes punctuation in a query as a space, and never throws on it', () => {
+    const entries = [entry({ entry_id: 'run-1' })]
+    expect(find(entries, 'ru+n')).toEqual([])
+    expect(find(entries, '(run)')).toEqual(['run-1'])
+    expect(find(entries, '%&?')).toBeNull()
   })
 })

@@ -11,8 +11,11 @@ export type Route =
   | { readonly name: 'practice'; readonly unit?: string | undefined; readonly theme?: string | undefined }
   | { readonly name: 'practice-words'; readonly mode: Mode | null; readonly unit?: string | undefined; readonly theme?: string | undefined }
   | { readonly name: 'matching'; readonly unit?: string | undefined; readonly theme?: string | undefined }
-  | { readonly name: 'path' }
+  /** The level path; `unit` is the unit it opens at (`?unit=<unitId>`), as a search result links to it. */
+  | { readonly name: 'path'; readonly unit?: string | undefined }
   | { readonly name: 'themes' }
+  /** The search for the whole course (`/search`); `q` is the query (`?q=`), empty when there is none. */
+  | { readonly name: 'search'; readonly q: string }
   /** One theme's words (`/themes/<themeId>`); `q` is what its word search starts with (`?q=`). */
   | { readonly name: 'theme'; readonly themeId: string; readonly q?: string | undefined }
   | { readonly name: 'progress' }
@@ -68,8 +71,12 @@ export function parseRoute(pathname: string, search: string): Route {
       return { name: 'practice-words', mode: modeParam(search), ...scopeParam(search) }
     case '/practice/matching':
       return { name: 'matching', ...scopeParam(search) }
-    case '/path':
-      return { name: 'path' }
+    case '/path': {
+      const unit = new URLSearchParams(search).get('unit')
+      return unit ? { name: 'path', unit } : { name: 'path' }
+    }
+    case '/search':
+      return { name: 'search', q: new URLSearchParams(search).get('q') ?? '' }
     case '/themes':
       return { name: 'themes' }
     case '/progress':
@@ -118,6 +125,10 @@ export function routeHref(route: Route): string {
       return withQuery('/practice/words', route)
     case 'matching':
       return withQuery('/practice/matching', route)
+    case 'path':
+      return withQuery('/path', { unit: route.unit })
+    case 'search':
+      return route.q === '' ? '/search' : `/search?${new URLSearchParams({ q: route.q }).toString()}`
     case 'placement':
       return '/settings/placement'
     case 'native-language':
@@ -137,8 +148,13 @@ const NAVIGATE = 'wordado:navigate'
 
 export function navigate(route: Route, options: { readonly replace?: boolean } = {}): void {
   const href = routeHref(route)
-  if (options.replace) window.history.replaceState(null, '', href)
-  else window.history.pushState(null, '', href)
+  if (options.replace) {
+    try {
+      window.history.replaceState(null, '', href)
+    } catch {
+      // WebKit refuses a burst of replacements (as typing in the search makes): the address may lag, the app goes on.
+    }
+  } else window.history.pushState(null, '', href)
   window.dispatchEvent(new Event(NAVIGATE))
 }
 

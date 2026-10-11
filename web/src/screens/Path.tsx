@@ -1,11 +1,11 @@
 import { useClient, useClientSnapshot, type PathView } from '@wordado/client-data'
 import { unitPractisable, type Unit, type UnitProgress } from '@wordado/core'
 import { Check, ChevronDown, CircleDashed, Lock, Play, Star, type LucideIcon } from 'lucide-react'
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { localized, useT, type MessageKey } from '../i18n/i18n'
 import { Link } from '../router'
 import { WordRow } from '../study/WordRow'
-import { levelStatus, levelToOpen, unitsAtFirst, type LevelStatus, type UnitStatus } from './pathFolding'
+import { levelStatus, levelToOpen, unitReveal, unitsAtFirst, type LevelStatus, type UnitStatus } from './pathFolding'
 import { todayCounts } from './today'
 
 function statusOf(unit: Unit, progress: UnitProgress | undefined, path: PathView): UnitStatus {
@@ -52,7 +52,7 @@ const toggled = (set: ReadonlySet<string>, key: string): ReadonlySet<string> => 
  * finished units (one line), the current unit and the next few; the other
  * levels are folded to one line each. Everything opens on request.
  */
-export function Path() {
+export function Path(props: { readonly unit?: string | undefined }) {
   const { t } = useT()
   const { corpus, progress, path, plan } = useClientSnapshot()
   // Levels the learner opened or folded, over the default (only the level being studied is open).
@@ -62,6 +62,12 @@ export function Path() {
   // A unit's word list mounts (and subscribes to the snapshot) only while its <details> is open,
   // so a path with many units and words stays cheap to render.
   const [openUnits, setOpenUnits] = useState<ReadonlySet<string>>(new Set())
+  // The unit a search result led to, once the path has opened at it; the learner folds and unfolds freely afterwards.
+  const [arrived, setArrived] = useState<string | null>(null)
+  // The unit comes into view without animation, so reduced motion needs no special case.
+  useEffect(() => {
+    if (arrived !== null) document.getElementById(`unit-${arrived}`)?.scrollIntoView?.({ block: 'start', behavior: 'instant' })
+  }, [arrived])
   if (!corpus || !progress || !path) return null
 
   const levels = [...new Set(corpus.units.map((u) => u.level))].map((level) => {
@@ -70,6 +76,20 @@ export function Path() {
     return { level, units, statuses, skipped: progress.levels[level]?.kind === 'skipped' }
   })
   const studied = levelToOpen(levels)
+  // Opened at a unit (`?unit=`): open what hides it, once per arrival. State set while rendering, so the unit is
+  // in the first paint and the shell can focus it.
+  if (props.unit !== undefined && arrived !== props.unit) {
+    setArrived(props.unit)
+    const reveal = unitReveal(levels, studied, props.unit)
+    if (reveal) {
+      const unitId = props.unit
+      setLevelChoice((prev) => new Map(prev).set(reveal.level, true))
+      if (reveal.done) setDoneOpen((prev) => new Set(prev).add(reveal.level))
+      if (reveal.all) setShowAll((prev) => new Set(prev).add(reveal.level))
+      setOpenUnits((prev) => new Set(prev).add(unitId))
+    }
+  }
+  const target = props.unit !== undefined && levels.some((l) => l.units.some((u) => u.unitId === props.unit)) ? props.unit : null
   // As on Today: with nothing due and the day's new words taken, a session would end at once. Until the plan is
   // known the path says nothing about today, as Today itself shows nothing.
   const today: UnitToday = !plan ? 'unknown' : todayCounts(plan).nothing ? 'nothing' : 'something'
@@ -96,6 +116,7 @@ export function Path() {
             progress={progress.units.get(units[i]!.unitId)}
             line={next === undefined ? null : statuses[next] !== 'locked'}
             today={today}
+            arrived={units[i]!.unitId === target}
             wordsOpen={openUnits.has(units[i]!.unitId)}
             onWordsToggle={() => setOpenUnits((prev) => toggled(prev, units[i]!.unitId))}
           />
@@ -189,6 +210,8 @@ function UnitItem(props: {
   /** The line to the next unit shown: null for the last, true once that unit is reachable. */
   readonly line: boolean | null
   readonly today: UnitToday
+  /** A search result led here: the heading takes focus on arrival. */
+  readonly arrived: boolean
   readonly wordsOpen: boolean
   onWordsToggle(): void
 }) {
@@ -212,7 +235,7 @@ function UnitItem(props: {
     )
   }
   return (
-    <li className={`unit unit-${status}`}>
+    <li id={`unit-${unit.unitId}`} className={`unit unit-${status}`}>
       <div className="unit-track" aria-hidden="true">
         <span className="unit-marker">
           <Icon size={20} strokeWidth={2.25} />
@@ -221,7 +244,9 @@ function UnitItem(props: {
       </div>
       <div className="unit-card">
         <div className="unit-head">
-          <h3>{title}</h3>
+          <h3 tabIndex={-1} {...(props.arrived ? { 'data-route-focus': '' } : {})}>
+            {title}
+          </h3>
           <p className="unit-status">{t(UNIT_STATUS[status])}</p>
         </div>
         {status !== 'locked' && progress && (

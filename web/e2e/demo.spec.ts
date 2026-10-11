@@ -435,6 +435,107 @@ test('searches the themes for a word, and chooses a theme from what it finds', a
   await expect(page.getByRole('region', { name: 'Studying now' }).getByRole('heading', { name: 'Daily life' })).toBeVisible()
 })
 
+test('searches the whole course from the top row, and goes from a result to its unit and back', async ({ page }) => {
+  await page.goto('/')
+  await finishSetup(page)
+  await page.getByRole('link', { name: 'Search', exact: true }).click()
+  await expect(heading(page)).toHaveText('Search')
+  const field = page.getByRole('searchbox', { name: 'Search the course' })
+  await expect(field).toBeFocused()
+  // Typing rewrites the address and never takes the cursor from the field.
+  await field.pressSequentially('teach')
+  await expect(field).toBeFocused()
+  await expect(page).toHaveURL(/\/search\?q=teach$/)
+  await expect(page.locator('.search-page [role="status"]')).toHaveText('1 word')
+  const row = page.locator('.search-words > li').filter({ hasText: 'teacher' })
+  await expect(row).toHaveCount(1)
+  await expectAccessible(page, { dark: true })
+  // The unit link opens the path at that unit, its words open and its heading focused.
+  const unitLink = row.locator('.word-where a').first()
+  const title = (await unitLink.textContent())!.trim()
+  await unitLink.click()
+  await expect(heading(page)).toHaveText('Your path')
+  await expect(page).toHaveURL(/\/path\?unit=/)
+  const unit = page.getByRole('heading', { level: 3, name: title })
+  await expect(unit).toBeFocused()
+  await expect(page.locator('li.unit', { has: unit }).locator('details')).toHaveAttribute('open', '')
+  // Back: the same query and the same result.
+  await page.goBack()
+  await expect(field).toHaveValue('teach')
+  await expect(row).toHaveCount(1)
+})
+
+test('marks a found word to learn, follows its theme, and says when the sample has no such word', async ({ page }) => {
+  await page.goto('/')
+  await finishSetup(page)
+  await page.goto('/search?q=key')
+  const row = page.locator('.search-words > li').filter({ hasText: 'ключ' })
+  await row.getByRole('button', { name: 'Word actions: key' }).click()
+  await row.getByRole('button', { name: 'Learn this word: key' }).click()
+  await row.getByRole('button', { name: 'Word actions: key' }).click()
+  await expect(row.getByRole('button', { name: 'Don’t learn this word: key' })).toBeVisible()
+  await page.keyboard.press('Escape')
+  await row.getByRole('link', { name: 'Daily life' }).click()
+  await expect(heading(page)).toHaveText('Daily life')
+  await page.goto('/search?q=zebra')
+  await expect(page.locator('.search-page [role="status"]')).toHaveText('No word in the course matches “zebra”.')
+  await expect(page.getByText('The sample has 60 words. Sign in to search the whole course.')).toBeVisible()
+})
+
+test('fits the top row on a narrow phone while signed out', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 720 })
+  await page.goto('/')
+  await finishSetup(page)
+  const row = page.locator('.masthead-top')
+  const box = (await row.boundingBox())!
+  // One line of controls: the row is no taller than a control and its padding, and nothing reaches past its edge.
+  expect(box.height).toBeLessThan(80)
+  for (const control of [page.getByRole('link', { name: 'Search', exact: true }), page.getByRole('link', { name: 'Sign in' })]) {
+    const b = (await control.boundingBox())!
+    expect(b.x).toBeGreaterThanOrEqual(box.x)
+    expect(b.x + b.width).toBeLessThanOrEqual(box.x + box.width + 0.5)
+    expect(b.height).toBeLessThan(50)
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
+  await page.goto('/search?q=te')
+  await expectAccessible(page)
+})
+
+test('does not scroll sideways in the first-run setup in Spanish on a narrow phone', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 720 })
+  await page.goto('/')
+  await page.getByRole('button', { name: /^Interface language/ }).click()
+  await page.getByRole('button', { name: 'Español', exact: true }).click()
+  await expect(page.getByRole('heading', { name: '¿Qué idioma hablas?', level: 2 })).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
+})
+
+for (const [locale, l1] of [
+  ['es-ES', 'Español'],
+  ['de-DE', 'Deutsch'],
+] as const) {
+  test(`fits the top row on a narrow phone while signed out, in ${l1}`, async ({ browser }) => {
+    const context = await browser.newContext({ locale, viewport: { width: 360, height: 720 } })
+    forwardConsole(context)
+    try {
+      const page = await context.newPage()
+      await page.goto('/')
+      await finishSetup(page, l1)
+      const box = (await page.locator('.masthead-top').boundingBox())!
+      expect(box.height).toBeLessThan(80)
+      for (const control of [page.locator('.search-circle'), page.locator('.account-signin')]) {
+        const b = (await control.boundingBox())!
+        expect(b.x).toBeGreaterThanOrEqual(box.x)
+        expect(b.x + b.width).toBeLessThanOrEqual(box.x + box.width + 0.5)
+        expect(b.height).toBeLessThan(50)
+      }
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
+    } finally {
+      await context.close()
+    }
+  })
+}
+
 test('opens a theme’s page from Themes, reads its words, finds one and chooses the theme', async ({ page }) => {
   await page.goto('/')
   await finishSetup(page)

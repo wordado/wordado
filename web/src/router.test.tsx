@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Link, navigate, parseRoute, routeHref, routePath, useRoute, type Route } from './router'
 
 beforeEach(() => window.history.replaceState(null, '', '/'))
@@ -132,6 +132,31 @@ function Where() {
   )
 }
 
+describe('the search route', () => {
+  it('reads and writes the query', () => {
+    expect(parseRoute('/search', '')).toEqual({ name: 'search', q: '' })
+    expect(parseRoute('/search/', '?q=run')).toEqual({ name: 'search', q: 'run' })
+    expect(routeHref({ name: 'search', q: '' })).toBe('/search')
+    expect(routeHref({ name: 'search', q: 'thank you' })).toBe('/search?q=thank+you')
+  })
+
+  it('carries any text through the address unchanged', () => {
+    for (const q of ['a+b', 'c&d=e', '100%', '“run”', 'бягам', ' two  spaces ']) {
+      const url = new URL(routeHref({ name: 'search', q }), 'http://local')
+      expect(parseRoute(url.pathname, url.search)).toEqual({ name: 'search', q })
+    }
+  })
+})
+
+describe('the path route', () => {
+  it('reads and writes the unit it opens at', () => {
+    expect(parseRoute('/path', '')).toEqual({ name: 'path' })
+    expect(parseRoute('/path', '?unit=a1-02')).toEqual({ name: 'path', unit: 'a1-02' })
+    expect(routeHref({ name: 'path' })).toBe('/path')
+    expect(routeHref({ name: 'path', unit: 'a1-02' })).toBe('/path?unit=a1-02')
+  })
+})
+
 describe('navigation', () => {
   it('updates the route on navigate and on a link click', () => {
     render(<Where />)
@@ -155,5 +180,24 @@ describe('navigation', () => {
     act(() => navigate({ name: 'progress' }, { replace: true }))
     expect(window.history.length).toBe(before)
     expect(window.location.pathname).toBe('/progress')
+  })
+
+  it('tells the listeners even when the browser refuses a replacement, and not when it refuses a push', () => {
+    const told = vi.fn()
+    window.addEventListener('wordado:navigate', told)
+    const refuse = () => {
+      throw new DOMException('Too many calls', 'SecurityError')
+    }
+    vi.spyOn(window.history, 'replaceState').mockImplementation(refuse)
+    vi.spyOn(window.history, 'pushState').mockImplementation(refuse)
+    try {
+      expect(() => navigate({ name: 'progress' }, { replace: true })).not.toThrow()
+      expect(told).toHaveBeenCalledTimes(1)
+      expect(() => navigate({ name: 'progress' })).toThrow()
+      expect(told).toHaveBeenCalledTimes(1)
+    } finally {
+      window.removeEventListener('wordado:navigate', told)
+      vi.restoreAllMocks()
+    }
   })
 })
