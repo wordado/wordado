@@ -36,6 +36,35 @@ for (const mode of ['flashcard', 'multiple_choice', 'listening_select']) {
   })
 }
 
+test('a flashcard’s answer: the gloss on its own row under the translation, without brackets', async ({ browser }) => {
+  const GLOSS = 'for the test'
+  const context = await browser.newContext({ serviceWorkers: 'block' })
+  forwardConsole(context)
+  await context.addInitScript(() => localStorage.setItem('wordado.locale', 'en'))
+  await serveGlossedSample(context, GLOSS)
+  try {
+    const page = await context.newPage()
+    await page.goto('/')
+    await finishSetup(page)
+    await page.goto('/study?mode=flashcard')
+    await expect(page.locator('.card[data-phase="prompt"]')).toBeVisible()
+    await page.waitForTimeout(SETTLE_MS)
+    await page.keyboard.press('Space')
+    const word = page.locator('.revealed .translation-word')
+    const gloss = page.locator('.revealed .sense')
+    await expect(gloss).toHaveText(GLOSS)
+    await expect(page.locator('.revealed .prompt-text')).not.toContainText('(')
+    const wordBox = (await word.boundingBox())!
+    const glossBox = (await gloss.boundingBox())!
+    expect(glossBox.y).toBeGreaterThanOrEqual(wordBox.y + wordBox.height - 1)
+    // Both centred in the card, one over the other.
+    expect(Math.abs(wordBox.x + wordBox.width / 2 - (glossBox.x + glossBox.width / 2))).toBeLessThan(2)
+    await expectAccessible(page, { dark: true })
+  } finally {
+    await context.close()
+  }
+})
+
 test('a multiple-choice question: the gloss on its own row, a right answer moves on by itself, a wrong one waits (spec §8.1)', async ({ browser }) => {
   test.slow()
   const GLOSS = 'for the test'

@@ -255,7 +255,7 @@ function Flashcard(props: { readonly run: StudyRun; readonly snapshot: RunSnapsh
           {snapshot.phase !== 'prompt' && (
             <div className="revealed" role="region" ref={answer} tabIndex={-1} aria-labelledby={answerId}>
               <p className="prompt-text" id={answerId}>
-                <Translation entry={entry} lang={corpus?.l1 ?? 'bg'} />
+                <Translation entry={entry} lang={corpus?.l1 ?? 'bg'} stacked />
               </p>
               {entry.examples[0] !== undefined && (
                 <p className="example" lang="en">
