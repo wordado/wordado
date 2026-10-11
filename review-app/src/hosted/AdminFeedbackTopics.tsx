@@ -4,11 +4,9 @@ import { Dialog } from '../Dialog'
 import { hostedApi } from '../hostedApi'
 import { count, dateOf, messageOf } from './adminUtil'
 import { FeedbackDraftDialog } from './FeedbackDraftDialog'
-import { FeedbackCard, IDLE, SaveStatus, type Saving, SEVERITY_CHIP, SEVERITY_LABEL, STATES } from './FeedbackCard'
+import { FeedbackCard, IDLE, SaveStatus, type Saving, SEVERITY_CHIP, SEVERITY_LABEL, STATE_CHIP, STATE_LABEL, STATES } from './FeedbackCard'
 
 const SHOWN: Readonly<Record<FeedbackStateFilter, readonly FeedbackState[]>> = { open: ['new', 'seen'], all: ['new', 'seen', 'done', 'declined'], done: ['done'], declined: ['declined'] }
-const STATE_LABEL: Readonly<Record<FeedbackState, string>> = Object.fromEntries(STATES) as Record<FeedbackState, string>
-const STATE_CHIP: Readonly<Record<FeedbackState, string>> = { new: 'chip', seen: 'chip off', done: 'chip ok', declined: 'chip off' }
 
 /**
  * The Feedback tab by topic (spec 2026-10-10 §3.2, §3.3): one line for each thing the feedback is about, with how
@@ -187,7 +185,7 @@ function TopicLine(props: { topic: FeedbackTopicView; topics: readonly FeedbackT
               {opened.topic.items.length === 0 && <p className="note">No messages to show.</p>}
               <ul className="feedback-list" aria-label="Messages of the topic">
                 {opened.topic.items.map((item) => (
-                  <FeedbackCard key={`${opened.version}-${item.id}`} item={item} topics={props.topics} onMoved={moved} />
+                  <FeedbackCard key={`${opened.version}-${item.id}`} item={item} topics={props.topics} onMoved={moved} inTopic />
                 ))}
               </ul>
               {opened.topic.more > 0 && <p className="note">and {count(opened.topic.more, 'older message')}, not shown here.</p>}
@@ -302,7 +300,7 @@ function TopicTools(props: { topic: FeedbackTopicView; topics: readonly Feedback
         <div className="topic-tool">
           <button
             type="button"
-            className="button small"
+            className="button tool"
             onClick={() => {
               setRenaming(IDLE)
               setTitle(saved.current.title)
@@ -318,10 +316,10 @@ function TopicTools(props: { topic: FeedbackTopicView; topics: readonly Feedback
             <input type="text" value={title} maxLength={MAX_TOPIC_TITLE_LENGTH} onChange={(e) => setTitle(e.target.value)} />
           </label>
           <span className="form-actions">
-            <button type="submit" className="button small" disabled={renaming.kind === 'busy' || title.trim() === ''}>
+            <button type="submit" className="button tool" disabled={renaming.kind === 'busy' || title.trim() === ''}>
               Save
             </button>
-            <button type="button" className="button small ghost" onClick={() => setTitle(null)}>
+            <button type="button" className="button tool ghost" onClick={() => setTitle(null)}>
               Cancel
             </button>
           </span>
@@ -366,7 +364,7 @@ function TopicTools(props: { topic: FeedbackTopicView; topics: readonly Feedback
           />
         </label>
         <span className="form-actions">
-          <button type="submit" className="button small" disabled={issue.trim() === (topic.issue === null ? '' : String(topic.issue))}>
+          <button type="submit" className="button tool" disabled={issue.trim() === (topic.issue === null ? '' : String(topic.issue))}>
             Save issue
           </button>
         </span>
@@ -377,7 +375,7 @@ function TopicTools(props: { topic: FeedbackTopicView; topics: readonly Feedback
         )}
       </form>
       <div className="topic-tool topic-draft">
-        <button type="button" className="button small" disabled={!props.aiOn} onClick={() => setDrafting(true)}>
+        <button type="button" className="button tool" disabled={!props.aiOn} onClick={() => setDrafting(true)}>
           Draft an issue
         </button>
         {!props.aiOn && <span className="feedback-status">Needs the AI help, which is off or not set up.</span>}
@@ -385,7 +383,7 @@ function TopicTools(props: { topic: FeedbackTopicView; topics: readonly Feedback
       <form className="feedback-mark topic-mark" aria-label="The topic’s mark" onSubmit={saveNote}>
         <div className="feedback-state">
           <label className="field">
-            State
+            Topic state
             <select value={chosen} aria-busy={stateSaving.kind === 'busy'} onChange={(e) => choose(e.target.value as FeedbackState)}>
               {STATES.map(([value, label]) => (
                 <option key={value} value={value}>
@@ -394,17 +392,11 @@ function TopicTools(props: { topic: FeedbackTopicView; topics: readonly Feedback
               ))}
             </select>
           </label>
-          <SaveStatus saving={stateSaving} what="State" />
-          {marked > 0 && (
-            <span role="status" className="feedback-status">
-              {count(marked, 'message')} marked done.
-            </span>
-          )}
         </div>
         <label className="field feedback-note">
-          Note
+          Topic note
           <textarea
-            rows={2}
+            rows={1}
             maxLength={MAX_FEEDBACK_NOTE_LENGTH}
             value={draft}
             onChange={(e) => {
@@ -414,9 +406,17 @@ function TopicTools(props: { topic: FeedbackTopicView; topics: readonly Feedback
           />
         </label>
         <span className="form-actions">
-          <button type="submit" className="button small" disabled={noteSaving.kind === 'busy' || draft.trim() === savedNote}>
+          <button type="submit" className="button tool" disabled={noteSaving.kind === 'busy' || draft.trim() === savedNote}>
             Save note
           </button>
+        </span>
+        <span className="feedback-saved">
+          <SaveStatus saving={stateSaving} what="State" />
+          {marked > 0 && (
+            <span role="status" className="feedback-status">
+              {count(marked, 'message')} marked done.
+            </span>
+          )}
           <SaveStatus saving={noteSaving} what="Note" />
         </span>
       </form>

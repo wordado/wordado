@@ -7,6 +7,8 @@ import { dateOf, messageOf } from './adminUtil'
 const KIND_LABEL: Readonly<Record<FeedbackKind, string>> = { bug: 'Bug', idea: 'Idea', other: 'Other' }
 const KIND_CHIP: Readonly<Record<FeedbackKind, string>> = { bug: 'chip major', idea: 'chip', other: 'chip off' }
 export const STATES: readonly (readonly [FeedbackState, string])[] = [['new', 'New'], ['seen', 'Looked at'], ['done', 'Done'], ['declined', 'Not doing']]
+export const STATE_LABEL: Readonly<Record<FeedbackState, string>> = Object.fromEntries(STATES) as Record<FeedbackState, string>
+export const STATE_CHIP: Readonly<Record<FeedbackState, string>> = { new: 'chip', seen: 'chip off', done: 'chip ok', declined: 'chip off' }
 export const CATEGORY_LABEL: Readonly<Record<FeedbackCategory, string>> = { bug: 'Bug', idea: 'Idea', question: 'Question', praise: 'Praise', junk: 'Junk' }
 export const SEVERITY_LABEL: Readonly<Record<FeedbackSeverity, string>> = { blocks: 'Blocks study', annoys: 'Annoys', cosmetic: 'Cosmetic' }
 export const SEVERITY_CHIP: Readonly<Record<FeedbackSeverity, string>> = { blocks: 'chip major', annoys: 'chip minor', cosmetic: 'chip off' }
@@ -30,8 +32,9 @@ export function SaveStatus(props: { saving: Saving; what: string }) {
  * own words, which are never changed), the details folded away, and the mark. The state saves when it is chosen;
  * the note on Save. Each save sends the other one as it was last saved. A message the AI has read also shows the
  * topic it is in (spec 2026-10-10 §3.2), and `topics`, when given, are offered to move it to: the coordinator's
- * choice, which the AI does not change again. `onMoved` is told where it went. */
-export function FeedbackCard(props: { item: FeedbackView; topics?: readonly FeedbackTopicRef[]; onMoved?(id: number, topic: FeedbackTopicRef): void }) {
+ * choice, which the AI does not change again. `onMoved` is told where it went. `inTopic`: the card stands under its
+ * topic, which has a mark of its own, so the message's mark is folded away and its state shown in the head. */
+export function FeedbackCard(props: { item: FeedbackView; topics?: readonly FeedbackTopicRef[]; onMoved?(id: number, topic: FeedbackTopicRef): void; inTopic?: boolean }) {
   const { item } = props
   const id = useId()
   // The mark as the server last confirmed it. Each save sends the whole mark, so the saves of one message go one
@@ -92,6 +95,44 @@ export function FeedbackCard(props: { item: FeedbackView; topics?: readonly Feed
     }
   }
 
+  const mark = (
+    <form className="feedback-mark" aria-label="Your mark" onSubmit={saveNote}>
+      <div className="feedback-state">
+        <label className="field">
+          State
+          <select value={chosen} aria-busy={stateSaving.kind === 'busy'} onChange={(e) => choose(e.target.value as FeedbackState)}>
+            {STATES.map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <label className="field feedback-note">
+        Note
+        <textarea
+          rows={1}
+          maxLength={MAX_FEEDBACK_NOTE_LENGTH}
+          value={draft}
+          onChange={(e) => {
+            setDraft(e.target.value)
+            setNoteSaving(IDLE)
+          }}
+        />
+      </label>
+      <span className="form-actions">
+        <button type="submit" className="button tool" disabled={noteSaving.kind === 'busy' || draft.trim() === savedNote}>
+          Save note
+        </button>
+      </span>
+      <span className="feedback-saved">
+        <SaveStatus saving={stateSaving} what="State" />
+        <SaveStatus saving={noteSaving} what="Note" />
+      </span>
+    </form>
+  )
+
   return (
     <li className="feedback-item">
       <article aria-labelledby={`${id}-title`}>
@@ -99,6 +140,7 @@ export function FeedbackCard(props: { item: FeedbackView; topics?: readonly Feed
           <span className={KIND_CHIP[item.kind]}>{KIND_LABEL[item.kind]}</span>
           <time dateTime={when}>{dateOf(when)}</time>
           <span className="note">{item.signedIn ? 'signed in' : 'not signed in'}</span>
+          {props.inTopic && <span className={STATE_CHIP[chosen]}>{STATE_LABEL[chosen]}</span>}
         </h3>
         <p className="feedback-message">{item.message}</p>
         {item.ai && item.ai.translation !== '' && (
@@ -158,39 +200,14 @@ export function FeedbackCard(props: { item: FeedbackView; topics?: readonly Feed
             <dd>{item.userAgent === '' ? 'not given' : item.userAgent}</dd>
           </dl>
         </details>
-        <form className="feedback-mark" aria-label="Your mark" onSubmit={saveNote}>
-          <div className="feedback-state">
-            <label className="field">
-              State
-              <select value={chosen} aria-busy={stateSaving.kind === 'busy'} onChange={(e) => choose(e.target.value as FeedbackState)}>
-                {STATES.map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <SaveStatus saving={stateSaving} what="State" />
-          </div>
-          <label className="field feedback-note">
-            Note
-            <textarea
-              rows={2}
-              maxLength={MAX_FEEDBACK_NOTE_LENGTH}
-              value={draft}
-              onChange={(e) => {
-                setDraft(e.target.value)
-                setNoteSaving(IDLE)
-              }}
-            />
-          </label>
-          <span className="form-actions">
-            <button type="submit" className="button small" disabled={noteSaving.kind === 'busy' || draft.trim() === savedNote}>
-              Save note
-            </button>
-            <SaveStatus saving={noteSaving} what="Note" />
-          </span>
-        </form>
+        {props.inTopic ? (
+          <details className="feedback-details feedback-mark-fold">
+            <summary>Mark this message</summary>
+            {mark}
+          </details>
+        ) : (
+          mark
+        )}
       </article>
     </li>
   )
