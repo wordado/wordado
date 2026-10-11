@@ -132,6 +132,31 @@ function Where() {
   )
 }
 
+describe('the search route', () => {
+  it('reads and writes the query', () => {
+    expect(parseRoute('/search', '')).toEqual({ name: 'search', q: '' })
+    expect(parseRoute('/search/', '?q=run')).toEqual({ name: 'search', q: 'run' })
+    expect(routeHref({ name: 'search', q: '' })).toBe('/search')
+    expect(routeHref({ name: 'search', q: 'thank you' })).toBe('/search?q=thank+you')
+  })
+
+  it('carries any text through the address unchanged', () => {
+    for (const q of ['a+b', 'c&d=e', '100%', '“run”', 'бягам', ' two  spaces ']) {
+      const url = new URL(routeHref({ name: 'search', q }), 'http://local')
+      expect(parseRoute(url.pathname, url.search)).toEqual({ name: 'search', q })
+    }
+  })
+})
+
+describe('the path route', () => {
+  it('reads and writes the unit it opens at', () => {
+    expect(parseRoute('/path', '')).toEqual({ name: 'path' })
+    expect(parseRoute('/path', '?unit=a1-02')).toEqual({ name: 'path', unit: 'a1-02' })
+    expect(routeHref({ name: 'path' })).toBe('/path')
+    expect(routeHref({ name: 'path', unit: 'a1-02' })).toBe('/path?unit=a1-02')
+  })
+})
+
 describe('navigation', () => {
   it('updates the route on navigate and on a link click', () => {
     render(<Where />)
