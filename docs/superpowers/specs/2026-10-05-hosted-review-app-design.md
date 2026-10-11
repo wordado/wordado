@@ -2,6 +2,9 @@
 
 Date: 2026-10-05. Status: draft for the product owner's review.
 Builds on: `2026-10-04-ai-review-and-review-app-design.md` (the local review app, §5; "Remote reviewers later", §8).
+Revised 2026-10-11: §18 added, the Announcements tab (issue #185): a mail to learners' account holders, written
+here and sent by the learner app's server in batches, as a service notice to everyone or as news to those who
+consented, with an unsubscribe link.
 Revised 2026-10-11: §17 added, the Accounts tab (issue #187): an account of the learner app deleted by hand, and
 the counts of the sweep of inactive accounts, behind a second token that is not the one that reads feedback.
 Revised 2026-10-10: the week and the drafted issue (issue #158, stage D): §8's weekly mail gains the AI's part,
@@ -872,3 +875,158 @@ the address in the field forgets it.
   on; not connected; each failure in words; the three routes under the count of D1 statements.
 - **Page:** the numbers, the lookup, the question and the typed address, each failure. The hosted browser run
   deletes an account on the desktop and opens the question on a phone, against the fake server.
+
+## 18. Announcements
+
+Issue #185. The provider has to be able to tell account holders something at once: that the terms change on a
+date, that the service will be down, that a feature has shipped. The only channel that reaches every account
+holder is the sign-in address. An announcement is written in the review app and sent by the learner app's server,
+which holds the accounts and the mailer; the review app keeps nothing of it.
+
+### 18.1 Two kinds, kept apart
+
+- **Service notice** (changed terms or privacy policy, planned downtime, shutdown): part of providing the service.
+  It goes to every account holder, carries no unsubscribe link, and says in one line that it goes to every account
+  holder.
+- **News** (new features): direct marketing. It goes only to accounts whose consent to news stands
+  (`news_consent = 'given'`, issue #186), and every mail carries a link that withdraws that consent.
+
+The kind is chosen when the announcement is written, shown in the question before the send, and typed by the owner
+to confirm it. One announcement is of one kind.
+
+### 18.2 What is kept (`server/migrations/0011_announcements.sql`)
+
+- `announcement`: the kind, the texts (`{"en": {"subject", "body"}, …}`), a `version` raised by every change of a
+  draft, `tested_version`, the status (`draft` → `sending` ⇄ `stopped`, `sending` → `sent`), the times, why the
+  last run was held, and four counts (`recipients`, `sent`, `failed`, `skipped`). The counts are kept here so that
+  they stay when an account is deleted.
+- `announcement_delivery`: one row for each account an announcement goes to, with the account's language, its
+  state (`queued`, `sent`, `failed`, `skipped`) and a random `send_key`. It references the account with
+  `on delete cascade`: the learner's own deletion, the provider's by hand and the sweep (§17) all take it.
+- `announcement_mail_day`: how many announcement mails went on each UTC day. A number.
+
+### 18.3 The text
+
+Plain text, and nothing else: the mail has no HTML part, so nothing written is markup to a mail program, and a link
+is its address written out. A subject is one line of at most 150 characters with no control character, so it
+cannot start a header; a body is at most 10,000 characters with no control character but the new line and the tab.
+The rules are `validateAnnouncementTexts` in `core/src/announcement.ts`, used by the page's server and by the
+learner app's server alike. English is needed; Bulgarian, German and Spanish are optional.
+
+Under the text, after a signature line, the server adds why the mail came (for news, with the unsubscribe link) and
+who sent it: the name of the service, the website and the public contact address. The sender is the server's
+`EMAIL_FROM`, as for sign-in codes; `Reply-To` is the contact address, since the sending address has no mailbox.
+
+**Language.** The app keeps the interface language on the device and does not send it as such. The server reads it
+from what the app did send, the most direct first: the language the account's newest device asks its reminders
+in; the language the account read the question about news in (`news-1.bg`); its native language from the synced
+settings. An account that left none of these gets English. The account then gets the announcement's text in that
+language where there is one, and the English one otherwise; the footer and the unsubscribe page follow the text.
+
+### 18.4 The safeguards on a send
+
+A mail cannot be taken back, so:
+
+1. **A test send first.** `test` mails every language of the version to one address, made as the real mails are
+   (the subject marked `[Test]`; a news mail's link is one that withdraws nobody's consent). Only when the mailer
+   took them is `tested_version` set. A change of the draft is a new version, which needs its own test send.
+2. **A confirmation that is typed.** The page reads from the server the kind and how many accounts would get the
+   announcement now, shows both, and the owner types them (`service 1204`). The page's server refuses a send whose
+   typed text is not that; the learner app's server is told the version, the kind and the number, and starts
+   nothing if any is no longer so (the number is given back, to be read and typed again).
+3. **Once.** Sending starts in one transaction with the announcement's row locked. From then on nothing of it can
+   be changed, it cannot be tested or deleted, and it cannot be started again.
+4. **Stop.** `stop` halts a send where it is; `resume` goes on with those not yet reached. A mail already handed to
+   the mailer when stop is pressed still goes.
+
+### 18.5 Who gets it, and how it is sent
+
+**Who gets it is fixed when the send starts**: one `announcement_delivery` row an account, written in the
+transaction that starts the send. An account made later is not among them. The one thing asked again is consent:
+as each news mail is about to go, the account's consent is read, and one that was withdrawn since gets nothing
+(`skipped`).
+
+The press itself mails nobody. A step of the server's cron (`server/src/announcements/send.ts`, every 15 minutes)
+sends, one mail at a time:
+
+| Limit | Value | Why |
+|---|---|---|
+| Mails a run | 20 (`ANNOUNCEMENT_BATCH`) | One run is one invocation of the Worker, which on the free plan may make 50 requests to other services; the reminders of the same run are among them. |
+| Wait between two mails | 500 ms (`ANNOUNCEMENT_SEND_INTERVAL_MS`) | The mail provider allows 10 requests a second for the whole account, shared with sign-in codes and the review app's own mails. |
+| Mails a UTC day | 50 (`ANNOUNCEMENT_MAILS_PER_DAY`, a setting) | The provider's free plan sends 100 mails a day, sign-in codes among them, and a code must never be the one to wait. Test sends count. |
+| A key holds | 23 hours (`ANNOUNCEMENT_KEY_WINDOW_MS`) | The provider keeps an idempotency key for 24 hours. |
+
+Every mail is sent under a key (`announcement/<id>/<send_key>`): asked twice with one key, the provider sends one
+mail. With the row, that makes a run safe to stop anywhere:
+
+- the provider took the mail: the row is `sent` in the transaction that counts it, and no run takes it again;
+- it will never take it (the address is none): `failed`, and the run goes on;
+- it takes nothing now, or its allowance is used up: the mail waits as if untried, the run stops, and the tab
+  says why. This is held against no account, however long it lasts. After "allowance used up" no run asks again
+  that day;
+- no answer came (a crash, the network): whether the mail went is not known. It is asked for again after 30
+  minutes with the same key, at most five times and only while the key holds; after that it is `failed` rather
+  than risked twice.
+
+An announcement with no mail left waiting is `sent`.
+
+### 18.6 The unsubscribe link
+
+`GET` and `POST /v1/news/unsubscribe?t=<token>&l=<language>` on the learner app's server. The token names the
+account and carries an HMAC-SHA-256 of that under the server's secret: it works without a sign-in, and nobody
+without the secret can make one for an account. `GET` shows a small page with a question, in the language of the
+mail, and changes nothing: mail scanners open every link. `POST` withdraws the consent through the same function
+as the switch in the app's settings (`setNewsConsent`), and shows that it is done. Every news mail also carries
+`List-Unsubscribe` and `List-Unsubscribe-Post: List-Unsubscribe=One-Click` (RFC 8058), so a mail program's own
+button posts to the same address. That post is a form with no Origin, so the two routes stand before the guard on
+`/v1/*`; they read no cookie, and the answer never says whether the account exists or had consented.
+
+### 18.7 The link between the two services
+
+On the learner app's server, behind `ADMIN_WRITE_TOKEN` like §17.3 (writing, testing and sending are all changes;
+the token that reads feedback opens none of them):
+
+- `GET /v1/admin/announcements` → `{ announcements, limits: { perDay, sentToday, batch } }`, the newest 50.
+- `POST /v1/admin/announcements/save` `{ id?, kind, texts }`, `…/delete` `{ id }`, `…/preview` `{ id }`,
+  `…/test` `{ id, version, email }`, `…/send` `{ id, version, kind, recipients }`, `…/stop` `{ id }`,
+  `…/resume` `{ id }`.
+
+Nothing answered is of an account: counts and times. The address of a test send travels in the body, is used for
+that send and is kept nowhere. Logs on both sides have counts and statuses.
+
+### 18.8 The review app
+
+Routes, admins only, which run no statement of their own against D1: `GET /api/admin/announcements`
+(`{ connected: false }` while `ADMIN_WRITE_TOKEN` or `LEARNER_APP_URL` is not set) and `POST
+/api/admin/announcements/{save,delete,preview,test,send,stop,resume}`. Each passes on only the fields it names,
+checks the texts as the server does, and says a refusal in words.
+
+The **Announcements** tab: the list of what was written and sent (the kind, the state, `40 of 120 sent · 77 waiting
+· 1 failed · …`, when, and what holds a send), with **Stop sending** and **Resume**. An announcement opens as a
+form: the kind, a subject and a text for each language, then **Preview** (each language as it is mailed, and how
+many accounts get which), the test send, and **Send…**, closed until this version's test went and nothing has been
+changed since.
+
+### 18.9 Left out
+
+- Mail to learners without an account: there is no address.
+- Scheduling a send for later, and recurring mails.
+- Rich templates and HTML.
+- The notice in the app when the terms change (issue #184).
+- A record of who wrote or sent an announcement.
+- Reading bounces and complaints back from the mail provider: a mail it accepted counts as sent.
+
+### 18.10 Testing
+
+- **Shared:** the check of the texts: English needed, the lengths, a subject that cannot break into a header.
+- **Server:** the mail of each kind in each language; the token (made for one account, refused for another, refused
+  without the secret); the page on GET changing nothing and the POST withdrawing, with no session and no Origin;
+  the routes closed without the write token; the test send and the version; each refusal of a send; two presses at
+  once; the recipients of each kind, fixed at the press; consent asked again; the language; the batch, the day's
+  allowance, each kind of failure and the same key on a repeat; stop and resume; the rows going with a deleted
+  account by the learner's deletion and by the sweep; logs with counts only.
+- **Worker:** admins only; only the named fields passed on; the typed confirmation; each refusal in words; not
+  connected; the routes under the count of D1 statements.
+- **Page:** the list, writing and saving, the preview, the send closed until tested and saved, the question and the
+  typed kind and count, a changed count, stop and resume. The hosted browser run writes, tests and sends a service
+  notice on the desktop and opens the question for news on a phone, against the fake server. No test sends a mail.

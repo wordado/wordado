@@ -11,9 +11,11 @@ import { useStore } from '../useStore'
  * The optional placement test (spec §7.2), in focus mode like a study run.
  * Questions carry no feedback, since the test measures rather than teaches.
  * Nothing changes until the learner takes the result. It is offered under
- * Settings › Studying, so every way back leads there.
+ * Settings › Studying, so every way back leads there; and on the setup's
+ * level step (`setup`), where every way back leads to that step: `leave`
+ * with nothing changed, `taken` once the result is the learner's level.
  */
-export function Placement(props: { readonly source?: PlacementSource }) {
+export function Placement(props: { readonly source?: PlacementSource; readonly setup?: { leave(): void; taken(): void } }) {
   const { t } = useT()
   const client = useClient()
   const { env } = useApp()
@@ -47,7 +49,14 @@ export function Placement(props: { readonly source?: PlacementSource }) {
     else heading.current?.focus()
   }, [s.item, s.phase])
 
+  // In the setup the step shows the level that was taken: there is no screen of its own for it.
+  const taken = props.setup?.taken
+  useEffect(() => {
+    if (s.phase === 'accepted') taken?.()
+  }, [s.phase, taken])
+
   const back = { name: 'settings', section: 'study' } as const
+  const leave = props.setup?.leave
   if (s.phase === 'unavailable') {
     return (
       <section className="setup" aria-labelledby="placement-title">
@@ -59,9 +68,15 @@ export function Placement(props: { readonly source?: PlacementSource }) {
         <div className="panel form-section">
           <p>{t('placement.unavailableNote')}</p>
           <div className="actions">
-            <Link className="button" to={back}>
-              {t('placement.back')}
-            </Link>
+            {leave ? (
+              <button type="button" className="button" onClick={leave}>
+                {t('placement.backToSetup')}
+              </button>
+            ) : (
+              <Link className="button" to={back}>
+                {t('placement.back')}
+              </Link>
+            )}
           </div>
         </div>
       </section>
@@ -88,14 +103,22 @@ export function Placement(props: { readonly source?: PlacementSource }) {
               <button type="button" className="button primary study-main" onClick={() => void run.accept()}>
                 {t('placement.accept', { level })}
               </button>
-              <Link className="button study-main" to={back}>
-                {t('placement.keep', { level: settings.declaredLevel })}
-              </Link>
+              {leave ? (
+                <button type="button" className="button study-main" onClick={leave}>
+                  {t('placement.keep', { level: settings.declaredLevel })}
+                </button>
+              ) : (
+                <Link className="button study-main" to={back}>
+                  {t('placement.keep', { level: settings.declaredLevel })}
+                </Link>
+              )}
             </>
           ) : (
-            <Link className="button primary study-main" to={{ name: 'home' }}>
-              {t('placement.home')}
-            </Link>
+            !props.setup && (
+              <Link className="button primary study-main" to={{ name: 'home' }}>
+                {t('placement.home')}
+              </Link>
+            )
           )}
         </div>
       </section>
@@ -106,9 +129,15 @@ export function Placement(props: { readonly source?: PlacementSource }) {
   return (
     <section className="study" aria-labelledby="placement-title">
       <div className="study-bar">
-        <Link className="study-close" to={back} aria-label={t('placement.back')}>
-          <X aria-hidden="true" size={20} strokeWidth={2} />
-        </Link>
+        {leave ? (
+          <button type="button" className="study-close" onClick={leave} aria-label={t('placement.backToSetup')}>
+            <X aria-hidden="true" size={20} strokeWidth={2} />
+          </button>
+        ) : (
+          <Link className="study-close" to={back} aria-label={t('placement.back')}>
+            <X aria-hidden="true" size={20} strokeWidth={2} />
+          </Link>
+        )}
         <h1 id="placement-title" className="study-bar-title">
           {t('placement.title')}
         </h1>

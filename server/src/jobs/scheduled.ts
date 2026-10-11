@@ -1,4 +1,5 @@
 import { sweepInactiveAccounts } from '../account/sweep'
+import { sendAnnouncements } from '../announcements/send'
 import type { ServerDeps } from '../deps'
 import { pruneFeedbackSends } from '../feedback/limit'
 import { sendDueReminders } from '../reminders/schedule'
@@ -26,6 +27,7 @@ export async function runScheduled(deps: ServerDeps): Promise<void> {
     () => sendDueReminders(deps),
     () => pruneFeedbackSends(deps),
     () => sweepInactiveAccounts(deps),
+    () => sendAnnouncements(deps),
   ]
   const results = await Promise.allSettled(steps.map((step) => step()))
   const failures = results.flatMap((r) => (r.status === 'rejected' ? [r.reason as unknown] : []))

@@ -1,4 +1,4 @@
-import type { FeedbackItem } from '@wordado/core'
+import type { AnnouncementKind, AnnouncementLanguage, AnnouncementTexts, FeedbackItem } from '@wordado/core'
 import type { Action, RowView } from '../server/types'
 
 export type Language = 'bg' | 'de' | 'es' | 'en'
@@ -325,3 +325,56 @@ export interface AccountSweep {
 
 /** `GET /api/admin/accounts/sweep`. Not connected: the token or the server's address is not set. */
 export type AccountSweepView = { readonly connected: false } | { readonly connected: true; readonly sweep: AccountSweep }
+
+export type AnnouncementStatus = 'draft' | 'sending' | 'stopped' | 'sent'
+/** Why the last run of a send sent nothing or stopped early: the day's own allowance of announcement mails is used,
+ * the mail service says its allowance is, or the mail service takes nothing now. */
+export type AnnouncementHeld = 'day' | 'quota' | 'busy'
+
+/** An announcement as the learner app's server tells of it (#185): its texts, its state, and counts. Times are
+ * epoch milliseconds. Nothing of an account: no address, no id. */
+export interface Announcement {
+  readonly id: number
+  readonly kind: AnnouncementKind
+  readonly texts: AnnouncementTexts
+  /** Raised by every change of a draft; `testedVersion` is the one whose test send went, null before any. Only a
+   * version that was tested can be sent. */
+  readonly version: number
+  readonly testedVersion: number | null
+  readonly status: AnnouncementStatus
+  readonly createdAt: number
+  readonly startedAt: number | null
+  readonly stoppedAt: number | null
+  readonly finishedAt: number | null
+  readonly held: { readonly reason: AnnouncementHeld; readonly at: number } | null
+  /** The accounts it was for when sending started, and what became of their mails. What these do not add up to
+   * are accounts deleted before their turn. */
+  readonly recipients: number
+  readonly sent: number
+  readonly failed: number
+  readonly skipped: number
+  readonly queued: number
+}
+
+/** What a send works under: the announcement mails of one UTC day at most and how many went today, and the mails of one run (every 15 minutes). */
+export interface AnnouncementLimits {
+  readonly perDay: number
+  readonly sentToday: number
+  readonly batch: number
+}
+
+/** `GET /api/admin/announcements`. Not connected: the token or the server's address is not set. */
+export type AnnouncementsView = { readonly connected: false } | { readonly connected: true; readonly announcements: readonly Announcement[]; readonly limits: AnnouncementLimits }
+
+/** `POST /api/admin/announcements/preview`: each language as it would be mailed, footer and all, and how many
+ * accounts would get which if it were sent now. `version` is the one that was read. */
+export interface AnnouncementPreview {
+  readonly version: number
+  readonly kind: AnnouncementKind
+  readonly recipients: number
+  readonly byLanguage: Readonly<Partial<Record<AnnouncementLanguage, number>>>
+  readonly mails: readonly { readonly language: AnnouncementLanguage; readonly subject: string; readonly text: string }[]
+}
+
+/** What the owner types to send: the kind and the number of accounts, "service 1204". */
+export const announcementConfirmation = (kind: AnnouncementKind, recipients: number): string => `${kind} ${recipients}`

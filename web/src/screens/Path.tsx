@@ -76,8 +76,9 @@ export function Path(props: { readonly unit?: string | undefined }) {
     return { level, units, statuses, skipped: progress.levels[level]?.kind === 'skipped' }
   })
   const studied = levelToOpen(levels)
-  // Opened at a unit (`?unit=`): open what hides it, once per arrival. State set while rendering, so the unit is
+  // Opened at a unit (`?unit=`): open what hides it, once per arrival (the plain path in between makes the same unit a new arrival). State set while rendering, so the unit is
   // in the first paint and the shell can focus it.
+  if (props.unit === undefined && arrived !== null) setArrived(null)
   if (props.unit !== undefined && arrived !== props.unit) {
     setArrived(props.unit)
     const reveal = unitReveal(levels, studied, props.unit)
@@ -118,7 +119,14 @@ export function Path(props: { readonly unit?: string | undefined }) {
             today={today}
             arrived={units[i]!.unitId === target}
             wordsOpen={openUnits.has(units[i]!.unitId)}
-            onWordsToggle={() => setOpenUnits((prev) => toggled(prev, units[i]!.unitId))}
+            onWordsOpen={(open) =>
+              setOpenUnits((prev) => {
+                const next = new Set(prev)
+                if (open) next.add(units[i]!.unitId)
+                else next.delete(units[i]!.unitId)
+                return next
+              })
+            }
           />
         )
 
@@ -213,7 +221,7 @@ function UnitItem(props: {
   /** A search result led here: the heading takes focus on arrival. */
   readonly arrived: boolean
   readonly wordsOpen: boolean
-  onWordsToggle(): void
+  onWordsOpen(open: boolean): void
 }) {
   const { t, locale } = useT()
   const client = useClient()
@@ -274,7 +282,7 @@ function UnitItem(props: {
             )}
           </div>
         )}
-        <details className="unit-words" open={props.wordsOpen} onToggle={(e) => e.currentTarget.open !== props.wordsOpen && props.onWordsToggle()}>
+        <details className="unit-words" open={props.wordsOpen} onToggle={(e) => e.currentTarget.open !== props.wordsOpen && props.onWordsOpen(e.currentTarget.open)}>
           <summary>
             {t('path.words', { count: unit.wordIds.length })}
             <ChevronDown aria-hidden="true" size={18} className="unit-chevron" />

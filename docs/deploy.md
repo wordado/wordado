@@ -130,6 +130,13 @@ private `wordado/wordado-research`, cloned into `docs/research/` and ignored her
      until that deploy has run; the routes answer 404 to a wrong token and to none alike, so they cannot be
      probed from outside. The sweep itself needs no
      setting: it runs with the cron whether or not the tab is connected.
+   - Announcements (#185) need **no new secret**: the review app's Announcements tab uses `ADMIN_WRITE_TOKEN`
+     as the Accounts tab does, and the mails go through the mailer already in place (`RESEND_API_KEY`,
+     `EMAIL_FROM`). One optional variable, `ANNOUNCEMENT_MAILS_PER_DAY`: the announcement mails sent in one UTC
+     day at most, 50 when unset, which is half of the 100 a day of the mail provider's free plan, the rest being
+     the sign-in codes'. On a plan without a daily limit, raise it by adding it to `vars` of the `production`
+     block in `server/wrangler.jsonc`, in a pull request. `0` holds every send. See "Announcements" under
+     Everyday.
    - This server mails no feedback. The notice that feedback came is the review app's weekly mail to its
      admins (`review-app/README.md`, "Hosted", step 8): a count and a link to the tab, sent on Monday for
      the week before. It needs the review app's `RESEND_API_KEY`, `FEEDBACK_READ_TOKEN` and
@@ -194,6 +201,25 @@ private `wordado/wordado-research`, cloned into `docs/research/` and ignored her
   after that deploy at the earliest. From then on the date moves at each sign-in and each time a session is
   extended (once a day of use). An account with no date is never deleted; the tab counts such accounts, and
   the number should stay 0.
+- **Announcements (#185):** written and sent from the review app's Announcements tab
+  (`review-app/README.md`, "Hosted", step 11; the design is §18 of
+  `docs/superpowers/specs/2026-10-05-hosted-review-app-design.md`). A service notice goes to every account
+  holder, news only to accounts that consented, with an unsubscribe link. What to know when one is sent:
+  - **Order of deploys:** this server first (migration `0011_announcements.sql` adds three tables and changes
+    none), then the review app. Until the server has the routes the tab says the app's server answered 404.
+  - **Nothing is mailed by the press.** The cron sends: at most 20 mails every 15 minutes and
+    `ANNOUNCEMENT_MAILS_PER_DAY` (50) a UTC day, test sends counted. On the free mail plan 500 accounts take ten
+    days; the tab shows how far a send is and what holds it, and **Stop sending** halts it. The first change of
+    the terms should be sent that many days before it has to have reached everyone, or after the limit is raised.
+  - **The mails come from `EMAIL_FROM`**, the address of the sign-in codes, with `Reply-To` the public contact
+    address (`privacy@wordado.com`), so an answer reaches a mailbox. A sending address of its own for
+    announcements would be one more setting; there is none yet.
+  - **Without a mailer** (the preview, local development) a send runs the same way and each mail is one log line
+    with its subject and no address: a way to rehearse a send, not to deliver one.
+  - **The log** says `announcements: N sent, N failed, N skipped` for a run that did something, and never an
+    address or an account.
+  - **Before the first mail** the privacy policy has to say that the address is used for service notices, and for
+    news with consent (it lives in the site repository).
 - **Rollback:** `pnpm --filter @wordado/server exec wrangler rollback --env production` restores the previous
   Worker and its assets together. Migrations are forward-only: never roll the schema back; write a new migration.
   Never roll production back to a version from before the move (2026-10): a rollback restores a version's

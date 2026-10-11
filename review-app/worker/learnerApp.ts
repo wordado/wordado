@@ -1,5 +1,5 @@
-import { FEEDBACK_KINDS, type FeedbackItem, type FeedbackKind } from '@wordado/core'
-import type { AccountFound, AccountSweep } from '../shared/hosted'
+import { ANNOUNCEMENT_LANGUAGES, FEEDBACK_KINDS, isAnnouncementKind, isAnnouncementLanguage, validateAnnouncementTexts, type AnnouncementKind, type AnnouncementLanguage, type AnnouncementTexts, type FeedbackItem, type FeedbackKind } from '@wordado/core'
+import type { AccountFound, AccountSweep, Announcement, AnnouncementHeld, AnnouncementLimits, AnnouncementPreview, AnnouncementStatus } from '../shared/hosted'
 import type { Deps } from './app'
 
 /** How long the learner app's server has to answer. */
@@ -148,4 +148,158 @@ export async function readAccountSweep(deps: Pick<Deps, 'fetch' | 'log'>, source
   const { months, batch, due, undated, taken, lastRunAt, lastTaken } = await askAccounts(deps, source, 'sweep')
   if (!isCount(months) || !isCount(batch) || !isCount(due) || !isCount(undated) || !isCount(taken) || !isCount(lastTaken) || (lastRunAt !== null && !isTime(lastRunAt))) throw unfit(deps)
   return { months, batch, due, undated, taken, lastRunAt, lastTaken }
+}
+
+/** The learner app's server did not do what was asked of an announcement (#185): `message` is for the page, and
+ * holds nothing of the request. `status` is what the page is answered with. */
+export class AnnouncementsUnanswered extends Error {
+  constructor(message: string, readonly status: 400 | 404 | 409 | 502 = 502) {
+    super(message)
+  }
+}
+
+/** What the server's refusals mean, in words for the page. `changed` is said with the new count. */
+const ANNOUNCEMENT_REFUSALS: Readonly<Record<string, string>> = {
+  not_draft: 'This announcement is no longer a draft: its sending has started, and it cannot be changed, tested or sent again.',
+  not_sending: 'This announcement is not being sent.',
+  not_stopped: 'This announcement is not stopped.',
+  stale: 'The announcement was changed after this page read it. Nothing was done. Open it again.',
+  untested: 'This version has not been sent as a test yet. Send a test first.',
+  nobody: 'No account would get this announcement. Nothing was sent.',
+}
+
+function unfitAnnouncements(deps: Pick<Deps, 'log'>): AnnouncementsUnanswered {
+  deps.log('announcements: the answer of the app’s server was not what was asked for')
+  return new AnnouncementsUnanswered('The app’s server gave an answer the review app does not understand.')
+}
+
+/** One request to the announcements routes, with the token that changes things: the same server and the same
+ * token as the accounts (accountsSource). The address of a test send is only ever in the body; the log has the
+ * status and nothing else. */
+async function askAnnouncements(deps: Pick<Deps, 'fetch' | 'log'>, source: FeedbackSource, path: '' | 'save' | 'delete' | 'preview' | 'test' | 'send' | 'stop' | 'resume', body?: unknown): Promise<Record<string, unknown>> {
+  let res: Response
+  try {
+    // A redirect is not followed: the token goes to the server it was made for and nowhere else.
+    res = await deps.fetch(`${source.url.replace(/\/+$/, '')}/v1/admin/announcements${path === '' ? '' : `/${path}`}`, {
+      method: body === undefined ? 'GET' : 'POST',
+      headers: { authorization: `Bearer ${source.token}`, accept: 'application/json', ...(body === undefined ? {} : { 'content-type': 'application/json' }) },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      redirect: 'manual',
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    })
+  } catch (err) {
+    deps.log(`announcements: the app's server was not reached: ${err instanceof Error ? err.name : 'error'}`)
+    throw new AnnouncementsUnanswered('The app’s server could not be reached.')
+  }
+  const answer: unknown = await res.json().catch(() => null)
+  const fields = typeof answer === 'object' && answer !== null && !Array.isArray(answer) ? (answer as Record<string, unknown>) : null
+  if (res.status === 200) {
+    if (fields === null) throw unfitAnnouncements(deps)
+    return fields
+  }
+  const error = typeof fields?.['error'] === 'string' ? fields['error'] : ''
+  if (res.status === 409) {
+    const now = fields?.['recipients']
+    if (error === 'changed' && isCount(now)) throw new AnnouncementsUnanswered(`The number of accounts has changed: it would now go to ${now.toLocaleString('en')}. Nothing was sent. Read the count again and confirm it.`, 409)
+    throw new AnnouncementsUnanswered(ANNOUNCEMENT_REFUSALS[error] ?? 'The app’s server refused: the announcement is not in the state this needs.', 409)
+  }
+  // To a wrong token the server is a route that does not exist; the list is what meets that first.
+  if (res.status === 404 && path !== '') throw new AnnouncementsUnanswered('The app’s server has no such announcement.', 404)
+  if (res.status === 502 && error === 'mail_not_sent') {
+    const reason = fields?.['reason']
+    throw new AnnouncementsUnanswered(`The test was not sent: the mail service did not take it (${reason === 'refused' || reason === 'busy' || reason === 'quota' ? reason : 'no answer'}). Nothing was marked as tested.`)
+  }
+  deps.log(`announcements: the app's server answered ${res.status}`)
+  if (res.status === 400) throw new AnnouncementsUnanswered('The app’s server did not take the request as it was written.', 400)
+  throw new AnnouncementsUnanswered(`The app’s server answered ${res.status}.${res.status === 404 ? ' Check that ADMIN_WRITE_TOKEN is the same in both deployments, and that the app’s server has announcements.' : ''}`)
+}
+
+const isId = (v: unknown): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v >= 1
+const isTimeOrNull = (v: unknown): v is number | null => v === null || isTime(v)
+const STATUSES: readonly AnnouncementStatus[] = ['draft', 'sending', 'stopped', 'sent']
+const HELD: readonly AnnouncementHeld[] = ['day', 'quota', 'busy']
+
+/** One announcement as the server sent it, field by field: anything else it may send is not passed on. */
+function announcementOf(raw: unknown): Announcement | null {
+  if (typeof raw !== 'object' || raw === null) return null
+  const { id, kind, texts, version, testedVersion, status, createdAt, startedAt, stoppedAt, finishedAt, held, recipients, sent, failed, skipped, queued } = raw as Record<string, unknown>
+  const checked = validateAnnouncementTexts(texts)
+  if (!isId(id) || !isAnnouncementKind(kind) || !checked.ok || !isId(version) || !(testedVersion === null || isId(testedVersion))) return null
+  if (!(STATUSES as readonly unknown[]).includes(status) || !isTime(createdAt) || !isTimeOrNull(startedAt) || !isTimeOrNull(stoppedAt) || !isTimeOrNull(finishedAt)) return null
+  if (!isCount(recipients) || !isCount(sent) || !isCount(failed) || !isCount(skipped) || !isCount(queued)) return null
+  let heldBy: Announcement['held'] = null
+  if (held !== null) {
+    const { reason, at } = (typeof held === 'object' ? held : {}) as Record<string, unknown>
+    if (!(HELD as readonly unknown[]).includes(reason) || !isTime(at)) return null
+    heldBy = { reason: reason as AnnouncementHeld, at }
+  }
+  return { id, kind, texts: checked.texts, version, testedVersion, status: status as AnnouncementStatus, createdAt, startedAt, stoppedAt, finishedAt, held: heldBy, recipients, sent, failed, skipped, queued }
+}
+
+/** The announcement in an answer, or the failure that it was none. */
+function changedAnnouncement(deps: Pick<Deps, 'log'>, answer: Record<string, unknown>): Announcement {
+  const announcement = announcementOf(answer['announcement'])
+  if (announcement === null) throw unfitAnnouncements(deps)
+  return announcement
+}
+
+type Asking = Pick<Deps, 'fetch' | 'log'>
+
+/** The announcements, newest first, and the limits a send works under. */
+export async function readAnnouncements(deps: Asking, source: FeedbackSource): Promise<{ announcements: Announcement[]; limits: AnnouncementLimits }> {
+  const { announcements, limits } = await askAnnouncements(deps, source, '')
+  const list = Array.isArray(announcements) ? announcements.map(announcementOf) : null
+  const { perDay, sentToday, batch } = (typeof limits === 'object' && limits !== null ? limits : {}) as Record<string, unknown>
+  if (list === null || list.includes(null) || !isCount(perDay) || !isCount(sentToday) || !isCount(batch)) throw unfitAnnouncements(deps)
+  return { announcements: list as Announcement[], limits: { perDay, sentToday, batch } }
+}
+
+/** Writes a draft, or changes the one `id` names. */
+export async function saveAnnouncement(deps: Asking, source: FeedbackSource, draft: { id: number | null; kind: AnnouncementKind; texts: AnnouncementTexts }): Promise<Announcement> {
+  return changedAnnouncement(deps, await askAnnouncements(deps, source, 'save', { ...(draft.id === null ? {} : { id: draft.id }), kind: draft.kind, texts: draft.texts }))
+}
+
+export async function deleteAnnouncement(deps: Asking, source: FeedbackSource, id: number): Promise<void> {
+  const { deleted } = await askAnnouncements(deps, source, 'delete', { id })
+  if (deleted !== true) throw unfitAnnouncements(deps)
+}
+
+/** Each language as it would be mailed, and how many accounts would get which. */
+export async function previewAnnouncement(deps: Asking, source: FeedbackSource, id: number): Promise<AnnouncementPreview> {
+  const { version, kind, recipients, byLanguage, mails } = await askAnnouncements(deps, source, 'preview', { id })
+  const counts: Partial<Record<AnnouncementLanguage, number>> = {}
+  const given = (typeof byLanguage === 'object' && byLanguage !== null ? byLanguage : {}) as Record<string, unknown>
+  for (const language of ANNOUNCEMENT_LANGUAGES) {
+    const n = given[language]
+    if (n !== undefined && !isCount(n)) throw unfitAnnouncements(deps)
+    if (isCount(n)) counts[language] = n
+  }
+  const texts = Array.isArray(mails)
+    ? mails.map((mail: unknown) => {
+        const { language, subject, text } = (typeof mail === 'object' && mail !== null ? mail : {}) as Record<string, unknown>
+        return isAnnouncementLanguage(language) && isText(subject) && isText(text) ? { language, subject, text } : null
+      })
+    : null
+  if (!isId(version) || !isAnnouncementKind(kind) || !isCount(recipients) || texts === null || texts.includes(null)) throw unfitAnnouncements(deps)
+  return { version, kind, recipients, byLanguage: counts, mails: texts as AnnouncementPreview['mails'] }
+}
+
+/** The test send of one version to one address; answers the announcement, now tested, and how many mails went. */
+export async function testAnnouncement(deps: Asking, source: FeedbackSource, test: { id: number; version: number; email: string }): Promise<{ announcement: Announcement; mails: number }> {
+  const answer = await askAnnouncements(deps, source, 'test', test)
+  if (!isCount(answer['mails'])) throw unfitAnnouncements(deps)
+  return { announcement: changedAnnouncement(deps, answer), mails: answer['mails'] }
+}
+
+/** Starts the send, with what the owner confirmed. */
+export async function sendAnnouncement(deps: Asking, source: FeedbackSource, confirmed: { id: number; version: number; kind: AnnouncementKind; recipients: number }): Promise<Announcement> {
+  return changedAnnouncement(deps, await askAnnouncements(deps, source, 'send', confirmed))
+}
+
+export async function stopAnnouncement(deps: Asking, source: FeedbackSource, id: number): Promise<Announcement> {
+  return changedAnnouncement(deps, await askAnnouncements(deps, source, 'stop', { id }))
+}
+
+export async function resumeAnnouncement(deps: Asking, source: FeedbackSource, id: number): Promise<Announcement> {
+  return changedAnnouncement(deps, await askAnnouncements(deps, source, 'resume', { id }))
 }

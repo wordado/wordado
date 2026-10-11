@@ -1,8 +1,11 @@
-import type { FeedbackKind } from '@wordado/core'
+import type { AnnouncementKind, AnnouncementTexts, FeedbackKind } from '@wordado/core'
 import type { DecisionResult } from '../server/types'
 import type {
   AccountFound,
   AccountSweepView,
+  Announcement,
+  AnnouncementPreview,
+  AnnouncementsView,
   AssignmentView,
   FeedbackAiRead,
   FeedbackAiStatus,
@@ -123,5 +126,19 @@ export const hostedApi = {
     lookUpAccount: (email: string) => send<AccountFound>('POST', '/api/admin/accounts/lookup', { email }),
     /** Deletes the account an address names, as the learner's own deletion does; `deleted` is false when there was none. */
     deleteAccount: (email: string) => send<{ deleted: boolean }>('POST', '/api/admin/accounts/delete', { email, confirm: true }),
+    /** The Announcements tab (#185): what there is, newest first, and the limits a send works under. */
+    announcements: () => get<AnnouncementsView>('/api/admin/announcements'),
+    /** Writes a draft, or with an `id` changes that one: a change is a new version, which needs its own test send. */
+    saveAnnouncement: (draft: { id: number | null; kind: AnnouncementKind; texts: Partial<AnnouncementTexts> }) =>
+      send<{ announcement: Announcement }>('POST', '/api/admin/announcements/save', { ...(draft.id === null ? {} : { id: draft.id }), kind: draft.kind, texts: draft.texts }),
+    deleteAnnouncement: (id: number) => send<{ deleted: boolean }>('POST', '/api/admin/announcements/delete', { id }),
+    /** Each language as it would be mailed, and how many accounts would get which if it were sent now. */
+    previewAnnouncement: (id: number) => send<AnnouncementPreview>('POST', '/api/admin/announcements/preview', { id }),
+    /** Sends this version to one address, which goes in the body and is kept nowhere. */
+    testAnnouncement: (id: number, version: number, email: string) => send<{ announcement: Announcement; mails: number }>('POST', '/api/admin/announcements/test', { id, version, email }),
+    /** Starts the send: the version, the kind and the count as they were shown, and what was typed to confirm them. */
+    sendAnnouncement: (confirmed: { id: number; version: number; kind: AnnouncementKind; recipients: number; confirm: string }) => send<{ announcement: Announcement }>('POST', '/api/admin/announcements/send', confirmed),
+    stopAnnouncement: (id: number) => send<{ announcement: Announcement }>('POST', '/api/admin/announcements/stop', { id }),
+    resumeAnnouncement: (id: number) => send<{ announcement: Announcement }>('POST', '/api/admin/announcements/resume', { id }),
   },
 }

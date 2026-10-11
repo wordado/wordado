@@ -71,6 +71,16 @@ describe('focus on the search screen', () => {
     expect(document.activeElement).toBe(field())
   })
 
+  it('goes back to the field when the search button is pressed on an empty search', async () => {
+    renderWith(app(), await setup())
+    await act(async () => navigate({ name: 'search', q: '' }))
+    const field = screen.getByRole('searchbox', { name: 'Search the course' })
+    await act(async () => document.getElementById('main')!.focus())
+    expect(document.activeElement).not.toBe(field)
+    await act(async () => fireEvent.click(screen.getByRole('link', { name: 'Search' })))
+    expect(document.activeElement).toBe(field)
+  })
+
   it('follows the address between two searches', async () => {
     renderWith(app(), await setup())
     await act(async () => navigate({ name: 'search', q: 'teacher' }))
