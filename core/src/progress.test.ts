@@ -102,19 +102,14 @@ describe('what of a unit can be practised (spec §7.2, §7.4)', () => {
     expect(isSkippedLevel('B1', 'A2')).toBe(false)
   })
 
-  it('counts the started live words of a unit, and every live word of a skipped level’s unit: the words `practisable` admits', () => {
+  it('counts every live word of a unit, started or not: the words `practisable` admits when the unit is practised whole', () => {
     const states = new Map([state(1, true), state(2, false), state(3, true)])
     const ctx = { retired: new Set([w(5)]), flags: new Map<WordId, WordFlag>([[w(3), 'known']]) }
     const progress = unitProgress(u, states, ctx)
-    for (const skipped of [false, true]) {
-      const admitted = u.wordIds.filter((id) => practisable(id, { ...ctx, states, unstarted: skipped }))
-      expect(unitPractisable(progress, skipped)).toBe(admitted.length)
-    }
-    expect(unitPractisable(progress, false)).toBe(2)
-    expect(unitPractisable(progress, true)).toBe(3)
-    // Nothing started: only a skipped level's unit can be practised.
-    const none = unitProgress(u, new Map(), ctx)
-    expect(unitPractisable(none, false)).toBe(0)
-    expect(unitPractisable(none, true)).toBe(3)
+    const admitted = u.wordIds.filter((id) => practisable(id, { ...ctx, states, unstarted: true }))
+    expect(unitPractisable(progress)).toBe(admitted.length)
+    expect(unitPractisable(progress)).toBe(3)
+    // Nothing started, as in a unit still locked: it can be practised all the same.
+    expect(unitPractisable(unitProgress(u, new Map(), ctx))).toBe(3)
   })
 })

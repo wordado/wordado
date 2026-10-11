@@ -31,7 +31,7 @@ describe('Study', () => {
     expect(await screen.findByText('Nothing to study right now.')).toBeTruthy()
   })
 
-  it('practises one unit from that unit’s started words, without touching the schedule', async () => {
+  it('practises one unit from all that unit’s words, started or not, without touching the schedule', async () => {
     const ctx = await setup()
     await ctx.client.updateSettings({ newWordLimit: 30 })
     await answerNew(ctx.client, ctx.env, 23)
@@ -40,9 +40,9 @@ describe('Study', () => {
     const second = ctx.client.snapshot.corpus!.units[1]!
     const states = ctx.client.snapshot.states
     renderWith(<Study kind="practice" mode="flashcard" unit={second.unitId} />, ctx)
-    expect((await screen.findByRole('progressbar', { name: 'Session progress' })).getAttribute('aria-valuemax')).toBe('3')
+    expect((await screen.findByRole('progressbar', { name: 'Session progress' })).getAttribute('aria-valuemax')).toBe('10')
     const headwords = second.wordIds.map((wordId) => ctx.client.entry(wordId)!.headword)
-    for (let i = 0; i < 3; i += 1) {
+    for (let i = 0; i < 10; i += 1) {
       expect(headwords).toContain(document.querySelector('.card [lang="en"]')!.textContent)
       ctx.env.advance(ITEM_SETTLE_MS)
       await showAnswer()
@@ -51,6 +51,7 @@ describe('Study', () => {
     }
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Practice complete')
     expect(ctx.client.snapshot.states).toEqual(states)
+    expect(states.size).toBe(23)
     // The way on is that unit's practice; the way back, the path.
     const links = [...document.querySelectorAll('.done-actions a')].map((a) => [a.textContent, a.getAttribute('href'), a.classList.contains('primary')])
     expect(links).toEqual([
@@ -240,29 +241,31 @@ describe('Study', () => {
     })
   })
 
-  it('never starts a practice run empty: with every started word due today, it practises them', async () => {
+  it('practises a unit’s other words when every started word is due today, and leaves the schedule alone', async () => {
     const ctx = await setup()
     await answerNew(ctx.client, ctx.env, 6)
     ctx.env.advance(30 * DAY_MS)
     const first = ctx.client.snapshot.corpus!.units[0]!
     renderWith(<Study kind="practice" mode="flashcard" unit={first.unitId} />, ctx)
-    expect((await screen.findByRole('progressbar', { name: 'Session progress' })).getAttribute('aria-valuemax')).toBe('6')
+    expect((await screen.findByRole('progressbar', { name: 'Session progress' })).getAttribute('aria-valuemax')).toBe('4')
     expect(screen.queryByText('Nothing to study right now.')).toBeNull()
+    expect(ctx.client.snapshot.states.size).toBe(6)
   })
 
-  it('practises over everything for a locked unit, and ends as practice always has', async () => {
+  it('practises a locked unit whole, and ends as a unit’s practice does', async () => {
     const ctx = await setup()
     await answerNew(ctx.client, ctx.env, 5)
     const third = ctx.client.snapshot.corpus!.units[2]!
     await ctx.client.answer({ wordId: third.wordIds[0]!, mode: 'flashcard', direction: 'en_to_l1', grade: Grade.Good, latencyMs: 2_000, practice: false })
     ctx.env.advance(3_600_000)
     renderWith(<Study kind="practice" mode="flashcard" unit={third.unitId} />, ctx)
-    expect((await screen.findByRole('progressbar', { name: 'Session progress' })).getAttribute('aria-valuemax')).toBe('6')
+    expect((await screen.findByRole('progressbar', { name: 'Session progress' })).getAttribute('aria-valuemax')).toBe('10')
+    expect(third.wordIds.map((wordId) => ctx.client.entry(wordId)!.headword)).toContain(document.querySelector('.card [lang="en"]')!.textContent)
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Stop for now' })))
     const links = [...document.querySelectorAll('.done-actions a')].map((a) => [a.textContent, a.getAttribute('href')])
     expect(links).toEqual([
-      ['Done', '/'],
-      ['Practise more', '/practice'],
+      ['Back to the path', '/path'],
+      ['Practise more', `/practice?unit=${third.unitId}`],
     ])
   })
 

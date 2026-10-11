@@ -213,7 +213,7 @@ function ThemeCard(props: {
   const aboveLevel = entries.some((e) => levelIndex(e.level) > levelIndex(settings.declaredLevel))
   const name = localized(theme.name, locale, corpus!.l1)
   // Practice draws on every word of the theme that is not set aside, started or not (spec §7.4); the bar counts the started ones.
-  const canPractise = scopeWords({ corpus, settings, states, flags }, { kind: 'theme', id: theme.themeId }).words > 0
+  const canPractise = scopeWords({ corpus, states, flags }, { kind: 'theme', id: theme.themeId }).words > 0
   const startedText = t('themes.started', { started, count: entries.length })
   const practise = canPractise && (
     <Link className={`button theme-practise${group === 'new' ? ' is-quiet' : ''}`} to={{ name: 'practice', theme: theme.themeId }} aria-label={t('themes.practiseNamed', { name })}>

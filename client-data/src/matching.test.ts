@@ -21,7 +21,7 @@ describe('MatchingRun', () => {
     expect(MatchingRun.start(client, env)).toBeNull()
   })
 
-  it('needs five introduced words of the unit when practising one unit, and deals only that unit’s words', async () => {
+  it('deals a unit’s board from all the unit’s words, started or not, and only from that unit', async () => {
     const { env, client } = await clientWithWords(10)
     await client.updateSettings({ newWordLimit: 30 })
     for (const wordId of client.snapshot.plan!.newWords.slice(0, 14)) {
@@ -29,12 +29,12 @@ describe('MatchingRun', () => {
     }
     // Twenty words of the first unit are started, and four of the second.
     const [first, second] = client.snapshot.corpus!.units
-    expect(MatchingRun.start(client, env, { kind: 'unit', id: second!.unitId })).toBeNull()
-    const run = MatchingRun.start(client, env, { kind: 'unit', id: first!.unitId })!
-    expect(run.snapshot.left).toHaveLength(MATCHING_PAIRS)
-    expect(run.snapshot.left.every((e) => first!.wordIds.includes(corpusWordId(e.entryId)))).toBe(true)
-    await client.answer({ wordId: client.snapshot.plan!.newWords[0]!, mode: 'flashcard', direction: 'en_to_l1', grade: Grade.Good, latencyMs: 2000, practice: false })
-    expect(MatchingRun.start(client, env, { kind: 'unit', id: second!.unitId })!.snapshot.left.every((e) => second!.wordIds.includes(corpusWordId(e.entryId)))).toBe(true)
+    const firstRun = MatchingRun.start(client, env, { kind: 'unit', id: first!.unitId })!
+    expect(firstRun.snapshot.left).toHaveLength(MATCHING_PAIRS)
+    expect(firstRun.snapshot.left.every((e) => first!.wordIds.includes(corpusWordId(e.entryId)))).toBe(true)
+    const secondRun = MatchingRun.start(client, env, { kind: 'unit', id: second!.unitId })!
+    expect(secondRun.snapshot.left).toHaveLength(MATCHING_PAIRS)
+    expect(secondRun.snapshot.left.every((e) => second!.wordIds.includes(corpusWordId(e.entryId)))).toBe(true)
   })
 
   it('deals a theme’s board from all the theme’s words, and a pair starts neither word (spec §7.4, §8.1)', async () => {
@@ -61,9 +61,8 @@ describe('MatchingRun', () => {
     expect(client.snapshot.progress!.tiers).toEqual(before.progress!.tiers)
     expect(client.snapshot.settings.activeTheme).toBeNull()
     expect(client.snapshot.xp.total - before.xp.total).toBe(MATCHING_PAIRS * XP_AMOUNTS.practice)
-    // Matching over everything still needs started words, and so does a unit of the learner's own level.
+    // Matching over everything still needs started words.
     expect(MatchingRun.start(client, env)).toBeNull()
-    expect(MatchingRun.start(client, env, { kind: 'unit', id: client.snapshot.corpus!.units[1]!.unitId })).toBeNull()
   })
 
   it('needs five words of the theme that are not set aside', async () => {
@@ -96,14 +95,13 @@ describe('MatchingRun', () => {
     expect(visitProgress(client, undefined)).toBeNull()
   })
 
-  it('deals the board of a skipped level’s unit from all its words, and a pair starts neither word (spec §7.2, §8.1)', async () => {
+  it('deals the board of a unit from all its words, locked or not, and a pair starts neither word (spec §7.4, §8.1)', async () => {
     const env = testEnv()
     const client = await openSampleClient(env)
     const unit = client.snapshot.corpus!.units[1]!
     const scope = { kind: 'unit', id: unit.unitId } as const
-    // Nothing is started: at the learner's own level the unit has nothing to match.
-    expect(MatchingRun.start(client, env, scope)).toBeNull()
-    await client.updateSettings({ declaredLevel: 'A2' })
+    // Nothing is started, and the unit is still locked: its words are dealt all the same.
+    expect(client.snapshot.path!.unlocked.has(unit.unitId)).toBe(false)
     const before = client.snapshot
     const run = MatchingRun.start(client, env, scope)!
     expect(run.snapshot.left).toHaveLength(MATCHING_PAIRS)

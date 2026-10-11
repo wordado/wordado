@@ -599,17 +599,18 @@ learner a visible map and a sense of place, not to constrain daily review.
 **What the path offers.** The current unit carries the way into the daily
 session, shown only while that session has something in it — a review due or a
 new word left of the day's quota, the same rule as the home screen. When it has
-nothing, the unit says so in its place. Every unlocked unit with at least one
-started word that is not set aside also offers **practice of that unit**
-(§7.4), so a learner can go back over an open unit at any time. A locked unit
-offers neither.
+nothing, the unit says so in its place. Every unit with at least one live word
+that is not set aside also offers **practice of that unit** (§7.4): the one
+being studied, the ones behind it, and the ones still locked, so a learner can
+go back over a unit or look ahead at one at any time. Such practice uses all
+the unit's words, started or not, and starts none of them; a locked unit stays
+locked.
 
 A unit of a skipped level — one below the declared level — offers practice of
-that unit too, whenever it has a live word that is not set aside, although none
-of its words was ever started: the learner placed above it and may still want
-to go over it. Such practice uses all the unit's words and starts none of them
-(§7.4); the level stays "skipped — placed above". It never offers the daily
-session, which does not serve its words.
+that unit in the same way, although none of its words was ever started: the
+learner placed above it and may still want to go over it. The level stays
+"skipped — placed above". It never offers the daily session, which does not
+serve its words.
 
 ### 7.3 Grading inputs
 
@@ -665,28 +666,28 @@ seen. `core` composes each session as follows.
    Practice can also be **kept to one unit or one theme**, opened from that
    unit on the path (§7.2) or that theme on the themes screen (§8.9): the same
    ways to practise, under the same rules as any practice. A unit's practice
-   draws only on its started words; a theme's on the whole theme (below). It
+   and a theme's both draw on the whole unit or theme (below). It
    is practice in every respect above, and changes neither the schedule, the
    daily session, which words are introduced, nor the learner's chosen
    collection.
 
-   *A theme, and a unit of a skipped level* (§7.2), are **practised whole**:
-   the two exceptions to "started words". Their practice draws on **all** the
-   words of the theme or unit that are neither set aside nor retired, started
-   or not. A learner with a trip next week wants to go through everything in
-   *Travel* now, not only what the plan has reached; and a skipped level's
-   words are never introduced, so there would be nothing to practise. Nothing
+   *A theme and a unit* (§7.2) are **practised whole**: the exception to
+   "started words". Their practice draws on **all** the words of the theme or
+   unit that are neither set aside nor retired, started or not. A learner with
+   a trip next week wants to go through everything in *Travel* now, not only
+   what the plan has reached; a learner may want to look ahead at a unit not
+   reached yet; and a skipped level's words are never introduced, so there
+   would be nothing to practise. Nothing
    is started by it: an answer to a never-started word is an ordinary practice
    event, so it creates no review state, does not introduce the word, and
    leaves the daily session, the unlocks, a level's skipped status, the
    chosen collection and every progress figure as they were. The practice
    screen says so in one quiet line — that the words are from a level the
-   learner skipped, or that the practice covers the whole theme, including
-   words not started (the latter only while the theme has such words). In a
+   learner skipped, or that the practice covers the whole theme or unit,
+   including words not started (the latter only while it has such words). In a
    run, the card of a word the learner has not started carries a small
    **New to you** label, beside *Above your level* when both apply.
-   Everywhere else — practice over everything, a unit at or above the
-   declared level — only started words are used.
+   Practice over everything uses only started words.
 
    *Which words practice picks.* Started words — or, where the scope is
    practised whole, all its words — that are neither set aside nor
@@ -2436,6 +2437,15 @@ decision, the phasing, or scope. † in the body marks those still pending.
 | A search for the whole course; the path opens at a unit; "Learn this word" for any found word (§7.4, §8.13) | Decided by the product owner, 2026-10-11 |
 
 ---
+
+**2026-10-11 — practice of any unit.** Decided by the product owner.
+
+- **Path, practice (§7.2, §7.4):** every unit with a live word that is not set
+  aside offers practice of that unit, the ones still locked included, and a
+  unit is practised whole, as a theme is: all its live words, started or not.
+  Nothing is started by it and a locked unit stays locked. This replaces "a
+  unit's practice draws only on its started words" of 2026-10-07 and "a locked
+  unit offers neither".
 
 ## 17. Technology choices
 
