@@ -1,6 +1,8 @@
 import type { FeedbackKind } from '@wordado/core'
 import type { DecisionResult } from '../server/types'
 import type {
+  AccountFound,
+  AccountSweepView,
   AssignmentView,
   FeedbackAiRead,
   FeedbackAiStatus,
@@ -115,5 +117,11 @@ export const hostedApi = {
     setFeedbackTopicIssue: (id: number, issue: number | null) => send<FeedbackTopicView>('PUT', `/api/admin/feedback/topics/${id}/issue`, { issue }),
     /** Asks the AI to draft an issue for a topic (spec 2026-10-10 §3.5): one call, counted; the draft is for this page alone, and is kept nowhere. */
     draftFeedbackTopic: (id: number) => send<FeedbackDraft>('POST', `/api/admin/feedback/topics/${id}/draft`, {}),
+    /** The Accounts tab (#187). The sweep of inactive accounts in numbers: what it would take next and what it took. */
+    accountSweep: () => get<AccountSweepView>('/api/admin/accounts/sweep'),
+    /** The account an address names: when it was made and last signed in. The address goes in the body, never in the path. */
+    lookUpAccount: (email: string) => send<AccountFound>('POST', '/api/admin/accounts/lookup', { email }),
+    /** Deletes the account an address names, as the learner's own deletion does; `deleted` is false when there was none. */
+    deleteAccount: (email: string) => send<{ deleted: boolean }>('POST', '/api/admin/accounts/delete', { email, confirm: true }),
   },
 }

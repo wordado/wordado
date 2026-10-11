@@ -288,7 +288,7 @@ describe('HostedApp', () => {
       render(<HostedApp me={admin} />)
       fireEvent.click(await screen.findByRole('button', { name: 'Admin' }))
       const header = within(screen.getByRole('banner'))
-      expect((await header.findAllByRole('tab')).length).toBe(5)
+      expect((await header.findAllByRole('tab')).length).toBe(6)
       expect(header.queryByRole('button', { name: 'Admin' })).toBeNull()
       fireEvent.click(header.getByRole('tab', { name: 'Reviewers' }))
       expect(window.location.hash).toBe('#reviewers')

@@ -62,20 +62,30 @@ createServer((req, res) => {
   })()
 }).listen(4182, '127.0.0.1')
 
-// The fake learner app server: the feedback the Feedback tab reads (feedbackFixture.ts).
+// The fake learner app server: the feedback the Feedback tab reads (feedbackFixture.ts), and the accounts of the
+// Accounts tab, which answer to a token of their own.
 const FEEDBACK_TOKEN = 'e2e-feedback-read-token-0123456789abcdef'
+const WRITE_TOKEN = 'e2e-admin-write-token-0123456789abcdef'
 // The messages came in the last hours, whenever this runs: the week at the top of the tab counts the last seven days.
 const learnerApp = new FakeLearnerApp(FEEDBACK_TOKEN, FEEDBACK.map((item) => ({ ...item, receivedAt: Date.now() - (30 - item.id) * 10 * 60_000 })))
+learnerApp.writeToken = WRITE_TOKEN
+// One account for the desktop run to delete, one for the phone run to look up, and a sweep that has run.
+const DAY = 86_400_000
+learnerApp.accounts.set('leaving@example.com', { createdAt: Date.now() - 400 * DAY, lastSignInAt: Date.now() - 30 * DAY })
+learnerApp.accounts.set('staying@example.com', { createdAt: Date.now() - 900 * DAY, lastSignInAt: null })
+learnerApp.sweep = { months: 24, batch: 50, due: 70, undated: 1, taken: 12, lastRunAt: Date.now() - DAY, lastTaken: 2 }
 createServer((req, res) => {
   void (async () => {
-    // What the review app has asked of it, for the test of the timed job.
+    // What the review app has asked of it, for the test of the timed job, and the accounts it still has.
     if (req.url === '/_state') {
       res.writeHead(200, { 'content-type': 'application/json' })
-      res.end(JSON.stringify({ requests: learnerApp.requests }))
+      res.end(JSON.stringify({ requests: learnerApp.requests, accounts: [...learnerApp.accounts.keys()] }))
       return
     }
+    const chunks: Buffer[] = []
+    for await (const c of req) chunks.push(c as Buffer)
     const headers = Object.fromEntries(Object.entries(req.headers).map(([k, v]) => [k, String(v)]))
-    const out = await learnerApp.fetch(`http://127.0.0.1:4183${req.url}`, { method: req.method ?? 'GET', headers })
+    const out = await learnerApp.fetch(`http://127.0.0.1:4183${req.url}`, { method: req.method ?? 'GET', headers, ...(chunks.length ? { body: Buffer.concat(chunks).toString('utf8') } : {}) })
     res.writeHead(out.status, { 'content-type': out.headers.get('content-type') ?? 'text/plain' })
     res.end(await out.text())
   })()
@@ -118,7 +128,7 @@ const vars = {
   ACCESS_JWKS: keys.jwks, ACCESS_TEAM_DOMAIN: TEAM, ACCESS_AUD: AUD, ADMIN_EMAIL: 'admin@example.com',
   GITHUB_API_URL: 'http://127.0.0.1:4182', GITHUB_APP_ID: '1', GITHUB_INSTALLATION_ID: '1', GITHUB_APP_PRIVATE_KEY: (await testAppKey()).pem,
   APP_ORIGIN: 'http://127.0.0.1:4181', APP_REPO: 'wordado/wordado',
-  LEARNER_APP_URL: 'http://127.0.0.1:4183', FEEDBACK_READ_TOKEN: FEEDBACK_TOKEN,
+  LEARNER_APP_URL: 'http://127.0.0.1:4183', FEEDBACK_READ_TOKEN: FEEDBACK_TOKEN, ADMIN_WRITE_TOKEN: WRITE_TOKEN,
   FEEDBACK_AI_AUTH: 'google-service-account', FEEDBACK_AI_URL: 'http://127.0.0.1:4184', FEEDBACK_AI_KEY: account.keyFile,
 }
 spawn('pnpm', ['exec', 'wrangler', 'dev', '--port', '4181', '--ip', '127.0.0.1', '--persist-to', state, ...Object.entries(vars).flatMap(([k, v]) => ['--var', `${k}:${v}`])], { cwd: root, stdio: 'inherit' })

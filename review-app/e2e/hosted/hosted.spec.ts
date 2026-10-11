@@ -10,12 +10,13 @@ const as = async (browser: Browser, who: 'admin' | 'reviewer' | 'phone' | 'hans'
 }
 
 /** Nothing is wider than the screen: the page does not scroll sideways, and no part of the row or the header (or of
- * what `selector` names) sticks out. */
+ * what `selector` names) sticks out. The admin tabs are left out: on a phone they are a strip that slides sideways
+ * inside the header, and the tabs after the chosen one are meant to lie beyond its edge. */
 async function expectFits(page: Page, selector = 'header *, article *, dialog[open] *') {
   const sizes = await page.evaluate((sel) => {
     const width = document.documentElement.clientWidth
     const out = [...document.querySelectorAll(sel)]
-      .filter((el) => el.getClientRects().length > 0 && el.getBoundingClientRect().right > width + 0.5)
+      .filter((el) => !el.closest('.admin-tabs') && el.getClientRects().length > 0 && el.getBoundingClientRect().right > width + 0.5)
       .map((el) => `${el.tagName.toLowerCase()}.${el.className}`)
     return { scrollWidth: document.documentElement.scrollWidth, width, out }
   }, selector)
@@ -798,6 +799,83 @@ test('an admin reads the week’s summary, drafts an issue for a topic, and past
 
 test('@phone an admin reads the week’s summary and opens a draft on a phone', async ({ browser }) => {
   await readsWeekAndDrafts(browser, 'words')
+})
+
+/** The accounts the fake learner app server still has. */
+const accountsLeft = async () => ((await (await fetch('http://127.0.0.1:4183/_state')).json()) as { accounts: string[] }).accounts
+
+test('an admin reads the sweep’s counts, looks an account up and deletes it after typing its address again (#187)', async ({ browser }) => {
+  const page = await as(browser, 'admin')
+  await page.goto('/#accounts')
+  const panel = page.getByRole('tabpanel', { name: 'Accounts' })
+  const stats = panel.getByRole('list', { name: 'The sweep of inactive accounts' }).getByRole('listitem')
+  await expect(stats).toHaveText([/^70\s*past 24 months now$/, /^50\s*the next run deletes$/, /^2\s*deleted by the last run$/, /^12\s*deleted so far$/])
+  await expect(panel.getByText(/An account not signed in to for 24 months is deleted, at most 50 a day, with no mail first\. Last run: .+\./)).toBeVisible()
+  await expect(panel.getByText('1 account has no date of a last sign-in: the sweep never takes it.')).toBeVisible()
+
+  // An address nobody has.
+  await panel.getByLabel('Email address').fill('nobody@example.com')
+  await panel.getByRole('button', { name: 'Look up' }).click()
+  await expect(panel.getByText('No account has the address nobody@example.com.')).toBeVisible()
+
+  // The account: when it was made and last signed in, and nothing else.
+  await panel.getByLabel('Email address').fill('Leaving@example.com')
+  await panel.getByLabel('Email address').press('Enter')
+  const account = panel.getByRole('region', { name: 'The account' })
+  await expect(account.getByText('leaving@example.com')).toBeVisible()
+  await expect(account.getByText(/^Created .*\d{4}$/)).toBeVisible()
+  await expect(account.getByText(/^Last sign-in .*\d{4}$/)).toBeVisible()
+
+  // The question: closed, nothing is deleted.
+  await account.getByRole('button', { name: 'Delete this account…' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Delete this account?' })
+  await expect(dialog.getByText(/it cannot be brought back/)).toBeVisible()
+  await expect(dialog.getByRole('button', { name: 'Delete the account' })).toBeDisabled()
+  await dialog.getByRole('button', { name: 'Cancel' }).click()
+  await expect(dialog).toBeHidden()
+  expect(await accountsLeft()).toContain('leaving@example.com')
+
+  // Answered with another address, it stays closed to the button; with the account's own, the account goes.
+  await account.getByRole('button', { name: 'Delete this account…' }).click()
+  await dialog.getByLabel('Type the address again to delete the account').fill('staying@example.com')
+  await expect(dialog.getByRole('button', { name: 'Delete the account' })).toBeDisabled()
+  await dialog.getByLabel('Type the address again to delete the account').fill('leaving@example.com')
+  await dialog.getByRole('button', { name: 'Delete the account' }).click()
+  await expect(panel.getByText('The account of leaving@example.com was deleted.')).toBeVisible()
+  await expect(dialog).toBeHidden()
+  await expect(account).toBeHidden()
+  const left = await accountsLeft()
+  expect(left).not.toContain('leaving@example.com')
+  expect(left).toContain('staying@example.com')
+  await panel.getByLabel('Email address').fill('leaving@example.com')
+  await panel.getByRole('button', { name: 'Look up' }).click()
+  await expect(panel.getByText('No account has the address leaving@example.com.')).toBeVisible()
+})
+
+test('@phone an admin reads the Accounts tab and opens the question on a phone (#187)', async ({ browser }) => {
+  const page = await as(browser, 'admin')
+  await page.goto('/#accounts')
+  const panel = page.getByRole('tabpanel', { name: 'Accounts' })
+  // The four numbers, two by two.
+  const stats = panel.getByRole('list', { name: 'The sweep of inactive accounts' }).getByRole('listitem')
+  await expect(stats).toHaveCount(4)
+  const [first, second, third] = await Promise.all([0, 1, 2].map(async (i) => (await stats.nth(i).boundingBox())!))
+  expect(second!.y).toBe(first!.y)
+  expect(third!.y).toBeGreaterThan(first!.y)
+  await panel.getByLabel('Email address').fill('staying@example.com')
+  await panel.getByRole('button', { name: 'Look up' }).tap()
+  const account = panel.getByRole('region', { name: 'The account' })
+  await expect(account.getByText('Last sign-in not recorded')).toBeVisible()
+  await expectFits(page, '.admin *')
+  // The question is the whole screen, and closing it deletes nothing.
+  await account.getByRole('button', { name: 'Delete this account…' }).tap()
+  const dialog = page.getByRole('dialog', { name: 'Delete this account?' })
+  await expect(dialog.getByRole('button', { name: 'Delete the account' })).toBeDisabled()
+  expect(await dialog.boundingBox()).toEqual({ x: 0, y: 0, width: 390, height: 844 })
+  await expectFits(page)
+  await dialog.getByRole('button', { name: 'Cancel' }).tap()
+  await expect(dialog).toBeHidden()
+  expect(await accountsLeft()).toContain('staying@example.com')
 })
 
 test('the daily job reads the open issues of the app’s repository once a day, with no token', async () => {

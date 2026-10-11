@@ -85,6 +85,7 @@ export function harness(options: HarnessOptions = {}): Harness {
       minProtocolVersion: 1,
       vapid: null,
       feedbackReadToken: null,
+      adminWriteToken: null,
       ...options.config,
     },
     now: options.now ?? (() => clock.now),
