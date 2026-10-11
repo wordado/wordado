@@ -2909,6 +2909,11 @@ li:not(:has(> .play-word)) > .word-where {
   align-items: center;
 }
 
+/* A label of several lines, as the news box has (#186), must not squeeze its box. */
+.form-section label.check input {
+  flex-shrink: 0;
+}
+
 /* The way in fills the card's width. */
 .signin .signin-wide {
   width: 100%;

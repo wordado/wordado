@@ -1,15 +1,21 @@
-import type { StampedReviewEvent, WireDocument } from '@wordado/core'
+import type { NewsConsent, StampedReviewEvent, WireDocument } from '@wordado/core'
 import type { Db } from '../db/db'
 import { EVENT_COLUMNS, toStampedEvent, toStoredEvent, type EventRow } from '../sync/events'
 import { DOCUMENT_COLUMNS, toWire, type DocumentRow } from '../sync/documents'
 
-export const EXPORT_FORMAT = 'wordado-export-2'
+export const EXPORT_FORMAT = 'wordado-export-3'
 
 /** The learner's portable copy (spec §11). Words join it in Phase 2. */
 export interface AccountExport {
   readonly format: string
   readonly exportedAt: number
-  readonly account: { readonly userId: string; readonly email: string; readonly createdAt: number }
+  readonly account: {
+    readonly userId: string
+    readonly email: string
+    readonly createdAt: number
+    /** News by email (#186): the choice, when it was made and the wording it was given with; both null while none. */
+    readonly newsConsent: { readonly state: NewsConsent; readonly at: number | null; readonly text: string | null }
+  }
   /** Settings, flags, unlocks, reports and the entitlement, as the pull sends them. */
   readonly documents: readonly WireDocument[]
   readonly dayComplete: readonly string[]
@@ -27,8 +33,8 @@ export interface AccountExport {
 export async function buildExport(db: Db, userId: string, now: number): Promise<AccountExport | null> {
   return db.transaction(async (tx) => {
     await tx.query('set transaction isolation level repeatable read, read only')
-    const [user] = await tx.query<{ id: string; email: string; created_at: Date }>(
-      'select id, email, "createdAt" as created_at from "user" where id = $1',
+    const [user] = await tx.query<{ id: string; email: string; created_at: Date; news_consent: NewsConsent; news_consent_at: Date | null; news_consent_text: string | null }>(
+      'select id, email, "createdAt" as created_at, news_consent, news_consent_at, news_consent_text from "user" where id = $1',
       [userId],
     )
     if (!user) return null
@@ -41,7 +47,12 @@ export async function buildExport(db: Db, userId: string, now: number): Promise<
     return {
       format: EXPORT_FORMAT,
       exportedAt: now,
-      account: { userId: user.id, email: user.email, createdAt: user.created_at.getTime() },
+      account: {
+        userId: user.id,
+        email: user.email,
+        createdAt: user.created_at.getTime(),
+        newsConsent: { state: user.news_consent, at: user.news_consent_at?.getTime() ?? null, text: user.news_consent_text },
+      },
       documents: documents.map((row) => toWire(row, null)),
       dayComplete: days.map((d) => d.local_date),
       reviewEvents: events.map((row) => toStampedEvent(toStoredEvent(row))),
