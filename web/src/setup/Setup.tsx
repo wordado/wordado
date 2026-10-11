@@ -5,6 +5,7 @@ import { Placement } from '../screens/Placement'
 import { useT } from '../i18n/i18n'
 import { GoalStep } from './GoalStep'
 import { LanguageStep } from './LanguageStep'
+import { hasLevels } from './LevelAsk'
 import { LevelStep } from './LevelStep'
 import { ThemeStep } from './ThemeStep'
 
@@ -12,10 +13,9 @@ type StepName = 'language' | 'level' | 'theme' | 'goal'
 
 /** The steps that show for `corpus`: Level only when its units span more than one level, Theme only when one is offered. */
 function stepsFor(corpus: Corpus | null): readonly StepName[] {
-  const levels = new Set(corpus?.units.map((u) => u.level) ?? [])
   return [
     'language',
-    ...(levels.size > 1 ? (['level'] as const) : []),
+    ...(hasLevels(corpus) ? (['level'] as const) : []),
     ...(corpus !== null && offeredThemes(corpus).length > 0 ? (['theme'] as const) : []),
     'goal',
   ]

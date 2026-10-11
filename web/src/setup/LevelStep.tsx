@@ -13,7 +13,7 @@ import { StepActions, useStepHeading, type StepProps } from './step'
  * `onTest` opens it inside the setup, and `placed` is the level it gave when the learner took its result. It is
  * offered only where it can run (enough words of the first levels), as in Settings.
  */
-export function LevelStep(props: StepProps & { readonly placed: CefrLevel | null; onTest(): void }) {
+export function LevelStep(props: StepProps & { readonly placed: CefrLevel | null; onTest(): void; /** Outside the setup (`LevelAsk`): Continue is the one way on. */ readonly alone?: boolean }) {
   const { t } = useT()
   const client = useClient()
   const { settings, corpus } = useClientSnapshot()
@@ -65,16 +65,24 @@ export function LevelStep(props: StepProps & { readonly placed: CefrLevel | null
         </div>
       )}
       {error !== null && <p role="alert">{error}</p>}
-      <StepActions
-        last={props.last}
-        next={props.next}
-        finish={props.finish}
-        primary={
+      {props.alone ? (
+        <div className="actions">
           <button type="button" className="button primary" onClick={props.next}>
             {t('setup.continue')}
           </button>
-        }
-      />
+        </div>
+      ) : (
+        <StepActions
+          last={props.last}
+          next={props.next}
+          finish={props.finish}
+          primary={
+            <button type="button" className="button primary" onClick={props.next}>
+              {t('setup.continue')}
+            </button>
+          }
+        />
+      )}
     </section>
   )
 }

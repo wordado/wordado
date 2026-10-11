@@ -13,6 +13,11 @@ export interface AccountRecord {
    * server yet: `Boot` pushes it before opening the learner's file (spec §8.6).
    */
   readonly carryOver?: boolean
+  /**
+   * The demo was carried into this account and its learner has not been asked for a level yet: the demo's sample
+   * has one level, so its setup never asked. The app asks once, when the course it opens has more (`LevelAsk`).
+   */
+  readonly askLevel?: boolean
 }
 
 export interface AccountStorage {
@@ -70,7 +75,8 @@ const isRecord = (v: unknown): v is AccountRecord =>
   v !== null &&
   typeof (v as AccountRecord).userId === 'string' &&
   typeof (v as AccountRecord).email === 'string' &&
-  ['boolean', 'undefined'].includes(typeof (v as AccountRecord).carryOver)
+  ['boolean', 'undefined'].includes(typeof (v as AccountRecord).carryOver) &&
+  ['boolean', 'undefined'].includes(typeof (v as AccountRecord).askLevel)
 
 /** The browser's storage of that kind, or page-lifetime storage when the browser refuses it. */
 export function browserStorage(kind: 'localStorage' | 'sessionStorage'): KeyValue {

@@ -77,7 +77,7 @@ describe('signing in from the demo (spec §8.6)', () => {
     expect(await a.controller.completeSignIn()).toBe('carried-over')
     expect([...a.server.events.values()].map((e) => [e.wordId, e.deviceId])).toEqual([['c:hello-1', demoDevice]])
     expect(a.d.exists(DEMO_FILE)).toBe(false)
-    expect(a.accounts.read()).toEqual({ userId: 'u1', email: 'ana@example.com', carryOver: false })
+    expect(a.accounts.read()).toEqual({ userId: 'u1', email: 'ana@example.com', carryOver: false, askLevel: true })
     expect(a.boot.store.get()).toMatchObject({ status: 'ready', account: { userId: 'u1' } })
     expect(await a.client().sync()).toBe('synced')
     expect(a.client().snapshot.states.get('c:hello-1' as WordId)?.reps).toBe(1)
@@ -144,7 +144,7 @@ describe('signing in from the demo (spec §8.6)', () => {
     await a.client().attachUser('u1')
     expect(await a.controller.completeSignIn()).toBe('carried-over')
     expect([...a.server.events.values()].map((e) => e.wordId).sort()).toEqual(['c:goodbye-1', 'c:hello-1'])
-    expect(a.accounts.read()).toEqual({ userId: 'u1', email: 'ana@example.com', carryOver: false })
+    expect(a.accounts.read()).toEqual({ userId: 'u1', email: 'ana@example.com', carryOver: false, askLevel: true })
     expect(a.d.exists(DEMO_FILE)).toBe(false)
   })
 
@@ -157,7 +157,7 @@ describe('signing in from the demo (spec §8.6)', () => {
     await a.client().answer(answerTo('c:hello-1'))
     transport.push = () => new Promise(() => undefined)
     void a.controller.completeSignIn()
-    await vi.waitFor(() => expect(a.accounts.read()).toEqual({ userId: 'u1', email: 'ana@example.com', carryOver: true }))
+    await vi.waitFor(() => expect(a.accounts.read()).toEqual({ userId: 'u1', email: 'ana@example.com', carryOver: true, askLevel: true }))
     expect(a.client().snapshot.userId).toBe('u1')
   })
 
@@ -171,7 +171,7 @@ describe('signing in from the demo (spec §8.6)', () => {
     await a.client().attachUser('u1')
     transport.push = () => new Promise(() => undefined)
     void a.controller.completeSignIn()
-    await vi.waitFor(() => expect(a.accounts.read()).toEqual({ userId: 'u1', email: 'ana@example.com', carryOver: true }))
+    await vi.waitFor(() => expect(a.accounts.read()).toEqual({ userId: 'u1', email: 'ana@example.com', carryOver: true, askLevel: true }))
   })
 
   it('changes nothing when the account cannot be checked (offline)', async () => {

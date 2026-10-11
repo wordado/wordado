@@ -176,6 +176,8 @@ export const en = {
   'setup.level.title': 'Your English level',
   'setup.level.unsure': 'Not sure? A short test of about twenty words finds your level.',
   'setup.level.placed': 'The test placed you at {level}. You can still change it.',
+  'levelAsk.title': 'Where do you start?',
+  'levelAsk.lead': 'Your account has the whole course now, at every level.',
   'setup.goal.title': 'A daily goal',
   'setup.goal.hint': 'Optional. You can set it or change it any time in Settings.',
   'setup.language.title': 'Which language do you speak?',

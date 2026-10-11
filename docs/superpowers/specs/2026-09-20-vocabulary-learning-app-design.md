@@ -553,6 +553,13 @@ step as the chosen level, which can still be changed), and it can be taken later
 from settings; it is never a blocking onboarding step (§8.6). It is offered only
 where it can run: enough words of the first two levels at least.
 
+A learner who came through the demo was never asked: its sample has one level.
+When the demo is carried into an account (§8.6), the account's device remembers
+that the question is owed, and the first time Today opens on a course with more
+than one level, the level step stands in its place, alone, with the test. Continue
+ends it for good, whatever was chosen; the other screens stay within reach
+meanwhile.
+
 **Placement consequences.** A learner placed at level *L* has every unit below
 *L* unlocked and marked *assumed known*. Those words are **not** fed into the
 new-word queue — a B1 learner is not made to grind 1,600 A-level words. They
