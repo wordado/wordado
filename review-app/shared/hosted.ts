@@ -301,3 +301,27 @@ export type FeedbackDraft = { readonly ok: true; readonly title: string; readonl
 export type FeedbackList =
   | { readonly connected: false }
   | { readonly connected: true; readonly items: readonly FeedbackView[]; readonly read: number; readonly nextBefore: number | null }
+
+/** What the Accounts tab is told of the account an address names (#187): that there is none, or when it was made
+ * and last signed in (epoch milliseconds; null when no sign-in was ever recorded). Nothing else of an account
+ * leaves the learner app's server. */
+export type AccountFound = { readonly found: false } | { readonly found: true; readonly createdAt: number; readonly lastSignInAt: number | null }
+
+/** The sweep of inactive accounts, as the learner app's server counts it (#187): numbers and times only. */
+export interface AccountSweep {
+  /** The months without a sign-in after which an account is deleted, and the most one run deletes. */
+  readonly months: number
+  readonly batch: number
+  /** The accounts past that now: the next run takes the longest away of them, up to `batch`. */
+  readonly due: number
+  /** The accounts with no date of a last sign-in, which no run takes. */
+  readonly undated: number
+  /** The accounts every run so far deleted, together. */
+  readonly taken: number
+  /** The last run (epoch milliseconds) and how many it deleted; null and 0 before the first. */
+  readonly lastRunAt: number | null
+  readonly lastTaken: number
+}
+
+/** `GET /api/admin/accounts/sweep`. Not connected: the token or the server's address is not set. */
+export type AccountSweepView = { readonly connected: false } | { readonly connected: true; readonly sweep: AccountSweep }

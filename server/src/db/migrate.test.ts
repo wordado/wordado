@@ -49,6 +49,7 @@ describe('migrate', () => {
       const rows = await db.query<{ tablename: string }>(`select tablename from pg_tables where schemaname = 'public' order by tablename`)
       expect(rows.map((r) => r.tablename)).toEqual([
         'account',
+        'account_sweep',
         'content_report',
         'day_complete',
         'device',
