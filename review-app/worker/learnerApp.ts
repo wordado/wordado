@@ -1,4 +1,5 @@
 import { FEEDBACK_KINDS, type FeedbackItem, type FeedbackKind } from '@wordado/core'
+import type { AccountFound, AccountSweep } from '../shared/hosted'
 import type { Deps } from './app'
 
 /** How long the learner app's server has to answer. */
@@ -73,4 +74,78 @@ export async function readFeedback(deps: Pick<Deps, 'fetch' | 'log'>, source: Fe
   const asked = q.ids ? new Set(q.ids) : null
   const kept = asked ? given.filter((item) => asked.has(item.id)) : given
   return { items: kept, nextBefore: next, others: given.length - kept.length }
+}
+
+/** The learner app's server and the token its accounts routes answer to (#187), or null while either setting is
+ * missing. Not the token that reads feedback: what can read learners' messages cannot delete an account. */
+export function accountsSource(deps: Pick<Deps, 'env'>): FeedbackSource | null {
+  const url = (deps.env.LEARNER_APP_URL ?? '').trim()
+  const token = (deps.env.ADMIN_WRITE_TOKEN ?? '').trim()
+  return url === '' || token === '' ? null : { url, token }
+}
+
+/** The learner app's server did not do what was asked of an account: `message` is for the page, and holds nothing
+ * of the request. `status` is what the page is answered with. */
+export class AccountsUnanswered extends Error {
+  constructor(message: string, readonly status: 409 | 502 = 502) {
+    super(message)
+  }
+}
+
+/** One request to the accounts routes: the token in a header, an address only ever in the body. The log has the
+ * status and nothing else, since the address is in neither. */
+async function askAccounts(deps: Pick<Deps, 'fetch' | 'log'>, source: FeedbackSource, path: 'lookup' | 'delete' | 'sweep', body?: unknown): Promise<Record<string, unknown>> {
+  let res: Response
+  try {
+    // A redirect is not followed: the token goes to the server it was made for and nowhere else.
+    res = await deps.fetch(`${source.url.replace(/\/+$/, '')}/v1/admin/accounts/${path}`, {
+      method: body === undefined ? 'GET' : 'POST',
+      headers: { authorization: `Bearer ${source.token}`, accept: 'application/json', ...(body === undefined ? {} : { 'content-type': 'application/json' }) },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      redirect: 'manual',
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    })
+  } catch (err) {
+    deps.log(`accounts: the app's server was not reached: ${err instanceof Error ? err.name : 'error'}`)
+    throw new AccountsUnanswered('The app’s server could not be reached.')
+  }
+  if (res.status === 409) throw new AccountsUnanswered('Two accounts answer to this address, and the app’s server cannot tell which is meant. Nothing was deleted.', 409)
+  if (res.status !== 200) {
+    deps.log(`accounts: the app's server answered ${res.status}`)
+    // To a wrong token the server is a route that does not exist.
+    throw new AccountsUnanswered(`The app’s server answered ${res.status}.${res.status === 404 ? ' Check that ADMIN_WRITE_TOKEN is the same in both deployments.' : ''}`)
+  }
+  const answer: unknown = await res.json().catch(() => null)
+  if (typeof answer !== 'object' || answer === null || Array.isArray(answer)) throw unfit(deps)
+  return answer as Record<string, unknown>
+}
+
+function unfit(deps: Pick<Deps, 'log'>): AccountsUnanswered {
+  deps.log('accounts: the answer of the app’s server was not what was asked for')
+  return new AccountsUnanswered('The app’s server gave an answer the review app does not understand.')
+}
+
+const isTime = (v: unknown): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v >= 0
+const isCount = isTime
+
+/** The account an address names, field by field: anything else the server may send is not passed on. */
+export async function lookUpAccount(deps: Pick<Deps, 'fetch' | 'log'>, source: FeedbackSource, email: string): Promise<AccountFound> {
+  const { found, createdAt, lastSignInAt } = await askAccounts(deps, source, 'lookup', { email })
+  if (found === false) return { found: false }
+  if (found !== true || !isTime(createdAt) || (lastSignInAt !== null && !isTime(lastSignInAt))) throw unfit(deps)
+  return { found: true, createdAt, lastSignInAt }
+}
+
+/** Deletes the account an address names, as the learner's own deletion does; false when there was none. */
+export async function deleteLearnerAccount(deps: Pick<Deps, 'fetch' | 'log'>, source: FeedbackSource, email: string): Promise<boolean> {
+  const { deleted } = await askAccounts(deps, source, 'delete', { email, confirm: true })
+  if (typeof deleted !== 'boolean') throw unfit(deps)
+  return deleted
+}
+
+/** The counts of the sweep of inactive accounts. */
+export async function readAccountSweep(deps: Pick<Deps, 'fetch' | 'log'>, source: FeedbackSource): Promise<AccountSweep> {
+  const { months, batch, due, undated, taken, lastRunAt, lastTaken } = await askAccounts(deps, source, 'sweep')
+  if (!isCount(months) || !isCount(batch) || !isCount(due) || !isCount(undated) || !isCount(taken) || !isCount(lastTaken) || (lastRunAt !== null && !isTime(lastRunAt))) throw unfit(deps)
+  return { months, batch, due, undated, taken, lastRunAt, lastTaken }
 }

@@ -24,6 +24,8 @@ export interface ServerConfig {
   readonly vapid: VapidKeys | null
   /** What a request to `GET /v1/admin/feedback` must carry (spec §8.12). Null closes the route. */
   readonly feedbackReadToken: string | null
+  /** What a request to the routes that change something for the review app must carry (`/v1/admin/accounts/*`, #187). Null closes them. */
+  readonly adminWriteToken: string | null
 }
 
 export interface Mailer {

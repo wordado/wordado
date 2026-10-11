@@ -2,6 +2,8 @@
 
 Date: 2026-10-05. Status: draft for the product owner's review.
 Builds on: `2026-10-04-ai-review-and-review-app-design.md` (the local review app, §5; "Remote reviewers later", §8).
+Revised 2026-10-11: §17 added, the Accounts tab (issue #187): an account of the learner app deleted by hand, and
+the counts of the sweep of inactive accounts, behind a second token that is not the one that reads feedback.
 Revised 2026-10-10: the week and the drafted issue (issue #158, stage D): §8's weekly mail gains the AI's part,
 §16.9 gains the week's summary, the draft, their routes and the table `feedback_week_texts`; §16.8 follows.
 Revised 2026-10-10: topics and known issues on the Feedback tab (issue #158, stage C): §16.9 gains the topics, their
@@ -779,3 +781,94 @@ mail always has its statement.
   following the fields, the long text and the copy, each failure, the number saved. The hosted browser run reads
   the week and opens a draft, desktop and phone; the desktop run edits it, checks the link's address without
   following it, and pastes the number.
+
+## 17. Accounts
+
+Issue #187. The learner can delete their account in the app. The provider needs to do it too: for an erasure asked
+for by mail, for an account closed, and for accounts not signed in to for 24 months, which the terms say may be
+deleted and the privacy policy gives as the retention period. The accounts live on the learner app's server; the
+review app keeps nothing of them.
+
+### 17.1 The last sign-in
+
+The server kept no date of a last sign-in, and sessions cannot give it: they go 60 days after their last use.
+Migration `0010_last_sign_in.sql` adds `last_sign_in_at` to the `user` table. It is written when a session is made
+(a sign-in) and when one is extended, which Better Auth does once a day of use: a learner who never signs out is
+here, not away. No client reads or sets it.
+
+**The accounts already there** when the migration runs are dated from that day. When they last signed in was not
+kept, and no row left says it for certain: a session that was signed out of is gone, so the newest session left, or
+the day the account was made, can both be earlier than the true last sign-in. Dating from the day of the migration
+means no account is deleted sooner than 24 months after its last sign-in; the cost is that an account already
+abandoned is kept that much longer than 24 months, at most by the age of the service on that day.
+
+### 17.2 The sweep
+
+A step of the learner app server's cron (`server/src/account/sweep.ts`), with the others in `runScheduled`:
+
+- **The threshold** is a named constant, 24 months, counted as 731 days: the longest 24 months there are, so
+  never a day early.
+- **What it takes:** an account whose `last_sign_in_at` is before the threshold. Never one with no date. Never one
+  with a session used since the threshold, whatever its date says: if the date were ever not written, a learner
+  who is here is still not deleted.
+- **Once a day, in batches.** The cron comes every 15 minutes. The first run of a UTC day takes that day's row in
+  the table `account_sweep (utc_day, ran_at, deleted)`; every other run that day does nothing. A run deletes at
+  most 50 accounts, the longest away first; the rest wait for the next day.
+- **The same deletion** as the learner's own (`server/src/account/deletion.ts`), each account in a transaction of
+  its own in which it is checked again, so one that signs in meanwhile is kept, and the day's count is exact
+  wherever a run stops. One account that cannot be deleted does not keep the others.
+- **No mail before.** Decided by the owner: the rule is in the terms, and that is the notice.
+- **The log** has a count and nothing of an account.
+
+### 17.3 The link between the two services
+
+Three routes on the learner app's server, for the review app's server alone:
+
+- `POST /v1/admin/accounts/lookup` with `{ email }` → `{ found: false }` or `{ found: true, createdAt, lastSignInAt }`.
+- `POST /v1/admin/accounts/delete` with `{ email, confirm: true }` → `{ deleted }`.
+- `GET /v1/admin/accounts/sweep` → `{ months, batch, due, undated, taken, lastRunAt, lastTaken }`.
+
+The address is the whole address, compared without regard to capitals, and travels in the body: paths and queries
+are logged. Two accounts that answer to one address are refused (409). Nothing is answered about an account beyond
+the two dates.
+
+They answer only to `authorization: Bearer …` with **`ADMIN_WRITE_TOKEN`**, a second secret of at least 32
+characters, the same in both deployments. It is not `FEEDBACK_READ_TOKEN`: that one is named and documented as
+read-only, it is sent by a timed job as well as by the tab, and a leak of what reads messages must not be able to
+delete accounts. Neither token opens the other's routes; the server reads a write token equal to the read token
+as none, and a deploy refuses it. Without the token, with a wrong one, or while the server has none, the routes
+answer 404 with the body of a route that does not exist. Unlike `GET /v1/admin/feedback` they are registered
+behind the guard on `/v1/*`: they change something, so the body is limited and a form post from another site is
+refused like any other. They read no cookie.
+
+### 17.4 The review app
+
+Routes, admins only (behind the same middleware as every `/api/admin/*`), which run no statement of their own
+against D1: `GET /api/admin/accounts/sweep` (`{ connected: false }` while `ADMIN_WRITE_TOKEN` or `LEARNER_APP_URL`
+is not set), `POST /api/admin/accounts/lookup` and `POST /api/admin/accounts/delete`. The Worker passes on, field
+by field, only what §17.3 names; its log has a status or a count, never an address.
+
+The **Accounts** tab: the sweep in four numbers (past 24 months now, the next run deletes, deleted by the last
+run, deleted so far) with the day of the last run, and the count of accounts with no date when there are any.
+Under it, an address field and **Look up**: the account's address, when it was made and when it last signed in,
+or that no account has the address. **Delete this account…** opens a question that says what goes and what stays;
+its button is closed until the address is typed again. What is deleted is the account that was looked up: changing
+the address in the field forgets it.
+
+### 17.5 Left out
+
+- A warning mail before the sweep.
+- Blocking an address from signing up again after an account is closed.
+- A record of who deleted which account: the logs say only that one was deleted.
+
+### 17.6 Testing
+
+- **Server:** the migration dating the accounts that are there; the date written at sign-in and when a session is
+  extended, and unreachable by a client; the sweep taking only accounts past the threshold, never one with no date
+  or with a session used since, never more than a batch, once a day, scrubbing like the learner's own deletion,
+  logging a count; the routes' answers, 404 without the token and with the token that reads feedback, the
+  confirmation, the ambiguous address.
+- **Worker:** admins only; the address in the body and the write token in a header; only the named fields passed
+  on; not connected; each failure in words; the three routes under the count of D1 statements.
+- **Page:** the numbers, the lookup, the question and the typed address, each failure. The hosted browser run
+  deletes an account on the desktop and opens the question on a phone, against the fake server.
