@@ -44,6 +44,22 @@ describe('Path', () => {
     expect(within(current).getByRole('link', { name: 'Practise this unit: People and greetings' })).toBeTruthy()
   })
 
+  it('makes the current unit’s marker a way into the session while there is one, for a pointer only', async () => {
+    const ctx = await setup()
+    renderWith(<Path />, ctx)
+    const marker = (title: string) => unit(title).querySelector('.unit-track .unit-marker')!
+    expect(marker('People and greetings').tagName).toBe('A')
+    expect(marker('People and greetings').getAttribute('href')).toBe('/study')
+    // The same place as Start studying beside it: not a second stop for the keyboard or a screen reader.
+    expect(marker('People and greetings').getAttribute('tabindex')).toBe('-1')
+    expect(marker('People and greetings').closest('[aria-hidden="true"]')).not.toBeNull()
+    expect(marker('Food and drink').tagName).toBe('SPAN')
+    await act(() => answerNew(ctx.client, ctx.env, 10))
+    // Nothing left today: a mark again, as Start studying is gone.
+    expect(screen.queryByRole('link', { name: 'Start studying' })).toBeNull()
+    expect(marker('People and greetings').tagName).toBe('SPAN')
+  })
+
   it('says nothing about today until the plan is known: neither Start studying nor that the day is done', async () => {
     const ctx = await setup()
     await answerNew(ctx.client, ctx.env, 5)
