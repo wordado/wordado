@@ -251,7 +251,7 @@ export const de: Messages = {
 
   'signin.title': 'Konto erstellen oder anmelden',
   'signin.againTitle': 'Erneut anmelden',
-  'signin.gateIntro': 'Das Gesetz legt je nach Land ein Alter für ein eigenes Konto fest. Nur dein Land wird gespeichert.',
+  'signin.gateIntro': 'Das Gesetz legt je nach Land ein Alter für ein eigenes Konto fest. Dein Land bleibt auf diesem Gerät und wird nicht gesendet. Wenn du das Kästchen für Neuigkeiten ankreuzt, wird diese Wahl mit deinem Konto gespeichert.',
   'signin.country': 'Land, in dem du lebst',
   'signin.countryUnknown': 'Das möchte ich nicht angeben',
   'signin.continue': 'Weiter',

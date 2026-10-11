@@ -19,9 +19,11 @@ async function signInOf(request: Request): Promise<{ readonly email: string; rea
 /**
  * Around Better Auth's sign-in (#186). Sign-in and sign-up are one request, and the first creates the account, so
  * the sign-up checkbox travels with the code as `newsConsent`: the wording the learner ticked, absent when they did
- * not. It is recorded only once the code was right, and only where no decision is recorded yet: a new account, or
- * one from before the question was asked. A recorded choice, given or withdrawn, is never changed here. A failure
- * to record must not undo a sign-in that happened, so it is logged; the account is asked again at its next one.
+ * not. It is recorded only once the code was right. A ticked box is consent given now, so it counts where none is
+ * recorded (a new account, or one from before the question was asked) and after a withdrawal alike; a consent
+ * already given keeps its first time and wording. A box left alone changes nothing, whatever is recorded: a sign-in
+ * never withdraws. A failure to record must not undo a sign-in that happened, so it is logged; the account is asked
+ * again at its next one.
  */
 export function newsConsentAtSignIn(deps: ServerDeps): MiddlewareHandler<AppEnv> {
   return async (c, next) => {
@@ -31,7 +33,7 @@ export function newsConsentAtSignIn(deps: ServerDeps): MiddlewareHandler<AppEnv>
     try {
       await deps.db.query(
         `update "user" set news_consent = 'given', news_consent_at = to_timestamp($2::double precision / 1000), news_consent_text = $3
-         where email = $1 and news_consent = 'none'`,
+         where email = $1 and news_consent <> 'given'`,
         [signIn.email, deps.now(), signIn.text],
       )
     } catch (error) {

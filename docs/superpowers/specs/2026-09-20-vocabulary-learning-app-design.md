@@ -1694,11 +1694,15 @@ on their next pull. That failure is far worse than the cheating it prevents.
   features is direct marketing, so it goes only to learners who asked for it.
   The age gate carries a checkbox under the age confirmation, unticked, and
   the account is created with or without it. Sign-in and sign-up are one
-  request, so the wording that was ticked travels with the code, and the
-  server records it only where the account has no recorded decision: a new
-  account, or one from before the question existed. A recorded choice is never
-  changed by a later sign-in; the switch in *Settings › Account* gives and
-  withdraws it, with the same wording as the checkbox. The account keeps the
+  request, so the wording that was ticked travels with the code. A ticked box
+  is consent given at that moment: the server records it where the account
+  has no decision (a new account, or one from before the question existed)
+  and where an earlier consent was withdrawn. A consent already given keeps
+  its first time and wording. A box left unticked changes nothing, whatever
+  is recorded: a sign-in never withdraws. The switch in *Settings › Account*
+  gives and withdraws it, with the same wording as the checkbox, and the gate
+  says that the country stays on the device while a ticked box is saved with
+  the account. The account keeps the
   choice (none, given, withdrawn), when it was made, and which wording in
   which language (`news-1.bg`); the data export shows all three. Notices
   about the service itself do not depend on it.

@@ -41,7 +41,7 @@ describe('consent to news at sign-in (#186)', () => {
     expect(await recorded(h, again)).toEqual({ consent: 'given', at: h.clock.now, text: EN })
   })
 
-  it('never changes a recorded choice at a later sign-in, given or withdrawn', async () => {
+  it('leaves a consent already given as it was first recorded, box ticked or not', async () => {
     const h = harness()
     const s = await h.signIn(undefined, { newsConsent: BG })
     const given = await recorded(h, s)
@@ -49,14 +49,21 @@ describe('consent to news at sign-in (#186)', () => {
     await h.signIn(s.email)
     await h.signIn(s.email, { newsConsent: EN })
     expect(await recorded(h, s)).toEqual(given)
+  })
 
-    const again = await h.signIn(s.email)
-    expect((await again.put('/v1/account/news-consent', { consent: false })).status).toBe(200)
+  it('takes a ticked box after a withdrawal as consent given anew, and never withdraws at a sign-in', async () => {
+    const h = harness()
+    const s = await h.signIn(undefined, { newsConsent: BG })
+    h.clock.advance(HOUR)
+    expect((await s.put('/v1/account/news-consent', { consent: false })).status).toBe(200)
     const withdrawn = await recorded(h, s)
-    expect(withdrawn?.consent).toBe('withdrawn')
+    expect(withdrawn).toEqual({ consent: 'withdrawn', at: h.clock.now, text: BG })
     h.clock.advance(2 * HOUR)
-    await h.signIn(s.email, { newsConsent: EN })
+    // The box left alone says nothing: the withdrawal stands.
+    await h.signIn(s.email)
     expect(await recorded(h, s)).toEqual(withdrawn)
+    await h.signIn(s.email, { newsConsent: EN })
+    expect(await recorded(h, s)).toEqual({ consent: 'given', at: h.clock.now, text: EN })
   })
 
   it('signs in and records nothing when the wording is not one it knows', async () => {

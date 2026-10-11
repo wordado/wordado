@@ -285,6 +285,15 @@ describe('SignIn: news by email (#186)', () => {
     expect(accounts.calls).toEqual(['completeSignIn'])
   })
 
+  it('says what is kept: the country stays on this device, a ticked box goes with the account', async () => {
+    await render()
+    expect(
+      screen.getByText(
+        'The law sets an age for an account of your own, depending on where you live. Your country stays on this device and is not sent. If you tick the box for news, that choice is saved with your account.',
+      ),
+    ).toBeTruthy()
+  })
+
   it('sends the wording that was ticked, in the language it was read in, with the code', async () => {
     const { api } = await render()
     fireEvent.click(screen.getByRole('checkbox', { name: NEWS }))

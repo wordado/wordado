@@ -249,7 +249,7 @@ export const es: Messages = {
 
   'signin.title': 'Crea una cuenta o inicia sesión',
   'signin.againTitle': 'Vuelve a iniciar sesión',
-  'signin.gateIntro': 'La ley fija una edad mínima para tener una cuenta propia, según dónde vivas. Solo guardamos tu país.',
+  'signin.gateIntro': 'La ley fija una edad mínima para tener una cuenta propia, según dónde vivas. Tu país se queda en este dispositivo y no se envía. Si marcas la casilla de novedades, esa elección se guarda con tu cuenta.',
   'signin.country': 'País en el que vives',
   'signin.countryUnknown': 'Prefiero no decirlo',
   'signin.continue': 'Continuar',

@@ -302,12 +302,17 @@ test('asks about news by email at sign-up, the account settings change the answe
   expect(await newsOf(b)).toEqual({ state: 'given', at: expect.any(Number), text: 'news-1.en' })
   await second.close()
 
-  // A recorded choice is not changed by signing in again, box ticked or not: only the switch changes it.
+  // Signing in again with the box left alone changes nothing; ticking it after a withdrawal is consent given anew.
   const again = await context(browser)
   const c = await again.newPage()
-  await signIn(c, withNews, { news: true })
+  await signIn(c, withNews)
   expect((await newsOf(c)).state).toBe('withdrawn')
   await again.close()
+  const anew = await context(browser)
+  const d = await anew.newPage()
+  await signIn(d, withNews, { news: true })
+  expect(await newsOf(d)).toEqual({ state: 'given', at: expect.any(Number), text: 'news-1.en' })
+  await anew.close()
 })
 
 test('sends feedback from the account menu; the export names neither it nor a country (spec §8.12, §11, #166)', async ({ browser }) => {

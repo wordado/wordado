@@ -243,7 +243,7 @@ export const en = {
 
   'signin.title': 'Create an account or sign in',
   'signin.againTitle': 'Sign in again',
-  'signin.gateIntro': 'The law sets an age for an account of your own, depending on where you live. Only your country is kept.',
+  'signin.gateIntro': 'The law sets an age for an account of your own, depending on where you live. Your country stays on this device and is not sent. If you tick the box for news, that choice is saved with your account.',
   'signin.country': 'Country where you live',
   'signin.countryUnknown': 'I’d rather not say',
   'signin.continue': 'Continue',

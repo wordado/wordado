@@ -57,7 +57,7 @@ export interface FeedbackBody extends FeedbackInput {
 /** Everything the app asks of the server beside sync (spec §8.6, §8.11, §8.12, §11). */
 export interface Api {
   sendCode(email: string): Promise<void>
-  /** `newsConsent` is the wording of the news box when the learner ticked it (#186); the server records it only where no choice is recorded yet. */
+  /** `newsConsent` is the wording of the news box when the learner ticked it (#186); the server records it unless consent is already given. */
   verifyCode(email: string, code: string, newsConsent?: string | null): Promise<void>
   /** The signed-in learner, or null without a valid session. */
   me(): Promise<Me | null>
