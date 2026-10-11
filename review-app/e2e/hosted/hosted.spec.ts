@@ -657,10 +657,10 @@ async function readsTopics(browser: Browser, mine: 'sound' | 'words') {
   await expectFits(page, '.admin *')
   // The topic's own note and state, as on a message.
   const mark = topic.getByRole('form', { name: 'The topic’s mark' })
-  await mark.getByLabel('Note').fill('Planned with the settings.')
+  await mark.getByLabel('Topic note').fill('Planned with the settings.')
   await mark.getByRole('button', { name: 'Save note' }).tap()
   await expect(mark.getByRole('status').filter({ hasText: 'Saved' })).toBeVisible()
-  await mark.getByLabel('State').selectOption({ label: 'Looked at' })
+  await mark.getByLabel('Topic state').selectOption({ label: 'Looked at' })
   await expect(mark.getByRole('status').filter({ hasText: 'Saved' })).toHaveCount(2)
   await expect(topic.locator('.topic-meta').getByText('Looked at')).toBeVisible()
   await expectFits(page, '.admin *')
@@ -668,10 +668,15 @@ async function readsTopics(browser: Browser, mine: 'sound' | 'words') {
   await byTopic()
   await expect(topic.locator('.topic-meta').getByText('Looked at')).toBeVisible()
   await topic.getByRole('button', { name: 'Choose the number of new words' }).tap()
-  await expect(mark.getByLabel('Note')).toHaveValue('Planned with the settings.')
-  await expect(mark.getByLabel('State')).toHaveValue('seen')
+  await expect(mark.getByLabel('Topic note')).toHaveValue('Planned with the settings.')
+  await expect(mark.getByLabel('Topic state')).toHaveValue('seen')
   // Its messages were not marked with it.
-  await expect(messages.filter({ hasText: 'Me gustaría elegir' }).getByLabel('State')).toHaveValue('new')
+  const message = messages.filter({ hasText: 'Me gustaría elegir' })
+  await expect(message.locator('.feedback-head').getByText('New', { exact: true })).toBeVisible()
+  // Its own mark is folded away under the topic's.
+  await expect(message.getByLabel('State')).toBeHidden()
+  await message.getByText('Mark this message').tap()
+  await expect(message.getByLabel('State')).toHaveValue('new')
   await expectFits(page, '.admin *')
 }
 

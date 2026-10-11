@@ -382,6 +382,31 @@ p {
   border-radius: 0.875rem;
 }
 
+/* A button in a row with fields: as tall as they are and with their corners, and tinted, so that it is not taken
+   for one of them. */
+.button.tool {
+  min-height: 2.75rem;
+  color: var(--blue);
+  background: var(--blue-soft);
+  border-color: color-mix(in srgb, var(--blue) 35%, transparent);
+  border-radius: 0.625rem;
+}
+
+.button.tool:hover {
+  border-color: var(--blue);
+}
+
+.button.tool.ghost {
+  color: var(--ink-soft);
+  background: none;
+  border-color: transparent;
+}
+
+.button.tool.ghost:hover {
+  color: var(--ink);
+  border-color: var(--rule);
+}
+
 .button:disabled {
   opacity: 0.55;
   cursor: not-allowed;
@@ -895,6 +920,54 @@ button.settings-row:hover {
 
 .app-header-slot:not(:empty) ~ .spacer {
   display: none;
+}
+
+/* The admin pages on a wide screen: the tabs are a second line of the header, as the learner app's navigation is:
+   plain words, a line under the one that is shown. My work and the account stay on the first line. */
+@media (min-width: 40.01rem) {
+  .app-header:has(.admin-tabs) .app-header-inner {
+    row-gap: 0;
+    padding-bottom: 0;
+  }
+
+  .app-header:has(.admin-tabs) .app-header-content {
+    display: contents;
+  }
+
+  .app-header:has(.admin-tabs) .header-switch {
+    order: 1;
+  }
+
+  .app-header:has(.admin-tabs) .account {
+    order: 2;
+  }
+
+  .app-header:has(.admin-tabs):not(:has(.header-switch)) .account {
+    margin-left: auto;
+  }
+
+  .admin-tabs {
+    order: 3;
+    flex-basis: 100%;
+  }
+
+  .admin-tabs [role='tablist'] {
+    gap: var(--space-5);
+  }
+
+  .admin-tabs button {
+    padding: 0.625rem 0;
+    font-weight: 500;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+  }
+
+  .admin-tabs [aria-selected='true'] {
+    color: var(--ink);
+    background: none;
+    border-bottom-color: var(--rose);
+    box-shadow: none;
+  }
 }
 
 /* My work, on the admin pages: at the right end, where Admin is on the reviewer's (the tabs hide the spacer). */
@@ -1515,11 +1588,12 @@ kbd {
   overflow-wrap: anywhere;
 }
 
+/* The mark: the state, the note and its button on one row, their lower edges in line; what a save says under them. */
 .feedback-mark {
   display: grid;
-  grid-template-columns: 11rem minmax(0, 1fr);
-  gap: var(--space-2) var(--space-4);
-  align-items: start;
+  grid-template-columns: 11rem minmax(0, 1fr) auto;
+  gap: var(--space-2) var(--space-3);
+  align-items: end;
   padding-top: var(--space-3);
   border-top: 1px solid var(--rule);
 }
@@ -1529,9 +1603,26 @@ kbd {
   gap: var(--space-1);
 }
 
-.feedback-mark > .form-actions {
-  grid-column: 2;
-  align-items: center;
+.feedback-saved {
+  display: flex;
+  flex-wrap: wrap;
+  grid-column: 1 / -1;
+  gap: var(--space-1) var(--space-3);
+}
+
+.feedback-saved:not(:has(.feedback-status:not(:empty))) {
+  display: none;
+}
+
+/* Inside a topic the message's mark is folded away: the rule is the fold's, not the form's. */
+.feedback-mark-fold {
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--rule);
+}
+
+.feedback-mark-fold > .feedback-mark {
+  padding-top: var(--space-2);
+  border-top: 0;
 }
 
 .feedback-note textarea {
@@ -1544,6 +1635,9 @@ kbd {
   border: 1px solid var(--rule);
   border-radius: 0.625rem;
   resize: vertical;
+  /* One line tall, growing with what is typed, where the browser can. */
+  field-sizing: content;
+  max-height: 12rem;
 }
 
 .feedback-note textarea:hover {
@@ -2335,13 +2429,6 @@ kbd {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .feedback-mark > .form-actions {
-    grid-column: 1;
-  }
-
-  .feedback-mark .button {
-    min-height: 2.75rem;
-  }
 
   /* The AI help: the switch, its line and the button each on a line of their own, wide enough for a thumb. */
   .feedback-ai-panel {
