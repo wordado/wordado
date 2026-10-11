@@ -31,9 +31,13 @@ export interface Env {
   /** The public app repository, `owner/name`: its open issues are read once a day, without a token, for the AI help on feedback to match topics against
    * (spec 2026-10-10 §3.3). Unset, none are read and no match is proposed. */
   readonly APP_REPO?: string
+  /** The repository that holds the notices prepared with a change, `owner/name`, and the folder in it they are in (#215): read through the GitHub
+   * App, which must be installed on it too, for the Mail tab to offer the newest one. Either unset, nothing is read and nothing is offered. */
+  readonly NOTICES_REPO?: string
+  readonly NOTICES_PATH?: string
   readonly GITHUB_APP_ID: string
   readonly GITHUB_INSTALLATION_ID: string
-  /** Tests and e2e only: a fake GitHub API's base URL, for the content repository and for the read of the app repository's open issues. */
+  /** Tests and e2e only: a fake GitHub API's base URL, for the content repository, the notices' repository and the read of the app repository's open issues. */
   readonly GITHUB_API_URL?: string
   readonly GITHUB_APP_PRIVATE_KEY?: string
   readonly GITHUB_WEBHOOK_SECRET?: string

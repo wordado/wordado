@@ -4,6 +4,8 @@ Date: 2026-10-05. Status: draft for the product owner's review.
 Builds on: `2026-10-04-ai-review-and-review-app-design.md` (the local review app, §5; "Remote reviewers later", §8).
 Revised 2026-10-11: §17.3 and §17.4 gain what is behind the counts of accounts (issue #209): the accounts by week
 made and by day studied, and by language, and a lookup that says how the account is used.
+Revised 2026-10-11: §18.8 rewritten (issue #215): the tab is called Mail, the form has one editor with a language
+box, a service notice is offered its prepared text, and Translate fills the empty languages.
 Revised 2026-10-11: §18 added, the Announcements tab (issue #185): a mail to learners' account holders, written
 here and sent by the learner app's server in batches, as a service notice to everyone or as news to those who
 consented, with an unsubscribe link.
@@ -1046,11 +1048,38 @@ Routes, admins only, which run no statement of their own against D1: `GET /api/a
 /api/admin/announcements/{save,delete,preview,test,send,stop,resume}`. Each passes on only the fields it names,
 checks the texts as the server does, and says a refusal in words.
 
-The **Announcements** tab: the list of what was written and sent (the kind, the state, `40 of 120 sent · 77 waiting
+The tab is called **Mail** (issue #215; its address stays `#announcements`, and one mail is still an
+announcement): the list of what was written and sent (the kind, the state, `40 of 120 sent · 77 waiting
 · 1 failed · …`, when, and what holds a send), with **Stop sending** and **Resume**. An announcement opens as a
-form: the kind, a subject and a text for each language, then **Preview** (each language as it is mailed, and how
-many accounts get which), the test send, and **Send…**, closed until this version's test went and nothing has been
-changed since.
+form: the kind in one selection box with a line that says what the kind is for; one editor, with a box for the
+language, a mark for each language that says whether it is written (English: needed, until it is) and shows it
+when pressed, and the length of the subject and of the text against their limits; then **Preview** (each
+language as it is mailed, and how many accounts get which), the test send, and **Send…**, closed until this
+version's test went and nothing has been changed since. What is typed in a language stays while another is shown
+or the kind is changed.
+
+Two things bring text into the form (issue #215). Neither saves anything, and neither is a way around the test
+send: what they put in is a change like one typed, to be saved, tested and confirmed.
+
+- **The prepared notice.** A notice about a change is written with the change, in another repository, one file a
+  change (the format is in `review-app/README.md`, "Prepared notices"). `GET /api/admin/announcements/prepared`
+  reads the announcements from the learner app's server and, through the GitHub App, the five newest files of
+  the folder `NOTICES_PATH` of `NOTICES_REPO` at the head of `main`, and answers the newest one that is in the
+  format and not used, or none. Used means that an announcement has its English subject: nothing is kept to know
+  it, here or in that repository. The form shows the offer to a draft that is a service notice; one press puts
+  every language of the notice in the form, after a question when something is written there. Not set up, no
+  access, a failed read, nothing prepared: no offer, and the form is as it is without one. A file that is not in
+  the format is passed over whole.
+- **Translate.** `POST /api/admin/announcements/translate` takes the English subject and body and the languages
+  to fill, checks the English as a save does, and asks the AI help of §16 (its settings, its switch, its
+  allowance of calls a UTC day) once for each language, each call counted before it is made. The model is given
+  the language and that subject and body, and nothing else: no account, no address, nothing of the request. An
+  answer is taken only as a text that may be saved: a subject of one line and a body of plain text within the
+  limits, with every web address of the English text in it letter for letter. Anything else is refused for that
+  language with its reason (too long, not usable, an address changed, the service's own failures, the limit,
+  off, not set up); nothing is cut to fit. The form asks only for the languages that are empty, puts a text only
+  in a language that is still empty when it comes, and says beside each such language that a machine wrote it.
+  Nothing of a text is kept or logged.
 
 ### 18.9 Left out
 
@@ -1071,7 +1100,9 @@ changed since.
   allowance, each kind of failure and the same key on a repeat; stop and resume; the rows going with a deleted
   account by the learner's deletion and by the sweep; logs with counts only.
 - **Worker:** admins only; only the named fields passed on; the typed confirmation; each refusal in words; not
-  connected; the routes under the count of D1 statements.
+  connected; the routes under the count of D1 statements. The notices' format, file by file; the newest unused one,
+  and none without the settings, the access or the announcements; the translation's request holding the text
+  alone, each refusal of an answer, the allowance, off and not set up.
 - **Page:** the list, writing and saving, the preview, the send closed until tested and saved, the question and the
   typed kind and count, a changed count, stop and resume. The hosted browser run writes, tests and sends a service
   notice on the desktop and opens the question for news on a phone, against the fake server. No test sends a mail.

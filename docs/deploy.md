@@ -130,7 +130,7 @@ private `wordado/wordado-research`, cloned into `docs/research/` and ignored her
      until that deploy has run; the routes answer 404 to a wrong token and to none alike, so they cannot be
      probed from outside. The sweep itself needs no
      setting: it runs with the cron whether or not the tab is connected.
-   - Announcements (#185) need **no new secret**: the review app's Announcements tab uses `ADMIN_WRITE_TOKEN`
+   - Announcements (#185) need **no new secret**: the review app's Mail tab uses `ADMIN_WRITE_TOKEN`
      as the Accounts tab does, and the mails go through the mailer already in place (`RESEND_API_KEY`,
      `EMAIL_FROM`). One optional variable, `ANNOUNCEMENT_MAILS_PER_DAY`: the announcement mails sent in one UTC
      day at most, 50 when unset, which is half of the 100 a day of the mail provider's free plan, the rest being
@@ -201,10 +201,14 @@ private `wordado/wordado-research`, cloned into `docs/research/` and ignored her
   after that deploy at the earliest. From then on the date moves at each sign-in and each time a session is
   extended (once a day of use). An account with no date is never deleted; the tab counts such accounts, and
   the number should stay 0.
-- **Announcements (#185):** written and sent from the review app's Announcements tab
+- **Announcements (#185):** written and sent from the review app's Mail tab
   (`review-app/README.md`, "Hosted", step 11; the design is §18 of
   `docs/superpowers/specs/2026-10-05-hosted-review-app-design.md`). A service notice goes to every account
   holder, news only to accounts that consented, with an unsubscribe link. What to know when one is sent:
+  - **The text of a notice (#215)** can be taken from the notice prepared with the change, and the empty
+    languages translated by the review app's AI help: both are the review app's alone and need nothing of this
+    server (`review-app/README.md`, "Hosted", step 12, and "Prepared notices" for the file's format). A
+    translation is a machine's: read each one, and the test send, before sending.
   - **Order of deploys:** this server first (migration `0011_announcements.sql` adds three tables and changes
     none), then the review app. Until the server has the routes the tab says the app's server answered 404.
   - **Nothing is mailed by the press.** The cron sends: at most 20 mails every 15 minutes and

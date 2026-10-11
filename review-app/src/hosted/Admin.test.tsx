@@ -82,7 +82,7 @@ describe('Admin', () => {
   it('has seven tabs; a click or the arrow keys change the tab, and it is kept in the address', async () => {
     render(<Admin />)
     const tablist = await screen.findByRole('tablist')
-    expect(within(tablist).getAllByRole('tab').map((t) => t.textContent)).toEqual(['Overview', 'Reviewers', 'Assignments', 'Submissions', 'Feedback', 'Accounts', 'Announcements'])
+    expect(within(tablist).getAllByRole('tab').map((t) => t.textContent)).toEqual(['Overview', 'Reviewers', 'Assignments', 'Submissions', 'Feedback', 'Accounts', 'Mail'])
     await openTab('Reviewers')
     expect(window.location.hash).toBe('#reviewers')
     expect(screen.getByRole('tab', { name: 'Reviewers' }).getAttribute('aria-selected')).toBe('true')
@@ -102,9 +102,9 @@ describe('Admin', () => {
     fireEvent.keyDown(assignments, { key: 'ArrowLeft' })
     fireEvent.keyDown(screen.getByRole('tab', { name: 'Reviewers' }), { key: 'ArrowLeft' })
     fireEvent.keyDown(screen.getByRole('tab', { name: 'Overview' }), { key: 'ArrowLeft' })
-    expect(screen.getByRole('tab', { name: 'Announcements' }).getAttribute('aria-selected')).toBe('true')
+    expect(screen.getByRole('tab', { name: 'Mail' }).getAttribute('aria-selected')).toBe('true')
     expect(window.location.hash).toBe('#announcements')
-    fireEvent.keyDown(screen.getByRole('tab', { name: 'Announcements' }), { key: 'Home' })
+    fireEvent.keyDown(screen.getByRole('tab', { name: 'Mail' }), { key: 'Home' })
     expect(screen.getByRole('tabpanel', { name: 'Overview' })).toBeTruthy()
   })
 
@@ -123,13 +123,13 @@ describe('Admin', () => {
     expect(hostedApi.admin.accountStats).toHaveBeenCalledTimes(1)
   })
 
-  it('reads the announcements when the Announcements tab is opened, not before (#185)', async () => {
+  it('reads the announcements when the Mail tab is opened, not before (#185, #215)', async () => {
     render(<Admin />)
     await screen.findByRole('tabpanel', { name: 'Overview' })
     expect(hostedApi.admin.announcements).not.toHaveBeenCalled()
-    await openTab('Announcements')
+    await openTab('Mail')
     expect(window.location.hash).toBe('#announcements')
-    const panel = screen.getByRole('tabpanel', { name: 'Announcements' })
+    const panel = screen.getByRole('tabpanel', { name: 'Mail' })
     expect(await within(panel).findByRole('button', { name: 'New announcement' })).toBeTruthy()
     expect(within(panel).getByText('No announcement has been written yet.')).toBeTruthy()
     expect(hostedApi.admin.announcements).toHaveBeenCalledTimes(1)

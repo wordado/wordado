@@ -86,6 +86,18 @@ export function computeUnlocks(ctx: PathContext): string[] {
   return ordered.map((u) => u.unitId).filter((id) => all.has(id) && !ctx.unlocked.has(id))
 }
 
+/**
+ * The units of `computeUnlocks` that the learner's own study opened: the successor of a unit whose words are all
+ * introduced. Not the units a declared level opens outright, and not the unit the path starts at: those were
+ * open to the learner before any answer, and only their record is new.
+ */
+export function earnedUnlocks(ctx: PathContext): string[] {
+  const ordered = inPathOrder(ctx.units)
+  const start = ordered.find((unit) => !isBelow(unit, ctx.declaredLevel))
+  const below = new Set(ordered.filter((unit) => isBelow(unit, ctx.declaredLevel)).map((unit) => unit.unitId))
+  return computeUnlocks(ctx).filter((id) => !below.has(id) && id !== start?.unitId)
+}
+
 /** The earliest unlocked unit, at or above the declared level, with a live never-introduced word. */
 export function currentUnit(ctx: PathContext): Unit | null {
   const ordered = inPathOrder(ctx.units)

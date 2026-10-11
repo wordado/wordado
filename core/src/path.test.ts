@@ -1,6 +1,6 @@
 import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
-import { assumedKnownWords, computeUnlocks, currentUnit, pathNewWords, type PathContext } from './path'
+import { assumedKnownWords, computeUnlocks, currentUnit, earnedUnlocks, pathNewWords, type PathContext } from './path'
 import type { CefrLevel, Unit, WordFlag } from './types'
 import { corpusWordId, type WordId } from './wordId'
 
@@ -31,6 +31,29 @@ function ctx(over: Partial<PathContext> = {}): PathContext {
     ...over,
   }
 }
+
+describe('earnedUnlocks', () => {
+  it('counts no unit as earned where the path only starts', () => {
+    expect(earnedUnlocks(ctx())).toEqual([])
+  })
+
+  it('counts the successor of a unit whose words are all introduced', () => {
+    expect(earnedUnlocks(ctx({ unlocked: new Set(['a1-u1']), introduced: new Set([w(1), w(2), w(3)]) }))).toEqual(['a1-u2'])
+  })
+
+  it('counts none of the units a declared level opens outright, nor the first unit at it', () => {
+    expect(computeUnlocks(ctx({ declaredLevel: 'A2' }))).toEqual(['a1-u1', 'a1-u2', 'a2-u1'])
+    expect(earnedUnlocks(ctx({ declaredLevel: 'A2' }))).toEqual([])
+  })
+
+  it('counts the next unit a learner who placed higher then studies their way to', () => {
+    expect(earnedUnlocks(ctx({ declaredLevel: 'A2', introduced: new Set([w(7), w(8), w(9)]) }))).toEqual(['a2-u2'])
+  })
+
+  it('counts nothing that is already recorded', () => {
+    expect(earnedUnlocks(ctx({ unlocked: new Set(['a1-u1', 'a1-u2']), introduced: new Set([w(1), w(2), w(3)]) }))).toEqual([])
+  })
+})
 
 describe('computeUnlocks', () => {
   it('unlocks the first unit for a new A1 learner', () => {

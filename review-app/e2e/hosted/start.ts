@@ -12,6 +12,7 @@ import { FakeGitHub, testAppKey } from '../../worker/test/fakeGitHub'
 import { FakeLearnerApp } from '../../worker/test/fakeLearnerApp'
 import { FakeModel, testServiceAccount } from '../../worker/test/fakeModel'
 import { testKeys } from '../../worker/test/jwt'
+import { noticeFile } from '../../worker/test/notices'
 import { migrate } from '../../worker/test/platform'
 import { FEEDBACK, KNOWN_ISSUES, standInAnswer } from './feedbackFixture'
 
@@ -46,6 +47,26 @@ const files = Object.fromEntries(walk(join(content, 'review')).map((p) => [relat
 const gh = new FakeGitHub(files)
 // The app's own repository is public: its open issues are listed for anyone, and the daily job reads them.
 gh.issues = [...KNOWN_ISSUES]
+// A second repository the GitHub App can read: the notices prepared with a change, which the Mail tab offers (#215).
+// One is in the format and not used yet; the README beside it is no notice.
+const NOTICES_REPO = 'wordado/e2e-notices'
+const notices = new FakeGitHub(
+  {
+    'docs/notices/README.md': '# Notices\n\nOne file for each change.\n',
+    'docs/notices/2026-10-11-new-terms.md': noticeFile('New terms of use', {
+      en: { subject: 'The terms of use have changed', body: 'Hello,\n\nthe terms of use have changed.\n\nThe full text:\nhttps://example.com/en/terms' },
+      bg: { subject: 'Условията за ползване са променени', body: 'Здравейте,\n\nусловията за ползване са променени.\n\nПълният текст:\nhttps://example.com/bg/terms' },
+    }),
+  },
+  NOTICES_REPO,
+)
+/** The fake a request is for: the notices' repository by its name in the path, or in the variables of a GraphQL request; the content repository otherwise. */
+function repositoryOf(url: string, body: string): FakeGitHub {
+  if (url.startsWith(`/repos/${NOTICES_REPO}/`)) return notices
+  if (url !== '/graphql') return gh
+  const { owner, name } = (JSON.parse(body) as { variables?: { owner?: string; name?: string } }).variables ?? {}
+  return `${owner}/${name}` === NOTICES_REPO ? notices : gh
+}
 createServer((req, res) => {
   void (async () => {
     const chunks: Buffer[] = []
@@ -56,14 +77,14 @@ createServer((req, res) => {
       return
     }
     const headers = Object.fromEntries(Object.entries(req.headers).map(([k, v]) => [k, String(v)]))
-    const out = await gh.fetch(`https://x${req.url}`, { method: req.method ?? 'GET', headers, ...(chunks.length ? { body: Buffer.concat(chunks).toString('utf8') } : {}) })
+    const out = await repositoryOf(req.url ?? '', Buffer.concat(chunks).toString('utf8')).fetch(`https://x${req.url}`, { method: req.method ?? 'GET', headers, ...(chunks.length ? { body: Buffer.concat(chunks).toString('utf8') } : {}) })
     res.writeHead(out.status, { 'content-type': out.headers.get('content-type') ?? 'text/plain' })
     res.end(await out.text())
   })()
 }).listen(4182, '127.0.0.1')
 
 // The fake learner app server: the feedback the Feedback tab reads (feedbackFixture.ts), and the accounts of the
-// Accounts tab and the announcements of the Announcements tab, which answer to a token of their own. No mail is
+// Accounts tab and the announcements of the Mail tab, which answer to a token of their own. No mail is
 // sent by anything here: a test send and a send are only written down.
 const FEEDBACK_TOKEN = 'e2e-feedback-read-token-0123456789abcdef'
 const WRITE_TOKEN = 'e2e-admin-write-token-0123456789abcdef'
@@ -120,8 +141,8 @@ createServer((req, res) => {
   })()
 }).listen(4183, '127.0.0.1')
 
-// The stand-in model, for the AI help on the Feedback tab: it answers what feedbackFixture.ts wrote down for each
-// message, and keeps what it was sent, so the browser run can look at it. No model is ever asked. It stands in for
+// The stand-in model, for the AI help on the Feedback tab and the Mail tab's Translate: it answers what
+// feedbackFixture.ts wrote down for each message (and for a translation, the English with the language before it), and keeps what it was sent, so the browser run can look at it. No model is ever asked. It stands in for
 // Google's: the Worker signs in with a service account made for this run (a new key each time, written nowhere),
 // whose key file names the stand-in's own token endpoint, as only a local Worker lets it.
 const account = await testServiceAccount({ token_uri: 'http://127.0.0.1:4184/token' })
@@ -156,7 +177,7 @@ writeFileSync(join(root, '.e2e', 'tokens.json'), JSON.stringify(tokens))
 const vars = {
   ACCESS_JWKS: keys.jwks, ACCESS_TEAM_DOMAIN: TEAM, ACCESS_AUD: AUD, ADMIN_EMAIL: 'admin@example.com',
   GITHUB_API_URL: 'http://127.0.0.1:4182', GITHUB_APP_ID: '1', GITHUB_INSTALLATION_ID: '1', GITHUB_APP_PRIVATE_KEY: (await testAppKey()).pem,
-  APP_ORIGIN: 'http://127.0.0.1:4181', APP_REPO: 'wordado/wordado',
+  APP_ORIGIN: 'http://127.0.0.1:4181', APP_REPO: 'wordado/wordado', NOTICES_REPO, NOTICES_PATH: 'docs/notices',
   LEARNER_APP_URL: 'http://127.0.0.1:4183', FEEDBACK_READ_TOKEN: FEEDBACK_TOKEN, ADMIN_WRITE_TOKEN: WRITE_TOKEN,
   FEEDBACK_AI_AUTH: 'google-service-account', FEEDBACK_AI_URL: 'http://127.0.0.1:4184', FEEDBACK_AI_KEY: account.keyFile,
 }

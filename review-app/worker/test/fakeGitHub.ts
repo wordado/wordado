@@ -79,8 +79,15 @@ export class FakeGitHub {
     }
     if (method === 'GET' && (m = new RegExp(`^${repo}/contents/(.+)$`).exec(p))) {
       const ref = url.searchParams.get('ref') ?? this.mainSha
-      const text = this.commits.get(ref)?.files.get(decodeURIComponent(m[1]!))
-      return text === undefined ? json({ message: 'Not Found' }, 404) : new Response(text)
+      const path = decodeURIComponent(m[1]!)
+      const files = this.commits.get(ref)?.files
+      const text = files?.get(path)
+      // A file is its text when the raw form is asked for, and otherwise an object that describes it.
+      if (text !== undefined) return (init.headers as Record<string, string>)['accept'] === 'application/vnd.github.raw' ? new Response(text) : json({ name: path.split('/').at(-1), path, type: 'file' })
+      // A folder is answered with what is in it, by name: its files, and its own folders once each.
+      const under = [...(files?.keys() ?? [])].filter((file) => file.startsWith(`${path}/`)).map((file) => file.slice(path.length + 1))
+      if (under.length === 0) return json({ message: 'Not Found' }, 404)
+      return json([...new Set(under.map((rest) => rest.split('/')[0]!))].map((name) => ({ name, path: `${path}/${name}`, type: under.includes(name) ? 'file' : 'dir' })))
     }
     if (method === 'GET' && (m = new RegExp(`^${repo}/git/commits/(.+)$`).exec(p))) {
       const c = this.commits.get(m[1]!)

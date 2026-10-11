@@ -19,6 +19,8 @@ test('studies the demo by keyboard from the first visit to a completed day', asy
   for (let i = 0; i < 40 && !(await page.locator('.done').isVisible()); i += 1) await answer(page)
   await expect(heading(page)).toHaveText('Session complete')
   await expect(page.getByText('Today counts toward your streak.')).toBeVisible()
+  // The unit being studied was open already: the screen announces no unit.
+  await expect(page.getByText(/^New unit open/)).toHaveCount(0)
   await page.getByRole('link', { name: 'Done', exact: true }).click()
   await expect(heading(page)).toHaveText('Nothing left for today.')
   await expect(page.getByText('1-day streak Today counts.')).toBeVisible()

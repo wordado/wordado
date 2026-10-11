@@ -53,6 +53,15 @@ describe('Client', () => {
     expect(client.entry('c:hello-1')?.headword).toBe('hello')
   })
 
+  it('reports the next unit as opened by the answer that starts the last word of a unit, and only then', async () => {
+    const client = await openClient()
+    const [first, second] = client.snapshot.corpus!.units
+    const opened: (readonly string[])[] = []
+    for (const wordId of first!.wordIds) opened.push((await client.answer(answer(wordId))).opened)
+    expect(opened.slice(0, -1).every((ids) => ids.length === 0)).toBe(true)
+    expect(opened.at(-1)).toEqual([second!.unitId])
+  })
+
   it('records an answer, unlocks, completes the day and notifies subscribers', async () => {
     const client = await openClient()
     let notified = 0
@@ -60,7 +69,9 @@ describe('Client', () => {
       notified += 1
     })
     const first = await client.answer(answer('c:hello-1'))
+    // The first unit is recorded as unlocked, but it was open already: nothing to announce.
     expect(first.unlocked).toEqual(['a1-01'])
+    expect(first.opened).toEqual([])
     expect(first.dayCompleted).toBe(true)
     expect(client.snapshot.plan?.newWords).toHaveLength(9)
     expect(client.snapshot.plan?.newWords).not.toContain('c:hello-1')
@@ -68,7 +79,7 @@ describe('Client', () => {
     expect(client.snapshot.progress?.streak.todayComplete).toBe(true)
     expect(client.snapshot.xp).toEqual({ total: 10, today: 10, provisional: 10 })
     const second = await client.answer(answer('c:goodbye-1'))
-    expect(second).toMatchObject({ dayCompleted: false, unlocked: [] })
+    expect(second).toMatchObject({ dayCompleted: false, unlocked: [], opened: [] })
     expect(notified).toBeGreaterThanOrEqual(2)
   })
 

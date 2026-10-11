@@ -4,11 +4,13 @@ import type { Env } from './bindings'
 import { countedDb, D1BudgetSpent, type CountedDb } from './d1Count'
 import { insertReviewer, insertTopicsIfAbsent, putFeedbackAi, putSetting, replaceOpenIssues, type FeedbackAiRow } from './db'
 import { AI_BATCH, AI_SWITCH } from './feedbackAi'
+import { resetGitHubTokens } from './github'
 import { ISSUE_PAGES, refreshOpenIssues } from './openIssues'
-import { FakeGitHub } from './test/fakeGitHub'
+import { FakeGitHub, testAppKey } from './test/fakeGitHub'
 import { FakeLearnerApp, feedbackItem } from './test/fakeLearnerApp'
 import { FakeModel } from './test/fakeModel'
 import { testKeys } from './test/jwt'
+import { noticeFile } from './test/notices'
 import { fetchBy, resetDb, startPlatform, testDeps } from './test/platform'
 import { runWeekly, WEEKLY_AI_CALLS, WEEKLY_PAGES } from './weekly'
 
@@ -78,6 +80,7 @@ beforeEach(async () => {
   model = new FakeModel(KEY)
   model.answer = worstAnswer
   gh = new FakeGitHub({})
+  resetGitHubTokens()
   mails = 0
   logged = []
   await insertReviewer(base.DB, { email: ADMIN, name: 'Coordinator', languages: ['bg'], role: 'admin', invitedAt: 't', inviteSentAt: null, disabledAt: null })
@@ -209,6 +212,25 @@ describe('the statements one invocation runs against D1, in the worst case (Free
       expect(counted.statements()).toBeLessThanOrEqual(1)
     }
     expect(server.announcements.map((a) => a.status)).toEqual(['sending'])
+  })
+
+  it('the Mail tab’s form: the prepared notice, and a translation into every other language (#215)', async () => {
+    env = { ...env, ADMIN_WRITE_TOKEN: WRITE_TOKEN, NOTICES_REPO: 'an-owner/a-repo', NOTICES_PATH: 'notices', GITHUB_APP_PRIVATE_KEY: (await testAppKey()).pem }
+    server.writeToken = WRITE_TOKEN
+    gh = new FakeGitHub({ 'notices/2026-10-11-new-terms.md': noticeFile('New terms of use', { en: { subject: 'The terms change', body: 'Hello.' } }) }, 'an-owner/a-repo')
+    model.answer = (_name, input) => ({ subject: `${(input as { language: string }).language}: the terms change`, body: 'Hello.' })
+    counted = countedDb(base.DB)
+    const offered = await admin('GET', '/api/admin/announcements/prepared')
+    expect(((await offered.json()) as { notice: { file: string } | null }).notice?.file).toBe('2026-10-11-new-terms.md')
+    console.log(`D1 statements, the prepared notice: ${counted.statements()}`)
+    // The sign-in's own read of the reviewer, and nothing more.
+    expect(counted.statements()).toBeLessThanOrEqual(1)
+    counted = countedDb(base.DB)
+    const translated = await admin('POST', '/api/admin/announcements/translate', { subject: 'The terms change', body: 'Hello.', languages: ['bg', 'de', 'es'] })
+    expect(Object.keys(((await translated.json()) as { texts: object }).texts)).toEqual(['bg', 'de', 'es'])
+    console.log(`D1 statements, a translation into three languages: ${counted.statements()}`)
+    // The reviewer, the switch, and one count for each language.
+    expect(counted.statements()).toBeLessThanOrEqual(5)
   })
 })
 

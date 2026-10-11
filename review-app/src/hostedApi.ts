@@ -1,4 +1,4 @@
-import type { AnnouncementKind, AnnouncementTexts, FeedbackKind } from '@wordado/core'
+import type { AnnouncementKind, AnnouncementLanguage, AnnouncementText, AnnouncementTexts, FeedbackKind } from '@wordado/core'
 import type { DecisionResult } from '../server/types'
 import type {
   AccountFound,
@@ -8,6 +8,7 @@ import type {
   AccountSweepView,
   Announcement,
   AnnouncementPreview,
+  AnnouncementTranslation,
   AnnouncementsView,
   AssignmentView,
   FeedbackAiRead,
@@ -25,6 +26,7 @@ import type {
   HostedDecisionRequest,
   Language,
   Me,
+  PreparedNoticeView,
   ReviewerView,
   Role,
   RowsResponse,
@@ -134,7 +136,7 @@ export const hostedApi = {
     lookUpAccount: (email: string) => send<AccountFound>('POST', '/api/admin/accounts/lookup', { email }),
     /** Deletes the account an address names, as the learner's own deletion does; `deleted` is false when there was none. */
     deleteAccount: (email: string) => send<{ deleted: boolean }>('POST', '/api/admin/accounts/delete', { email, confirm: true }),
-    /** The Announcements tab (#185): what there is, newest first, and the limits a send works under. */
+    /** The Mail tab (#185): what there is, newest first, and the limits a send works under. */
     announcements: () => get<AnnouncementsView>('/api/admin/announcements'),
     /** Writes a draft, or with an `id` changes that one: a change is a new version, which needs its own test send. */
     saveAnnouncement: (draft: { id: number | null; kind: AnnouncementKind; texts: Partial<AnnouncementTexts> }) =>
@@ -146,6 +148,11 @@ export const hostedApi = {
     testAnnouncement: (id: number, version: number, email: string) => send<{ announcement: Announcement; mails: number }>('POST', '/api/admin/announcements/test', { id, version, email }),
     /** Starts the send: the version, the kind and the count as they were shown, and what was typed to confirm them. */
     sendAnnouncement: (confirmed: { id: number; version: number; kind: AnnouncementKind; recipients: number; confirm: string }) => send<{ announcement: Announcement }>('POST', '/api/admin/announcements/send', confirmed),
+    /** The newest prepared notice that no announcement has used, for the form to offer (#215); null when there is none. */
+    preparedNotice: () => get<PreparedNoticeView>('/api/admin/announcements/prepared'),
+    /** The English text in `languages`, written by the AI help (#215): nothing but that text goes, and nothing is saved. */
+    translateAnnouncement: (english: AnnouncementText, languages: readonly AnnouncementLanguage[]) =>
+      send<AnnouncementTranslation>('POST', '/api/admin/announcements/translate', { subject: english.subject, body: english.body, languages }),
     stopAnnouncement: (id: number) => send<{ announcement: Announcement }>('POST', '/api/admin/announcements/stop', { id }),
     resumeAnnouncement: (id: number) => send<{ announcement: Announcement }>('POST', '/api/admin/announcements/resume', { id }),
   },

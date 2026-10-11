@@ -2791,39 +2791,103 @@ kbd {
   }
 }
 
-/* The Announcements tab (issue 185): the kind, then a block for each language, the text as wide as a mail is read. */
-.form.announcement > fieldset {
+/* The Mail tab's form (issues 185, 215): the kind, the offer of a prepared notice, then one editor for the language
+   chosen, the text as wide as a mail is read. */
+.form.announcement > .field,
+.form.announcement > .note {
+  max-width: 44rem;
+}
+
+.form.announcement > .note {
+  margin: 0;
+}
+
+/* The offer: what was prepared, and the one button that takes it, beside it or under it on a phone. */
+.announcement-offer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+  width: 100%;
+  max-width: 44rem;
+  margin: 0;
+}
+
+.announcement-offer > p {
   display: grid;
-  gap: var(--space-2);
+  flex: 1 1 16rem;
+  gap: var(--space-1);
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.announcement-editor {
+  display: grid;
+  gap: var(--space-3);
   width: 100%;
   max-width: 44rem;
   min-width: 0;
-  margin: 0;
   padding: var(--space-3);
   border: 1px solid var(--rule);
   border-radius: 0.875rem;
 }
 
-.form.announcement legend {
-  padding: 0 var(--space-1);
-  font-size: var(--step--1);
-  font-weight: 600;
-  color: var(--ink-soft);
+.announcement-editor > .note {
+  margin: 0;
 }
 
-.announcement-kind .check {
-  align-items: flex-start;
+/* The language box and Translate on one line, which breaks into two on a phone; the button's words wrap there. */
+.announcement-editor-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-2) var(--space-4);
 }
 
-.announcement-kind input[type='radio'] {
-  flex-shrink: 0;
-  width: 1.125rem;
-  height: 1.125rem;
-  margin: 0.2rem 0 0;
-  accent-color: var(--rose);
+.announcement-editor-head > .field {
+  flex: 1 1 14rem;
 }
 
-.announcement-text textarea {
+.announcement-editor-head > .button {
+  max-width: 100%;
+  white-space: normal;
+}
+
+/* The marks: a chip for each language, which is a button that shows it. The one shown is ringed. */
+.announcement-marks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.announcement-marks > .chip {
+  min-height: 2rem;
+  padding-inline: var(--space-3);
+  font-family: inherit;
+  border: 0;
+  cursor: pointer;
+}
+
+.announcement-marks > .chip[aria-pressed='true'] {
+  box-shadow: 0 0 0 2px var(--ink);
+}
+
+/* A field's name with its length against the limit at the other end of the line. */
+.announcement-field-head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.announcement-field-head > .note {
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.announcement-editor textarea {
   width: 100%;
   min-height: 8rem;
   padding: var(--space-2) var(--space-3);
@@ -2835,11 +2899,11 @@ kbd {
   resize: vertical;
 }
 
-.announcement-text textarea:hover {
+.announcement-editor textarea:hover {
   border-color: var(--ink-soft);
 }
 
-.announcement-text :is(input, textarea):read-only {
+.announcement-editor :is(input, textarea):read-only {
   opacity: 0.75;
 }
 
