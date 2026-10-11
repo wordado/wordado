@@ -88,15 +88,19 @@ private `wordado/wordado-research`, cloned into `docs/research/` and ignored her
    `{"rules":[{"allowed":{"origins":["https://app.wordado.com","https://wordado-preview.<subdomain>.workers.dev"],"methods":["GET","HEAD"]},"maxAgeSeconds":86400}]}`
    and run `pnpm exec wrangler r2 bucket cors set wordado-content --file cors.json`. Create an R2 API
    token with *Object Read & Write* on `wordado-content` only, and keep its access key id and secret.
-6. **Secrets and variables** (`gh` from the repository root). Create the environments, with production limited to `main`:
+6. **Secrets and variables** (`gh` from the repository root). Every `gh secret` and `gh variable` command names the
+   repository with `--repo wordado/wordado`: in a checkout with more than one git remote `gh` refuses with
+   "multiple remotes" and sets nothing. `gh secret list --repo wordado/wordado --env production` shows what an
+   environment has, by name and date. Create the environments, with production limited to `main`:
    `gh api -X PUT repos/wordado/wordado/environments/preview`,
    `gh api -X PUT repos/wordado/wordado/environments/production -F "deployment_branch_policy[protected_branches]=false" -F "deployment_branch_policy[custom_branch_policies]=true"`,
    then `gh api -X POST repos/wordado/wordado/environments/production/deployment-branch-policies -f name=main`.
-   - Repository: `gh variable set CLOUDFLARE_ACCOUNT_ID --body <cloudflare-account-id>`.
-   - Both environments (`--env preview`, `--env production`): `gh secret set CLOUDFLARE_API_TOKEN`,
-     `gh secret set DATABASE_URL` (that branch's direct URL), and `gh secret set BETTER_AUTH_SECRET`
+   - Repository: `gh variable set CLOUDFLARE_ACCOUNT_ID --repo wordado/wordado --body <cloudflare-account-id>`.
+   - Both environments (`--env preview`, `--env production`): `gh secret set CLOUDFLARE_API_TOKEN --repo wordado/wordado`,
+     `gh secret set DATABASE_URL --repo wordado/wordado` (that branch's direct URL), and
+     `gh secret set BETTER_AUTH_SECRET --repo wordado/wordado`
      (`openssl rand -base64 48`, a different one per environment). Also
-     `gh variable set CONTENT_MANIFEST_URL --body https://content.wordado.com/manifest.json`.
+     `gh variable set CONTENT_MANIFEST_URL --repo wordado/wordado --body https://content.wordado.com/manifest.json`.
    - `APP_ORIGIN`: `https://wordado-preview.<subdomain>.workers.dev` for preview, `https://app.wordado.com` for production.
    - The R2 token pair is the content repository's secret (`pipeline/README.md`), not this one's: the copies
      kept here during the first corpus releases were removed on 2026-10-10.
@@ -109,7 +113,7 @@ private `wordado/wordado-research`, cloned into `docs/research/` and ignored her
    - Production only, optional: `FEEDBACK_READ_TOKEN`, which lets the review app's Feedback tab read
      feedback from this server (`GET /v1/admin/feedback`, spec §8.12). One random value, the same in both
      deployments, made and set without ever being shown:
-     `t=$(openssl rand -hex 32)`, then `printf %s "$t" | gh secret set FEEDBACK_READ_TOKEN --env production`
+     `t=$(openssl rand -hex 32)`, then `printf %s "$t" | gh secret set FEEDBACK_READ_TOKEN --repo wordado/wordado --env production`
      here and `printf %s "$t" | pnpm --filter @wordado/review-app exec wrangler secret put FEEDBACK_READ_TOKEN --env production`
      for the review app (`review-app/README.md`, "Hosted", step 8), then `unset t`. Without it the route
      answers 404 and the tab says feedback is not connected. To change the token, set a new value in both
@@ -117,11 +121,14 @@ private `wordado/wordado-research`, cloned into `docs/research/` and ignored her
    - Production only, optional: `ADMIN_WRITE_TOKEN`, which lets the review app's Accounts tab look an account
      up by its address, delete it, and read the counts of the sweep of inactive accounts and of accounts and
      their use (`/v1/admin/accounts/*`, #187, #206). A second random value, made and set the same way as the one above
-     (`t=$(openssl rand -hex 32)`, `printf %s "$t" | gh secret set ADMIN_WRITE_TOKEN --env production` here,
+     (`t=$(openssl rand -hex 32)`, `printf %s "$t" | gh secret set ADMIN_WRITE_TOKEN --repo wordado/wordado --env production` here,
      `printf %s "$t" | pnpm --filter @wordado/review-app exec wrangler secret put ADMIN_WRITE_TOKEN --env production`
      for the review app, `unset t`). **It must not be the value of `FEEDBACK_READ_TOKEN`**: what can read
      learners' messages must not be able to delete an account, and a deploy refuses the two being equal.
-     Without it the routes answer 404 and the tab says accounts are not connected. The sweep itself needs no
+     Without it the routes answer 404 and the tab says accounts are not connected. This server takes the value
+     at its next production deploy, so after setting or changing it the tab says the app's server answered 404
+     until that deploy has run; the routes answer 404 to a wrong token and to none alike, so they cannot be
+     probed from outside. The sweep itself needs no
      setting: it runs with the cron whether or not the tab is connected.
    - Announcements (#185) need **no new secret**: the review app's Announcements tab uses `ADMIN_WRITE_TOKEN`
      as the Accounts tab does, and the mails go through the mailer already in place (`RESEND_API_KEY`,
@@ -162,7 +169,7 @@ private `wordado/wordado-research`, cloned into `docs/research/` and ignored her
 9. **Content first.** *Done 2026-09-27*, with the sample (v0), by the Publish content workflow that plan 8
    replaced. The first corpus version is published by the content repository's **Corpus** workflow
    (`pipeline/README.md`).
-10. **Enable deploys.** `gh variable set DEPLOY_ENABLED --body true`. The next pull request deploys
+10. **Enable deploys.** `gh variable set DEPLOY_ENABLED --repo wordado/wordado --body true`. The next pull request deploys
     the preview, and the next merge deploys production. `cloudflare/wrangler-action@v4` exists (its
     `v4` tag was checked on 2026-09-25), but that first deploy is its first real use, so watch it. Once deploys are
     on, consider adding "Preview deployment / Deploy (preview)" to `main`'s required checks (step 7).
