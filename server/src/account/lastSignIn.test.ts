@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { harness, type Harness } from '../../test/harness'
+import { recordSignIn } from './lastSignIn'
 
 const DAY = 86_400_000
 
@@ -43,5 +44,19 @@ describe('the last sign-in (#187)', () => {
     await b.post('/api/auth/update-user', { lastSignInAt: 0, last_sign_in_at: 0 })
     expect(await lastSignIn(h, b.userId)).toBe(h.clock.now)
     expect(JSON.stringify((await b.get('/api/auth/get-session')).body)).not.toMatch(/last_?sign/i)
+  })
+
+  it('does not undo a sign-in when the date cannot be written: it logs that, and not for whom', async () => {
+    const failing = { query: async () => Promise.reject(new Error('connection lost for user-1')) }
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    try {
+      await expect(recordSignIn(failing, 'user-1', 0)).resolves.toBeUndefined()
+      expect(log.mock.calls).toEqual([['last sign-in not recorded', 'Error']])
+      // A session row that names no user writes nothing.
+      await expect(recordSignIn(failing, undefined, 0)).resolves.toBeUndefined()
+      expect(log).toHaveBeenCalledTimes(1)
+    } finally {
+      log.mockRestore()
+    }
   })
 })

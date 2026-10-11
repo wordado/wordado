@@ -49,8 +49,8 @@ export function createAuth(deps: ServerDeps) {
       },
       session: {
         // The `after` of each: a sign-in, or a session extended after a day of use, dates the account (#187).
-        create: { before: async (session) => ({ data: withoutDevice(session) }), after: async (session) => recordSignIn(deps.db, session.userId, deps.now()) },
-        update: { before: async (session) => ({ data: withoutDevice(session) }), after: async (session) => recordSignIn(deps.db, session.userId, deps.now()) },
+        create: { before: async (session) => ({ data: withoutDevice(session) }), after: async (session) => recordSignIn(deps.db, session?.userId, deps.now()) },
+        update: { before: async (session) => ({ data: withoutDevice(session) }), after: async (session) => recordSignIn(deps.db, session?.userId, deps.now()) },
       },
     },
     rateLimit: {

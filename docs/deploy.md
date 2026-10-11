@@ -114,6 +114,15 @@ private `wordado/wordado-research`, cloned into `docs/research/` and ignored her
      for the review app (`review-app/README.md`, "Hosted", step 8), then `unset t`. Without it the route
      answers 404 and the tab says feedback is not connected. To change the token, set a new value in both
      places and deploy this server; until both agree the tab says the app's server answered 404.
+   - Production only, optional: `ADMIN_WRITE_TOKEN`, which lets the review app's Accounts tab look an account
+     up by its address, delete it, and read the counts of the sweep of inactive accounts
+     (`/v1/admin/accounts/*`, #187). A second random value, made and set the same way as the one above
+     (`t=$(openssl rand -hex 32)`, `printf %s "$t" | gh secret set ADMIN_WRITE_TOKEN --env production` here,
+     `printf %s "$t" | pnpm --filter @wordado/review-app exec wrangler secret put ADMIN_WRITE_TOKEN --env production`
+     for the review app, `unset t`). **It must not be the value of `FEEDBACK_READ_TOKEN`**: what can read
+     learners' messages must not be able to delete an account, and a deploy refuses the two being equal.
+     Without it the routes answer 404 and the tab says accounts are not connected. The sweep itself needs no
+     setting: it runs with the cron whether or not the tab is connected.
    - This server mails no feedback. The notice that feedback came is the review app's weekly mail to its
      admins (`review-app/README.md`, "Hosted", step 8): a count and a link to the tab, sent on Monday for
      the week before. It needs the review app's `RESEND_API_KEY`, `FEEDBACK_READ_TOKEN` and
@@ -133,7 +142,7 @@ private `wordado/wordado-research`, cloned into `docs/research/` and ignored her
      A server from before that ignores `ids` and gives its newest page: nothing breaks and nothing is
      deleted, but a topic then opens with messages missing, and says so, until this server is deployed.
      The other way round is safe as well: the new server answers the old review app as before.
-   A deploy refuses half of a pair, and a `BETTER_AUTH_SECRET` or a `FEEDBACK_READ_TOKEN` under 32 characters (`server/scripts/secretsFile.ts`).
+   A deploy refuses half of a pair, a `BETTER_AUTH_SECRET`, a `FEEDBACK_READ_TOKEN` or an `ADMIN_WRITE_TOKEN` under 32 characters, and an `ADMIN_WRITE_TOKEN` equal to the `FEEDBACK_READ_TOKEN` (`server/scripts/secretsFile.ts`).
 7. **Protect `main`.** *Done 2026-09-25*: the five checks below are required, a pull request must be
    up to date with `main` before it merges, and force pushes to `main` and its deletion are refused.
    Admins can still override. A history rewrite of `main` therefore needs this protection lifted for
@@ -169,6 +178,15 @@ private `wordado/wordado-research`, cloned into `docs/research/` and ignored her
 - **Migrations:** they run while the previous Worker still serves, and `wrangler rollback` restores a
   Worker that runs against the new schema, so every migration must work with the previous Worker too: expand first,
   contract in a later release.
+- **Inactive accounts (#187):** the cron deletes accounts not signed in to for 24 months
+  (`server/src/account/sweep.ts`): once a UTC day, at most 50 accounts a run, the longest away first, with the
+  learner's own deletion and no mail first. Its log line is a count (`account sweep: N inactive account(s)
+  deleted`); the review app's Accounts tab shows what it would take next and what it took. Migration
+  `0010_last_sign_in.sql` starts the record of the last sign-in: **every account that exists when it runs is
+  dated from that day**, since nothing kept says when it last signed in, so the first deletions come 24 months
+  after that deploy at the earliest. From then on the date moves at each sign-in and each time a session is
+  extended (once a day of use). An account with no date is never deleted; the tab counts such accounts, and
+  the number should stay 0.
 - **Rollback:** `pnpm --filter @wordado/server exec wrangler rollback --env production` restores the previous
   Worker and its assets together. Migrations are forward-only: never roll the schema back; write a new migration.
   Never roll production back to a version from before the move (2026-10): a rollback restores a version's
