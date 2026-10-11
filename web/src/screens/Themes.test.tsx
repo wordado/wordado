@@ -350,6 +350,9 @@ describe('Themes: search', () => {
     type('teach')
     expect(groups()).toEqual(['No theme has “teach”.'])
     expect(screen.getByText(/^Also in the course/).textContent).toBe('Also in the course, in no theme: teacher учител')
+    const line = screen.getByRole('link', { name: /^Also in the course, in no theme:/ })
+    expect(line.getAttribute('href')).toBe('/search?q=teach')
+    expect(line.textContent).toBe('Also in the course, in no theme: teacher учител')
   })
 
   it('chooses a theme from the results, which stay as they are', async () => {
