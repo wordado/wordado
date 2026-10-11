@@ -105,6 +105,17 @@ export class GitHub {
     return res.text()
   }
 
+  /** The files of a folder at a commit, by name, and nothing of what is under its own folders. Null when there is no such folder. */
+  async listFiles(path: string, ref: string): Promise<string[] | null> {
+    const res = await this.call(`contents ${path}`, 'GET', `/contents/${path.split('/').map(encodeURIComponent).join('/')}?ref=${encodeURIComponent(ref)}`)
+    if (res.status === 404) return null
+    if (!res.ok) throw await failure(res, `contents ${path}`)
+    const entries: unknown = await res.json()
+    // A path that names a file is answered with that file, not with a list.
+    if (!Array.isArray(entries)) return null
+    return entries.flatMap((e: unknown) => (typeof e === 'object' && e !== null && (e as { type?: unknown }).type === 'file' && typeof (e as { name?: unknown }).name === 'string' ? [(e as { name: string }).name] : []))
+  }
+
   /**
    * Many files at one commit, in one request per READ_BATCH of them: a submit of a spot check reads files from
    * all over a queue, and a Worker may make only so many requests while it answers one. Null for a file that is
@@ -180,10 +191,11 @@ export class GitHub {
   }
 }
 
-export function githubFor(deps: Deps): GitHub | null {
+/** The GitHub App's client for a repository of its installation: the content repository, unless another is named. */
+export function githubFor(deps: Pick<Deps, 'env' | 'fetch' | 'now'>, repo: string = deps.env.CONTENT_REPO): GitHub | null {
   const e = deps.env
   if (!e.GITHUB_APP_PRIVATE_KEY || !e.GITHUB_APP_ID || !e.GITHUB_INSTALLATION_ID) return null
-  return new GitHub({ api: e.GITHUB_API_URL ?? 'https://api.github.com', appId: e.GITHUB_APP_ID, installationId: e.GITHUB_INSTALLATION_ID, privateKeyPem: e.GITHUB_APP_PRIVATE_KEY, repo: e.CONTENT_REPO }, deps.fetch, deps.now)
+  return new GitHub({ api: e.GITHUB_API_URL ?? 'https://api.github.com', appId: e.GITHUB_APP_ID, installationId: e.GITHUB_INSTALLATION_ID, privateKeyPem: e.GITHUB_APP_PRIVATE_KEY, repo }, deps.fetch, deps.now)
 }
 
 /** GitHub's X-Hub-Signature-256 (spec §7.4). */

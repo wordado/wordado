@@ -62,6 +62,14 @@ describe('checkProductionConfig', () => {
       expect(checkProductionConfig(config({ vars: { LEARNER_APP_URL: bad } })).join('\n')).toMatch(/LEARNER_APP_URL/)
     }
   })
+  it('takes the prepared notices’ repository and folder together, or neither (#215)', () => {
+    expect(checkProductionConfig(config({ vars: { NOTICES_REPO: 'an-owner/a-repo', NOTICES_PATH: 'docs/notices' } }))).toEqual([])
+    expect(checkProductionConfig(config({ vars: { NOTICES_REPO: '', NOTICES_PATH: '' } }))).toEqual([])
+    expect(checkProductionConfig(config({ vars: { NOTICES_REPO: 'an-owner/a-repo' } })).join('\n')).toMatch(/NOTICES_REPO and NOTICES_PATH must both be set/)
+    expect(checkProductionConfig(config({ vars: { NOTICES_PATH: 'notices' } })).join('\n')).toMatch(/NOTICES_REPO and NOTICES_PATH must both be set/)
+    for (const bad of ['a-repo', 'https://github.com/an-owner/a-repo', 'an-owner/a-repo/notices']) expect(checkProductionConfig(config({ vars: { NOTICES_REPO: bad, NOTICES_PATH: 'notices' } })).join('\n')).toMatch(/NOTICES_REPO must be/)
+    for (const bad of ['/notices', 'notices/', 'a b', 'notices?ref=x']) expect(checkProductionConfig(config({ vars: { NOTICES_REPO: 'an-owner/a-repo', NOTICES_PATH: bad } })).join('\n')).toMatch(/NOTICES_PATH must be/)
+  })
   it('refuses the AI help’s key in production vars, and an address of its service that is not https', () => {
     expect(checkProductionConfig(config({ vars: { FEEDBACK_AI_KEY: 'k'.repeat(40) } })).join('\n')).toMatch(/FEEDBACK_AI_KEY must not be set: it is a secret/)
     for (const good of ['https://openrouter.ai/api/v1', 'https://ai.example.com', 'https://ai.example.com:8443/v1']) expect(checkProductionConfig(config({ vars: { FEEDBACK_AI_URL: good } }))).toEqual([])

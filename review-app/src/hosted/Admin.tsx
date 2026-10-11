@@ -18,7 +18,8 @@ const TABS = [
   ['submissions', 'Submissions'],
   ['feedback', 'Feedback'],
   ['accounts', 'Accounts'],
-  ['announcements', 'Announcements'],
+  // Mail (#215): the announcements, under the address they have had since #185.
+  ['announcements', 'Mail'],
 ] as const
 type Tab = (typeof TABS)[number][0]
 
@@ -27,10 +28,10 @@ export function adminTabOf(hash: string): Tab | null {
   return TABS.find(([id]) => `#${id}` === hash)?.[0] ?? null
 }
 
-/** The admin page: Overview, Reviewers, Assignments, Submissions, Feedback, Accounts and Announcements as tabs in
+/** The admin page: Overview, Reviewers, Assignments, Submissions, Feedback, Accounts and Mail as tabs in
  * the header, one shown at a time. The tab is kept in the address (`#reviewers`), so a reload stays put. The
  * Feedback tab reads what it shows itself, when it is opened: it comes from another server, a page at a time. So
- * do the Accounts and the Announcements tabs. */
+ * do the Accounts and the Mail tabs. */
 export function Admin() {
   const [snapshot, setSnapshot] = useState<SnapshotStatus | null | undefined>(undefined)
   const [reviewers, setReviewers] = useState<ReviewerView[] | undefined>(undefined)

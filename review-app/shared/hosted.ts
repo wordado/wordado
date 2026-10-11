@@ -1,4 +1,4 @@
-import type { AnnouncementKind, AnnouncementLanguage, AnnouncementTexts, FeedbackItem } from '@wordado/core'
+import type { AnnouncementKind, AnnouncementLanguage, AnnouncementText, AnnouncementTexts, FeedbackItem } from '@wordado/core'
 import type { Action, RowView } from '../server/types'
 
 export type Language = 'bg' | 'de' | 'es' | 'en'
@@ -454,3 +454,28 @@ export interface AnnouncementPreview {
 
 /** What the owner types to send: the kind and the number of accounts, "service 1204". */
 export const announcementConfirmation = (kind: AnnouncementKind, recipients: number): string => `${kind} ${recipients}`
+
+/** A notice prepared with a change, in the repository that holds what changed (#215): its file's name, the day of
+ * the change that name starts with (`2026-10-11`), its title, and its texts, each one an announcement may hold. */
+export interface PreparedNotice {
+  readonly file: string
+  readonly date: string
+  readonly title: string
+  readonly texts: AnnouncementTexts
+}
+
+/** `GET /api/admin/announcements/prepared`: the newest prepared notice no announcement has used; null when there
+ * is none, or the notices are not set up or could not be read. */
+export interface PreparedNoticeView {
+  readonly notice: PreparedNotice | null
+}
+
+/** Why a language got no translation: the AI help's own reasons, or its text was dropped because it is longer than
+ * an announcement may be (`too-long`) or does not hold an address of the English text as it is written (`address`). */
+export type AnnouncementTranslationWhy = FeedbackAiWhy | 'too-long' | 'address'
+
+/** `POST /api/admin/announcements/translate`: for each language asked for, its text, checked as a saved one is, or why there is none. Kept nowhere. */
+export interface AnnouncementTranslation {
+  readonly texts: Readonly<Partial<Record<AnnouncementLanguage, AnnouncementText>>>
+  readonly failed: Readonly<Partial<Record<AnnouncementLanguage, AnnouncementTranslationWhy>>>
+}
