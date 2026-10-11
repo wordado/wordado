@@ -4,6 +4,7 @@ import type { FeedbackAiStatus, FeedbackAiView, FeedbackTopicOpened, FeedbackTop
 import { hostedApi } from '../hostedApi'
 import { AdminFeedback } from './AdminFeedback'
 import { dateOf } from './adminUtil'
+import { STATE_LABEL } from './FeedbackCard'
 
 afterEach(() => (cleanup(), vi.restoreAllMocks()))
 
@@ -239,10 +240,10 @@ describe('the Feedback tab by topic (spec 2026-10-10 §3.2)', () => {
     openTopic.mockResolvedValue(opened({ topic: words, items: [message(2, { ai: reading({ topic: { id: 15, title: words.title } }) })] }))
     const li = await open('Number of new words a day')
     const mark = within(li).getByRole('form', { name: 'The topic’s mark' })
-    const note = within(mark).getByRole('textbox', { name: 'Note' }) as HTMLTextAreaElement
+    const note = within(mark).getByRole('textbox', { name: 'Topic note' }) as HTMLTextAreaElement
     expect(note.value).toBe('Asked the designer.')
-    expect((within(mark).getByRole('combobox', { name: 'State' }) as HTMLSelectElement).value).toBe('seen')
-    fireEvent.change(within(mark).getByRole('combobox', { name: 'State' }), { target: { value: 'declined' } })
+    expect((within(mark).getByRole('combobox', { name: 'Topic state' }) as HTMLSelectElement).value).toBe('seen')
+    fireEvent.change(within(mark).getByRole('combobox', { name: 'Topic state' }), { target: { value: 'declined' } })
     await waitFor(() => expect(put).toHaveBeenCalledWith(15, { title: 'Number of new words a day', state: 'declined', note: 'Asked the designer.' }))
     fireEvent.change(note, { target: { value: ' Not this year. ' } })
     fireEvent.click(within(mark).getByRole('button', { name: 'Save note' }))
@@ -257,7 +258,7 @@ describe('the Feedback tab by topic (spec 2026-10-10 §3.2)', () => {
     await byTopic()
     const li = await open('Sound plays twice on phones')
     openTopic.mockResolvedValue(opened({ items: opened().items.map((m) => ({ ...m, state: 'done' as const })) }))
-    fireEvent.change(within(within(li).getByRole('form', { name: 'The topic’s mark' })).getByRole('combobox', { name: 'State' }), { target: { value: 'done' } })
+    fireEvent.change(within(within(li).getByRole('form', { name: 'The topic’s mark' })).getByRole('combobox', { name: 'Topic state' }), { target: { value: 'done' } })
     expect(await within(li).findByText('4 messages marked done.')).toBeTruthy()
     await waitFor(() => expect(openTopic).toHaveBeenCalledTimes(2))
     await waitFor(() => {
@@ -266,14 +267,24 @@ describe('the Feedback tab by topic (spec 2026-10-10 §3.2)', () => {
     })
   })
 
+  it('folds a message’s own mark away inside a topic, and shows its state in the head', async () => {
+    await byTopic()
+    const li = await open('Sound plays twice on phones')
+    const first = within(within(li).getByRole('list', { name: 'Messages of the topic' })).getAllByRole('article')[0]!
+    const fold = within(first).getByText('Mark this message').closest('details')!
+    expect(fold.open).toBe(false)
+    expect(within(fold).getByRole('combobox', { name: 'State' })).toBeTruthy()
+    expect(first.querySelector('.feedback-head .chip:last-child')?.textContent).toBe(STATE_LABEL[opened().items[0]!.state])
+  })
+
   it('puts the state back when it was refused, and says why', async () => {
     vi.spyOn(hostedApi.admin, 'putFeedbackTopic').mockRejectedValue(new Error('internal error'))
     await byTopic()
     const li = await open('Sound plays twice on phones')
     const mark = within(li).getByRole('form', { name: 'The topic’s mark' })
-    fireEvent.change(within(mark).getByRole('combobox', { name: 'State' }), { target: { value: 'done' } })
+    fireEvent.change(within(mark).getByRole('combobox', { name: 'Topic state' }), { target: { value: 'done' } })
     expect(await within(mark).findByText('State not saved: internal error')).toBeTruthy()
-    expect((within(mark).getByRole('combobox', { name: 'State' }) as HTMLSelectElement).value).toBe('new')
+    expect((within(mark).getByRole('combobox', { name: 'Topic state' }) as HTMLSelectElement).value).toBe('new')
   })
 
   it('moves a message to another topic from its card: it leaves this topic', async () => {
