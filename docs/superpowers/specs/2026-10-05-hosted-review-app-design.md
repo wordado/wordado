@@ -2,6 +2,8 @@
 
 Date: 2026-10-05. Status: draft for the product owner's review.
 Builds on: `2026-10-04-ai-review-and-review-app-design.md` (the local review app, §5; "Remote reviewers later", §8).
+Revised 2026-10-11: §17.3 and §17.4 gain what is behind the counts of accounts (issue #209): the accounts by week
+made and by day studied, and by language, and a lookup that says how the account is used.
 Revised 2026-10-11: §18 added, the Announcements tab (issue #185): a mail to learners' account holders, written
 here and sent by the learner app's server in batches, as a service notice to everyone or as news to those who
 consented, with an unsubscribe link.
@@ -825,9 +827,16 @@ A step of the learner app server's cron (`server/src/account/sweep.ts`), with th
 
 ### 17.3 The link between the two services
 
-Four routes on the learner app's server, for the review app's server alone:
+Six routes on the learner app's server, for the review app's server alone:
 
-- `POST /v1/admin/accounts/lookup` with `{ email }` → `{ found: false }` or `{ found: true, createdAt, lastSignInAt }`.
+- `POST /v1/admin/accounts/lookup` with `{ email }` → `{ found: false }` or `{ found: true, createdAt, lastSignInAt,
+  details }`. `details` (#209) is how the account is used, never what it holds: `{ lastStudiedAt, daysStudied30,
+  newsConsent, newsConsentAt, newsConsentLanguage, reminders: [{ minute, tzOffsetMin, paused }], devices,
+  sweepNotBefore }`. The last answer is read from the `device` rows, as the counts read it; the days studied are
+  the UTC days with an answer among the last 30, today among them, from the answer log by its index on
+  `(user_id, utc_day)`; the language is the one the consent's wording was read in; the reminders are the
+  account's push subscriptions, newest first and at most 10, paused once ignored three times in a row;
+  `sweepNotBefore` is the last sign-in plus the sweep's threshold, null when there is no date.
 - `POST /v1/admin/accounts/delete` with `{ email, confirm: true }` → `{ deleted }`.
 - `GET /v1/admin/accounts/sweep` → `{ months, batch, due, undated, taken, lastRunAt, lastTaken }`.
 - `GET /v1/admin/accounts/stats` → `{ readAt, accounts, made7, made30, studied7, studied30, newsGiven,
@@ -836,10 +845,25 @@ Four routes on the learner app's server, for the review app's server alone:
   read from the `device` rows (the time of the last answer accepted from each device), not from the answer log;
   the three `news` counts are the accounts by their consent to news; `reminders` is the accounts with at least
   one push subscription. On the edge counts as within. Nothing is logged.
+- `GET /v1/admin/accounts/series` → `{ readAt, accounts, weekStart, madeByWeek, dayStart, studiedByDay }` (#209):
+  the accounts that exist now by the week they were made, 26 weeks, oldest first, and the accounts with at least
+  one answer on each day, 90 days, oldest first. Weeks (Monday first) and days are UTC ones; the last of each is
+  the one `readAt` falls in and began at `weekStart` and `dayStart`. A deleted account is in no week. The days
+  come from the answer log, which is never read through: by its index on `(user_id, utc_day)`, one probe for
+  each account (has it any answer since the first day?) and one for each such account on each day. `utc_day` is
+  the day of the server's stamp of when the answer was given. No index was added.
+- `GET /v1/admin/accounts/splits` → `{ readAt, news: [{ language, given, withdrawn, none }], reminders:
+  [{ language, sending, paused }] }` (#209): one row for each language that has an account, `language` null
+  where it is not known. News is by the account's interface language as an announcement reads it (§18), without
+  the fall back to English: so `given` by language is whom a news announcement would be written to in that
+  language. Reminders are by the language of the account's newest push subscription, each account once, paused
+  only when every one of its subscriptions is.
 
 The address is the whole address, compared without regard to capitals, and travels in the body: paths and queries
-are logged. Two accounts that answer to one address are refused (409). Nothing is answered about an account beyond
-the two dates.
+are logged. Two accounts that answer to one address are refused (409). Only the lookup answers about one account;
+no route gives a list of accounts or an id, and the series and the splits are numbers. With few accounts a number
+can be one person's: a language with one account in it shows what that account said to news. That is no more
+than the lookup says of the same account, and the tab is the owner's alone.
 
 They answer only to `authorization: Bearer …` with **`ADMIN_WRITE_TOKEN`**, a second secret of at least 32
 characters, the same in both deployments. It is not `FEEDBACK_READ_TOKEN`: that one is named and documented as
@@ -854,17 +878,28 @@ refused like any other. They read no cookie.
 
 Routes, admins only (behind the same middleware as every `/api/admin/*`), which run no statement of their own
 against D1: `GET /api/admin/accounts/sweep` (`{ connected: false }` while `ADMIN_WRITE_TOKEN` or `LEARNER_APP_URL`
-is not set), `GET /api/admin/accounts/stats` (the same when not set), `POST /api/admin/accounts/lookup` and
+is not set), `GET /api/admin/accounts/stats`, `GET /api/admin/accounts/series` and
+`GET /api/admin/accounts/splits` (the same when not set), `POST /api/admin/accounts/lookup` and
 `POST /api/admin/accounts/delete`. The Worker passes on, field
-by field, only what §17.3 names; its log has a status or a count, never an address.
+by field, only what §17.3 names; its log has a status or a count, never an address. A learner app server from
+before #209 has no series, no splits and no `details`: the two routes answer 502 with a message that says the
+server may be older, and the lookup passes on the two dates with `details: null`.
 
 The **Accounts** tab: first the accounts in eight numbers (#206: how many there are, made in the last 7 and 30
 days, with reminders on, studied in the last 7 and 30 days, agreed to news, withdrew from news), with how many
 have said nothing about news and when the numbers were counted; when they cannot be read the tab says so and the
-rest of it works. Then the sweep in four numbers (past 24 months now, the next run deletes, deleted by the last
+rest of it works. Each number is a button, one of them pressed, and a panel under them shows what is behind the
+pressed one (#209): the accounts in total by week (26 weeks, a line), new accounts per week (12 or 26 weeks, bars,
+the unfinished week paler), accounts that studied per day (30 or 90 days, a line), news by language (agreed,
+withdrew, said nothing) and reminders by language (sending, paused). The charts are drawn by hand as SVG, at the
+width they have; each is one picture to a screen reader, named with its range, with every number in a table under
+it that anyone can open; a split writes every part out in words beside its colour. When the series or the splits
+cannot be read the panel says so, and the counts and the lookup work. Then the sweep in four numbers (past 24 months now, the next run deletes, deleted by the last
 run, deleted so far) with the day of the last run, and the count of accounts with no date when there are any.
 Under it, an address field and **Look up**: the account's address, when it was made and when it last signed in,
-or that no account has the address. **Delete this account…** opens a question that says what goes and what stays;
+and (#209) when it last studied, on how many of the last 30 days, what it said to news with the day and the
+language, its reminders with their time and offset from UTC, its devices and the earliest month the sweep could
+take it; or that no account has the address. **Delete this account…** opens a question that says what goes and what stays;
 its button is closed until the address is typed again. What is deleted is the account that was looked up: changing
 the address in the field forgets it.
 

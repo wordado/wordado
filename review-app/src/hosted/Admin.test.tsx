@@ -35,6 +35,7 @@ beforeEach(() => {
   vi.spyOn(hostedApi.admin, 'feedbackAi').mockResolvedValue({ setUp: false, needs: 'FEEDBACK_AI_KEY', on: false, model: 'test/model', callsToday: 0, dailyCalls: 200, reads: ['en', 'bg'], repo: 'wordado/wordado' })
   vi.spyOn(hostedApi.admin, 'accountSweep').mockResolvedValue({ connected: true, sweep: { months: 24, batch: 50, due: 0, undated: 0, taken: 0, lastRunAt: null, lastTaken: 0 } })
   vi.spyOn(hostedApi.admin, 'accountStats').mockResolvedValue({ connected: true, stats: { readAt: 0, accounts: 0, made7: 0, made30: 0, studied7: 0, studied30: 0, newsGiven: 0, newsWithdrawn: 0, newsNone: 0, reminders: 0 } })
+  vi.spyOn(hostedApi.admin, 'accountSeries').mockResolvedValue({ connected: true, series: { readAt: 0, accounts: 0, weekStart: 0, madeByWeek: [0], dayStart: 0, studiedByDay: [0] } })
   vi.spyOn(hostedApi.admin, 'announcements').mockResolvedValue({ connected: true, announcements: [], limits: { perDay: 50, sentToday: 0, batch: 20 } })
 })
 

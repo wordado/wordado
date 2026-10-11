@@ -1,5 +1,5 @@
 import { ANNOUNCEMENT_LANGUAGES, FEEDBACK_KINDS, isAnnouncementKind, isAnnouncementLanguage, validateAnnouncementTexts, type AnnouncementKind, type AnnouncementLanguage, type AnnouncementTexts, type FeedbackItem, type FeedbackKind } from '@wordado/core'
-import type { AccountFound, AccountStats, AccountSweep, Announcement, AnnouncementHeld, AnnouncementLimits, AnnouncementPreview, AnnouncementStatus } from '../shared/hosted'
+import type { AccountDetails, AccountFound, AccountSeries, AccountSplits, AccountStats, AccountSweep, Announcement, AnnouncementHeld, AnnouncementLimits, AnnouncementPreview, AnnouncementStatus } from '../shared/hosted'
 import type { Deps } from './app'
 
 /** How long the learner app's server has to answer. */
@@ -94,7 +94,7 @@ export class AccountsUnanswered extends Error {
 
 /** One request to the accounts routes: the token in a header, an address only ever in the body. The log has the
  * status and nothing else, since the address is in neither. */
-async function askAccounts(deps: Pick<Deps, 'fetch' | 'log'>, source: FeedbackSource, path: 'lookup' | 'delete' | 'sweep' | 'stats', body?: unknown): Promise<Record<string, unknown>> {
+async function askAccounts(deps: Pick<Deps, 'fetch' | 'log'>, source: FeedbackSource, path: 'lookup' | 'delete' | 'sweep' | 'stats' | 'series' | 'splits', body?: unknown): Promise<Record<string, unknown>> {
   let res: Response
   try {
     // A redirect is not followed: the token goes to the server it was made for and nowhere else.
@@ -112,8 +112,9 @@ async function askAccounts(deps: Pick<Deps, 'fetch' | 'log'>, source: FeedbackSo
   if (res.status === 409) throw new AccountsUnanswered('Two accounts answer to this address, and the app’s server cannot tell which is meant. Nothing was deleted.', 409)
   if (res.status !== 200) {
     deps.log(`accounts: the app's server answered ${res.status}`)
-    // To a wrong token the server is a route that does not exist.
-    throw new AccountsUnanswered(`The app’s server answered ${res.status}.${res.status === 404 ? ' Check that ADMIN_WRITE_TOKEN is the same in both deployments.' : ''}`)
+    // To a wrong token the server is a route that does not exist; so are the series and the splits (#209) to a server from before them.
+    const hint = path === 'series' || path === 'splits' ? ' It may be from before it had these numbers: deploy it too.' : ' Check that ADMIN_WRITE_TOKEN is the same in both deployments.'
+    throw new AccountsUnanswered(`The app’s server answered ${res.status}.${res.status === 404 ? hint : ''}`)
   }
   const answer: unknown = await res.json().catch(() => null)
   if (typeof answer !== 'object' || answer === null || Array.isArray(answer)) throw unfit(deps)
@@ -127,13 +128,43 @@ function unfit(deps: Pick<Deps, 'log'>): AccountsUnanswered {
 
 const isTime = (v: unknown): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v >= 0
 const isCount = isTime
+const isTimeOrNull = (v: unknown): v is number | null => v === null || isTime(v)
 
-/** The account an address names, field by field: anything else the server may send is not passed on. */
+const isOffset = (v: unknown): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v >= -720 && v <= 840
+const languageOrNull = (v: unknown): v is AnnouncementLanguage | null => v === null || isAnnouncementLanguage(v)
+const fieldsOf = (v: unknown): Record<string, unknown> | null => (typeof v === 'object' && v !== null && !Array.isArray(v) ? (v as Record<string, unknown>) : null)
+/** The most reminders of one account, rows of a split and points of a series that are passed on. */
+const MAX_REMINDERS = 10
+const MAX_SPLIT_ROWS = 10
+const MAX_POINTS = 400
+
+/** How an account is used, field by field; null when what the server sent is not that. */
+function detailsOf(raw: unknown): AccountDetails | null {
+  const fields = fieldsOf(raw)
+  if (fields === null) return null
+  const { lastStudiedAt, daysStudied30, newsConsent, newsConsentAt, newsConsentLanguage, reminders, devices, sweepNotBefore } = fields
+  if (!isTimeOrNull(lastStudiedAt) || !isCount(daysStudied30) || !isCount(devices) || !isTimeOrNull(sweepNotBefore)) return null
+  if ((newsConsent !== 'none' && newsConsent !== 'given' && newsConsent !== 'withdrawn') || !isTimeOrNull(newsConsentAt) || !languageOrNull(newsConsentLanguage)) return null
+  if (!Array.isArray(reminders) || reminders.length > MAX_REMINDERS) return null
+  const times: AccountDetails['reminders'][number][] = []
+  for (const reminder of reminders) {
+    const { minute, tzOffsetMin, paused } = fieldsOf(reminder) ?? {}
+    if (!isCount(minute) || minute > 1439 || !isOffset(tzOffsetMin) || typeof paused !== 'boolean') return null
+    times.push({ minute, tzOffsetMin, paused })
+  }
+  return { lastStudiedAt, daysStudied30, newsConsent, newsConsentAt, newsConsentLanguage, reminders: times, devices, sweepNotBefore }
+}
+
+/** The account an address names, field by field: anything else the server may send is not passed on. A server
+ * from before #209 says nothing of how the account is used: the two dates are passed on without it. */
 export async function lookUpAccount(deps: Pick<Deps, 'fetch' | 'log'>, source: FeedbackSource, email: string): Promise<AccountFound> {
-  const { found, createdAt, lastSignInAt } = await askAccounts(deps, source, 'lookup', { email })
+  const { found, createdAt, lastSignInAt, details } = await askAccounts(deps, source, 'lookup', { email })
   if (found === false) return { found: false }
   if (found !== true || !isTime(createdAt) || (lastSignInAt !== null && !isTime(lastSignInAt))) throw unfit(deps)
-  return { found: true, createdAt, lastSignInAt }
+  if (details === undefined) return { found: true, createdAt, lastSignInAt, details: null }
+  const used = detailsOf(details)
+  if (used === null) throw unfit(deps)
+  return { found: true, createdAt, lastSignInAt, details: used }
 }
 
 /** Deletes the account an address names, as the learner's own deletion does; false when there was none. */
@@ -155,6 +186,37 @@ export async function readAccountStats(deps: Pick<Deps, 'fetch' | 'log'>, source
   const { readAt, accounts, made7, made30, studied7, studied30, newsGiven, newsWithdrawn, newsNone, reminders } = await askAccounts(deps, source, 'stats')
   if (!isTime(readAt) || !isCount(accounts) || !isCount(made7) || !isCount(made30) || !isCount(studied7) || !isCount(studied30) || !isCount(newsGiven) || !isCount(newsWithdrawn) || !isCount(newsNone) || !isCount(reminders)) throw unfit(deps)
   return { readAt, accounts, made7, made30, studied7, studied30, newsGiven, newsWithdrawn, newsNone, reminders }
+}
+
+const isCounts = (v: unknown): v is number[] => Array.isArray(v) && v.length >= 1 && v.length <= MAX_POINTS && v.every(isCount)
+
+/** The accounts by week made and by day studied (#209), field by field. */
+export async function readAccountSeries(deps: Pick<Deps, 'fetch' | 'log'>, source: FeedbackSource): Promise<AccountSeries> {
+  const { readAt, accounts, weekStart, madeByWeek, dayStart, studiedByDay } = await askAccounts(deps, source, 'series')
+  if (!isTime(readAt) || !isCount(accounts) || !isTime(weekStart) || !isCounts(madeByWeek) || !isTime(dayStart) || !isCounts(studiedByDay)) throw unfit(deps)
+  return { readAt, accounts, weekStart, madeByWeek, dayStart, studiedByDay }
+}
+
+/** The rows of a split, each a language (or none known) and the counts `parts` names; null when they are not that. */
+function splitOf<K extends string>(raw: unknown, parts: readonly K[]): ({ language: AnnouncementLanguage | null } & Record<K, number>)[] | null {
+  if (!Array.isArray(raw) || raw.length > MAX_SPLIT_ROWS) return null
+  const rows: ({ language: AnnouncementLanguage | null } & Record<K, number>)[] = []
+  for (const row of raw) {
+    const fields = fieldsOf(row)
+    const language = fields?.['language']
+    if (fields === null || !languageOrNull(language) || !parts.every((part) => isCount(fields[part]))) return null
+    rows.push({ language, ...(Object.fromEntries(parts.map((part) => [part, fields[part]])) as Record<K, number>) })
+  }
+  return rows
+}
+
+/** The accounts by language (#209), field by field. */
+export async function readAccountSplits(deps: Pick<Deps, 'fetch' | 'log'>, source: FeedbackSource): Promise<AccountSplits> {
+  const answer = await askAccounts(deps, source, 'splits')
+  const news = splitOf(answer['news'], ['given', 'withdrawn', 'none'] as const)
+  const reminders = splitOf(answer['reminders'], ['sending', 'paused'] as const)
+  if (!isTime(answer['readAt']) || news === null || reminders === null) throw unfit(deps)
+  return { readAt: answer['readAt'], news, reminders }
 }
 
 /** The learner app's server did not do what was asked of an announcement (#185): `message` is for the page, and
@@ -222,7 +284,6 @@ async function askAnnouncements(deps: Pick<Deps, 'fetch' | 'log'>, source: Feedb
 }
 
 const isId = (v: unknown): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v >= 1
-const isTimeOrNull = (v: unknown): v is number | null => v === null || isTime(v)
 const STATUSES: readonly AnnouncementStatus[] = ['draft', 'sending', 'stopped', 'sent']
 const HELD: readonly AnnouncementHeld[] = ['day', 'quota', 'busy']
 

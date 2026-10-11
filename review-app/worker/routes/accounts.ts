@@ -1,7 +1,7 @@
 import type { Hono } from 'hono'
-import type { AccountStatsView, AccountSweepView } from '../../shared/hosted'
+import type { AccountSeriesView, AccountSplitsView, AccountStatsView, AccountSweepView } from '../../shared/hosted'
 import { apiError, jsonBody, type AppEnv, type Deps } from '../app'
-import { AccountsUnanswered, accountsSource, deleteLearnerAccount, lookUpAccount, readAccountStats, readAccountSweep } from '../learnerApp'
+import { AccountsUnanswered, accountsSource, deleteLearnerAccount, lookUpAccount, readAccountSeries, readAccountSplits, readAccountStats, readAccountSweep } from '../learnerApp'
 
 const NOT_CONNECTED = 'Accounts are not connected: set ADMIN_WRITE_TOKEN and LEARNER_APP_URL for the review app.'
 
@@ -42,7 +42,20 @@ export function accountsRoutes(app: Hono<AppEnv>, deps: Deps): void {
     return asked(c, async () => ({ connected: true, stats: await readAccountStats(deps, source) }) satisfies AccountStatsView)
   })
 
-  /** The account an address names: when it was made and last signed in, and nothing else. */
+  /** What is behind those counts (#209): the accounts by week made and by day studied, and by language. Numbers only. */
+  app.get('/api/admin/accounts/series', async (c) => {
+    const source = accountsSource(deps)
+    if (!source) return c.json({ connected: false } satisfies AccountSeriesView)
+    return asked(c, async () => ({ connected: true, series: await readAccountSeries(deps, source) }) satisfies AccountSeriesView)
+  })
+
+  app.get('/api/admin/accounts/splits', async (c) => {
+    const source = accountsSource(deps)
+    if (!source) return c.json({ connected: false } satisfies AccountSplitsView)
+    return asked(c, async () => ({ connected: true, splits: await readAccountSplits(deps, source) }) satisfies AccountSplitsView)
+  })
+
+  /** The account an address names: when it was made and last signed in, how it is used (#209), and nothing else. */
   app.post('/api/admin/accounts/lookup', async (c) => {
     const email = emailOf(await jsonBody<Record<string, unknown>>(c))
     if (email === null) return apiError(c, 400, 'email must be the whole address of an account')

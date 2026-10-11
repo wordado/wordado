@@ -70,13 +70,39 @@ const WRITE_TOKEN = 'e2e-admin-write-token-0123456789abcdef'
 // The messages came in the last hours, whenever this runs: the week at the top of the tab counts the last seven days.
 const learnerApp = new FakeLearnerApp(FEEDBACK_TOKEN, FEEDBACK.map((item) => ({ ...item, receivedAt: Date.now() - (30 - item.id) * 10 * 60_000 })))
 learnerApp.writeToken = WRITE_TOKEN
-// One account for the desktop run to delete, one for the phone run to look up, a sweep that has run, and the counts
-// of accounts and their use (#206).
+// One account for the desktop run to delete, one for the phone run to look up, a sweep that has run, the counts
+// of accounts and their use (#206), and what is behind them: the series and the splits (#209).
 const DAY = 86_400_000
-learnerApp.accounts.set('leaving@example.com', { createdAt: Date.now() - 400 * DAY, lastSignInAt: Date.now() - 30 * DAY })
-learnerApp.accounts.set('staying@example.com', { createdAt: Date.now() - 900 * DAY, lastSignInAt: null })
+const today = Math.floor(Date.now() / DAY)
+learnerApp.accounts.set('leaving@example.com', {
+  createdAt: Date.now() - 400 * DAY,
+  lastSignInAt: Date.now() - 30 * DAY,
+  details: {
+    lastStudiedAt: Date.now() - DAY, daysStudied30: 19, newsConsent: 'given', newsConsentAt: Date.now() - 38 * DAY, newsConsentLanguage: 'bg',
+    reminders: [{ minute: 1170, tzOffsetMin: 180, paused: false }, { minute: 480, tzOffsetMin: 180, paused: true }], devices: 2, sweepNotBefore: Date.now() + 701 * DAY,
+  },
+})
+learnerApp.accounts.set('staying@example.com', {
+  createdAt: Date.now() - 900 * DAY,
+  lastSignInAt: null,
+  details: { lastStudiedAt: null, daysStudied30: 0, newsConsent: 'none', newsConsentAt: null, newsConsentLanguage: null, reminders: [], devices: 0, sweepNotBefore: null },
+})
 learnerApp.sweep = { months: 24, batch: 50, due: 70, undated: 1, taken: 12, lastRunAt: Date.now() - DAY, lastTaken: 2 }
 learnerApp.stats = { readAt: Date.now(), accounts: 1204, made7: 4, made30: 31, studied7: 40, studied30: 75, newsGiven: 50, newsWithdrawn: 3, newsNone: 1151, reminders: 22 }
+learnerApp.series = {
+  readAt: Date.now(),
+  accounts: 1204,
+  weekStart: (Math.floor((today + 3) / 7) * 7 - 3) * DAY,
+  // Numbers that rise and dip the same way in every run; the last week has 3 and the last day 14.
+  madeByWeek: Array.from({ length: 26 }, (_, i) => (i === 25 ? 3 : 4 + ((i * 7) % 11) + Math.floor(i / 3))),
+  dayStart: today * DAY,
+  studiedByDay: Array.from({ length: 90 }, (_, i) => (i === 89 ? 14 : 18 + ((i * 5) % 13) + Math.floor(i / 6))),
+}
+learnerApp.splits = {
+  readAt: Date.now(),
+  news: [{ language: 'bg', given: 31, withdrawn: 2, none: 640 }, { language: 'de', given: 6, withdrawn: 0, none: 120 }, { language: 'en', given: 9, withdrawn: 1, none: 201 }, { language: 'es', given: 4, withdrawn: 0, none: 98 }, { language: null, given: 0, withdrawn: 0, none: 92 }],
+  reminders: [{ language: 'bg', sending: 11, paused: 3 }, { language: 'de', sending: 2, paused: 1 }, { language: 'en', sending: 3, paused: 0 }, { language: 'es', sending: 2, paused: 0 }],
+}
 createServer((req, res) => {
   void (async () => {
     // What the review app has asked of it, for the test of the timed job, the accounts it still has, and its announcements.

@@ -2,6 +2,8 @@ import type { AnnouncementKind, AnnouncementTexts, FeedbackKind } from '@wordado
 import type { DecisionResult } from '../server/types'
 import type {
   AccountFound,
+  AccountSeriesView,
+  AccountSplitsView,
   AccountStatsView,
   AccountSweepView,
   Announcement,
@@ -125,7 +127,10 @@ export const hostedApi = {
     accountSweep: () => get<AccountSweepView>('/api/admin/accounts/sweep'),
     /** How many accounts there are and how many are used (#206): counts of now, never a list. */
     accountStats: () => get<AccountStatsView>('/api/admin/accounts/stats'),
-    /** The account an address names: when it was made and last signed in. The address goes in the body, never in the path. */
+    /** What is behind those counts (#209): the accounts by week made and by day studied, and by language. */
+    accountSeries: () => get<AccountSeriesView>('/api/admin/accounts/series'),
+    accountSplits: () => get<AccountSplitsView>('/api/admin/accounts/splits'),
+    /** The account an address names: when it was made and last signed in, and how it is used. The address goes in the body, never in the path. */
     lookUpAccount: (email: string) => send<AccountFound>('POST', '/api/admin/accounts/lookup', { email }),
     /** Deletes the account an address names, as the learner's own deletion does; `deleted` is false when there was none. */
     deleteAccount: (email: string) => send<{ deleted: boolean }>('POST', '/api/admin/accounts/delete', { email, confirm: true }),
