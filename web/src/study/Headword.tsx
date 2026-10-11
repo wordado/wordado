@@ -26,7 +26,8 @@ export function Headword(props: { readonly entry: CorpusEntry; readonly id?: str
 
 /**
  * The primary translation, with the sense gloss where the headword alone is ambiguous (spec §5.2): after the word
- * in brackets, or `stacked`, on a line of its own under it, as a multiple-choice question and its answers show it.
+ * in brackets, or `stacked`, on a line of its own under it, as a flashcard's answer and a multiple-choice question
+ * and its answers show it.
  * Stacked, a comma that is only heard joins the two, so a screen reader says "word, gloss" as one option.
  */
 export function Translation(props: { readonly entry: CorpusEntry; readonly lang: string; readonly stacked?: boolean }) {
