@@ -370,7 +370,7 @@ p {
 /* Signed out on a narrow phone, the search, the language and "Sign in" leave no room for the name: the icon
    stands alone. The link keeps its name for a screen reader. */
 @media (max-width: 24.99rem) {
-  .masthead-top:has(.account-signin) .wordmark-name {
+  .masthead-top:has(.search-circle):has(.account-signin) .wordmark-name {
     display: none;
   }
 }

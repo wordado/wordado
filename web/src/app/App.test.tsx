@@ -45,6 +45,16 @@ describe('focus on the search screen', () => {
     expect(document.activeElement).toBe(screen.getByRole('searchbox', { name: 'Search the course' }))
   })
 
+  it('stays in the field while typing on a search it arrived at with a query', async () => {
+    renderWith(app(), await setup())
+    await act(async () => navigate({ name: 'search', q: 'teacher' }))
+    const field = screen.getByRole('searchbox', { name: 'Search the course' })
+    field.focus()
+    await act(async () => fireEvent.change(field, { target: { value: 'teach' } }))
+    expect(window.location.search).toBe('?q=teach')
+    expect(document.activeElement).toBe(field)
+  })
+
   it('goes to the page when it arrives with a query, as on any screen', async () => {
     renderWith(app(), await setup())
     await act(async () => navigate({ name: 'search', q: 'teacher' }))
