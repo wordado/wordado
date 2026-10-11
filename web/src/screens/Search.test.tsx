@@ -1,7 +1,8 @@
 import { act, cleanup, fireEvent, screen, within } from '@testing-library/react'
 import { corpusWordId } from '@wordado/core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { renderWith, setup } from '../test/fixtures'
+import type { ReactElement } from 'react'
+import { renderWith, setup, withProviders } from '../test/fixtures'
 import { RESULTS_STEP, Search } from './Search'
 
 afterEach(cleanup)
@@ -59,12 +60,39 @@ describe('Search', () => {
     const corpus = ctx.client.snapshot.corpus!
     const entry = [...corpus.entries.values()].find((e) => e.headword === 'teacher')!
     const where = rows()[0]!.querySelector<HTMLElement>('.word-where')!
-    for (const themeId of entry.themes) expect(where.querySelector(`a[href="/themes/${themeId}"]`)).toBeNull()
+    expect(entry.themes.length).toBeGreaterThan(0)
+    for (const themeId of entry.themes) {
+      expect(where.querySelector(`a[href="/themes/${themeId}"]`)).toBeNull()
+      expect(within(where).getByText(corpus.themes.find((theme) => theme.themeId === themeId)!.name.en).tagName).toBe('SPAN')
+    }
     const locked = [...corpus.entries.values()].find((e) => !ctx.client.snapshot.path!.unlocked.has(e.unitId))!
     cleanup()
     renderWith(<Search q={locked.headword} />, ctx)
     const title = corpus.units.find((u) => u.unitId === locked.unitId)!.title.en
     expect(screen.getAllByRole('link', { name: `${title}, locked` }).length).toBeGreaterThan(0)
+  })
+
+  it('still lists a word whose unit the course does not have, without a unit link', async () => {
+    const ctx = await setup()
+    const snapshot = ctx.client.snapshot
+    const entries = new Map([...snapshot.corpus!.entries].map(([id, e]) => [id, e.headword === 'teacher' ? { ...e, unitId: 'no-such-unit' } : e]))
+    ctx.client.store.set({ ...snapshot, corpus: { ...snapshot.corpus!, entries } })
+    renderWith(<Search q="teacher" />, ctx)
+    expect(words()).toEqual(['teacher'])
+    const where = rows()[0]!.querySelector<HTMLElement>('.word-where')!
+    expect(within(where).getByText('A1')).toBeTruthy()
+    expect(where.querySelector('a[href^="/path"]')).toBeNull()
+  })
+
+  it('follows the address when it changes under it', async () => {
+    const ctx = await setup()
+    const { rerender } = renderWith(<Search q="teacher" />, ctx)
+    const again = (ui: ReactElement) => rerender(withProviders(ui, ctx))
+    expect(words()).toEqual(['teacher'])
+    again(<Search q="key" />)
+    expect((field() as HTMLInputElement).value).toBe('key')
+    expect(words()).toContain('key')
+    expect(words()).not.toContain('teacher')
   })
 
   it('offers Learn this word on any word found, and marks it', async () => {

@@ -364,6 +364,10 @@ p {
 
 .account-signin {
   min-height: 2.75rem;
+}
+
+/* Where the wordmark gives up its name for the search, "Sign in" stays on one line. */
+.masthead-top:has(.search-circle) .account-signin {
   white-space: nowrap;
 }
 
@@ -1963,7 +1967,6 @@ ul.theme-words > li:first-child {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
-  max-width: 46rem;
   margin-inline: auto;
 }
 
@@ -2020,11 +2023,6 @@ ul.theme-words > li:first-child {
 .search-status {
   margin: 0;
   font-weight: 600;
-}
-
-/* Nothing to say yet: the line keeps no room. */
-.search-status:empty {
-  display: none;
 }
 
 ul.search-words.panel {

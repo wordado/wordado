@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Link, navigate, parseRoute, routeHref, routePath, useRoute, type Route } from './router'
 
 beforeEach(() => window.history.replaceState(null, '', '/'))
@@ -180,5 +180,24 @@ describe('navigation', () => {
     act(() => navigate({ name: 'progress' }, { replace: true }))
     expect(window.history.length).toBe(before)
     expect(window.location.pathname).toBe('/progress')
+  })
+
+  it('tells the listeners even when the browser refuses a replacement, and not when it refuses a push', () => {
+    const told = vi.fn()
+    window.addEventListener('wordado:navigate', told)
+    const refuse = () => {
+      throw new DOMException('Too many calls', 'SecurityError')
+    }
+    vi.spyOn(window.history, 'replaceState').mockImplementation(refuse)
+    vi.spyOn(window.history, 'pushState').mockImplementation(refuse)
+    try {
+      expect(() => navigate({ name: 'progress' }, { replace: true })).not.toThrow()
+      expect(told).toHaveBeenCalledTimes(1)
+      expect(() => navigate({ name: 'progress' })).toThrow()
+      expect(told).toHaveBeenCalledTimes(1)
+    } finally {
+      window.removeEventListener('wordado:navigate', told)
+      vi.restoreAllMocks()
+    }
   })
 })

@@ -28,10 +28,16 @@ export function Search(props: { readonly q: string }) {
   const input = useRef<HTMLInputElement>(null)
   const list = useRef<HTMLUListElement>(null)
   const added = useRef<number | null>(null)
-  // The address changed without typing (back or forward between two searches): the field follows it.
+  // What the screen itself last wrote to the address: any other change of it comes from outside.
+  const written = useRef(props.q)
+  // The address changed without typing (back or forward between two searches, the magnifier pressed again): the
+  // field follows it, and takes focus when the search starts over.
   useEffect(() => {
+    const outside = props.q !== written.current
+    written.current = props.q
     setQuery(props.q)
     setShown(RESULTS_STEP)
+    if (outside && props.q === '') input.current?.focus()
   }, [props.q])
   // "Show more" puts focus on the first of the rows it added (spec §11.1).
   useEffect(() => {
@@ -56,6 +62,7 @@ export function Search(props: { readonly q: string }) {
   const search = (next: string) => {
     setQuery(next)
     setShown(RESULTS_STEP)
+    written.current = next
     navigate({ name: 'search', q: next }, { replace: true })
   }
   const typed = deferred.trim()
@@ -127,9 +134,14 @@ export function Search(props: { readonly q: string }) {
           </button>
         )}
       </form>
-      <p className="search-status" role="status">
+      <p className="visually-hidden" role="status">
         {statusText}
       </p>
+      {statusText !== '' && (
+        <p className="search-status" aria-hidden="true">
+          {statusText}
+        </p>
+      )}
       {typed === '' && <p className="note">{t('search.hint')}</p>}
       {found !== null && found.length === 0 && account === null && <p className="note">{t('search.sample', { count: index.words.length })}</p>}
       {found !== null && found.length > 0 && (

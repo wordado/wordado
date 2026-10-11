@@ -148,8 +148,13 @@ const NAVIGATE = 'wordado:navigate'
 
 export function navigate(route: Route, options: { readonly replace?: boolean } = {}): void {
   const href = routeHref(route)
-  if (options.replace) window.history.replaceState(null, '', href)
-  else window.history.pushState(null, '', href)
+  if (options.replace) {
+    try {
+      window.history.replaceState(null, '', href)
+    } catch {
+      // WebKit refuses a burst of replacements (as typing in the search makes): the address may lag, the app goes on.
+    }
+  } else window.history.pushState(null, '', href)
   window.dispatchEvent(new Event(NAVIGATE))
 }
 

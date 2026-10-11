@@ -501,6 +501,41 @@ test('fits the top row on a narrow phone while signed out', async ({ page }) => 
   await expectAccessible(page)
 })
 
+test('does not scroll sideways in the first-run setup in Spanish on a narrow phone', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 720 })
+  await page.goto('/')
+  await page.getByRole('button', { name: /^Interface language/ }).click()
+  await page.getByRole('button', { name: 'Español', exact: true }).click()
+  await expect(page.getByRole('heading', { name: '¿Qué idioma hablas?', level: 2 })).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
+})
+
+for (const [locale, l1] of [
+  ['es-ES', 'Español'],
+  ['de-DE', 'Deutsch'],
+] as const) {
+  test(`fits the top row on a narrow phone while signed out, in ${l1}`, async ({ browser }) => {
+    const context = await browser.newContext({ locale, viewport: { width: 360, height: 720 } })
+    forwardConsole(context)
+    try {
+      const page = await context.newPage()
+      await page.goto('/')
+      await finishSetup(page, l1)
+      const box = (await page.locator('.masthead-top').boundingBox())!
+      expect(box.height).toBeLessThan(80)
+      for (const control of [page.locator('.search-circle'), page.locator('.account-signin')]) {
+        const b = (await control.boundingBox())!
+        expect(b.x).toBeGreaterThanOrEqual(box.x)
+        expect(b.x + b.width).toBeLessThanOrEqual(box.x + box.width + 0.5)
+        expect(b.height).toBeLessThan(50)
+      }
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
+    } finally {
+      await context.close()
+    }
+  })
+}
+
 test('opens a theme’s page from Themes, reads its words, finds one and chooses the theme', async ({ page }) => {
   await page.goto('/')
   await finishSetup(page)

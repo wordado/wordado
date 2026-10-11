@@ -61,6 +61,28 @@ describe('focus on the search screen', () => {
     expect(document.activeElement).toBe(document.getElementById('main'))
   })
 
+  it('goes back to the field, emptied, when the search button is pressed on a search', async () => {
+    renderWith(app(), await setup())
+    await act(async () => navigate({ name: 'search', q: 'key' }))
+    const field = () => screen.getByRole('searchbox', { name: 'Search the course' }) as HTMLInputElement
+    expect(field().value).toBe('key')
+    await act(async () => fireEvent.click(screen.getByRole('link', { name: 'Search' })))
+    expect(field().value).toBe('')
+    expect(document.activeElement).toBe(field())
+  })
+
+  it('follows the address between two searches', async () => {
+    renderWith(app(), await setup())
+    await act(async () => navigate({ name: 'search', q: 'teacher' }))
+    const field = () => screen.getByRole('searchbox', { name: 'Search the course' }) as HTMLInputElement
+    expect(field().value).toBe('teacher')
+    await act(async () => navigate({ name: 'search', q: 'key' }))
+    expect(field().value).toBe('key')
+    const heads = () => [...document.querySelectorAll('.search-words .word-head')].map((head) => head.textContent)
+    expect(heads()).toContain('key')
+    expect(heads()).not.toContain('teacher')
+  })
+
   it('goes to the unit when the path opens at one', async () => {
     const ctx = await setup()
     renderWith(app(), ctx)
