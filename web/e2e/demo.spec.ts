@@ -442,6 +442,10 @@ test('searches the whole course from the top row, and goes from a result to its 
   await expect(heading(page)).toHaveText('Search')
   const field = page.getByRole('searchbox', { name: 'Search the course' })
   await expect(field).toBeFocused()
+  // Pressed again on the empty search, the button gives the cursor back to the field.
+  await field.blur()
+  await page.getByRole('link', { name: 'Search', exact: true }).click()
+  await expect(field).toBeFocused()
   // Typing rewrites the address and never takes the cursor from the field.
   await field.pressSequentially('teach')
   await expect(field).toBeFocused()
@@ -458,7 +462,18 @@ test('searches the whole course from the top row, and goes from a result to its 
   await expect(page).toHaveURL(/\/path\?unit=/)
   const unit = page.getByRole('heading', { level: 3, name: title })
   await expect(unit).toBeFocused()
-  await expect(page.locator('li.unit', { has: unit }).locator('details')).toHaveAttribute('open', '')
+  const words = page.locator('li.unit', { has: unit }).locator('details')
+  await expect(words).toHaveAttribute('open', '')
+  // Folded, left for the plain path and come back to: the same unit opens a second time.
+  await words.locator('summary').click()
+  await expect(words).not.toHaveAttribute('open', '')
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Path' }).click()
+  await expect(page).toHaveURL(/\/path$/)
+  await page.goBack()
+  await expect(page).toHaveURL(/\/path\?unit=/)
+  await expect(words).toHaveAttribute('open', '')
+  await expect(unit).toBeFocused()
+  await expect(unit).toBeInViewport()
   // Back: the same query and the same result.
   await page.goBack()
   await expect(field).toHaveValue('teach')

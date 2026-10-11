@@ -452,6 +452,9 @@ export const de: Messages = {
   'search.sample': { one: 'Das Beispiel hat {count} Wort. Melde dich an, um im ganzen Kurs zu suchen.', other: 'Das Beispiel hat {count} Wörter. Melde dich an, um im ganzen Kurs zu suchen.' },
   'search.more': 'Mehr anzeigen',
   'search.unitLocked': '{title}, gesperrt',
+  'search.whereLevel': 'Niveau',
+  'search.whereUnit': 'Einheit:',
+  'search.whereThemes': 'Themen:',
 
   'progress.title': 'Fortschritt',
   'progress.tiers': 'Deine Wörter',

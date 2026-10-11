@@ -437,6 +437,9 @@ export const en = {
   'search.sample': { one: 'The sample has {count} word. Sign in to search the whole course.', other: 'The sample has {count} words. Sign in to search the whole course.' },
   'search.more': 'Show more',
   'search.unitLocked': '{title}, locked',
+  'search.whereLevel': 'Level',
+  'search.whereUnit': 'Unit:',
+  'search.whereThemes': 'Themes:',
 
   'progress.title': 'Progress',
   'progress.tiers': 'Your words',
