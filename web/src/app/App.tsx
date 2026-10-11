@@ -9,6 +9,7 @@ import { Path } from '../screens/Path'
 import { Placement } from '../screens/Placement'
 import { Practice } from '../screens/Practice'
 import { Progress } from '../screens/Progress'
+import { Search } from '../screens/Search'
 import { Settings } from '../screens/Settings'
 import { SignIn } from '../screens/SignIn'
 import { Study } from '../screens/Study'
@@ -48,6 +49,8 @@ function Screen(props: { readonly route: Route }) {
       return <Themes />
     case 'theme':
       return <ThemeWords themeId={route.themeId} query={route.q ?? ''} />
+    case 'search':
+      return <Search q={route.q} />
     case 'progress':
       return <Progress />
     case 'signin':
