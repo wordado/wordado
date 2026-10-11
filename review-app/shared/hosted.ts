@@ -259,6 +259,42 @@ export interface FeedbackAiRead {
   readonly why: FeedbackAiWhy | null
 }
 
+/** `GET /api/admin/feedback/week`: what a period of feedback came to (spec 2026-10-10 §3.4), from the kept readings:
+ * numbers and topic titles, nothing a learner wrote. `since` and `until` are epoch ms. */
+export interface FeedbackWeek {
+  readonly since: number
+  readonly until: number
+  /** Messages of the period that have a reading. */
+  readonly read: number
+  readonly byCategory: Readonly<Record<FeedbackCategory, number>>
+  /** Bugs of the period the AI reads as blocking, in a topic or in none. */
+  readonly blockingBugs: number
+  /** The topics with the most messages in the period: five at most. */
+  readonly topTopics: readonly { readonly id: number; readonly title: string; readonly count: number }[]
+  /** The blocking bugs by topic; `id` is null for those in no topic. */
+  readonly blocking: readonly { readonly id: number | null; readonly title: string; readonly count: number }[]
+  /** The topics whose first message came in the period. */
+  readonly newTopics: readonly FeedbackTopicRef[]
+  /** A few sentences the AI wrote from the numbers and the titles alone, or null while there are none. */
+  readonly paragraph: string | null
+}
+
+/** `POST /api/admin/feedback/week/paragraph`: the paragraph, or why there is none (`why` is null for a period with no reading). */
+export interface FeedbackWeekParagraph {
+  readonly paragraph: string | null
+  readonly why: FeedbackAiWhy | null
+}
+
+/** A drafted issue (spec 2026-10-10 §3.5): the longest title and the longest text that are taken from the AI. */
+export const MAX_DRAFT_TITLE = 120
+export const MAX_DRAFT_BODY = 4000
+/** Why there is no draft: the AI's own reasons, or the draft was dropped because it repeated a learner's words (`quoted`)
+ * or held an address, a link, a phone number or the name of an account (`personal`), or the topic has no message left to write from. */
+export type FeedbackDraftWhy = FeedbackAiWhy | 'quoted' | 'personal' | 'no-messages'
+/** `POST /api/admin/feedback/topics/:id/draft`: a draft of an issue for the topic, written from `messages` of its
+ * messages, or why there is none. It is kept nowhere: it is for the page that asked, to be read, changed and filed by the coordinator. */
+export type FeedbackDraft = { readonly ok: true; readonly title: string; readonly body: string; readonly messages: number } | { readonly ok: false; readonly why: FeedbackDraftWhy }
+
 /** `GET /api/admin/feedback`. Not connected: the token or the server's address is not set. `read` is how many
  * messages the server's page held, before the filter by state; `nextBefore` is the `before` of the next, older
  * page, or null on the last. A page filtered by state can be short, or empty, with older ones still to come. */

@@ -1,9 +1,11 @@
 import { FEEDBACK_KINDS, type FeedbackKind } from '@wordado/core'
 import type { Context, Hono } from 'hono'
+import type { FeedbackWeek, FeedbackWeekParagraph } from '../../shared/hosted'
 import { apiError, jsonBody, type AppEnv, type Deps } from '../app'
-import { forgetFeedbackAi, putSetting } from '../db'
+import { forgetFeedbackAi, putSetting, weekText } from '../db'
 import { AI_SWITCH, aiStatus, readPageAi } from '../feedbackAi'
 import { aiSetup } from '../feedbackAiConfig'
+import { tabWeek, weekNumbers, weekParagraph } from '../feedbackWeek'
 import { FeedbackUnread, feedbackSource } from '../learnerApp'
 
 /** The first key of a body that is not one of `known`, if it has any. */
@@ -13,8 +15,8 @@ const extraKey = (body: Record<string, unknown>, known: readonly string[]) => Ob
 const fresh = (c: Context) => c.header('cache-control', 'no-store')
 
 /**
- * The AI help on the Feedback tab (spec 2026-10-10): its switch, the reading of a page, and forgetting what it
- * wrote. Registered after adminRoutes, so every route is behind the admin-only middleware, and before
+ * The AI help on the Feedback tab (spec 2026-10-10): its switch, the reading of a page, the week in numbers with
+ * its paragraph, and forgetting what it wrote. Registered after adminRoutes, so every route is behind the admin-only middleware, and before
  * feedbackRoutes: `PUT /api/admin/feedback/ai` must not be taken for the mark of a message called "ai".
  */
 export function feedbackAiRoutes(app: Hono<AppEnv>, deps: Deps): void {
@@ -59,7 +61,29 @@ export function feedbackAiRoutes(app: Hono<AppEnv>, deps: Deps): void {
     }
   })
 
-  /** Forget the AI's results: everything it wrote about the feedback. The marks, the switch and the day's count of calls stay. */
+  /** The last seven days in numbers (spec 2026-10-10 §3.4), from the database alone, with the day's paragraph when one is kept. Nobody is asked. */
+  app.get('/api/admin/feedback/week', async (c) => {
+    fresh(c)
+    const period = tabWeek(deps.now())
+    const [numbers, paragraph] = await Promise.all([weekNumbers(deps.env.DB, period), weekText(deps.env.DB, period.key)])
+    return c.json({ ...numbers, paragraph } satisfies FeedbackWeek)
+  })
+
+  /**
+   * The paragraph about the last seven days: the one kept for this UTC day, or one call to the model, which is
+   * given the numbers and the topics' titles and nothing a learner wrote. The body is empty: the Worker counts the
+   * week itself, so nothing a browser sent goes to the model.
+   */
+  app.post('/api/admin/feedback/week/paragraph', async (c) => {
+    fresh(c)
+    const body = await jsonBody<Record<string, unknown>>(c)
+    const extra = extraKey(body, [])
+    if (extra !== undefined) return apiError(c, 400, `the week's paragraph takes no ${extra}`)
+    const period = tabWeek(deps.now())
+    return c.json((await weekParagraph(deps, period.key, await weekNumbers(deps.env.DB, period))) satisfies FeedbackWeekParagraph)
+  })
+
+  /** Forget the AI's results: everything it wrote about the feedback, the week's paragraphs with it. The marks, the switch and the day's count of calls stay. */
   app.delete('/api/admin/feedback/ai/results', async (c) => {
     fresh(c)
     const body = await jsonBody<Record<string, unknown>>(c)

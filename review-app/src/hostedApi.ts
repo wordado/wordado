@@ -4,6 +4,7 @@ import type {
   AssignmentView,
   FeedbackAiRead,
   FeedbackAiStatus,
+  FeedbackDraft,
   FeedbackList,
   FeedbackMark,
   FeedbackState,
@@ -11,6 +12,8 @@ import type {
   FeedbackTopicOpened,
   FeedbackTopicRef,
   FeedbackTopicView,
+  FeedbackWeek,
+  FeedbackWeekParagraph,
   HostedDecisionRequest,
   Language,
   Me,
@@ -95,6 +98,9 @@ export const hostedApi = {
     /** Has the AI read one page of the list, named as the list names it. No message goes from the browser: the Worker reads the page itself. */
     readFeedbackAi: (q: { kind: FeedbackKind | ''; before?: number }) => send<FeedbackAiRead>('POST', '/api/admin/feedback/ai/read', { kind: q.kind, before: q.before ?? null }),
     forgetFeedbackAi: () => send<{ forgotten: number }>('DELETE', '/api/admin/feedback/ai/results', {}),
+    /** The last seven days of feedback in numbers (spec 2026-10-10 §3.4), and the AI's paragraph about them: asked for by itself, since it may take a while. */
+    feedbackWeek: () => get<FeedbackWeek>('/api/admin/feedback/week'),
+    feedbackWeekParagraph: () => send<FeedbackWeekParagraph>('POST', '/api/admin/feedback/week/paragraph', {}),
     /** The feedback by topic (spec 2026-10-10 §3.2): one line a topic, the one with the newest message first. */
     feedbackTopics: () => get<FeedbackTopicView[]>('/api/admin/feedback/topics'),
     /** A topic's newest messages, as the list of messages gives them. */
@@ -107,5 +113,7 @@ export const hostedApi = {
     moveFeedback: (id: number, topic: number) => send<{ id: number; topic: FeedbackTopicRef | null }>('PUT', `/api/admin/feedback/${id}/topic`, { topic }),
     /** A topic's match with a known issue: a number confirms it, null removes it. */
     setFeedbackTopicIssue: (id: number, issue: number | null) => send<FeedbackTopicView>('PUT', `/api/admin/feedback/topics/${id}/issue`, { issue }),
+    /** Asks the AI to draft an issue for a topic (spec 2026-10-10 §3.5): one call, counted; the draft is for this page alone, and is kept nowhere. */
+    draftFeedbackTopic: (id: number) => send<FeedbackDraft>('POST', `/api/admin/feedback/topics/${id}/draft`, {}),
   },
 }

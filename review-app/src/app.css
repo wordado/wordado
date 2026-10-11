@@ -1564,9 +1564,9 @@ kbd {
   display: none;
 }
 
-/* The AI help on the Feedback tab (spec 2026-10-10): a panel above the filters with the switch, how it stands and
-   the note on the privacy policy. On a card, what the AI says stands under the learner's words, set apart by a
-   rule at its side and named as the AI's each time: it is advice, and never the message. */
+/* The AI help on the Feedback tab (spec 2026-10-10): a panel above the filters with the switch, how it stands and,
+   while it is off, the note on the privacy policy. On a card, what the AI says stands under the learner's words,
+   set apart by a rule at its side and named as the AI's each time: it is advice, and never the message. */
 .feedback-ai-panel {
   display: grid;
   gap: var(--space-2);
@@ -1622,6 +1622,116 @@ kbd {
 
 .feedback-ai-left > .feedback-ai-note {
   margin: 0;
+}
+
+/* The week (spec 2026-10-10 §3.4), between the AI help's panel and the filters: the AI's paragraph, named as its
+   own and set apart by the same rule as its words on a card, then the numbers, then the topics in up to three
+   lists side by side. A topic's title is a button that opens it in the By topic view. */
+.feedback-week {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background: var(--paper-raised);
+  border: 1px solid var(--rule);
+  border-radius: 1.125rem;
+  box-shadow: var(--lift);
+}
+
+.feedback-week > * {
+  min-width: 0;
+  margin: 0;
+}
+
+.feedback-week-text {
+  display: grid;
+  gap: var(--space-1);
+  padding-left: var(--space-3);
+  border-left: 3px solid var(--rule);
+}
+
+.feedback-week-text > p {
+  margin: 0;
+}
+
+.feedback-week-paragraph {
+  max-width: 44rem;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.feedback-week-read {
+  font-weight: 600;
+}
+
+.feedback-week-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  padding: 0;
+  font-size: var(--step--1);
+  color: var(--ink-soft);
+  list-style: none;
+}
+
+.feedback-week-counts strong,
+.feedback-week-list strong {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.feedback-week-lists {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(14rem, 100%), 1fr));
+  gap: var(--space-3) var(--space-5);
+}
+
+.feedback-week-lists:empty {
+  display: none;
+}
+
+.feedback-week-list {
+  min-width: 0;
+}
+
+.feedback-week-list > h3 {
+  margin: 0 0 var(--space-1);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.feedback-week-list > ul {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  font-size: var(--step--1);
+  list-style: none;
+}
+
+.feedback-week-list li {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.feedback-week-topic {
+  padding: 0;
+  font: inherit;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+  color: var(--rose);
+  background: none;
+  border: 0;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.feedback-week-topic:hover {
+  color: var(--ink);
 }
 
 .feedback-translated,
@@ -1702,6 +1812,99 @@ kbd {
 
 .feedback-move > select {
   min-width: 0;
+}
+
+/* Draft an issue (spec 2026-10-10 §3.5): a dialog wider than the others, since it holds a text to read (on a phone
+   it is the whole screen, as every dialog is). The two
+   fields, then the way to GitHub, then, set apart by a rule, where the filed issue's number is pasted. */
+@media (min-width: 40.0625rem) {
+  .dialog:has(.draft) {
+    width: min(44rem, calc(100% - 2rem));
+  }
+}
+
+.draft {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.draft > * {
+  min-width: 0;
+  margin: 0;
+}
+
+.draft-none {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: start;
+}
+
+.draft-none > .dialog-error {
+  justify-self: stretch;
+  margin: 0;
+}
+
+.draft input[type='text'],
+.draft textarea {
+  width: 100%;
+  min-height: 2.75rem;
+  padding: var(--space-2) var(--space-3);
+  font: 400 var(--step-0) / 1.4 var(--font-ui);
+  color: var(--ink);
+  background: var(--paper-inset);
+  border: 1px solid var(--rule);
+  border-radius: 0.625rem;
+}
+
+.draft textarea {
+  font-size: var(--step--1);
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.draft input[type='text']:hover,
+.draft textarea:hover {
+  border-color: var(--ink-soft);
+}
+
+.draft input:disabled,
+.draft textarea:disabled {
+  opacity: 0.6;
+}
+
+.draft-open {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.draft-open > * {
+  margin: 0;
+}
+
+.draft-open > .form-actions {
+  align-items: center;
+}
+
+.draft-filed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-2) var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--rule);
+}
+
+.draft-filed > .field {
+  flex: 1 1 16rem;
+}
+
+.draft-filed > .feedback-status {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.topic-draft {
+  flex-wrap: wrap;
 }
 
 /* By topic (spec 2026-10-10 §3.2): a line for each topic, which opens to its tools and its messages. The line is
@@ -2159,6 +2362,15 @@ kbd {
     padding: var(--space-3) 0;
   }
 
+  /* The week: a topic's title is tall enough for a thumb. */
+  .feedback-week {
+    padding: var(--space-3);
+  }
+
+  .feedback-week-topic {
+    min-height: 2.75rem;
+  }
+
   /* By topic: the line's parts each on a line of their own, and the tools one under another, the card's whole width. */
   .topic-line,
   .topic-body {
@@ -2192,6 +2404,14 @@ kbd {
   .topic-line .button,
   .topic-tools .button {
     min-height: 2.75rem;
+  }
+
+  .draft .button {
+    min-height: 2.75rem;
+  }
+
+  .draft-filed > .button {
+    flex: 1 1 100%;
   }
 
   .dialog {

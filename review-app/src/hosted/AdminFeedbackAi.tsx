@@ -4,13 +4,13 @@ import { Dialog } from '../Dialog'
 import { hostedApi } from '../hostedApi'
 import { count, messageOf } from './adminUtil'
 
-/** What stands beside the switch, always (spec 2026-10-10 §5): switching it on sends learners' words to another company, which the privacy policy
- * must name, and which may process them outside the EU only under one of the two covers the policy relies on. */
+/** What stands beside the switch while it is off (spec 2026-10-10 §5): switching it on sends learners' words to another company, which the privacy policy
+ * must name, and which may process them outside the EU only under one of the two covers the policy relies on. Once it is on, the note has done its work and is not shown. */
 export const AI_PRIVACY_NOTE =
   'Before this is switched on for learners’ feedback, the privacy policy must name the AI service, and the transfer of the text to it must be covered: by the EU–US Data Privacy Framework or by standard contractual clauses.'
 
 /** Why the AI gave nothing, in words for the one line that says so. */
-const WHY: Readonly<Record<'unreachable' | 'late' | 'refused' | 'unfit', string>> = {
+export const AI_WHY: Readonly<Record<'unreachable' | 'late' | 'refused' | 'unfit', string>> = {
   unreachable: 'it could not be reached',
   late: 'it took too long',
   refused: 'the service refused the request',
@@ -20,13 +20,13 @@ const WHY: Readonly<Record<'unreachable' | 'late' | 'refused' | 'unfit', string>
 /** The one line for what went wrong with the AI on the pages shown: said once, never on each message. Nothing for a reason that is no failure. */
 export function aiFailureLine(why: FeedbackAiWhy | null, dailyCalls: number): string {
   if (why === 'limit') return `Today’s limit of ${dailyCalls.toLocaleString('en')} AI calls is reached. Messages without AI results are read again tomorrow.`
-  if (why === 'unreachable' || why === 'late' || why === 'refused' || why === 'unfit') return `The AI gave no results this time (${WHY[why]}). Messages without them are asked again the next time the page is read.`
+  if (why === 'unreachable' || why === 'late' || why === 'refused' || why === 'unfit') return `The AI gave no results this time (${AI_WHY[why]}). Messages without them are asked again the next time the page is read.`
   return ''
 }
 
 /**
- * The AI help's panel above the Feedback tab's filters (spec 2026-10-10 §4): the switch, how it stands, the note on
- * the privacy policy, and Forget the AI's results. `status` is null while it is not known yet and 'failed' when it
+ * The AI help's panel above the Feedback tab's filters (spec 2026-10-10 §4): the switch, how it stands, while it
+ * is off the note on the privacy policy, and Forget the AI's results. `status` is null while it is not known yet and 'failed' when it
  * could not be read; `unreached` says a later call of the AI's failed. The tab under it works either way.
  */
 export function AdminFeedbackAi(props: { status: FeedbackAiStatus | null | 'failed'; unreached?: boolean; onStatus(status: FeedbackAiStatus): void; onForgotten(): void }) {
@@ -110,7 +110,7 @@ export function AdminFeedbackAi(props: { status: FeedbackAiStatus | null | 'fail
           {count(forgotten, 'result')} forgotten.
         </p>
       )}
-      <p className="note feedback-ai-privacy">{AI_PRIVACY_NOTE}</p>
+      {known !== null && !known.on && <p className="note feedback-ai-privacy">{AI_PRIVACY_NOTE}</p>}
       <Dialog open={asking} title="Forget the AI’s results" onClose={() => setAsking(false)} error={forgetFailed}>
         <p>Everything the AI wrote about the feedback is removed, and with it the topics you have not worked on and where you moved messages. Your marks and notes stay. It is made again as pages are read.</p>
         <span className="form-actions">

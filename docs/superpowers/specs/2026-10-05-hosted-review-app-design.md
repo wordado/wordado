@@ -2,6 +2,8 @@
 
 Date: 2026-10-05. Status: draft for the product owner's review.
 Builds on: `2026-10-04-ai-review-and-review-app-design.md` (the local review app, §5; "Remote reviewers later", §8).
+Revised 2026-10-10: the week and the drafted issue (issue #158, stage D): §8's weekly mail gains the AI's part,
+§16.9 gains the week's summary, the draft, their routes and the table `feedback_week_texts`; §16.8 follows.
 Revised 2026-10-10: topics and known issues on the Feedback tab (issue #158, stage C): §16.9 gains the topics, their
 routes and tables, the daily read of the open issues and the setting `APP_REPO`; §16.2 gains `ids`; §14's cron
 triggers gain the daily line.
@@ -298,6 +300,17 @@ packages), from `Wordado Review <review@wordado.com>`, with the Worker's own sen
   Monday that failed (the app's server not reached, the mail refused); a row for each week (§16.3) makes it do
   nothing after a Monday that worked. The job needs `RESEND_API_KEY`, and `FEEDBACK_READ_TOKEN` with
   `LEARNER_APP_URL` (§16.2); while the last two are not both set it does nothing and logs one line.
+
+With the AI help set up and switched on (§16.9), the same job first has the AI read the week's messages that have
+no reading yet (at most 2 calls of 25 messages, the newest first), counts the week from the readings, and asks
+once more for a paragraph written from those counts and the topics' titles alone. The mail then holds, between the
+counts by kind and the link: the paragraph, named as written by the AI; "Read by the AI: <n> of <total>" with a
+line for each of its categories; *Most messages* (up to five topics with their counts); "Bugs that block
+learners: <n>"; and *New topics*. A topic's title and the paragraph are the only free text, and both are refused
+in code when they hold an address, a link or a phone number. Every call counts against the day's limit. When the
+help is off or not set up, when a call fails, or when the limit is reached, the mail is the one above, byte for
+byte; a paragraph that was written and refused leaves the AI's numbers in the mail without it. A second run of
+the same week asks the model nothing it already has.
 
 A failed send never fails the action: the reviewer is still created (the admin page shows *invite not sent* and
 the link to copy), and a submission is still recorded. A weekly mail that was not sent is tried once more, the
@@ -618,6 +631,11 @@ tab is in the address (`#feedback`), like the others, and the review app's own w
   a second run that asks nothing of anyone; the week given back when the server is not reached or the mail is
   refused; not connected; the cap. Every cron line of the config has a job and every job a cron line. The hosted
   browser run fires the trigger once and sees one read of the learner app's server, and none the second time.
+- **The weekly job with the AI help:** the mail byte for byte the same while the help is off or not set up; the
+  added lines; no message, address, translation or summary in the mail or the logs; at most 2 calls and one for
+  300 unread messages, and "50 of 300"; the model down, the limit reached, and a failure of its own, each ending
+  in the plain mail; a refused paragraph; the paragraph's request holding titles and counts only; a title written
+  as an instruction changing no recipient.
 - **UI:** the card and its details, a state saved and one refused, a note saved and one refused, the filters, Load
   more, not connected, unreachable with Try again, empty.
 - **E2E:** against a fake learner app server, on a desktop screen and a phone: an admin opens the tab, sees two
@@ -708,3 +726,56 @@ Off until an admin switches it on, and absent without the secret `FEEDBACK_AI_KE
   none otherwise; the daily read without a token, once a day, keeping the list when refused. The hosted browser
   run reads By topic, confirms a match, renames, notes and marks a topic, desktop and phone, and fires the daily
   line.
+
+**What an invocation asks of D1.** The Workers Free plan allows 50 queries of D1 in one invocation, and the
+documentation does not say that a batch counts as one, so each statement of a batch is counted. Every path is
+held to 40 in its worst case by `worker/d1Budget.test.ts`, with a counter around the test database
+(`worker/d1Count.ts`): rows are written several a statement, under the 100 bound values a statement may have. A
+page read by the AI runs 13 at its worst, the daily read of 300 issues 13, the weekly job 36. The weekly job reads
+at most 2 calls' worth of unread messages for that reason, and its AI part runs under an allowance of 32
+statements: the one that would go over is not run, the mail goes without the AI's part, and the record of the
+mail always has its statement.
+
+**The week and the drafted issue** (design §3.4, §3.5):
+
+- **The week** is counted from `feedback_ai` alone: the readings whose message came in the period, by category;
+  the five topics with the most messages; the blocking bugs by topic; the new topics. A topic is new in the period
+  its first message came in (and never when it was made before the period): the AI makes a topic when it reads a
+  message, which for the weekly job is after the week has ended. The tab's period is the seven days up to now; the
+  mail's is the week that ended on the Monday.
+- **The paragraph** is one call, counted, whose input is `{ messages, byCategory, topTopics, blockingBugs,
+  newTopics }`: counts and titles, with no field a message, a translation or a summary could travel in. The
+  answer is `{ paragraph }`; it is kept only when it is one paragraph of at most 600 characters that masking would
+  not change. It is kept by period in `feedback_week_texts` (migration `0008_feedback_week_texts.sql`): `d:<UTC
+  day>` for the tab, so it is asked for at most once a day, `w:<Monday>` for the mail. *Forget the AI's results*
+  removes them; the weekly job removes those older than 30 days, and with them the counts of calls that old.
+- **The draft** is one read of the topic's 30 newest messages by `ids` and one call, counted. The model is given
+  the topic's title and count and each message as it gets any message (masked text, kind, language, screen). The
+  answer is `{ title, body }`. It is dropped as `personal` when masking would change it or it names an account
+  (`@name`), and as `quoted` when the title or the body shares a run of 6 or more words with a message as it was
+  written or with its stored translation (case, punctuation and spacing aside). **Nothing of a draft is stored or
+  logged,** and nothing is written to GitHub: the page links to `https://github.com/{APP_REPO}/issues/new` with
+  the title and the body in the address, for the coordinator's own browser. Beyond 6,000 characters the body is
+  left out of the address and the page offers **Copy the text**.
+- **Routes,** admins only, `no-store`:
+  - `GET /api/admin/feedback/week`: the numbers of the last seven days and the day's paragraph when one is kept;
+    D1 only.
+  - `POST /api/admin/feedback/week/paragraph` takes exactly `{}` and answers `{ paragraph, why }`: the kept one, or
+    one call.
+  - `POST /api/admin/feedback/topics/:id/draft` takes exactly `{}` and answers `{ ok: true, title, body, messages }`
+    or `{ ok: false, why }`, where `why` is one of the AI's reasons, `quoted`, `personal` or `no-messages`.
+- **The tab:** above the filters, a section *This week*, shown when the AI has read something of the last seven
+  days: the paragraph under *Written by the AI*, the count, the categories, *Most messages*, *Blocking bugs*, *New
+  topics*; a topic there opens By topic at that topic. With no paragraph kept and the help on, the tab asks for it
+  once. On an opened topic, **Draft an issue** opens a dialog with the draft in two fields, **Open on GitHub**,
+  and a field for the filed issue's number or address, which becomes the topic's confirmed match. The note on the
+  privacy policy stands beside the switch only while the switch is off.
+- **Testing:** the numbers of a seeded week; the paragraph's request holding titles and counts only, with the
+  learner app's server not asked; a kept paragraph asking nobody; a paragraph with an address, of two paragraphs
+  or too long not kept; a title written as an instruction changing nothing but the paragraph's words. The draft:
+  `quotes` through case and punctuation, in Cyrillic, against a translation; a draft that quotes, and one with an
+  address, a link or an account, dropped; the instructions tested for the rule; no table changed but the count of
+  calls; a message written as an instruction, with an answer that obeys, changing nothing. The page: the link
+  following the fields, the long text and the copy, each failure, the number saved. The hosted browser run reads
+  the week and opens a draft, desktop and phone; the desktop run edits it, checks the link's address without
+  following it, and pastes the number.

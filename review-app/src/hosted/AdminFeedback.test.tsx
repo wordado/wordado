@@ -13,6 +13,7 @@ beforeEach(() => {
   vi.spyOn(hostedApi.admin, 'feedbackAi').mockResolvedValue(aiStatus({ setUp: false, needs: 'FEEDBACK_AI_KEY', on: false }))
   // No topics: a card then shows its message's topic, when it has one, and offers no other.
   vi.spyOn(hostedApi.admin, 'feedbackTopics').mockResolvedValue([])
+  vi.spyOn(hostedApi.admin, 'feedbackWeek').mockResolvedValue({ since: 0, until: 1, read: 0, byCategory: { bug: 0, idea: 0, question: 0, praise: 0, junk: 0 }, blockingBugs: 0, topTopics: [], blocking: [], newTopics: [], paragraph: null })
 })
 
 const item = (id: number, over: Partial<FeedbackView> = {}): FeedbackView => ({

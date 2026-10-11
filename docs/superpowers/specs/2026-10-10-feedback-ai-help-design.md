@@ -1,6 +1,6 @@
 # AI help on learners' feedback — design
 
-**Date:** 2026-10-10 · **Status:** agreed with the product owner on 2026-10-10 (§10); the weekly mail (§3.4, without the AI's part) and stage B (§3.1: per message, the switch, the limit) built; stage C (§3.2 topics, §3.3 known issues) built; §3.4's AI part and §3.5 not built
+**Date:** 2026-10-10 · **Status:** agreed with the product owner on 2026-10-10 (§10); the weekly mail (§3.4, without the AI's part) and stage B (§3.1: per message, the switch, the limit) built; stage C (§3.2 topics, §3.3 known issues) built; stage D (§3.4's AI part, §3.5) built: **all of it is built**
 **Issue:** #158. **Builds on:** the Feedback tab (#157; `2026-10-05-hosted-review-app-design.md` §16) and the
 feedback form (#153; `2026-09-20-vocabulary-learning-app-design.md` §8.12).
 
@@ -123,6 +123,18 @@ the tab. **No text a learner wrote and no contact address is in it:** a mail sta
 messages themselves are read in the tab only. The paragraph is written from the topic titles and the counts, not
 from the messages, so it cannot quote one.
 
+**As built (stage D).** The tab's summary is of the seven days up to now, counted from the kept readings alone,
+and says how many messages the AI has read. The mail's is of the week that ended on the Monday. Before it counts,
+the weekly job has the AI read the week's messages that have no reading: at most 2 calls of 25, so up to 50
+messages a week nobody opened (what the Free plan's 50 database statements an invocation leave room for); the
+mail says "Read by the AI: 50 of 300" when there were more. The paragraph is
+kept by period, so the tab asks for it at most once a UTC day and the mail once a week; it is refused in code
+unless it is one paragraph of at most 600 characters with no address, link or phone number. A topic is new in the
+week its first message came in. In the mail the AI's part stands between the counts by kind and the link. When
+the help is off or not set up, a call fails or the day's limit is reached, the mail is the one without the AI,
+byte for byte; a paragraph that was refused leaves the AI's numbers without it. The paragraphs are text the AI
+derived: *Forget the AI's results* removes them, and the weekly job removes those older than 30 days.
+
 ### 3.5 Draft an issue
 
 On a topic, **Draft an issue**: the model writes a title and a body from the topic's messages: what happens, where
@@ -131,6 +143,17 @@ draft opens in an editable field. **Open on GitHub** opens the repository's new-
 body filled in; the coordinator reads it once more and files it under their own name. The review app itself has
 no permission to write to the repository. When the issue is filed, the coordinator pastes its number into the
 topic, which becomes its match.
+
+**As built (stage D).** One read of the topic's 30 newest messages and one call. The draft is checked in code
+before it is shown: it is dropped when masking would change it or it names an account (`@name`, which GitHub
+would notify), and when its title or body shares a run of 6 or more words with a message as it was written or with
+the stored translation of one, whatever the case and the punctuation. The page then says so and offers another
+try, which is a call like any other; the fields stay, to write the issue by hand. The draft is stored nowhere and
+logged nowhere: it lives in the open dialog. **Open on GitHub** is a link built in the page; an address longer
+than 6,000 characters carries the title alone, and the page offers **Copy the text**. The number or the address
+of the filed issue, pasted into the dialog, becomes the topic's confirmed match; the address of another
+repository's issue is refused. The check finds runs of words, not meaning: a short message, or one retold word
+for word in another language, is not found by it, so the coordinator's reading before filing is still the rule.
 
 ## 4. Where it runs, and what is stored
 
@@ -165,6 +188,7 @@ topic, which becomes its match.
   - `feedback_topics`: title, state, note, matched issue, whether the coordinator renamed it.
   - `feedback_ai_calls`: one row per call, for the daily limit.
   - `open_issues`: number and title, refreshed at most once a day.
+  - `feedback_week_texts`: the paragraph about a period, by period.
 - A translation and a summary are text derived from a learner's message, kept in a second database. They hold no
   address (masked before sending) and no link to an account. They are deleted when their message is gone from
   the learner app's server (as built: a page of the list read with no filter by kind removes the results kept

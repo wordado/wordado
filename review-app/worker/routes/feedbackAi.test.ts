@@ -1,6 +1,6 @@
 import type { FeedbackItem } from '@wordado/core'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import type { FeedbackAiRead, FeedbackAiStatus, FeedbackList } from '../../shared/hosted'
+import type { FeedbackAiRead, FeedbackAiStatus, FeedbackList, FeedbackWeek, FeedbackWeekParagraph } from '../../shared/hosted'
 import { createApp } from '../app'
 import type { Env } from '../bindings'
 import { getTopic, insertReviewer, insertTopicsIfAbsent, moveFeedbackToTopic, putFeedbackAi, putTopic, replaceOpenIssues, setTopicIssue, type FeedbackAiRow } from '../db'
@@ -805,5 +805,86 @@ describe('DELETE /api/admin/feedback/ai/results', () => {
     expect(await read()).toMatchObject({ asked: 5, left: 0, why: null })
     expect(await storedIds()).toEqual([1, 2, 3, 4, 5])
     expect((await admin('DELETE', '/api/admin/feedback/ai/results', { all: true })).status).toBe(400)
+  })
+})
+
+describe('the week (spec 2026-10-10 §3.4)', () => {
+  const PARAGRAPH = 'Four messages came in the last days, half of them about the sound.'
+  /** A minute before the test's noon, three days before it, and eight. */
+  const at = (daysBack: number) => now.getTime() - daysBack * 24 * 60 * 60 * 1000 - 60_000
+  const week = async () => (await (await admin('GET', '/api/admin/feedback/week')).json()) as FeedbackWeek
+  const paragraph = async () => {
+    const res = await admin('POST', '/api/admin/feedback/week/paragraph', {})
+    expect(res.status).toBe(200)
+    return (await res.json()) as FeedbackWeekParagraph
+  }
+
+  beforeEach(async () => {
+    await switchOn()
+    const sound = (await insertTopicsIfAbsent(env.DB, ['Sound plays twice on phones'], new Date(at(3)).toISOString())).get('Sound plays twice on phones')!
+    await putFeedbackAi(env.DB, new Map([
+      [1, aiRow({ receivedAt: at(0), category: 'bug', severity: 'blocks', topicId: sound, summary: 'A summary nobody sends on.', translation: 'A translation nobody sends on.' })],
+      [2, aiRow({ receivedAt: at(3), category: 'bug', severity: 'annoys', topicId: sound })],
+      [3, aiRow({ receivedAt: at(6), category: 'idea' })],
+      [4, aiRow({ receivedAt: at(6), category: 'praise' })],
+      [5, aiRow({ receivedAt: at(8), category: 'idea' })],
+    ]))
+    model.answer = () => ({ paragraph: PARAGRAPH })
+  })
+
+  it('is for admins only, and the paragraph is asked for from the app’s own origin', async () => {
+    expect((await as('ivan@example.com', 'GET', '/api/admin/feedback/week')).status).toBe(403)
+    expect((await as('ivan@example.com', 'POST', '/api/admin/feedback/week/paragraph', {})).status).toBe(403)
+    expect((await admin('POST', '/api/admin/feedback/week/paragraph', {}, { origin: 'https://elsewhere.example.com' })).status).toBe(403)
+    expect((await admin('POST', '/api/admin/feedback/week/paragraph', { period: 'w:2026-10-05' })).status).toBe(400)
+    expect(model.requests).toEqual([])
+  })
+
+  it('counts the last seven days from the database alone: nobody is asked, and there is no paragraph yet', async () => {
+    const res = await admin('GET', '/api/admin/feedback/week')
+    expect(res.status).toBe(200)
+    expect(res.headers.get('cache-control')).toBe('no-store')
+    const body = (await res.json()) as FeedbackWeek
+    expect(body).toMatchObject({ since: now.getTime() - 7 * 24 * 60 * 60 * 1000, until: now.getTime(), read: 4, byCategory: { bug: 2, idea: 1, question: 0, praise: 1, junk: 0 }, blockingBugs: 1, paragraph: null })
+    expect(body.topTopics.map((t) => [t.title, t.count])).toEqual([['Sound plays twice on phones', 2]])
+    expect(body.blocking.map((t) => [t.title, t.count])).toEqual([['Sound plays twice on phones', 1]])
+    expect(body.newTopics.map((t) => t.title)).toEqual(['Sound plays twice on phones'])
+    expect(server.requests).toEqual([])
+    expect(model.requests).toEqual([])
+    expect(await calls()).toEqual([])
+  })
+
+  it('makes one call for the day’s paragraph and none the second time; the week then has it', async () => {
+    expect(await paragraph()).toEqual({ paragraph: PARAGRAPH, why: null })
+    expect(await paragraph()).toEqual({ paragraph: PARAGRAPH, why: null })
+    expect(model.requests).toHaveLength(1)
+    expect(await calls()).toEqual([{ day: '2026-10-05', what: 'week', messages: 0 }])
+    expect((await week()).paragraph).toBe(PARAGRAPH)
+    // The model was given numbers and titles, and the learner app's server was not asked.
+    expect(model.inputOf(0)).toEqual({ messages: 4, byCategory: { bug: 2, idea: 1, question: 0, praise: 1, junk: 0 }, topTopics: [{ title: 'Sound plays twice on phones', count: 2 }], blockingBugs: 1, newTopics: ['Sound plays twice on phones'] })
+    expect(JSON.stringify(model.requests)).not.toMatch(/nobody sends on|Kept from before/)
+    expect(server.requests).toEqual([])
+    // The next UTC day has a paragraph of its own.
+    now = new Date('2026-10-06T00:00:01Z')
+    expect((await week()).paragraph).toBeNull()
+    await paragraph()
+    expect(model.requests).toHaveLength(2)
+  })
+
+  it('says why there is no paragraph, and the numbers are there without it', async () => {
+    model.failure = { status: 503 }
+    expect(await paragraph()).toEqual({ paragraph: null, why: 'unreachable' })
+    model.failure = null
+    await admin('PUT', '/api/admin/feedback/ai', { on: false })
+    expect(await paragraph()).toEqual({ paragraph: null, why: 'off' })
+    expect(await week()).toMatchObject({ read: 4, paragraph: null })
+    expect(model.requests).toHaveLength(1)
+  })
+
+  it('forgets the paragraph with the AI’s other results', async () => {
+    await paragraph()
+    await admin('DELETE', '/api/admin/feedback/ai/results', {})
+    expect(await week()).toMatchObject({ read: 0, paragraph: null })
+    expect((await env.DB.prepare('SELECT * FROM feedback_week_texts').all()).results).toEqual([])
   })
 })

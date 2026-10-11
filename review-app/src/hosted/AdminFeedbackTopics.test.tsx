@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
-import type { FeedbackAiStatus, FeedbackAiView, FeedbackTopicOpened, FeedbackTopicView, FeedbackView } from '../../shared/hosted'
+import type { FeedbackAiStatus, FeedbackAiView, FeedbackTopicOpened, FeedbackTopicView, FeedbackView, FeedbackWeek } from '../../shared/hosted'
 import { hostedApi } from '../hostedApi'
 import { AdminFeedback } from './AdminFeedback'
 import { dateOf } from './adminUtil'
@@ -41,6 +41,8 @@ const opened = (over: Partial<FeedbackTopicOpened> = {}): FeedbackTopicOpened =>
   ...over,
 })
 
+const noWeek: FeedbackWeek = { since: 0, until: 1, read: 0, byCategory: { bug: 0, idea: 0, question: 0, praise: 0, junk: 0 }, blockingBugs: 0, topTopics: [], blocking: [], newTopics: [], paragraph: null }
+
 let listTopics: MockInstance<typeof hostedApi.admin.feedbackTopics>
 let openTopic: MockInstance<typeof hostedApi.admin.feedbackTopic>
 
@@ -49,6 +51,7 @@ beforeEach(() => {
   vi.spyOn(hostedApi.admin, 'feedback').mockResolvedValue({ connected: true, items: [], read: 0, nextBefore: null })
   vi.spyOn(hostedApi.admin, 'readFeedbackAi').mockResolvedValue({ results: {}, asked: 0, left: 0, why: null })
   listTopics = vi.spyOn(hostedApi.admin, 'feedbackTopics').mockResolvedValue([words, sound, theme])
+  vi.spyOn(hostedApi.admin, 'feedbackWeek').mockResolvedValue(noWeek)
   openTopic = vi.spyOn(hostedApi.admin, 'feedbackTopic').mockResolvedValue(opened())
 })
 
@@ -410,5 +413,62 @@ describe('a message’s topic on its card, among the messages', () => {
     const [first] = await cards()
     expect(await within(first!).findByText('Topic: A new topic')).toBeTruthy()
     await waitFor(() => expect(listTopics).toHaveBeenCalledTimes(2))
+  })
+})
+
+describe('a topic chosen in the week’s summary (spec 2026-10-10 §3.4)', () => {
+  const week: FeedbackWeek = { ...noWeek, read: 5, byCategory: { ...noWeek.byCategory, bug: 5 }, topTopics: [{ id: theme.id, title: theme.title, count: 1 }, { id: sound.id, title: sound.title, count: 4 }], paragraph: 'Five messages came.' }
+
+  it('opens By topic at that topic, with its messages, whatever the filter hid', async () => {
+    vi.spyOn(hostedApi.admin, 'feedbackWeek').mockResolvedValue(week)
+    render(<AdminFeedback />)
+    // The tab starts with the messages, and shows what is open: the topic chosen is done.
+    const summary = await screen.findByRole('region', { name: 'This week' })
+    fireEvent.click(within(summary).getByRole('button', { name: theme.title }))
+    const topics = await screen.findByRole('list', { name: 'Topics' })
+    expect((screen.getByRole('combobox', { name: 'View' }) as HTMLSelectElement).value).toBe('topics')
+    expect((screen.getByRole('combobox', { name: 'Show' }) as HTMLSelectElement).value).toBe('all')
+    const chosen = within(topics).getByRole('button', { name: theme.title })
+    await waitFor(() => expect(chosen.getAttribute('aria-expanded')).toBe('true'))
+    expect(openTopic).toHaveBeenCalledWith(theme.id)
+    expect(openTopic).toHaveBeenCalledTimes(1)
+    // Another one chosen opens too; the first stays as it is.
+    fireEvent.click(within(summary).getByRole('button', { name: sound.title }))
+    await waitFor(() => expect(within(topics).getByRole('button', { name: sound.title }).getAttribute('aria-expanded')).toBe('true'))
+    expect(openTopic).toHaveBeenLastCalledWith(sound.id)
+    expect(chosen.getAttribute('aria-expanded')).toBe('true')
+  })
+})
+
+describe('Draft an issue, on an opened topic (spec 2026-10-10 §3.5)', () => {
+  it('opens the draft’s dialog for that topic, and the filed issue’s number becomes the topic’s match', async () => {
+    const ask = vi.spyOn(hostedApi.admin, 'draftFeedbackTopic').mockResolvedValue({ ok: true, title: 'Audio is heard twice', body: 'In our words.', messages: 2 })
+    const save = vi.spyOn(hostedApi.admin, 'setFeedbackTopicIssue').mockResolvedValue({ ...words, issue: 95, issueState: 'confirmed' })
+    await byTopic()
+    const li = await open('Number of new words a day')
+    fireEvent.click(within(li).getByRole('button', { name: 'Draft an issue' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Draft an issue' })
+    await waitFor(() => expect((within(dialog).getByRole('textbox', { name: 'Title' }) as HTMLInputElement).value).toBe('Audio is heard twice'))
+    expect(ask).toHaveBeenCalledWith(words.id)
+    expect((within(dialog).getByRole('link', { name: 'Open on GitHub' }) as HTMLAnchorElement).href).toContain('https://github.com/wordado/wordado/issues/new?title=Audio+is+heard+twice')
+    listTopics.mockResolvedValue([{ ...words, issue: 95, issueState: 'confirmed' }, sound, theme])
+    fireEvent.change(within(dialog).getByRole('textbox', { name: /paste its number/ }), { target: { value: '#95' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(save).toHaveBeenCalledWith(words.id, 95)
+    expect((await within(line('Number of new words a day')).findByRole('link', { name: '#95' })).getAttribute('href')).toBe('https://github.com/wordado/wordado/issues/95')
+  })
+
+  it('cannot be asked for while the AI help is off, and says why', async () => {
+    vi.spyOn(hostedApi.admin, 'feedbackAi').mockResolvedValue(aiStatus({ on: false }))
+    const ask = vi.spyOn(hostedApi.admin, 'draftFeedbackTopic')
+    await byTopic()
+    const li = await open('Number of new words a day')
+    const button = within(li).getByRole('button', { name: 'Draft an issue' }) as HTMLButtonElement
+    await waitFor(() => expect(button.disabled).toBe(true))
+    expect(within(li).getByText('Needs the AI help, which is off or not set up.')).toBeTruthy()
+    fireEvent.click(button)
+    expect(ask).not.toHaveBeenCalled()
+    expect(screen.queryByRole('dialog')).toBeNull()
   })
 })

@@ -55,10 +55,28 @@ export const AI_TOPICS: Readonly<Record<number, { readonly title: string; readon
   14: { title: SOUND_TOPIC, issue: 94 },
 }
 
+/** What the stand-in model writes about a week (spec 2026-10-10 §3.4), whatever the numbers it is given. */
+export const WEEK_PARAGRAPH = 'Most of the week’s messages were about the sound playing twice and about choosing the number of new words. One bug keeps learners from studying: the path stays white after a unit.'
+
+/** The issues the stand-in model drafts (spec 2026-10-10 §3.5), in words of its own: no run of six words is shared
+ * with a message above or with a translation of one. The first is for a topic whose title names the sound, the
+ * second for any other. */
+export const SOUND_DRAFT = {
+  title: 'Audio for a word is heard two times on handsets',
+  body: '## What happens\nLearners hear the audio for a word two times in a row.\n\n## Where\nOn handsets. The interface was in Bulgarian and German.\n\n## How many messages say so\n2\n\n## How serious it sounds\nIt annoys. Nobody says it keeps them from studying.',
+} as const
+export const WORDS_DRAFT = {
+  title: 'Let learners set their daily amount of fresh vocabulary',
+  body: '## What happens\nLearners ask for a setting that fixes the amount of fresh vocabulary per day.\n\n## Where\nNot tied to one screen. The interface was in Bulgarian and Spanish.\n\n## How many messages say so\n2\n\n## How serious it sounds\nA wish; nothing is broken.',
+} as const
+
 /** The stand-in model's answer to a request: the reading written down for each message it was given, in the answer's
  * own words ("none" for no severity, 0 for no topic and no issue). As a model is asked to, it names a topic it was
- * given by its id, and gives a title only for one it was not given; it names an issue only when it was given it. */
-export function standInAnswer(_name: string, input: unknown): unknown {
+ * given by its id, and gives a title only for one it was not given; it names an issue only when it was given it.
+ * Asked about a week or for a draft, it answers what is written down above. */
+export function standInAnswer(name: string, input: unknown): unknown {
+  if (name === 'feedback_week') return { paragraph: WEEK_PARAGRAPH }
+  if (name === 'feedback_draft') return /sound/i.test((input as { topic?: { title?: string } }).topic?.title ?? '') ? SOUND_DRAFT : WORDS_DRAFT
   const { messages = [], topics = [], issues = [] } = input as { messages?: { id: number }[]; topics?: { id: number; title: string }[]; issues?: { number: number }[] }
   return {
     results: messages.flatMap((m) => {

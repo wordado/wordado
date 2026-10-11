@@ -3,6 +3,7 @@ import { FEEDBACK_STATES, MAX_FEEDBACK_NOTE_LENGTH, MAX_TOPIC_TITLE_LENGTH, MIN_
 import { apiError, jsonBody, type AppEnv, type Deps } from '../app'
 import { dropFeedbackAi, feedbackAiRows, feedbackMarks, getTopic, listTopics, markTopicMessagesDone, mergeTopics, moveFeedbackToTopic, putTopic, setTopicIssue, topicFeedbackIds } from '../db'
 import { aiView } from '../feedbackAi'
+import { draftIssue } from '../feedbackDraft'
 import { FeedbackUnread, feedbackSource, readFeedback } from '../learnerApp'
 import { topicTitle } from '../topicTitle'
 
@@ -24,7 +25,9 @@ const fresh = (c: Context) => c.header('cache-control', 'no-store')
  * The Feedback tab by topic (spec 2026-10-10 §3.2, §3.3): the list, a topic's messages, and what the coordinator
  * does with a topic: rename it, mark it, merge it into another, move a message to it, and confirm or remove its
  * match with a known issue. All of it is the coordinator's own doing: none of these routes asks the model, and the
- * only request that leaves the Worker is the read of a topic's messages from the learner app's server.
+ * only request that leaves the Worker is the read of a topic's messages from the learner app's server. The one
+ * exception is the draft of an issue (§3.5), which reads the topic's messages and asks the model once; it changes
+ * nothing, and nothing is written to GitHub by any route.
  * Registered after adminRoutes, so every route is behind the admin-only middleware, and before feedbackRoutes:
  * `PUT /api/admin/feedback/topics` must not be taken for the mark of a message.
  */
@@ -134,6 +137,31 @@ export function feedbackTopicsRoutes(app: Hono<AppEnv>, deps: Deps): void {
     if ((await moveFeedbackToTopic(deps.env.DB, id, topic)) === 'missing') return apiError(c, 404, 'The message has no AI result yet, or there is no such topic.')
     const now = (await feedbackAiRows(deps.env.DB, [id])).get(id)
     return c.json({ id, topic: now ? aiView(now).topic : null })
+  })
+
+  /**
+   * Drafts an issue for a topic (spec 2026-10-10 §3.5): one read of its newest messages, one call to the model. The
+   * body is empty: the Worker reads the messages itself, so what goes to the model is what the learner app's server
+   * gave and nothing a browser sent. The draft is answered and kept nowhere; filing it is the coordinator's, in
+   * their own browser, under their own name.
+   */
+  app.post('/api/admin/feedback/topics/:id/draft', async (c) => {
+    fresh(c)
+    const id = idOf(c.req.param('id'))
+    if (id === null) return apiError(c, 400, 'that is not the id of a topic')
+    const body = await jsonBody<Record<string, unknown>>(c)
+    const extra = extraKey(body, [])
+    if (extra !== undefined) return apiError(c, 400, `a draft is asked for with nothing, and no ${extra}`)
+    const topic = await getTopic(deps.env.DB, id)
+    if (!topic) return apiError(c, 404, 'no such topic')
+    const source = feedbackSource(deps)
+    if (!source) return apiError(c, 409, 'Feedback is not connected.')
+    try {
+      return c.json(await draftIssue(deps, source, topic))
+    } catch (err) {
+      if (err instanceof FeedbackUnread) return apiError(c, 502, err.message)
+      throw err
+    }
   })
 
   /** The coordinator's answer on a topic's match with a known issue: a number confirms it (one the AI proposed, or one they typed); null removes it, and the AI proposes none for the topic again. */

@@ -20,13 +20,25 @@ function shown(first: FeedbackAiStatus | null | 'failed') {
 const line = (panel: HTMLElement) => panel.querySelector('.feedback-ai-state')!.textContent
 
 describe('AdminFeedbackAi: the switch and what it says', () => {
-  it('says what the privacy policy must name and what must cover the transfer before it is switched on, whatever the state', () => {
+  it('says, while it is off, what the privacy policy must name and what must cover the transfer before it is switched on', () => {
     expect(AI_PRIVACY_NOTE).toBe('Before this is switched on for learners’ feedback, the privacy policy must name the AI service, and the transfer of the text to it must be covered: by the EU–US Data Privacy Framework or by standard contractual clauses.')
-    for (const s of [status(), status({ on: true }), status({ setUp: false, needs: 'FEEDBACK_AI_KEY' }), null, 'failed'] as const) {
+    for (const s of [status(), status({ setUp: false, needs: 'FEEDBACK_AI_KEY' })] as const) {
       const { panel } = shown(s)
       expect(within(panel).getByText(AI_PRIVACY_NOTE)).toBeTruthy()
       cleanup()
     }
+  })
+
+  it('does not repeat the note once it is on, nor before it is known how the help stands', () => {
+    for (const s of [status({ on: true }), null, 'failed'] as const) {
+      const { panel } = shown(s)
+      expect(within(panel).queryByText(AI_PRIVACY_NOTE)).toBeNull()
+      cleanup()
+    }
+    // Switched off again, it is back.
+    const { panel, show } = shown(status({ on: true }))
+    show(status())
+    expect(within(panel).getByText(AI_PRIVACY_NOTE)).toBeTruthy()
   })
 
   it('is not set up without the key: the switch cannot be moved, and the line names the setting', () => {
