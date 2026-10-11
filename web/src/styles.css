@@ -1605,6 +1605,8 @@ dialog.report input[type='text'] {
   display: grid;
   grid-template-columns: 2.75rem minmax(0, 1fr);
   gap: var(--space-3);
+  /* A search result leads to a unit: it comes to rest a little below the top of the screen. */
+  scroll-margin-top: var(--space-4);
 }
 
 .unit-track {

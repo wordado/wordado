@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { levelStatus, levelToOpen, unitsAtFirst, type UnitStatus } from './pathFolding'
+import { levelStatus, levelToOpen, unitReveal, unitsAtFirst, type UnitStatus } from './pathFolding'
 
 const level = (name: string, statuses: readonly UnitStatus[], skipped = false) => ({ level: name, statuses, skipped })
 
@@ -44,5 +44,34 @@ describe('unitsAtFirst', () => {
 
   it('has nothing to fold on a fresh level', () => {
     expect(unitsAtFirst(['current', 'locked', 'locked', 'locked'])).toEqual({ done: [], shown: [0, 1, 2], hidden: 1 })
+  })
+})
+
+describe('unitReveal', () => {
+  const level = (name: string, statuses: UnitStatus[]) => ({ level: name, units: statuses.map((_, i) => ({ unitId: `${name}-${i}` })), statuses })
+  const levels = [
+    level('A1', ['complete', 'mastered', 'current', 'locked', 'locked', 'locked', 'locked']),
+    level('A2', ['locked', 'locked']),
+  ]
+
+  it('opens another level with nothing more to unfold: an opened level shows every unit', () => {
+    expect(unitReveal(levels, 'A1', 'A2-1')).toEqual({ level: 'A2', done: false, all: false })
+  })
+
+  it('needs nothing unfolded for a unit the short view shows', () => {
+    expect(unitReveal(levels, 'A1', 'A1-2')).toEqual({ level: 'A1', done: false, all: false })
+    expect(unitReveal(levels, 'A1', 'A1-4')).toEqual({ level: 'A1', done: false, all: false })
+  })
+
+  it('unfolds the finished units for one of them', () => {
+    expect(unitReveal(levels, 'A1', 'A1-0')).toEqual({ level: 'A1', done: true, all: false })
+  })
+
+  it('shows every unit for one beyond the next few', () => {
+    expect(unitReveal(levels, 'A1', 'A1-6')).toEqual({ level: 'A1', done: false, all: true })
+  })
+
+  it('knows no unit by an ID the path does not hold', () => {
+    expect(unitReveal(levels, 'A1', 'nope')).toBeNull()
   })
 })

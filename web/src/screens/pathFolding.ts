@@ -42,3 +42,24 @@ export function unitsAtFirst(statuses: readonly UnitStatus[], next: number = NEX
   const shown = rest.slice(0, (current === -1 ? 0 : current) + 1 + next)
   return { done, shown, hidden: statuses.length - done.length - shown.length }
 }
+
+/**
+ * What the path must open to show one unit: its level, and, in the level being studied (the only one shown
+ * short), the finished units when it is one of them, or every unit when it lies beyond the next few. Null for
+ * an ID no unit has.
+ */
+export function unitReveal(
+  levels: readonly { readonly level: string; readonly units: readonly { readonly unitId: string }[]; readonly statuses: readonly UnitStatus[] }[],
+  studied: string | undefined,
+  unitId: string,
+): { readonly level: string; readonly done: boolean; readonly all: boolean } | null {
+  for (const { level, units, statuses } of levels) {
+    const i = units.findIndex((unit) => unit.unitId === unitId)
+    if (i < 0) continue
+    if (level !== studied) return { level, done: false, all: false }
+    const view = unitsAtFirst(statuses)
+    const done = view.done.includes(i)
+    return { level, done, all: !done && !view.shown.includes(i) }
+  }
+  return null
+}

@@ -389,3 +389,44 @@ describe('Path', () => {
     expect(ctx.client.snapshot.flags.size).toBe(0)
   })
 })
+
+describe('Path, opened at a unit', () => {
+  const unitId = (ctx: Awaited<ReturnType<typeof setup>>, title: string) => ctx.client.snapshot.corpus!.units.find((u) => u.title.en === title)!.unitId
+
+  it('opens the unit’s word list and marks its heading as where focus goes', async () => {
+    const ctx = await setup()
+    const id = unitId(ctx, 'Food and drink')
+    renderWith(<Path unit={id} />, ctx)
+    const item = unit('Food and drink')
+    expect(item.id).toBe(`unit-${id}`)
+    expect(item.querySelector('details')!.open).toBe(true)
+    expect(within(item).getAllByRole('listitem').length).toBeGreaterThan(0)
+    expect(within(item).getByRole('heading', { name: 'Food and drink' }).hasAttribute('data-route-focus')).toBe(true)
+    // The unit is still locked: arriving at it unlocks nothing.
+    expect(within(item).getByText('Locked')).toBeTruthy()
+  })
+
+  it('lets the learner fold the unit again: it opens once, on arrival', async () => {
+    const ctx = await setup()
+    renderWith(<Path unit={unitId(ctx, 'Food and drink')} />, ctx)
+    const details = unit('Food and drink').querySelector('details')!
+    details.open = false
+    fireEvent(details, new Event('toggle'))
+    expect(unit('Food and drink').querySelector('details')!.open).toBe(false)
+  })
+
+  it('opens as usual for an ID no unit has', async () => {
+    const ctx = await setup()
+    renderWith(<Path unit="no-such-unit" />, ctx)
+    expect(document.querySelector('details[open]')).toBeNull()
+    expect(document.querySelector('[data-route-focus]')).toBeNull()
+    expect(within(unit('People and greetings')).getByText('Current')).toBeTruthy()
+  })
+
+  it('gives every unit an ID and marks none without a unit to open at', async () => {
+    const ctx = await setup()
+    renderWith(<Path />, ctx)
+    expect(unit('People and greetings').id).toBe(`unit-${unitId(ctx, 'People and greetings')}`)
+    expect(document.querySelector('[data-route-focus]')).toBeNull()
+  })
+})

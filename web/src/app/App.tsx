@@ -43,7 +43,7 @@ function Screen(props: { readonly route: Route }) {
     case 'matching':
       return <Matching unit={route.unit} theme={route.theme} />
     case 'path':
-      return <Path />
+      return <Path unit={route.unit} />
     case 'themes':
       return <Themes />
     case 'theme':
@@ -117,8 +117,10 @@ export function App(props: { readonly resumed: boolean; readonly setup: boolean;
   // In the setup, the current step's heading takes focus instead (plan 11): the
   // step has already focused it (child effects run first), and main must not take it back.
   useEffect(() => {
+    // A screen may name what takes focus on arrival (`data-route-focus`): the unit a search led to, the search
+    // field. The setup names its step's heading. Otherwise the screen itself.
     const target = (): HTMLElement | null =>
-      (inSetup ? main.current?.querySelector<HTMLElement>('.setup h2[tabindex="-1"]') : null) ?? main.current
+      main.current?.querySelector<HTMLElement>(inSetup ? '.setup h2[tabindex="-1"]' : '[data-route-focus]') ?? main.current
     if (first.current) {
       first.current = false
       if (props.resumed) target()?.focus()
