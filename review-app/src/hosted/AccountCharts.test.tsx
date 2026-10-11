@@ -54,7 +54,10 @@ describe('the charts of the Accounts tab (#209)', () => {
     expect(chart.querySelector('.chart-at text')!.textContent).toBe('c: 10')
     fireEvent.pointerMove(chart, { clientX: 0 })
     expect(chart.querySelector('.chart-at text')!.textContent).toBe('a: 5')
-    fireEvent.pointerLeave(chart)
+    // A finger that lifts leaves what it touched read; a mouse that leaves takes the read-out with it.
+    fireEvent.pointerLeave(chart, { pointerType: 'touch' })
+    expect(chart.querySelector('.chart-at text')!.textContent).toBe('a: 5')
+    fireEvent.pointerLeave(chart, { pointerType: 'mouse' })
     expect(chart.querySelector('.chart-at')).toBeNull()
   })
 })

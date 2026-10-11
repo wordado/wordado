@@ -102,6 +102,11 @@ export function Chart(props: { kind: 'bars' | 'line'; title: string; points: Poi
     setAt(Math.max(0, Math.min(last, i)))
   }
 
+  /** A mouse that leaves the chart takes the read-out with it. A finger leaves at every lift: what it touched stays read. */
+  const leave = (e: PointerEvent<SVGSVGElement>) => {
+    if (e.pointerType !== 'touch') setAt(null)
+  }
+
   const line = values.map((value, i) => `${x(i).toFixed(1)},${y(value).toFixed(1)}`).join(' ')
   const summary =
     count === 0
@@ -109,7 +114,7 @@ export function Chart(props: { kind: 'bars' | 'line'; title: string; points: Poi
       : `${props.title}, ${labels[0]} to ${labels[last]}: between ${n(Math.min(...values))} and ${n(Math.max(...values))}, ${n(values[last]!)} at the end. The numbers are in the table below.`
   return (
     <div className="chart" ref={ref}>
-      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} role="img" aria-label={summary} onPointerMove={point} onPointerDown={point} onPointerLeave={() => setAt(null)}>
+      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} role="img" aria-label={summary} onPointerMove={point} onPointerDown={point} onPointerLeave={leave}>
         {Array.from({ length: top / step + 1 }, (_, k) => k * step).map((tick) => (
           <g key={tick}>
             <line className="chart-grid" x1={L} x2={W - R} y1={y(tick)} y2={y(tick)} />
