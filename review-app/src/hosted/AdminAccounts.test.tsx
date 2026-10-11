@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AccountFound, AccountSweep, AccountSweepView } from '../../shared/hosted'
+import type { AccountFound, AccountStats, AccountStatsView, AccountSweep, AccountSweepView } from '../../shared/hosted'
 import { hostedApi } from '../hostedApi'
 import { AdminAccounts, dayWithYear } from './AdminAccounts'
 
@@ -9,21 +9,27 @@ afterEach(() => (cleanup(), vi.restoreAllMocks()))
 const CREATED = Date.parse('2026-01-05T09:00:00Z')
 const SIGNED_IN = Date.parse('2026-09-30T18:00:00Z')
 const sweep = (over: Partial<AccountSweep> = {}): AccountSweep => ({ months: 24, batch: 50, due: 0, undated: 0, taken: 0, lastRunAt: null, lastTaken: 0, ...over })
+const READ = Date.parse('2026-10-11T08:30:00Z')
+const stats = (over: Partial<AccountStats> = {}): AccountStats => ({ readAt: READ, accounts: 0, made7: 0, made30: 0, studied7: 0, studied30: 0, newsGiven: 0, newsWithdrawn: 0, newsNone: 0, reminders: 0, ...over })
 const found: AccountFound = { found: true, createdAt: CREATED, lastSignInAt: SIGNED_IN }
 
-function shown(first: AccountSweepView | Error = { connected: true, sweep: sweep() }, account: AccountFound | Error = found) {
+function shown(first: AccountSweepView | Error = { connected: true, sweep: sweep() }, account: AccountFound | Error = found, counts: AccountStatsView | Error = { connected: true, stats: stats() }) {
   const read = vi.spyOn(hostedApi.admin, 'accountSweep')
   if (first instanceof Error) read.mockRejectedValue(first)
   else read.mockResolvedValue(first)
+  const counted = vi.spyOn(hostedApi.admin, 'accountStats')
+  if (counts instanceof Error) counted.mockRejectedValue(counts)
+  else counted.mockResolvedValue(counts)
   const lookUp = vi.spyOn(hostedApi.admin, 'lookUpAccount')
   if (account instanceof Error) lookUp.mockRejectedValue(account)
   else lookUp.mockResolvedValue(account)
   const del = vi.spyOn(hostedApi.admin, 'deleteAccount').mockResolvedValue({ deleted: true })
   render(<AdminAccounts />)
-  return { read, lookUp, del }
+  return { read, counted, lookUp, del }
 }
 
 const tiles = async () => within(await screen.findByRole('list', { name: 'The sweep of inactive accounts' })).getAllByRole('listitem').map((li) => li.textContent)
+const counts = async () => within(await screen.findByRole('list', { name: 'Accounts and their use' })).getAllByRole('listitem').map((li) => li.textContent)
 const lookUpForm = () => screen.findByRole('form', { name: 'Look an account up' })
 async function lookUp(email: string) {
   const form = await lookUpForm()
@@ -38,6 +44,44 @@ async function asking(email = 'ana@example.com') {
 }
 
 describe('AdminAccounts: the Accounts tab (#187)', () => {
+  it('shows how many accounts there are and how many are used, with when that was counted (#206)', async () => {
+    shown(undefined, undefined, { connected: true, stats: stats({ accounts: 1204, made7: 4, made30: 31, studied7: 40, studied30: 75, newsGiven: 50, newsWithdrawn: 3, newsNone: 1151, reminders: 22 }) })
+    expect(await counts()).toEqual([
+      '1,204accounts',
+      '4made in the last 7 days',
+      '31made in the last 30 days',
+      '22with reminders on',
+      '40studied in the last 7 days',
+      '75studied in the last 30 days',
+      '50agreed to news',
+      '3withdrew from news',
+    ])
+    expect(screen.getByText(`An account studied when it has at least one answer in that time. 1,151 accounts have said nothing about news yet. Counted ${new Date(READ).toLocaleString()}.`)).toBeTruthy()
+    // Above the sweep, which is above the lookup.
+    const order = [screen.getByRole('list', { name: 'Accounts and their use' }), screen.getByRole('list', { name: 'The sweep of inactive accounts' }), await lookUpForm()]
+    expect(order[0]!.compareDocumentPosition(order[1]!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(order[1]!.compareDocumentPosition(order[2]!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('counts nothing as nothing, and one account as one', async () => {
+    shown(undefined, undefined, { connected: true, stats: stats({ accounts: 1, newsNone: 1 }) })
+    expect(await counts()).toEqual(['1account', '0made in the last 7 days', '0made in the last 30 days', '0with reminders on', '0studied in the last 7 days', '0studied in the last 30 days', '0agreed to news', '0withdrew from news'])
+    expect(screen.getByText(/1 account has said nothing about news yet\./)).toBeTruthy()
+  })
+
+  it('says the counts of accounts could not be read, and reads them again when asked; the rest of the tab is there all the same', async () => {
+    const { counted } = shown(undefined, undefined, new Error('The app’s server could not be reached.'))
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain('The counts of accounts could not be read. The app’s server could not be reached.')
+    expect(screen.queryByRole('list', { name: 'Accounts and their use' })).toBeNull()
+    expect(await tiles()).toHaveLength(4)
+    expect(await lookUpForm()).toBeTruthy()
+    counted.mockResolvedValue({ connected: true, stats: stats({ accounts: 7 }) })
+    fireEvent.click(within(alert).getByRole('button', { name: 'Try again' }))
+    expect((await counts())[0]).toBe('7accounts')
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
   it('shows what the sweep would take next and what it took', async () => {
     shown({ connected: true, sweep: sweep({ due: 70, taken: 12, lastRunAt: SIGNED_IN, lastTaken: 2 }) })
     expect(await tiles()).toEqual(['70past 24 months now', '50the next run deletes', '2deleted by the last run', '12deleted so far'])
@@ -99,7 +143,7 @@ describe('AdminAccounts: the Accounts tab (#187)', () => {
   })
 
   it('deletes only after the question is answered with the address typed again', async () => {
-    const { del, read } = shown()
+    const { del, read, counted } = shown()
     const dialog = await asking()
     expect(within(dialog).getByText(`Created ${dayWithYear(CREATED)} · last sign-in ${dayWithYear(SIGNED_IN)}`)).toBeTruthy()
     const button = within(dialog).getByRole('button', { name: 'Delete the account' }) as HTMLButtonElement
@@ -119,6 +163,7 @@ describe('AdminAccounts: the Accounts tab (#187)', () => {
     expect((screen.getByLabelText('Email address') as HTMLInputElement).value).toBe('')
     // The counts are read again.
     expect(read).toHaveBeenCalledTimes(2)
+    expect(counted).toHaveBeenCalledTimes(2)
   })
 
   it('deletes nothing when the question is closed', async () => {

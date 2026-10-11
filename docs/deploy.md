@@ -115,8 +115,8 @@ private `wordado/wordado-research`, cloned into `docs/research/` and ignored her
      answers 404 and the tab says feedback is not connected. To change the token, set a new value in both
      places and deploy this server; until both agree the tab says the app's server answered 404.
    - Production only, optional: `ADMIN_WRITE_TOKEN`, which lets the review app's Accounts tab look an account
-     up by its address, delete it, and read the counts of the sweep of inactive accounts
-     (`/v1/admin/accounts/*`, #187). A second random value, made and set the same way as the one above
+     up by its address, delete it, and read the counts of the sweep of inactive accounts and of accounts and
+     their use (`/v1/admin/accounts/*`, #187, #206). A second random value, made and set the same way as the one above
      (`t=$(openssl rand -hex 32)`, `printf %s "$t" | gh secret set ADMIN_WRITE_TOKEN --env production` here,
      `printf %s "$t" | pnpm --filter @wordado/review-app exec wrangler secret put ADMIN_WRITE_TOKEN --env production`
      for the review app, `unset t`). **It must not be the value of `FEEDBACK_READ_TOKEN`**: what can read

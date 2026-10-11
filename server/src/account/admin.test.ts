@@ -97,7 +97,7 @@ describe('the accounts routes of the review app (#187)', () => {
     const h = withToken()
     await h.signIn('ana@example.com')
     const unknown = await h.request('/v1/no-such-route')
-    const tries: [string, unknown?][] = [['lookup', { email: 'ana@example.com' }], ['delete', { email: 'ana@example.com', confirm: true }], ['sweep']]
+    const tries: [string, unknown?][] = [['lookup', { email: 'ana@example.com' }], ['delete', { email: 'ana@example.com', confirm: true }], ['sweep'], ['stats']]
     for (const authorization of [null, '', 'Bearer ', `Bearer ${readToken}`, `Bearer ${token}x`, `bearer ${token}`, `Basic ${token}`, token]) {
       for (const [path, body] of tries) {
         const reply = await ask(h, path, body, authorization)

@@ -1,5 +1,5 @@
 import { ANNOUNCEMENT_LANGUAGES, FEEDBACK_KINDS, isAnnouncementKind, isAnnouncementLanguage, validateAnnouncementTexts, type AnnouncementKind, type AnnouncementLanguage, type AnnouncementTexts, type FeedbackItem, type FeedbackKind } from '@wordado/core'
-import type { AccountFound, AccountSweep, Announcement, AnnouncementHeld, AnnouncementLimits, AnnouncementPreview, AnnouncementStatus } from '../shared/hosted'
+import type { AccountFound, AccountStats, AccountSweep, Announcement, AnnouncementHeld, AnnouncementLimits, AnnouncementPreview, AnnouncementStatus } from '../shared/hosted'
 import type { Deps } from './app'
 
 /** How long the learner app's server has to answer. */
@@ -94,7 +94,7 @@ export class AccountsUnanswered extends Error {
 
 /** One request to the accounts routes: the token in a header, an address only ever in the body. The log has the
  * status and nothing else, since the address is in neither. */
-async function askAccounts(deps: Pick<Deps, 'fetch' | 'log'>, source: FeedbackSource, path: 'lookup' | 'delete' | 'sweep', body?: unknown): Promise<Record<string, unknown>> {
+async function askAccounts(deps: Pick<Deps, 'fetch' | 'log'>, source: FeedbackSource, path: 'lookup' | 'delete' | 'sweep' | 'stats', body?: unknown): Promise<Record<string, unknown>> {
   let res: Response
   try {
     // A redirect is not followed: the token goes to the server it was made for and nowhere else.
@@ -148,6 +148,13 @@ export async function readAccountSweep(deps: Pick<Deps, 'fetch' | 'log'>, source
   const { months, batch, due, undated, taken, lastRunAt, lastTaken } = await askAccounts(deps, source, 'sweep')
   if (!isCount(months) || !isCount(batch) || !isCount(due) || !isCount(undated) || !isCount(taken) || !isCount(lastTaken) || (lastRunAt !== null && !isTime(lastRunAt))) throw unfit(deps)
   return { months, batch, due, undated, taken, lastRunAt, lastTaken }
+}
+
+/** The counts of accounts and their use (#206), field by field: anything else the server may send is not passed on. */
+export async function readAccountStats(deps: Pick<Deps, 'fetch' | 'log'>, source: FeedbackSource): Promise<AccountStats> {
+  const { readAt, accounts, made7, made30, studied7, studied30, newsGiven, newsWithdrawn, newsNone, reminders } = await askAccounts(deps, source, 'stats')
+  if (!isTime(readAt) || !isCount(accounts) || !isCount(made7) || !isCount(made30) || !isCount(studied7) || !isCount(studied30) || !isCount(newsGiven) || !isCount(newsWithdrawn) || !isCount(newsNone) || !isCount(reminders)) throw unfit(deps)
+  return { readAt, accounts, made7, made30, studied7, studied30, newsGiven, newsWithdrawn, newsNone, reminders }
 }
 
 /** The learner app's server did not do what was asked of an announcement (#185): `message` is for the page, and

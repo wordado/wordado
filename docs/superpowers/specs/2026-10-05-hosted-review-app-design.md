@@ -825,11 +825,17 @@ A step of the learner app server's cron (`server/src/account/sweep.ts`), with th
 
 ### 17.3 The link between the two services
 
-Three routes on the learner app's server, for the review app's server alone:
+Four routes on the learner app's server, for the review app's server alone:
 
 - `POST /v1/admin/accounts/lookup` with `{ email }` → `{ found: false }` or `{ found: true, createdAt, lastSignInAt }`.
 - `POST /v1/admin/accounts/delete` with `{ email, confirm: true }` → `{ deleted }`.
 - `GET /v1/admin/accounts/sweep` → `{ months, batch, due, undated, taken, lastRunAt, lastTaken }`.
+- `GET /v1/admin/accounts/stats` → `{ readAt, accounts, made7, made30, studied7, studied30, newsGiven,
+  newsWithdrawn, newsNone, reminders }` (#206): counts of now and the time they were read, never a list. `made`
+  is by the account's creation; `studied` is the accounts with at least one answer in the last 7 and 30 days,
+  read from the `device` rows (the time of the last answer accepted from each device), not from the answer log;
+  the three `news` counts are the accounts by their consent to news; `reminders` is the accounts with at least
+  one push subscription. On the edge counts as within. Nothing is logged.
 
 The address is the whole address, compared without regard to capitals, and travels in the body: paths and queries
 are logged. Two accounts that answer to one address are refused (409). Nothing is answered about an account beyond
@@ -848,10 +854,14 @@ refused like any other. They read no cookie.
 
 Routes, admins only (behind the same middleware as every `/api/admin/*`), which run no statement of their own
 against D1: `GET /api/admin/accounts/sweep` (`{ connected: false }` while `ADMIN_WRITE_TOKEN` or `LEARNER_APP_URL`
-is not set), `POST /api/admin/accounts/lookup` and `POST /api/admin/accounts/delete`. The Worker passes on, field
+is not set), `GET /api/admin/accounts/stats` (the same when not set), `POST /api/admin/accounts/lookup` and
+`POST /api/admin/accounts/delete`. The Worker passes on, field
 by field, only what §17.3 names; its log has a status or a count, never an address.
 
-The **Accounts** tab: the sweep in four numbers (past 24 months now, the next run deletes, deleted by the last
+The **Accounts** tab: first the accounts in eight numbers (#206: how many there are, made in the last 7 and 30
+days, with reminders on, studied in the last 7 and 30 days, agreed to news, withdrew from news), with how many
+have said nothing about news and when the numbers were counted; when they cannot be read the tab says so and the
+rest of it works. Then the sweep in four numbers (past 24 months now, the next run deletes, deleted by the last
 run, deleted so far) with the day of the last run, and the count of accounts with no date when there are any.
 Under it, an address field and **Look up**: the account's address, when it was made and when it last signed in,
 or that no account has the address. **Delete this account…** opens a question that says what goes and what stays;

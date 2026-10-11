@@ -1,5 +1,5 @@
 import { ANNOUNCEMENT_LANGUAGES, isAnnouncementKind, validateAnnouncementTexts, type AnnouncementKind, type FeedbackItem, type FeedbackPage } from '@wordado/core'
-import type { AccountSweep, Announcement, AnnouncementLimits } from '../../shared/hosted'
+import type { AccountStats, AccountSweep, Announcement, AnnouncementLimits } from '../../shared/hosted'
 
 /** A message with every field filled in; `over` names what a test cares about. */
 export function feedbackItem(id: number, over: Partial<FeedbackItem> = {}): FeedbackItem {
@@ -37,6 +37,8 @@ export class FakeLearnerApp {
   readonly ambiguous = new Set<string>()
   /** What the sweep's counts are. */
   sweep: AccountSweep = { months: 24, batch: 50, due: 0, undated: 0, taken: 0, lastRunAt: null, lastTaken: 0 }
+  /** What the counts of accounts and their use are (#206). */
+  stats: AccountStats = { readAt: 0, accounts: 0, made7: 0, made30: 0, studied7: 0, studied30: 0, newsGiven: 0, newsWithdrawn: 0, newsNone: 0, reminders: 0 }
   /** The bodies the accounts routes were sent, in order. */
   readonly bodies: unknown[] = []
   /** The announcements, oldest first. */
@@ -144,6 +146,7 @@ export class FakeLearnerApp {
       if (this.writeToken === null || authorization !== `Bearer ${this.writeToken}`) return json({ error: 'not_found' }, 404)
       const what = url.pathname.slice('/v1/admin/accounts/'.length)
       if (method === 'GET' && what === 'sweep') return json(this.sweep)
+      if (method === 'GET' && what === 'stats') return json(this.stats)
       if (method !== 'POST' || (what !== 'lookup' && what !== 'delete') || !(new Headers(init.headers).get('content-type') ?? '').startsWith('application/json')) return json({ error: 'not_found' }, 404)
       const body = JSON.parse(typeof init.body === 'string' ? init.body : '{}') as { email?: unknown; confirm?: unknown }
       this.bodies.push(body)

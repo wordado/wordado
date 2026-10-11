@@ -1,5 +1,5 @@
 import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react'
-import type { AccountFound, AccountSweep } from '../../shared/hosted'
+import type { AccountFound, AccountStats, AccountSweep } from '../../shared/hosted'
 import { Dialog } from '../Dialog'
 import { hostedApi } from '../hostedApi'
 import { count, messageOf } from './adminUtil'
@@ -10,6 +10,9 @@ export const dayWithYear = (ms: number): string => new Date(ms).toLocaleDateStri
 /** What the tab has of the sweep: nothing yet, that accounts are not connected, that the counts could not be read, or the counts. */
 type Loaded = { readonly kind: 'loading' } | { readonly kind: 'unconnected' } | { readonly kind: 'failed'; readonly message: string } | { readonly kind: 'sweep'; readonly sweep: AccountSweep }
 
+/** What the tab has of the counts of accounts (#206): nothing yet, that they could not be read, or the counts. Not connected is the sweep's to say. */
+type Counted = { readonly kind: 'loading' } | { readonly kind: 'none' } | { readonly kind: 'failed'; readonly message: string } | { readonly kind: 'stats'; readonly stats: AccountStats }
+
 /** An account that was looked up: the address it was asked by, and what the server said of it. */
 interface LookedUp { readonly email: string; readonly account: AccountFound }
 
@@ -17,13 +20,15 @@ const lastSignIn = (account: Extract<AccountFound, { found: true }>): string => 
 
 /**
  * The Accounts tab (#187): the provider's own handling of learners' accounts, which live on the learner app's
- * server. Above, the sweep that deletes accounts not signed in to for 24 months, in numbers: what it would take
- * next and what it took. Below, one account deleted by hand, for an erasure asked for by mail or an account
+ * server. Above, how many accounts there are and how many are used (#206): counts of now, never a list. Then the
+ * sweep that deletes accounts not signed in to for 24 months, in numbers: what it would take next and what it
+ * took. Below, one account deleted by hand, for an erasure asked for by mail or an account
  * closed: it is looked up by its whole address, which shows only when it was made and last signed in, and deleted
  * after a question that is answered by typing the address again. Nothing of an account is kept by the review app.
  */
 export function AdminAccounts() {
   const [loaded, setLoaded] = useState<Loaded>({ kind: 'loading' })
+  const [counted, setCounted] = useState<Counted>({ kind: 'loading' })
   const [email, setEmail] = useState('')
   const [busy, setBusy] = useState(false)
   const [lookedUp, setLookedUp] = useState<LookedUp | null>(null)
@@ -42,6 +47,16 @@ export function AdminAccounts() {
     }
   }, [])
   useEffect(() => void load(), [load])
+
+  const loadStats = useCallback(async () => {
+    try {
+      const view = await hostedApi.admin.accountStats()
+      setCounted(view.connected ? { kind: 'stats', stats: view.stats } : { kind: 'none' })
+    } catch (err) {
+      setCounted({ kind: 'failed', message: messageOf(err) })
+    }
+  }, [])
+  useEffect(() => void loadStats(), [loadStats])
 
   /** The address in the field: what was looked up is of another address from now on, so it goes. */
   const type = (next: string) => {
@@ -78,9 +93,10 @@ export function AdminAccounts() {
     setEmail('')
     setDone(was ? `The account of ${address} was deleted.` : `No account had the address ${address} any more: nothing was deleted.`)
     void load()
+    void loadStats()
   }
 
-  if (loaded.kind === 'loading') return <p className="note">Loading…</p>
+  if (loaded.kind === 'loading' || counted.kind === 'loading') return <p className="note">Loading…</p>
   if (loaded.kind === 'unconnected') {
     return (
       <p className="note">
@@ -91,6 +107,17 @@ export function AdminAccounts() {
   const found = lookedUp?.account.found ? lookedUp.account : null
   return (
     <>
+      <p className="eyebrow">Accounts and their use</p>
+      {counted.kind === 'failed' && (
+        <div role="alert" className="notice feedback-failed">
+          <p>The counts of accounts could not be read. {counted.message}</p>
+          <button className="button small" onClick={() => void loadStats()}>
+            Try again
+          </button>
+        </div>
+      )}
+      {counted.kind === 'stats' && <Stats stats={counted.stats} />}
+
       <p className="eyebrow">Inactive accounts</p>
       {loaded.kind === 'failed' && (
         <div role="alert" className="notice feedback-failed">
@@ -144,6 +171,37 @@ export function AdminAccounts() {
         </section>
       )}
       {lookedUp && found && asking && <DeleteQuestion email={lookedUp.email} account={found} onClose={() => setAsking(false)} onDone={(was) => deleted(lookedUp.email, was)} />}
+    </>
+  )
+}
+
+/** The accounts in eight numbers and a line: how many there are, how many are new, how many study, what they said
+ * to news and how many have reminders on, with when that was counted. */
+function Stats(props: { stats: AccountStats }) {
+  const s = props.stats
+  const tiles: [number, string][] = [
+    [s.accounts, s.accounts === 1 ? 'account' : 'accounts'],
+    [s.made7, 'made in the last 7 days'],
+    [s.made30, 'made in the last 30 days'],
+    [s.reminders, 'with reminders on'],
+    [s.studied7, 'studied in the last 7 days'],
+    [s.studied30, 'studied in the last 30 days'],
+    [s.newsGiven, 'agreed to news'],
+    [s.newsWithdrawn, 'withdrew from news'],
+  ]
+  return (
+    <>
+      <ul className="stats" aria-label="Accounts and their use">
+        {tiles.map(([n, what]) => (
+          <li key={what} className="stat">
+            <b>{n.toLocaleString('en')}</b>
+            {what}
+          </li>
+        ))}
+      </ul>
+      <p className="note">
+        An account studied when it has at least one answer in that time. {count(s.newsNone, 'account has', 'accounts have')} said nothing about news yet. Counted {new Date(s.readAt).toLocaleString()}.
+      </p>
     </>
   )
 }

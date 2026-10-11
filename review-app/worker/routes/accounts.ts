@@ -1,7 +1,7 @@
 import type { Hono } from 'hono'
-import type { AccountSweepView } from '../../shared/hosted'
+import type { AccountStatsView, AccountSweepView } from '../../shared/hosted'
 import { apiError, jsonBody, type AppEnv, type Deps } from '../app'
-import { AccountsUnanswered, accountsSource, deleteLearnerAccount, lookUpAccount, readAccountSweep } from '../learnerApp'
+import { AccountsUnanswered, accountsSource, deleteLearnerAccount, lookUpAccount, readAccountStats, readAccountSweep } from '../learnerApp'
 
 const NOT_CONNECTED = 'Accounts are not connected: set ADMIN_WRITE_TOKEN and LEARNER_APP_URL for the review app.'
 
@@ -14,7 +14,7 @@ function emailOf(body: Record<string, unknown>): string | null {
 /**
  * The Accounts tab (#187): the provider's own handling of learners' accounts, which live on the learner app's
  * server. Nothing of an account is kept here, and these routes run no statement of their own against the database.
- * An address is sent on in a request's body and is never logged. Registered after adminRoutes, so all three are
+ * An address is sent on in a request's body and is never logged. Registered after adminRoutes, so all of them are
  * behind the admin-only middleware.
  */
 export function accountsRoutes(app: Hono<AppEnv>, deps: Deps): void {
@@ -33,6 +33,13 @@ export function accountsRoutes(app: Hono<AppEnv>, deps: Deps): void {
     const source = accountsSource(deps)
     if (!source) return c.json({ connected: false } satisfies AccountSweepView)
     return asked(c, async () => ({ connected: true, sweep: await readAccountSweep(deps, source) }) satisfies AccountSweepView)
+  })
+
+  /** How many accounts there are and how many are used (#206): counts of now, and nothing of an account. */
+  app.get('/api/admin/accounts/stats', async (c) => {
+    const source = accountsSource(deps)
+    if (!source) return c.json({ connected: false } satisfies AccountStatsView)
+    return asked(c, async () => ({ connected: true, stats: await readAccountStats(deps, source) }) satisfies AccountStatsView)
   })
 
   /** The account an address names: when it was made and last signed in, and nothing else. */

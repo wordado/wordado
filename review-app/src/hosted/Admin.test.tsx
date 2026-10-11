@@ -34,6 +34,7 @@ beforeEach(() => {
   vi.spyOn(hostedApi.admin, 'feedbackWeek').mockResolvedValue({ since: 0, until: 1, read: 0, byCategory: { bug: 0, idea: 0, question: 0, praise: 0, junk: 0 }, blockingBugs: 0, topTopics: [], blocking: [], newTopics: [], paragraph: null })
   vi.spyOn(hostedApi.admin, 'feedbackAi').mockResolvedValue({ setUp: false, needs: 'FEEDBACK_AI_KEY', on: false, model: 'test/model', callsToday: 0, dailyCalls: 200, reads: ['en', 'bg'], repo: 'wordado/wordado' })
   vi.spyOn(hostedApi.admin, 'accountSweep').mockResolvedValue({ connected: true, sweep: { months: 24, batch: 50, due: 0, undated: 0, taken: 0, lastRunAt: null, lastTaken: 0 } })
+  vi.spyOn(hostedApi.admin, 'accountStats').mockResolvedValue({ connected: true, stats: { readAt: 0, accounts: 0, made7: 0, made30: 0, studied7: 0, studied30: 0, newsGiven: 0, newsWithdrawn: 0, newsNone: 0, reminders: 0 } })
   vi.spyOn(hostedApi.admin, 'announcements').mockResolvedValue({ connected: true, announcements: [], limits: { perDay: 50, sentToday: 0, batch: 20 } })
 })
 
@@ -106,16 +107,19 @@ describe('Admin', () => {
     expect(screen.getByRole('tabpanel', { name: 'Overview' })).toBeTruthy()
   })
 
-  it('reads the sweep’s counts when the Accounts tab is opened, not before (#187)', async () => {
+  it('reads the sweep’s counts and the counts of accounts when the Accounts tab is opened, not before (#187, #206)', async () => {
     render(<Admin />)
     await screen.findByRole('tabpanel', { name: 'Overview' })
     expect(hostedApi.admin.accountSweep).not.toHaveBeenCalled()
+    expect(hostedApi.admin.accountStats).not.toHaveBeenCalled()
     await openTab('Accounts')
     expect(window.location.hash).toBe('#accounts')
     const panel = screen.getByRole('tabpanel', { name: 'Accounts' })
     expect(await within(panel).findByRole('list', { name: 'The sweep of inactive accounts' })).toBeTruthy()
     expect(within(panel).getByRole('form', { name: 'Look an account up' })).toBeTruthy()
+    expect(within(panel).getByRole('list', { name: 'Accounts and their use' })).toBeTruthy()
     expect(hostedApi.admin.accountSweep).toHaveBeenCalledTimes(1)
+    expect(hostedApi.admin.accountStats).toHaveBeenCalledTimes(1)
   })
 
   it('reads the announcements when the Announcements tab is opened, not before (#185)', async () => {
