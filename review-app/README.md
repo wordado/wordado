@@ -225,6 +225,12 @@ as a pull request against the content repository, with no local checkout and no 
     connected, and the rest of the app works. **This needs the learner app's server from the same change**:
     deploy that server first.
 
+11. Optional, for the Announcements tab (a mail to learners' account holders: a service notice to everyone, or
+    news to those who agreed to it; spec §18): nothing more than step 10. The tab uses the same
+    `ADMIN_WRITE_TOKEN` and `LEARNER_APP_URL`, and says announcements are not connected while either is missing.
+    The mails are sent by the learner app's server, with its mailer and under its limits (`docs/deploy.md`,
+    "Announcements"); this Worker sends none of them. **Deploy that server first.**
+
 `scripts/check-config.ts` refuses to deploy while any of steps 1–4 is still a placeholder, a secret is written
 as a variable, `FEEDBACK_AI_AUTH` is neither of its two values, `APP_REPO` is not `owner/name`, or `FEEDBACK_AI_URL` is not an https address
 (on `googleapis.com`, when the sign-in is `google-service-account`); it runs in
@@ -269,11 +275,16 @@ An admin has **Admin** in the header. The page has six tabs, kept in the address
 language with its progress and **Assign** where nobody holds it), **Reviewers**, **Assignments**,
 **Submissions**, **Feedback** (what learners wrote about the app, read from the learner app's server each
 time the tab is opened; the coordinator marks each message New, Looked at, Done or Not doing and can keep a note
-on it; those marks are stored here, and, with the AI help switched on, the AI's reading of each message: spec §16)
-and **Accounts** (spec §17: how many accounts the sweep of inactive accounts would delete next and how many it
+on it; those marks are stored here, and, with the AI help switched on, the AI's reading of each message: spec §16),
+**Accounts** (spec §17: how many accounts the sweep of inactive accounts would delete next and how many it
 deleted, and one account deleted by hand, for an erasure asked for by mail or an account closed. The account is
 looked up by its whole address, which shows only when it was made and last signed in, and is deleted after a
-question answered by typing the address again. Nothing of an account is stored here). Inviting, assigning, splitting, reassigning and editing a reviewer's languages each open a dialog;
+question answered by typing the address again. Nothing of an account is stored here) and **Announcements** (spec §18:
+a mail to learners' account holders, written here for each language and sent by the learner app's server. A
+service notice goes to every account holder; news goes only to the accounts that agreed to it, with a link to
+stop it. A version can be sent only after it went to one address as a test, and only by typing the kind and the
+number of accounts shown; it is sent once, a few at a time, and the list shows how far it is and lets it be
+stopped. Nothing of it is stored here). Inviting, assigning, splitting, reassigning and editing a reviewer's languages each open a dialog;
 when the server refuses, the dialog stays open and says why. The page is made for a laptop and usable on a phone.
 
 ### Changing reviewers

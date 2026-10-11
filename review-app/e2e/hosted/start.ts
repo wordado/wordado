@@ -63,7 +63,8 @@ createServer((req, res) => {
 }).listen(4182, '127.0.0.1')
 
 // The fake learner app server: the feedback the Feedback tab reads (feedbackFixture.ts), and the accounts of the
-// Accounts tab, which answer to a token of their own.
+// Accounts tab and the announcements of the Announcements tab, which answer to a token of their own. No mail is
+// sent by anything here: a test send and a send are only written down.
 const FEEDBACK_TOKEN = 'e2e-feedback-read-token-0123456789abcdef'
 const WRITE_TOKEN = 'e2e-admin-write-token-0123456789abcdef'
 // The messages came in the last hours, whenever this runs: the week at the top of the tab counts the last seven days.
@@ -76,10 +77,10 @@ learnerApp.accounts.set('staying@example.com', { createdAt: Date.now() - 900 * D
 learnerApp.sweep = { months: 24, batch: 50, due: 70, undated: 1, taken: 12, lastRunAt: Date.now() - DAY, lastTaken: 2 }
 createServer((req, res) => {
   void (async () => {
-    // What the review app has asked of it, for the test of the timed job, and the accounts it still has.
+    // What the review app has asked of it, for the test of the timed job, the accounts it still has, and its announcements.
     if (req.url === '/_state') {
       res.writeHead(200, { 'content-type': 'application/json' })
-      res.end(JSON.stringify({ requests: learnerApp.requests, accounts: [...learnerApp.accounts.keys()] }))
+      res.end(JSON.stringify({ requests: learnerApp.requests, accounts: [...learnerApp.accounts.keys()], announcements: learnerApp.announcements, testSends: learnerApp.testSends }))
       return
     }
     const chunks: Buffer[] = []
