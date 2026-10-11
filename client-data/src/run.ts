@@ -56,8 +56,8 @@ export interface RunSnapshot {
   readonly remaining: number
   /** True once an answer in this run completed the day (spec §8.4). */
   readonly dayCompleted: boolean
-  /** Units this run unlocked, in order (spec §7.2). */
-  readonly unlocked: readonly string[]
+  /** Units this run's study opened, in order (spec §7.2): not the ones a declared level opened outright. */
+  readonly opened: readonly string[]
   /** Why the last answer was not recorded; the item stays so it can be answered again. */
   readonly error: string | null
 }
@@ -71,15 +71,15 @@ const INITIAL: RunSnapshot = {
   toLearn: 0,
   remaining: 0,
   dayCompleted: false,
-  unlocked: [],
+  opened: [],
   error: null,
 }
 
 /** What a practice run draws from now: the learner's words, without today's session, kept to the scope if the corpus holds it. */
 function practiceInput(snapshot: ClientSnapshot, scope: PracticeScope | undefined): Omit<PracticeInput, 'count' | 'rng' | 'shown'> {
-  const { states, flags, plan, corpus, settings } = snapshot
+  const { states, flags, plan, corpus } = snapshot
   const exclude = new Set<WordId>([...(plan?.reviews ?? []), ...(plan?.newWords ?? [])])
-  return { states, flags, retired: corpus?.retired ?? new Set(), exclude, ...scopePool(corpus, settings.declaredLevel, scope) }
+  return { states, flags, retired: corpus?.retired ?? new Set(), exclude, ...scopePool(corpus, scope) }
 }
 
 /**
@@ -307,7 +307,7 @@ export class StudyRun {
 
   /**
    * "Learn this word" for the word on screen, or taking it back (spec §7.4): the daily session will serve it as a
-   * new word. Offered in practice of a theme or of a skipped level's unit, on a word that was never started; allowed at any
+   * new word. Offered in practice of a theme or of a unit, on a word that was never started; allowed at any
    * point of the item, the feedback after an answer included. The run itself goes on as it was.
    */
   async setLearn(on: boolean): Promise<void> {
@@ -369,8 +369,8 @@ export class StudyRun {
         // Finished meanwhile: the count is already 0 and stays put, not recomputed from a queue this run no longer serves.
         remaining: this.finished ? s.remaining : this.queue().length,
         dayCompleted: s.dayCompleted || result.dayCompleted,
-        // Practice introduces nothing, so it unlocks nothing: what its answer persisted was owed from before (a change of level).
-        unlocked: practice ? s.unlocked : [...s.unlocked, ...result.unlocked],
+        // Practice introduces nothing, so it opens nothing.
+        opened: practice ? s.opened : [...s.opened, ...result.opened],
         error: null,
       })
       return true

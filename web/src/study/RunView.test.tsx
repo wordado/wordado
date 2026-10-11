@@ -26,6 +26,29 @@ async function start(mode: RunOptions['mode'], audio: AudioPort = fakeAudio()) {
   return { ...ctx, run }
 }
 
+/** A session whose every answer reports `opened` as the units its study opened. */
+async function startOpening(opened: (units: readonly { readonly unitId: string }[]) => readonly string[]) {
+  const audio = fakeAudio()
+  const ctx = await setup({ audio })
+  const answer = ctx.client.answer.bind(ctx.client)
+  const ids = opened(ctx.client.snapshot.corpus!.units)
+  let told = false
+  vi.spyOn(ctx.client, 'answer').mockImplementation(async (input) => {
+    const result = await answer(input)
+    if (told) return result
+    told = true
+    return { ...result, opened: ids }
+  })
+  const run = await StudyRun.start(ctx.client, ctx.env, { kind: 'session', mode: 'flashcard', cachedClips: () => audio.cachedClips(), online: () => audio.streamable() })
+  renderWith(<RunView run={run} kind="session" />, ctx)
+  ctx.env.advance(ITEM_SETTLE_MS)
+  await press(' ')
+  ctx.env.advance(ITEM_SETTLE_MS)
+  await press('3')
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Stop for now' })))
+  return ctx
+}
+
 const press = (key: string) => act(async () => void fireEvent.keyDown(document.body, { key }))
 
 /** Opens the card's ⋯ menu, where setting aside and reporting live. */
@@ -433,6 +456,11 @@ describe('RunView: listening', () => {
 })
 
 describe('RunView: the end of a run', () => {
+  it('names the unit the session opened', async () => {
+    await startOpening((units) => [units[1]!.unitId])
+    expect(screen.getByText('New unit open: Food and drink')).toBeTruthy()
+  })
+
   it('stops on request and says what was done', async () => {
     const { run, env } = await start('flashcard')
     env.advance(ITEM_SETTLE_MS)
@@ -444,7 +472,8 @@ describe('RunView: the end of a run', () => {
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Session complete')
     expect(screen.getByText('You answered 1 word.')).toBeTruthy()
     expect(screen.getByText('Today counts toward your streak.')).toBeTruthy()
-    expect(screen.getByText('New unit open: People and greetings')).toBeTruthy()
+    // The unit the learner is studying in was open before: it is not announced as new.
+    expect(screen.queryByText(/^New unit open/)).toBeNull()
     expect(screen.getByRole('link', { name: 'Done' }).getAttribute('href')).toBe('/')
     // Done is the main action, Practise more the second.
     const links = [...document.querySelectorAll('.done-actions a')].map((a) => [a.textContent, a.classList.contains('primary')])

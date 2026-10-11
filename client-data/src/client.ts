@@ -31,7 +31,7 @@ import { activateStagedPacks, activePackVersion, installedPacks, installPacks, l
 import { migrate } from './schema'
 import { createStore, type Store } from './store'
 import { PracticeVisit } from './practiceVisit'
-import { availableModes, dayCompleteInput, entryOf, levelClips, newUnlocks, pathView, progressView, sessionPlan, today, toLearnWords, upcomingClips, type PathView, type ProgressView, type StudyContext } from './study'
+import { availableModes, dayCompleteInput, entryOf, levelClips, newlyOpened, newUnlocks, pathView, progressView, sessionPlan, today, toLearnWords, upcomingClips, type PathView, type ProgressView, type StudyContext } from './study'
 import { INITIAL_SYNC_STATUS, readPulledXp, SyncEngine, type PulledXp, type SyncOutcome, type SyncStatus, type SyncTransport } from './sync'
 
 export interface ClientOptions {
@@ -87,7 +87,10 @@ export interface AnswerResult {
   readonly event: ReviewEvent
   /** True the one time an answer completes the day (spec §8.4). */
   readonly dayCompleted: boolean
+  /** Units this answer recorded as unlocked: also the ones a declared level opens outright, owed since it was set. */
   readonly unlocked: readonly string[]
+  /** Those of `unlocked` the learner's study opened: what the end of a session announces (spec §7.2). */
+  readonly opened: readonly string[]
 }
 
 /** Thrown by a Client that has been closed, or is closing, when asked for new work. */
@@ -327,14 +330,17 @@ export class Client {
       const event = await appendAnswer(this.db, this.env, this.learner, input)
       let dayCompleted = false
       let unlocked: string[] = []
+      let opened: string[] = []
       try {
         const before = this.context()
         if (before) {
           const owed = newUnlocks(before)
+          const earned = newlyOpened(before)
           if (owed.length > 0) {
             await this.db.transaction((tx) => addUnlocks(tx, owed))
             this.unlocked = new Set([...this.unlocked, ...owed])
             unlocked = owed
+            opened = earned
           }
           const ctx = this.context()!
           dayCompleted = isDayComplete(dayCompleteInput(ctx, sessionPlan(ctx))) && (await recordDayComplete(this.db, this.learner, today(ctx), this.env.now()))
@@ -343,7 +349,7 @@ export class Client {
         // The answer itself is saved; what failed is owed and is made at the next answer.
       }
       this.refresh()
-      return { event, dayCompleted, unlocked }
+      return { event, dayCompleted, unlocked, opened }
     })
   }
 

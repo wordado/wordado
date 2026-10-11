@@ -1,6 +1,6 @@
 import {
   composeSession,
-  computeUnlocks,
+  computeUnlocks, earnedUnlocks,
   corpusWordId,
   currentUnit,
   dueDay,
@@ -111,6 +111,11 @@ export function dayCompleteInput(ctx: StudyContext, plan: SessionPlan): DayCompl
 /** Unit IDs the current state unlocks beyond the persisted set, in path order (spec §7.2). */
 export function newUnlocks(ctx: StudyContext): string[] {
   return computeUnlocks(pathContext(ctx))
+}
+
+/** Those of `newUnlocks` that study opened, the ones worth telling the learner about (spec §7.2). */
+export function newlyOpened(ctx: StudyContext): string[] {
+  return earnedUnlocks(pathContext(ctx))
 }
 
 export interface ProgressView {

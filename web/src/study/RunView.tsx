@@ -502,7 +502,7 @@ function Done(props: { readonly snapshot: RunSnapshot; readonly kind: RunKind; r
           {t('done.dayComplete')}
         </p>
       )}
-      {snapshot.unlocked.map((unitId) => (
+      {snapshot.opened.map((unitId) => (
         <p key={unitId} className="done-line">
           <span className="done-icon done-icon-unit" aria-hidden="true">
             <LockOpen size={22} strokeWidth={1.75} />

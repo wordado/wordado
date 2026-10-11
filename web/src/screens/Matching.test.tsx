@@ -19,28 +19,30 @@ describe('Matching', () => {
     expect(screen.getByRole('link', { name: 'Back to practice' }).getAttribute('href')).toBe('/practice')
   })
 
-  it('needs five started words of the unit when practising one unit', async () => {
+  it('needs five words of the unit that are not set aside, whatever is started elsewhere', async () => {
     const ctx = await setup()
     await ctx.client.updateSettings({ newWordLimit: 30 })
     await answerNew(ctx.client, ctx.env, 24)
     const second = ctx.client.snapshot.corpus!.units[1]!
+    for (const wordId of second.wordIds.slice(4)) await ctx.client.setFlag(wordId, 'known')
     renderWith(<Matching unit={second.unitId} />, ctx)
-    expect(screen.getByText('Matching needs five started words from this unit.')).toBeTruthy()
+    expect(screen.getByText('Matching needs five words from this unit.')).toBeTruthy()
+    expect(screen.queryByText(/started words/)).toBeNull()
     expect(screen.queryByText('Learn a few words first: matching needs five.')).toBeNull()
     expect(screen.getByText('Unit: Food and drink')).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Back to practice' }).getAttribute('href')).toBe(`/practice?unit=${second.unitId}`)
   })
 
-  it('deals a unit’s board from that unit’s words only, and leads back to that unit’s practice', async () => {
+  it('deals a unit’s board from that unit’s words, started or not, and leads back to that unit’s practice', async () => {
     const ctx = await setup()
     await ctx.client.updateSettings({ newWordLimit: 30 })
     await answerNew(ctx.client, ctx.env, 25)
     const second = ctx.client.snapshot.corpus!.units[1]!
     const states = ctx.client.snapshot.states
     renderWith(<Matching unit={second.unitId} />, ctx)
-    const started = second.wordIds.filter((wordId) => states.has(wordId))
-    expect(started).toHaveLength(5)
-    expect(new Set(english().map((b) => `c:${b.dataset.entry!}`))).toEqual(new Set(started))
+    expect(second.wordIds.filter((wordId) => states.has(wordId))).toHaveLength(5)
+    expect(english()).toHaveLength(5)
+    expect(english().every((b) => second.wordIds.includes(`c:${b.dataset.entry!}`))).toBe(true)
     expect(screen.getByRole('link', { name: 'Back to practice' }).getAttribute('href')).toBe(`/practice?unit=${second.unitId}`)
     for (const button of english()) {
       await click(button)
@@ -50,7 +52,9 @@ describe('Matching', () => {
     expect(ctx.client.snapshot.states).toEqual(states)
     // Play again deals the same unit.
     await click(screen.getByRole('button', { name: 'Play again' }))
-    expect(new Set(english().map((b) => `c:${b.dataset.entry!}`))).toEqual(new Set(started))
+    expect(english()).toHaveLength(5)
+    expect(english().every((b) => second.wordIds.includes(`c:${b.dataset.entry!}`))).toBe(true)
+    expect(ctx.client.snapshot.states).toEqual(states)
   })
 
   it('deals the board of a skipped level’s unit from words never started, and starts none (spec §7.2)', async () => {
@@ -130,12 +134,21 @@ describe('Matching', () => {
     }
   })
 
-  it('plays over everything for a locked unit', async () => {
+  it('plays over a locked unit’s own words, starts none, and leads back to that unit’s practice', async () => {
     const ctx = await setup()
     await answerNew(ctx.client, ctx.env, 5)
-    renderWith(<Matching unit={ctx.client.snapshot.corpus!.units[2]!.unitId} />, ctx)
+    const locked = ctx.client.snapshot.corpus!.units[2]!
+    const states = ctx.client.snapshot.states
+    renderWith(<Matching unit={locked.unitId} />, ctx)
     expect(english()).toHaveLength(5)
-    expect(screen.getByRole('link', { name: 'Back to practice' }).getAttribute('href')).toBe('/practice')
+    expect(english().every((b) => locked.wordIds.includes(`c:${b.dataset.entry!}`))).toBe(true)
+    expect(screen.getByRole('link', { name: 'Back to practice' }).getAttribute('href')).toBe(`/practice?unit=${locked.unitId}`)
+    for (const button of english()) {
+      await click(button)
+      await click(translationFor(button.dataset.entry!))
+    }
+    expect(screen.getByRole('button', { name: 'Play again' })).toBeTruthy()
+    expect(ctx.client.snapshot.states).toEqual(states)
   })
 
   it('heads the translation column with the pack’s language', async () => {

@@ -229,8 +229,8 @@ function UnitItem(props: {
   const { unit, status, progress } = props
   const Icon = ICON[status]
   const title = localized(unit.title, locale, corpus?.l1 ?? '')
-  // Practice draws on started words that are not set aside, and on every live word of a skipped level's unit (spec §7.4).
-  const canPractise = status !== 'locked' && progress !== undefined && unitPractisable(progress, props.skipped) > 0
+  // Practice draws on every live word of the unit, started or not, so a unit still locked offers it too (spec §7.4).
+  const canPractise = progress !== undefined && unitPractisable(progress) > 0
   let words: ReactNode = null
   if (props.wordsOpen) {
     words = (

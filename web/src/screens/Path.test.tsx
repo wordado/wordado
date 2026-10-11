@@ -73,11 +73,9 @@ describe('Path', () => {
     expect(within(current).getByRole('link', { name: 'Practise this unit: People and greetings' })).toBeTruthy()
   })
 
-  it('offers to practise a unit once one of its words is started, below Start studying on the current unit', async () => {
+  it('offers to practise a unit before any of its words is started, below Start studying on the current unit', async () => {
     const ctx = await setup()
     renderWith(<Path />, ctx)
-    expect(screen.queryByRole('link', { name: /^Practise this unit/ })).toBeNull()
-    await act(() => answerNew(ctx.client, ctx.env, 5))
     const [first] = ctx.client.snapshot.corpus!.units
     const links = within(unit('People and greetings')).getAllByRole('link')
     expect(links.map((a) => a.textContent)).toEqual(['Start studying', 'Practise this unit'])
@@ -85,32 +83,36 @@ describe('Path', () => {
     expect(links[1]!.getAttribute('aria-label')).toBe('Practise this unit: People and greetings')
     expect(links[1]!.getAttribute('href')).toBe(`/practice?unit=${first!.unitId}`)
     expect(links[1]!.classList.contains('primary')).toBe(false)
-    expect(screen.getAllByRole('link', { name: /^Practise this unit/ })).toHaveLength(1)
+    await act(() => answerNew(ctx.client, ctx.env, 5))
+    expect(within(unit('People and greetings')).getAllByRole('link').map((a) => a.textContent)).toEqual(['Start studying', 'Practise this unit'])
   })
 
-  it('offers practice on every open unit with started words, and never on a locked one', async () => {
+  it('offers practice on every unit, the locked ones included', async () => {
     const ctx = await setup()
     await ctx.client.updateSettings({ newWordLimit: 30 })
     await answerNew(ctx.client, ctx.env, 25)
-    // A word of the locked third unit, started some other way (a theme pulls words forward, spec §8.9).
-    const third = ctx.client.snapshot.corpus!.units[2]!
-    await ctx.client.answer({ wordId: third.wordIds[0]!, mode: 'flashcard', direction: 'en_to_l1', grade: Grade.Good, latencyMs: 2_000, practice: false })
     renderWith(<Path />, ctx)
     expect(within(unit('Home and every day')).getByText('Locked')).toBeTruthy()
     expect(screen.getAllByRole('link', { name: /^Practise this unit/ }).map((a) => a.getAttribute('aria-label'))).toEqual([
       'Practise this unit: People and greetings',
       'Practise this unit: Food and drink',
+      'Practise this unit: Home and every day',
     ])
+    const third = ctx.client.snapshot.corpus!.units[2]!
+    expect(within(unit('Home and every day')).getByRole('link', { name: /^Practise this unit/ }).getAttribute('href')).toBe(`/practice?unit=${third.unitId}`)
   })
 
-  it('does not offer practice on a unit whose only started words are set aside, as practice leaves them out', async () => {
+  it('does not offer practice on a unit whose live words are all set aside, as practice leaves them out', async () => {
     const ctx = await setup()
     await answerNew(ctx.client, ctx.env, 1)
-    const started = [...ctx.client.snapshot.states.keys()][0]!
+    const [first] = ctx.client.snapshot.corpus!.units
     renderWith(<Path />, ctx)
+    // One set-aside word is not enough: the unit has others.
+    await act(() => ctx.client.setFlag([...ctx.client.snapshot.states.keys()][0]!, 'known'))
     expect(screen.getByRole('link', { name: 'Practise this unit: People and greetings' })).toBeTruthy()
-    await act(() => ctx.client.setFlag(started, 'known'))
-    expect(screen.queryByRole('link', { name: /^Practise this unit/ })).toBeNull()
+    for (const wordId of first!.wordIds) await act(() => ctx.client.setFlag(wordId, 'known'))
+    expect(screen.queryByRole('link', { name: 'Practise this unit: People and greetings' })).toBeNull()
+    expect(screen.getByRole('link', { name: 'Practise this unit: Food and drink' })).toBeTruthy()
   })
 
   it('moves the current unit on once every word of the first is introduced', async () => {

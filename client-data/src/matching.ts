@@ -58,11 +58,11 @@ export class MatchingRun {
    * towards weaker words, and in a scope it deals the words the visit has not shown first (spec §7.4).
    */
   static start(client: Client, env: RunEnv, scope?: PracticeScope): MatchingRun | null {
-    const { corpus, states, flags, settings } = client.snapshot
+    const { corpus, states, flags } = client.snapshot
     if (!corpus) return null
     const wordId = (entry: CorpusEntry) => corpusWordId(entry.entryId)
     const weight = (entry: CorpusEntry) => practiceWeight(states.get(wordId(entry)))
-    const pool = scopePool(corpus, settings.declaredLevel, scope)
+    const pool = scopePool(corpus, scope)
     const candidates = matchingCandidates(corpus, states, flags, pool?.within, pool?.unstarted)
     // The scope the corpus holds: what its boards deal is remembered for the visit. It starts over when a run of
     // the scope would: a board may deal today's session words, but they do not hold the start back.

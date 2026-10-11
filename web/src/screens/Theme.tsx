@@ -45,7 +45,7 @@ export function ThemeWords(props: { readonly themeId: string; /** What the word 
   const started = entries.filter(isStarted).length
   const startedText = t('themes.started', { started, count: entries.length })
   const aboveLevel = entries.some((e) => levelIndex(e.level) > levelIndex(settings.declaredLevel))
-  const canPractise = scopeWords({ corpus, settings, states, flags }, { kind: 'theme', id: theme.themeId }).words > 0
+  const canPractise = scopeWords({ corpus, states, flags }, { kind: 'theme', id: theme.themeId }).words > 0
   const choose = (on: boolean) => {
     chosen.current = true
     void client.updateSettings({ activeTheme: on ? theme.themeId : null }).then(() => setAnnouncement(on ? t('themes.nowStudying', { name }) : t('themes.noneChosen')))

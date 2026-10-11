@@ -51,27 +51,54 @@ describe('Practice', () => {
     expect(screen.getByText('Урок: Хора и поздрави')).toBeTruthy()
   })
 
-  it('falls back to practice over everything for an unknown unit and for a locked one', async () => {
+  it('falls back to practice over everything for an unknown unit', async () => {
+    const ctx = await setup()
+    await answerNew(ctx.client, ctx.env, 5)
+    renderWith(<Practice unit="nowhere" />, ctx)
+    expect(screen.queryByText(/^Unit:/)).toBeNull()
+    expect(screen.queryByRole('link', { name: 'Back to the path' })).toBeNull()
+    expect(screen.getByRole('link', { name: 'Practise words you know' }).getAttribute('href')).toBe('/practice/words')
+    expect(screen.getByRole('link', { name: 'Matching' }).getAttribute('href')).toBe('/practice/matching')
+  })
+
+  it('practises a locked unit whole, with nothing started, and says it covers words the learner has not started', async () => {
     const ctx = await setup()
     await answerNew(ctx.client, ctx.env, 5)
     const locked = ctx.client.snapshot.corpus!.units[2]!
-    for (const unit of ['nowhere', locked.unitId]) {
-      renderWith(<Practice unit={unit} />, ctx)
-      expect(screen.queryByText(/^Unit:/)).toBeNull()
-      expect(screen.queryByRole('link', { name: 'Back to the path' })).toBeNull()
-      expect(screen.getByRole('link', { name: 'Practise words you know' }).getAttribute('href')).toBe('/practice/words')
-      expect(screen.getByRole('link', { name: 'Matching' }).getAttribute('href')).toBe('/practice/matching')
-      cleanup()
-    }
+    expect(ctx.client.snapshot.path!.unlocked.has(locked.unitId)).toBe(false)
+    renderWith(<Practice unit={locked.unitId} />, ctx)
+    expect(screen.getByText(/^Unit:/)).toBeTruthy()
+    const line = screen.getByText('This covers the whole unit, including words you have not started.')
+    expect(line.previousElementSibling?.textContent).toMatch(/^Unit:/)
+    expect(screen.queryByText('From a level you skipped: these words may be new to you.')).toBeNull()
+    expect(screen.queryByText('Nothing to practise yet. Study a few new words first.')).toBeNull()
+    expect(screen.getByRole('link', { name: 'Practise this unit' }).getAttribute('href')).toBe(`/practice/words?unit=${locked.unitId}`)
+    expect(screen.getByRole('link', { name: 'Matching' }).getAttribute('href')).toBe(`/practice/matching?unit=${locked.unitId}`)
+    expect(screen.getByRole('link', { name: 'Back to the path' }).getAttribute('href')).toBe('/path')
   })
 
-  it('says there is nothing to practise in a unit with no started word, whatever is started elsewhere', async () => {
+  it('practises a unit with no started word, whatever is started elsewhere, and says it covers the whole unit', async () => {
     const ctx = await setup()
     await ctx.client.updateSettings({ newWordLimit: 30 })
     await answerNew(ctx.client, ctx.env, 20)
-    renderWith(<Practice unit={ctx.client.snapshot.corpus!.units[1]!.unitId} />, ctx)
+    const second = ctx.client.snapshot.corpus!.units[1]!
+    renderWith(<Practice unit={second.unitId} />, ctx)
+    expect(screen.getByText('Unit: Food and drink')).toBeTruthy()
+    expect(screen.getByText('This covers the whole unit, including words you have not started.')).toBeTruthy()
+    expect(screen.queryByText('Nothing to practise yet. Study a few new words first.')).toBeNull()
+    expect(screen.getByRole('link', { name: 'Matching' }).getAttribute('href')).toBe(`/practice/matching?unit=${second.unitId}`)
+    expect(screen.getByRole('link', { name: 'Back to the path' }).getAttribute('href')).toBe('/path')
+  })
+
+  it('says there is nothing to practise in a unit whose words are all set aside', async () => {
+    const ctx = await setup()
+    await answerNew(ctx.client, ctx.env, 5)
+    const second = ctx.client.snapshot.corpus!.units[1]!
+    for (const wordId of second.wordIds) await ctx.client.setFlag(wordId, 'known')
+    renderWith(<Practice unit={second.unitId} />, ctx)
     expect(screen.getByText('Unit: Food and drink')).toBeTruthy()
     expect(screen.getByText('Nothing to practise yet. Study a few new words first.')).toBeTruthy()
+    expect(screen.queryByText('This covers the whole unit, including words you have not started.')).toBeNull()
     expect(screen.queryByRole('link', { name: 'Matching' })).toBeNull()
     expect(screen.getByRole('link', { name: 'Back to the path' }).getAttribute('href')).toBe('/path')
   })
