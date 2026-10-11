@@ -3043,6 +3043,12 @@ li:not(:has(> .play-word)) > .word-where {
   border-radius: var(--radius);
 }
 
+/* A notice with a link beside its Dismiss (the terms changed): the two sit on the line's own row, not under it. */
+.notice-line .banner-actions {
+  align-items: baseline;
+  margin-top: 0;
+}
+
 .sync-line {
   margin: 0;
   font-size: var(--step--1);

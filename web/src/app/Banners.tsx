@@ -8,6 +8,7 @@ import { useOnline } from '../useOnline'
 import { useStore } from '../useStore'
 import { ConfirmDialog } from './Confirm'
 import { useApp } from './context'
+import { LegalBanner } from './LegalBanner'
 import { ProgressBar } from './ProgressBar'
 import { syncMessage, type SyncMessage } from './syncMessage'
 
@@ -35,6 +36,7 @@ export function Banners() {
       <InstallBanner />
       <NoticeLine />
       <FixBanner />
+      <LegalBanner />
       {account === null ? (
         <div className={`banner${backend === 'memory' ? ' warning' : ''}`}>
           <p>{t(backend === 'memory' ? 'banner.memory' : 'banner.demo')}</p>

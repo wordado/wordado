@@ -60,6 +60,10 @@ export const bg: Messages = {
   'fixed.field.example': 'примерното изречение',
   'fixed.field.audio': 'произношението',
   'fixed.field.level': 'нивото',
+  'legal.terms.changed': 'Условията за ползване са променени.',
+  'legal.terms.link': 'Прочетете условията',
+  'legal.privacy.changed': 'Политиката за поверителност е променена.',
+  'legal.privacy.link': 'Прочетете политиката за поверителност',
 
   'sync.syncing': 'Синхронизиране…',
   'sync.synced': 'Целият напредък е запазен в профила ви',

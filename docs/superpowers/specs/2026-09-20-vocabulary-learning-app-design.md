@@ -1498,6 +1498,31 @@ nothing is in progress and automatic updates are on*.
   bytes read of the size its manifest states; a pack staged behind the open
   app (§9.3) shows nothing.
 
+**A notice when the terms or the privacy policy change** (#184, added
+2026-10-11). The legal pages are on the website, which publishes the date each
+was last changed, per language, in one small file (`/legal.json`, written by
+the website's build from the pages themselves). The app reads it as it starts
+and whenever it returns to the foreground, when online and at most once a day;
+nothing waits for it, and a look that fails says nothing and is tried again
+later. The service worker never answers for the website, and the request asks
+the website each time, so a kept copy cannot hide a new date.
+
+- *The first look tells nothing.* The dates found then are the ones the
+  learner started with: each document's newest date in any language is kept
+  as seen, on the device.
+- *Afterwards* a document whose page in the interface language is newer than
+  the date seen gets one line in the banner area, "The terms of use have
+  changed." or "The privacy policy has changed.", with a link to the page in
+  that language and Dismiss. The line is announced politely, waits across
+  visits and is shown offline from what the device kept.
+- *Dismissing* keeps that date on the device. For a signed-in learner it also
+  goes into the settings document (`termsSeen`, `privacySeen`, §9.2), so one
+  dismissal covers every device: a line shows only when the page is newer than
+  both the device's date and the account's. The demo keeps it on the device
+  alone.
+- There is nothing to accept: the terms bind on continued use, and the line is
+  the notice. Until the website serves the file, the app shows nothing.
+
 ### 9.2 Sync protocol
 
 Two mechanisms, chosen to avoid a CRDT layer entirely. Neither trusts a client
