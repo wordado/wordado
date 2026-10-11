@@ -748,7 +748,9 @@ device) is simply not served while the flag stands. The run's end says how
 many of the words it showed are marked to learn, whenever they were marked.
 The path's word list labels a chosen word "To learn" and can take the mark
 back; in a unit of a skipped level it can also mark a word that was never
-started, so the learner can pick words without playing a round. Each row
+started, so the learner can pick words without playing a round. That limit
+is the path's own: a theme's page and the search (§8.13) offer the mark for
+any word that is not started, whatever its level. Each row
 of the list shows the word, its translation and a listen button, where the
 word's clip can play (§11.1). A row carries a mark only for the word's own
 standing, which the unit cannot say: a ring that fills with its mastery tier
@@ -1352,6 +1354,57 @@ messages came in the week, by kind, and a link to the tab, with nothing a
 learner wrote.
 
 The website's own form is separate work.
+
+### 8.13 Search
+
+Phase 1a. Two searches help a learner find a word, and an address, the path
+at a unit, lets a result take the learner to it. The Themes search and the
+theme page are issue #142; the search for the whole course is issue #144.
+Both fold case and accents, and a word matches when every word of the query
+begins a word of the text (a headword, a variant, a translation or the sense
+note). The shortest query is two letters.
+
+*The Themes search* is a field above the themes. It keeps the themes it
+finds, by their name or description or by their words, and shows them in one
+list: the themes whose name matches first, then those with most matching
+words, otherwise in the pack's order. Each card names up to three matching
+words and a "+N more" link to the theme's page with the same query. Under
+the cards one line names the matching words that are in no offered theme (up
+to five) and links to the search for the whole course with the same query.
+
+*The theme page* (`/themes/<id>`) shows one theme: its description, how many
+of its words are started, the way to choose it or clear it, practice, and its
+words by level, in path order. The levels up to the learner's own are open,
+the higher ones folded. A word filter keeps the theme's matching words in one
+list. Every word not yet started offers "Learn this word" (§7.4).
+
+*The search for the whole course* is a button in the top row, on every
+screen that has one, and the screen `/search?q=`. The query stays in the
+address while the learner types, without a history entry for each letter. It
+finds the words of the whole course, not only those of the offered themes,
+and never a retired word. Best match first, in three groups: the word itself,
+then the words whose headword holds every word of the query, then the words
+found by a variant, a translation or the sense note. Inside a group the order
+is the level (A1 first), then the headword, then the word's ID, so it is the
+same on every run. The list shows thirty results at a time and "Show more"
+adds thirty.
+
+A result is the same row as on the theme page: the word, its translation and
+sense note, its standing, the listen button where the clip can play, and the
+menu with "Learn this word", "I know it" and "Set aside". A line under it
+gives the word's level, its unit as a link to the path at that unit (with a
+lock when the unit is locked) and its themes, a link for each offered theme
+and plain text for any other. Search unlocks nothing. It works offline: the
+index of the words is built in memory from the pack when the pack loads and
+is stored nowhere. Signed out, it covers the bundled sample and says so when
+nothing is found.
+
+*The path at a unit* (`/path?unit=<id>`) opens the unit's level and its word
+list, shows the unit if the short view hides it, scrolls to it and puts focus
+on its heading. The learner folds and unfolds freely afterwards. An address
+that names no unit behaves as `/path`.
+
+The detail is in `2026-10-11-global-search-design.md`.
 
 ## 9. Offline and synchronisation
 
@@ -2295,6 +2348,19 @@ owner (issues #163, #165, #166).
 - **Search engines (§11):** `app.wordado.com` is `noindex`; the website is the
   public face.
 
+**2026-10-11 — a search for the whole course.** Decided by the product
+owner (issue #144).
+
+- **Search (§8.13):** a button in the top row opens a search over every word
+  of the course, best match first, with the same actions as the theme page.
+  The Themes search and the theme page of #142 are described in the same
+  section.
+- **The path opens at a unit (§8.13):** a result links to `/path?unit=`,
+  which opens the unit's level and word list and focuses the unit.
+- **"Learn this word" for any found word (§7.4):** the theme page and the
+  search offer it for any word not yet started; the path's own list keeps
+  its limit to a skipped level's unit.
+
 ### Approval status
 
 Every change since the original approval that alters a settled product
@@ -2316,6 +2382,7 @@ decision, the phasing, or scope. † in the body marks those still pending.
 | iOS and Android apps postponed; the web beta comes first (§14) | Decided by the product owner, 2026-10-01 |
 | † Scope added to Phase 1a by the second review: error reporting, reminders, known/suspended words, account deletion, data export, accessibility target, interface localisation (§14) | Pending |
 | Store less: no country, session details or plain addresses on the server, feedback unlinked; Google sign-in removed; the app not indexed (§8.6, §8.12, §11, §17) | Decided by the product owner, 2026-10-10 |
+| A search for the whole course; the path opens at a unit; "Learn this word" for any found word (§7.4, §8.13) | Decided by the product owner, 2026-10-11 |
 
 ---
 
