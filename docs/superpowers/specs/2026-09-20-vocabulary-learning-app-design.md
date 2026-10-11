@@ -1690,6 +1690,18 @@ on their next pull. That failure is far worse than the cheating it prevents.
   There is no
   parental-consent flow at launch; learners below the threshold are turned
   away.
+- **News by email needs consent** (#186, decided 2026-10-11). Mail about new
+  features is direct marketing, so it goes only to learners who asked for it.
+  The age gate carries a checkbox under the age confirmation, unticked, and
+  the account is created with or without it. Sign-in and sign-up are one
+  request, so the wording that was ticked travels with the code, and the
+  server records it only where the account has no recorded decision: a new
+  account, or one from before the question existed. A recorded choice is never
+  changed by a later sign-in; the switch in *Settings › Account* gives and
+  withdraws it, with the same wording as the checkbox. The account keeps the
+  choice (none, given, withdrawn), when it was made, and which wording in
+  which language (`news-1.bg`); the data export shows all three. Notices
+  about the service itself do not depend on it.
 - Words a learner submits for enrichment are sent to third-party processors
   (dictionary, LLM, TTS) without any user identifier; the privacy policy says
   so.
