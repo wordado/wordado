@@ -2909,6 +2909,11 @@ li:not(:has(> .play-word)) > .word-where {
   align-items: center;
 }
 
+/* A label of several lines, as the news box has (#186), must not squeeze its box. */
+.form-section label.check input {
+  flex-shrink: 0;
+}
+
 /* The way in fills the card's width. */
 .signin .signin-wide {
   width: 100%;
@@ -3052,6 +3057,12 @@ li:not(:has(> .play-word)) > .word-where {
   color: var(--ink);
   background: var(--leaf-soft);
   border-radius: var(--radius);
+}
+
+/* A notice with a link beside its Dismiss (the terms changed): the two sit on the line's own row, not under it. */
+.notice-line .banner-actions {
+  align-items: baseline;
+  margin-top: 0;
 }
 
 .sync-line {

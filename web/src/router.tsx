@@ -158,6 +158,14 @@ export function navigate(route: Route, options: { readonly replace?: boolean } =
   window.dispatchEvent(new Event(NAVIGATE))
 }
 
+/**
+ * Calls `listener` after every navigation, one to the address already shown included (which changes no route).
+ * Returns the function that stops it.
+ */
+export function onNavigation(listener: () => void): () => void {
+  return subscribe(listener)
+}
+
 function subscribe(listener: () => void): () => void {
   window.addEventListener('popstate', listener)
   window.addEventListener(NAVIGATE, listener)

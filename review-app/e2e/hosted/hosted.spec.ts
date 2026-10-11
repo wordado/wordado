@@ -10,12 +10,13 @@ const as = async (browser: Browser, who: 'admin' | 'reviewer' | 'phone' | 'hans'
 }
 
 /** Nothing is wider than the screen: the page does not scroll sideways, and no part of the row or the header (or of
- * what `selector` names) sticks out. */
+ * what `selector` names) sticks out. The admin tabs are left out: on a phone they are a strip that slides sideways
+ * inside the header, and the tabs after the chosen one are meant to lie beyond its edge. */
 async function expectFits(page: Page, selector = 'header *, article *, dialog[open] *') {
   const sizes = await page.evaluate((sel) => {
     const width = document.documentElement.clientWidth
     const out = [...document.querySelectorAll(sel)]
-      .filter((el) => el.getClientRects().length > 0 && el.getBoundingClientRect().right > width + 0.5)
+      .filter((el) => !el.closest('.admin-tabs') && el.getClientRects().length > 0 && el.getBoundingClientRect().right > width + 0.5)
       .map((el) => `${el.tagName.toLowerCase()}.${el.className}`)
     return { scrollWidth: document.documentElement.scrollWidth, width, out }
   }, selector)
@@ -800,6 +801,83 @@ test('@phone an admin reads the week’s summary and opens a draft on a phone', 
   await readsWeekAndDrafts(browser, 'words')
 })
 
+/** The accounts the fake learner app server still has. */
+const accountsLeft = async () => ((await (await fetch('http://127.0.0.1:4183/_state')).json()) as { accounts: string[] }).accounts
+
+test('an admin reads the sweep’s counts, looks an account up and deletes it after typing its address again (#187)', async ({ browser }) => {
+  const page = await as(browser, 'admin')
+  await page.goto('/#accounts')
+  const panel = page.getByRole('tabpanel', { name: 'Accounts' })
+  const stats = panel.getByRole('list', { name: 'The sweep of inactive accounts' }).getByRole('listitem')
+  await expect(stats).toHaveText([/^70\s*past 24 months now$/, /^50\s*the next run deletes$/, /^2\s*deleted by the last run$/, /^12\s*deleted so far$/])
+  await expect(panel.getByText(/An account not signed in to for 24 months is deleted, at most 50 a day, with no mail first\. Last run: .+\./)).toBeVisible()
+  await expect(panel.getByText('1 account has no date of a last sign-in: the sweep never takes it.')).toBeVisible()
+
+  // An address nobody has.
+  await panel.getByLabel('Email address').fill('nobody@example.com')
+  await panel.getByRole('button', { name: 'Look up' }).click()
+  await expect(panel.getByText('No account has the address nobody@example.com.')).toBeVisible()
+
+  // The account: when it was made and last signed in, and nothing else.
+  await panel.getByLabel('Email address').fill('Leaving@example.com')
+  await panel.getByLabel('Email address').press('Enter')
+  const account = panel.getByRole('region', { name: 'The account' })
+  await expect(account.getByText('leaving@example.com')).toBeVisible()
+  await expect(account.getByText(/^Created .*\d{4}$/)).toBeVisible()
+  await expect(account.getByText(/^Last sign-in .*\d{4}$/)).toBeVisible()
+
+  // The question: closed, nothing is deleted.
+  await account.getByRole('button', { name: 'Delete this account…' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Delete this account?' })
+  await expect(dialog.getByText(/it cannot be brought back/)).toBeVisible()
+  await expect(dialog.getByRole('button', { name: 'Delete the account' })).toBeDisabled()
+  await dialog.getByRole('button', { name: 'Cancel' }).click()
+  await expect(dialog).toBeHidden()
+  expect(await accountsLeft()).toContain('leaving@example.com')
+
+  // Answered with another address, it stays closed to the button; with the account's own, the account goes.
+  await account.getByRole('button', { name: 'Delete this account…' }).click()
+  await dialog.getByLabel('Type the address again to delete the account').fill('staying@example.com')
+  await expect(dialog.getByRole('button', { name: 'Delete the account' })).toBeDisabled()
+  await dialog.getByLabel('Type the address again to delete the account').fill('leaving@example.com')
+  await dialog.getByRole('button', { name: 'Delete the account' }).click()
+  await expect(panel.getByText('The account of leaving@example.com was deleted.')).toBeVisible()
+  await expect(dialog).toBeHidden()
+  await expect(account).toBeHidden()
+  const left = await accountsLeft()
+  expect(left).not.toContain('leaving@example.com')
+  expect(left).toContain('staying@example.com')
+  await panel.getByLabel('Email address').fill('leaving@example.com')
+  await panel.getByRole('button', { name: 'Look up' }).click()
+  await expect(panel.getByText('No account has the address leaving@example.com.')).toBeVisible()
+})
+
+test('@phone an admin reads the Accounts tab and opens the question on a phone (#187)', async ({ browser }) => {
+  const page = await as(browser, 'admin')
+  await page.goto('/#accounts')
+  const panel = page.getByRole('tabpanel', { name: 'Accounts' })
+  // The four numbers, two by two.
+  const stats = panel.getByRole('list', { name: 'The sweep of inactive accounts' }).getByRole('listitem')
+  await expect(stats).toHaveCount(4)
+  const [first, second, third] = await Promise.all([0, 1, 2].map(async (i) => (await stats.nth(i).boundingBox())!))
+  expect(second!.y).toBe(first!.y)
+  expect(third!.y).toBeGreaterThan(first!.y)
+  await panel.getByLabel('Email address').fill('staying@example.com')
+  await panel.getByRole('button', { name: 'Look up' }).tap()
+  const account = panel.getByRole('region', { name: 'The account' })
+  await expect(account.getByText('Last sign-in not recorded')).toBeVisible()
+  await expectFits(page, '.admin *')
+  // The question is the whole screen, and closing it deletes nothing.
+  await account.getByRole('button', { name: 'Delete this account…' }).tap()
+  const dialog = page.getByRole('dialog', { name: 'Delete this account?' })
+  await expect(dialog.getByRole('button', { name: 'Delete the account' })).toBeDisabled()
+  expect(await dialog.boundingBox()).toEqual({ x: 0, y: 0, width: 390, height: 844 })
+  await expectFits(page)
+  await dialog.getByRole('button', { name: 'Cancel' }).tap()
+  await expect(dialog).toBeHidden()
+  expect(await accountsLeft()).toContain('staying@example.com')
+})
+
 test('the daily job reads the open issues of the app’s repository once a day, with no token', async () => {
   const asked = async () => ((await (await fetch('http://127.0.0.1:4182/_state')).json()) as { issueRequests: { authorization: string | null; page: number }[] }).issueRequests
   const before = (await asked()).length
@@ -824,4 +902,103 @@ test('the weekly job asks the learner app’s server once a week', async () => {
   // Tuesday's line, the same week: the week is taken, so nothing is asked.
   await fire('0 6 * * 2')
   expect(await asked()).toHaveLength(before + 1)
+})
+
+/** The announcements the fake learner app server has, and the test sends it was asked for. */
+const announcementsState = async () =>
+  (await (await fetch('http://127.0.0.1:4183/_state')).json()) as { announcements: { texts: { en: { subject: string } }; kind: string; status: string; version: number; testedVersion: number | null; recipients: number }[]; testSends: { email: string; version: number }[] }
+
+test('an admin writes a service notice, previews it, sends a test, and sends it after typing the kind and the count (#185)', async ({ browser }) => {
+  const page = await as(browser, 'admin')
+  await page.goto('/#announcements')
+  const panel = page.getByRole('tabpanel', { name: 'Announcements' })
+  await expect(panel.getByText(/At most 50 announcement mails go out a day/)).toBeVisible()
+  await panel.getByRole('button', { name: 'New announcement' }).click()
+  const form = panel.getByRole('form', { name: 'Announcement' })
+  await expect(form.getByRole('radio', { name: /^Service notice/ })).toBeChecked()
+  const english = form.getByRole('group', { name: 'English (needed)' })
+  await english.getByLabel('Subject').fill('The terms change on 1 December')
+  await english.getByLabel('Text').fill('Hello,\n\nthe terms change on 1 December.\nRead them: https://wordado.com/en/terms/')
+  const bulgarian = form.getByRole('group', { name: 'Bulgarian' })
+  await bulgarian.getByLabel('Subject').fill('Условията се променят на 1 декември')
+  await bulgarian.getByLabel('Text').fill('Здравейте.')
+  // Nothing to test or send before it is saved.
+  await expect(form.getByRole('button', { name: 'Send test' })).toBeDisabled()
+  await expect(form.getByRole('button', { name: 'Send…' })).toBeDisabled()
+  await form.getByRole('button', { name: 'Save draft' }).click()
+  await expect(form.getByText('Saved as version 1.')).toBeVisible()
+
+  // The preview: each language as it is mailed, with why it came under the text.
+  await form.getByRole('button', { name: 'Preview' }).click()
+  const preview = form.getByRole('region', { name: 'Preview' })
+  await expect(preview.getByText(/It would go to 3 accounts now/)).toBeVisible()
+  await expect(preview.getByText('Условията се променят на 1 декември')).toBeVisible()
+  await expect(preview.getByText(/You are receiving this notice because you have a Wordado account\./).first()).toBeVisible()
+
+  // Not sendable until this version went as a test.
+  await expect(form.getByText('This version has not been sent as a test yet.')).toBeVisible()
+  await expect(form.getByRole('button', { name: 'Send…' })).toBeDisabled()
+  await form.getByLabel('Send a test to').fill('owner@example.com')
+  await form.getByRole('button', { name: 'Send test' }).click()
+  await expect(form.getByText('The test of version 1 was sent: 2 mails. Read it before sending.')).toBeVisible()
+  expect((await announcementsState()).testSends).toContainEqual({ id: expect.any(Number), version: 1, email: 'owner@example.com' })
+
+  // The question: closed to the button until the kind and the count are typed as shown.
+  await form.getByRole('button', { name: 'Send…' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Send this announcement?' })
+  await expect(dialog.getByText('A service notice, to 3 accounts.')).toBeVisible()
+  const send = dialog.getByRole('button', { name: 'Send to 3 accounts' })
+  await expect(send).toBeDisabled()
+  await dialog.getByLabel('Type service 3 to send').fill('service 30')
+  await expect(send).toBeDisabled()
+  await dialog.getByRole('button', { name: 'Cancel' }).click()
+  await expect(dialog).toBeHidden()
+  expect((await announcementsState()).announcements.find((a) => a.texts.en.subject === 'The terms change on 1 December')).toMatchObject({ status: 'draft', testedVersion: 1 })
+  await form.getByRole('button', { name: 'Send…' }).click()
+  await dialog.getByLabel('Type service 3 to send').fill('service 3')
+  await send.click()
+  await expect(dialog).toBeHidden()
+
+  // Back on the list: it is being sent, and can be stopped.
+  const row = panel.getByRole('list', { name: 'Announcements' }).getByRole('listitem').filter({ hasText: 'The terms change on 1 December' })
+  await expect(row.getByText('Sending', { exact: true })).toBeVisible()
+  await expect(row.getByText('0 of 3 sent · 3 waiting')).toBeVisible()
+  expect((await announcementsState()).announcements.find((a) => a.texts.en.subject === 'The terms change on 1 December')).toMatchObject({ kind: 'service', status: 'sending', recipients: 3 })
+  await row.getByRole('button', { name: 'Stop sending' }).click()
+  await expect(row.getByText('Stopped', { exact: true })).toBeVisible()
+  // Open, it is read and nothing of it can be changed.
+  await row.getByRole('button', { name: 'Open' }).click()
+  await expect(panel.getByText(/cannot be changed or sent again/)).toBeVisible()
+  await expect(panel.getByRole('form', { name: 'Announcement' }).getByRole('button', { name: 'Save draft' })).toHaveCount(0)
+  await expectFits(page)
+})
+
+test('@phone an admin writes news on a phone, and the question to send it is the whole screen (#185)', async ({ browser }) => {
+  const page = await as(browser, 'admin')
+  await page.goto('/#announcements')
+  const panel = page.getByRole('tabpanel', { name: 'Announcements' })
+  await panel.getByRole('button', { name: 'New announcement' }).tap()
+  const form = panel.getByRole('form', { name: 'Announcement' })
+  await form.getByRole('radio', { name: /^News/ }).check()
+  const english = form.getByRole('group', { name: 'English (needed)' })
+  await english.getByLabel('Subject').fill('New: search the whole dictionary')
+  await english.getByLabel('Text').fill('You can now search every word: https://app.wordado.com/a-long-address-that-does-not-break-by-itself-anywhere-at-all')
+  await form.getByRole('button', { name: 'Save draft' }).tap()
+  await expect(form.getByText('Saved as version 1.')).toBeVisible()
+  await form.getByRole('button', { name: 'Preview' }).tap()
+  await expect(form.getByRole('region', { name: 'Preview' }).getByText(/To stop it, open:/)).toBeVisible()
+  await expectFits(page, '.admin *')
+  await form.getByLabel('Send a test to').fill('owner@example.com')
+  await form.getByRole('button', { name: 'Send test' }).tap()
+  await expect(form.getByText(/The test of version 1 was sent/)).toBeVisible()
+  await form.getByRole('button', { name: 'Send…' }).tap()
+  const dialog = page.getByRole('dialog', { name: 'Send this announcement?' })
+  await expect(dialog.getByText('News, to 1 account.')).toBeVisible()
+  await expect(dialog.getByRole('button', { name: 'Send to 1 account' })).toBeDisabled()
+  expect(await dialog.boundingBox()).toEqual({ x: 0, y: 0, width: 390, height: 844 })
+  await expectFits(page)
+  await dialog.getByRole('button', { name: 'Cancel' }).tap()
+  await expect(dialog).toBeHidden()
+  // Closed, nothing was sent.
+  expect((await announcementsState()).announcements.find((a) => a.texts.en.subject === 'New: search the whole dictionary')).toMatchObject({ kind: 'news', status: 'draft' })
 })

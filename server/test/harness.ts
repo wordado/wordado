@@ -1,5 +1,5 @@
 import { createApp } from '../src/app'
-import type { Job, ServerConfig, ServerDeps } from '../src/deps'
+import type { AnnouncementMail, Job, ServerConfig, ServerDeps } from '../src/deps'
 import { testDb } from './db'
 
 export const BASE_URL = 'http://localhost:8787'
@@ -32,6 +32,10 @@ export interface Harness {
   readonly clock: TestClock
   /** Every sign-in code the mailer was given. */
   readonly codes: { readonly email: string; readonly code: string }[]
+  /** Every announcement mail the mailer sent (#185); one it was made to fail is not among them. */
+  readonly announcements: AnnouncementMail[]
+  /** What the mailer does with an announcement mail instead of sending it: throws what this returns. Null sends. */
+  mailFailure: ((mail: AnnouncementMail) => Error | null) | null
   /** Every feedback mail the mailer was given. */
   readonly jobs: Job[]
   /** Every endpoint the push sender was asked to wake. */
@@ -39,7 +43,8 @@ export interface Harness {
   /** What the next push sends answer. */
   pushResult: 'sent' | 'gone' | Error
   request(path: string, init?: RequestInit): Promise<Reply>
-  signIn(email?: string): Promise<Session>
+  /** `extra` joins the body sent with the code, as the consent to news does (#186). */
+  signIn(email?: string, extra?: Record<string, unknown>): Promise<Session>
   /** Waits for the work handed to `deps.background`. */
   settle(): Promise<void>
 }
@@ -73,6 +78,7 @@ export function harness(options: HarnessOptions = {}): Harness {
   }
   const pending: Promise<unknown>[] = []
   const codes: { email: string; code: string }[] = []
+  const announcements: AnnouncementMail[] = []
   const jobs: Job[] = []
   const pushed: string[] = []
   const deps: ServerDeps = {
@@ -84,12 +90,19 @@ export function harness(options: HarnessOptions = {}): Harness {
       minProtocolVersion: 1,
       vapid: null,
       feedbackReadToken: null,
+      adminWriteToken: null,
+      announcementMailsPerDay: 50,
       ...options.config,
     },
     now: options.now ?? (() => clock.now),
     mailer: {
       async sendSignInCode(email, code) {
         codes.push({ email, code })
+      },
+      async sendAnnouncement(mail) {
+        const failure = h.mailFailure?.(mail) ?? null
+        if (failure) throw failure
+        announcements.push(mail)
       },
     },
     jobs: {
@@ -137,6 +150,8 @@ export function harness(options: HarnessOptions = {}): Harness {
     deps,
     clock,
     codes,
+    announcements,
+    mailFailure: null,
     jobs,
     pushed,
     pushResult: 'sent',
@@ -144,7 +159,7 @@ export function harness(options: HarnessOptions = {}): Harness {
     async settle() {
       await Promise.all(pending.splice(0))
     },
-    async signIn(email) {
+    async signIn(email, extra = {}) {
       learners += 1
       const address = email ?? `learner-${learners}-${Math.random().toString(36).slice(2, 8)}@example.com`
       // A fresh address per call keeps each sign-in in its own rate-limit bucket.
@@ -156,12 +171,13 @@ export function harness(options: HarnessOptions = {}): Harness {
       })
       if (sent.status !== 200) throw new Error(`send code: ${sent.status} ${await sent.text()}`)
       await h.settle()
-      const code = [...codes].reverse().find((c) => c.email === address)?.code
+      // Better Auth lower-cases the address before it sends.
+      const code = [...codes].reverse().find((c) => c.email === address.toLowerCase())?.code
       if (!code) throw new Error(`no code was sent to ${address}`)
       const signedIn = await app.request('/api/auth/sign-in/email-otp', {
         method: 'POST',
         headers,
-        body: JSON.stringify({ email: address, otp: code }),
+        body: JSON.stringify({ email: address, otp: code, ...extra }),
       })
       if (signedIn.status !== 200) throw new Error(`sign in: ${signedIn.status} ${await signedIn.text()}`)
       const cookie = signedIn.headers

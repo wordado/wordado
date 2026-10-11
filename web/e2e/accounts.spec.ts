@@ -100,11 +100,17 @@ async function continuePastGate(page: Page): Promise<void> {
   }
 }
 
+/** The consent to news by email: the box at sign-up and the switch in the account settings carry the same wording (#186). */
+const newsBox = (page: Page) => page.getByRole('checkbox', { name: /^I would like to receive news about Wordado/ })
+
 /** Through the age gate and an emailed code, as a learner would (spec §8.6, §11). */
-async function signIn(page: Page, email: string, gate: { country?: string } = {}): Promise<void> {
+async function signIn(page: Page, email: string, gate: { country?: string; news?: boolean } = {}): Promise<void> {
   await page.goto('/signin')
   await page.getByLabel('Country where you live').selectOption(gate.country ?? 'BG')
   await page.getByRole('checkbox', { name: /^I’m \d+ or older$/ }).check()
+  // News by email is never ticked for the learner (#186).
+  await expect(newsBox(page)).not.toBeChecked()
+  if (gate.news) await newsBox(page).check()
   await continuePastGate(page)
   await page.getByLabel('Email').fill(email)
   await page.getByRole('button', { name: 'Email me a code' }).click()
@@ -261,6 +267,52 @@ test('signs out leaving nothing behind, then deletes the account (spec §11)', a
   await expect(page.getByText('Your account and everything in it has been deleted.')).toBeVisible()
   expect((await page.request.get('/v1/me')).status()).toBe(401)
   await ctx.close()
+})
+
+test('asks about news by email at sign-up, the account settings change the answer, and the export shows it (#186)', async ({ browser }) => {
+  const newsOf = async (page: Page) => ((await exported(page)) as unknown as { account: { newsConsent: { state: string; at: number | null; text: string | null } } }).account.newsConsent
+
+  // With the box ticked: the consent is recorded with its time and wording, and the switch withdraws it.
+  const withNews = address('news-yes')
+  const first = await context(browser)
+  const a = await first.newPage()
+  await signIn(a, withNews, { news: true })
+  await finishSetup(a)
+  expect(await newsOf(a)).toEqual({ state: 'given', at: expect.any(Number), text: 'news-1.en' })
+  await a.goto('/settings/account')
+  await expect(newsBox(a)).toBeChecked()
+  // Not .uncheck(): the switch shows the change once the server has taken it (see the settings test above).
+  await newsBox(a).click()
+  await expect(newsBox(a)).not.toBeChecked()
+  await expect(a.locator('.settings-section').getByText('Saved', { exact: true })).toBeVisible()
+  expect(await newsOf(a)).toEqual({ state: 'withdrawn', at: expect.any(Number), text: 'news-1.en' })
+  await first.close()
+
+  // Without it: the account is created all the same, with no decision, and the switch gives the consent.
+  const second = await context(browser)
+  const b = await second.newPage()
+  await signIn(b, address('news-no'))
+  await finishSetup(b)
+  expect(await newsOf(b)).toEqual({ state: 'none', at: null, text: null })
+  await b.goto('/settings/account')
+  await expect(newsBox(b)).toBeEnabled()
+  await expect(newsBox(b)).not.toBeChecked()
+  await newsBox(b).click()
+  await expect(newsBox(b)).toBeChecked()
+  expect(await newsOf(b)).toEqual({ state: 'given', at: expect.any(Number), text: 'news-1.en' })
+  await second.close()
+
+  // Signing in again with the box left alone changes nothing; ticking it after a withdrawal is consent given anew.
+  const again = await context(browser)
+  const c = await again.newPage()
+  await signIn(c, withNews)
+  expect((await newsOf(c)).state).toBe('withdrawn')
+  await again.close()
+  const anew = await context(browser)
+  const d = await anew.newPage()
+  await signIn(d, withNews, { news: true })
+  expect(await newsOf(d)).toEqual({ state: 'given', at: expect.any(Number), text: 'news-1.en' })
+  await anew.close()
 })
 
 test('sends feedback from the account menu; the export names neither it nor a country (spec §8.12, §11, #166)', async ({ browser }) => {

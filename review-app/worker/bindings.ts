@@ -43,6 +43,8 @@ export interface Env {
   readonly LEARNER_APP_URL?: string
   /** A secret, the same value as that server's: what it answers to. Unset leaves the tab unconnected. */
   readonly FEEDBACK_READ_TOKEN?: string
+  /** A secret, the same value as that server's and not the one above: what its accounts routes answer to (#187). Unset leaves the Accounts tab unconnected. */
+  readonly ADMIN_WRITE_TOKEN?: string
   /** How the AI help on feedback signs in to its service: `key` (the default) or `google-service-account`. Anything else, and there is no AI help. */
   readonly FEEDBACK_AI_AUTH?: string
   /** A secret: what the AI help on feedback signs in with (spec 2026-10-10 §4). By `key`, the service's key. By `google-service-account`, the content of

@@ -1,4 +1,5 @@
 import { useClient } from '@wordado/client-data'
+import { newsConsentText } from '@wordado/core'
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { ApiError, OfflineError } from '../account/api'
 import { consentAge } from '../account/ageGate'
@@ -63,7 +64,10 @@ const STEP_NUMBER = { gate: 1, method: 2, code: 3 } as const
  * code. The server creates the account at the first sign-in, so the gate
  * comes first every time. The gate asks where the learner lives and that they
  * are at least the age it sets; the country stays on this device and is not
- * sent with the sign-in (#166), and no birth date is asked. The native
+ * sent with the sign-in (#166), and no birth date is asked. Under it the gate
+ * asks, with a box that starts unticked, whether the learner wants news by
+ * email (#186): the wording ticked travels with the code, since only the
+ * server knows whether the account is new. The native
  * language is asked by the first-run setup, right after
  * sign-up (plan 11), not here.
  */
@@ -75,6 +79,8 @@ export function SignIn() {
   const [step, setStep] = useState<Step>({ kind: 'gate' })
   const [country, setCountry] = useState<string | null>(null)
   const [ageConfirmed, setAgeConfirmed] = useState(false)
+  // News by email (#186): unticked until the learner ticks it, and nothing about the account waits for it.
+  const [newsConsent, setNewsConsent] = useState(false)
   const [email, setEmail] = useState('')
   const [code, setCode] = useState('')
   const [fieldError, setFieldError] = useState<MessageKey | null>(null)
@@ -177,7 +183,7 @@ export function SignIn() {
     setBusy(true)
     setVerifying(true)
     try {
-      await api.verifyCode(step.email, digits)
+      await api.verifyCode(step.email, digits, newsConsent ? newsConsentText(locale) : null)
     } catch (err) {
       // Only 400/401/403 mean the code itself was wrong; anything else (5xx, a
       // malformed response) is a server fault, not the learner's mistake, and
@@ -278,6 +284,12 @@ export function SignIn() {
               <label className="check">
                 <input type="checkbox" checked={ageConfirmed} onChange={(e) => setAgeConfirmed(e.target.checked)} />
                 {t('signin.ageConfirm', { age })}
+              </label>
+            </div>
+            <div className="field">
+              <label className="check">
+                <input type="checkbox" checked={newsConsent} onChange={(e) => setNewsConsent(e.target.checked)} />
+                {t('news.consent')}
               </label>
             </div>
             <div className="actions">

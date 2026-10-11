@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, screen, within } from '@testing-library/react'
 import { DAY_MS, entryClips, Grade } from '@wordado/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { answerNew, fakeAudio, renderWith, setup } from '../test/fixtures'
+import { answerNew, fakeAudio, renderWith, setup, withProviders } from '../test/fixtures'
 import { translate, type Locale } from '../i18n/i18n'
 import { LEVEL_STATUS, Path } from './Path'
 
@@ -413,6 +413,29 @@ describe('Path, opened at a unit', () => {
     details.open = false
     fireEvent(details, new Event('toggle'))
     expect(unit('Food and drink').querySelector('details')!.open).toBe(false)
+  })
+
+  it('opens and scrolls again when it is opened at the same unit a second time', async () => {
+    const ctx = await setup()
+    const id = unitId(ctx, 'Food and drink')
+    const scrolled = vi.fn()
+    const before = Element.prototype.scrollIntoView
+    Element.prototype.scrollIntoView = scrolled
+    try {
+      const { rerender } = renderWith(<Path unit={id} />, ctx)
+      expect(scrolled).toHaveBeenCalledTimes(1)
+      const details = unit('Food and drink').querySelector('details')!
+      details.open = false
+      fireEvent(details, new Event('toggle'))
+      // The address went to the plain path and back while the screen stayed.
+      rerender(withProviders(<Path />, ctx))
+      expect(unit('Food and drink').querySelector('details')!.open).toBe(false)
+      rerender(withProviders(<Path unit={id} />, ctx))
+      expect(unit('Food and drink').querySelector('details')!.open).toBe(true)
+      expect(scrolled).toHaveBeenCalledTimes(2)
+    } finally {
+      Element.prototype.scrollIntoView = before
+    }
   })
 
   it('opens as usual for an ID no unit has', async () => {
