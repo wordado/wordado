@@ -40,7 +40,8 @@ describe('StudyRun', () => {
     expect(run.snapshot.item?.wordId).toBe(planned[0])
     await playThrough(run, env)
     expect(run.snapshot).toMatchObject({ phase: 'done', item: null, answered: 10, remaining: 0, dayCompleted: true })
-    expect(run.snapshot.unlocked).toEqual(['a1-01'])
+    // The first unit was where the path starts: studying in it opened nothing new.
+    expect(run.snapshot.opened).toEqual([])
     expect(client.snapshot.progress?.tiers.new).toBe(50)
   })
 
@@ -188,7 +189,7 @@ describe('StudyRun', () => {
         } else if (phase === 'prompt') await run.choose(item.answerIndex)
         else run.next()
       }
-      expect(run.snapshot).toMatchObject({ phase: 'done', answered: PRACTICE_RUN_SIZE, unlocked: [] })
+      expect(run.snapshot).toMatchObject({ phase: 'done', answered: PRACTICE_RUN_SIZE, opened: [] })
       expect(seen).toHaveLength(PRACTICE_RUN_SIZE)
       expect(seen.every((wordId) => unit.wordIds.includes(wordId))).toBe(true)
       expect(seen.some((wordId) => !before.states.has(wordId))).toBe(true)
@@ -334,7 +335,7 @@ describe('StudyRun', () => {
         } else if (phase === 'prompt') await run.choose(grade === Grade.Again ? (item.answerIndex + 1) % item.options.length : item.answerIndex)
         else run.next()
       }
-      expect(run.snapshot).toMatchObject({ phase: 'done', answered: PRACTICE_RUN_SIZE, unlocked: [] })
+      expect(run.snapshot).toMatchObject({ phase: 'done', answered: PRACTICE_RUN_SIZE, opened: [] })
     }
     expect(seen).toHaveLength(2 * PRACTICE_RUN_SIZE)
     expect(seen.every((wordId) => theme.includes(wordId))).toBe(true)
