@@ -236,7 +236,7 @@ describe('AdminAnnouncements: the Mail tab (#185, #215)', () => {
     expect(await dialog.findByText('A service notice, to 3 accounts.')).toBeTruthy()
     expect(look).toHaveBeenCalledWith(1)
     const confirm = dialog.getByRole('button', { name: 'Send to 3 accounts' }) as HTMLButtonElement
-    const typed = dialog.getByLabelText('Type service 3 to send')
+    const typed = dialog.getByLabelText('Type “service 3” to send')
     expect(confirm.disabled).toBe(true)
     for (const wrong of ['service', 'service 2', 'news 3', '3']) {
       fireEvent.change(typed, { target: { value: wrong } })
@@ -259,14 +259,14 @@ describe('AdminAnnouncements: the Mail tab (#185, #215)', () => {
     const f = within(await open())
     fireEvent.click(f.getByRole('button', { name: 'Send…' }))
     const dialog = within(await screen.findByRole('dialog', { name: 'Send this announcement?' }))
-    fireEvent.change(await dialog.findByLabelText('Type service 3 to send'), { target: { value: 'service 3' } })
+    fireEvent.change(await dialog.findByLabelText('Type “service 3” to send'), { target: { value: 'service 3' } })
     look.mockResolvedValue(preview({ recipients: 4, byLanguage: { en: 4 } }))
     fireEvent.click(dialog.getByRole('button', { name: 'Send to 3 accounts' }))
     expect((await dialog.findByRole('alert')).textContent).toContain('it would now go to 4')
     const again = (await dialog.findByRole('button', { name: 'Send to 4 accounts' })) as HTMLButtonElement
     // What was typed for the old count does not send to the new one.
     expect(again.disabled).toBe(true)
-    expect(dialog.getByLabelText('Type service 4 to send')).toBeTruthy()
+    expect(dialog.getByLabelText('Type “service 4” to send')).toBeTruthy()
   })
 
   it('stops a send and resumes it from the list', async () => {

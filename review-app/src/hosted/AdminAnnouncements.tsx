@@ -642,7 +642,7 @@ function SendQuestion(props: { announcement: Announcement; limits: AnnouncementL
             At most {n(limits.perDay)} mails go out a day, {n(limits.batch)} every 15 minutes: the list shows how far it is, and it can be stopped there.
           </p>
           <label className="field">
-            Type {phrase} to send
+            Type “<code>{phrase}</code>” to send
             <input type="text" autoComplete="off" value={typed} onChange={(e) => setTyped(e.target.value)} />
           </label>
           <span className="form-actions">
