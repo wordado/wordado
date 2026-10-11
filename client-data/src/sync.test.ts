@@ -72,6 +72,20 @@ describe('SyncEngine', () => {
     expect(await pendingDocumentWrites(a.db.driver)).toEqual([])
   })
 
+  it('carries a dismissed notice of changed terms to the learner’s other devices, each document by itself', async () => {
+    const { env, server } = world()
+    const a = await device(server, env)
+    const b = await device(server, env)
+    await a.db.transaction((tx) => patchSettings(tx, { termsSeen: '2026-11-01' }))
+    await b.db.transaction((tx) => patchSettings(tx, { privacySeen: '2026-11-02' }))
+    await a.engine.sync()
+    await b.engine.sync()
+    await a.engine.sync()
+    const seen = { termsSeen: '2026-11-01', privacySeen: '2026-11-02' }
+    expect(await readSettings(a.db.driver)).toMatchObject(seen)
+    expect(await readSettings(b.db.driver)).toMatchObject(seen)
+  })
+
   it('merges settings field by field, later arrival winning a contested field', async () => {
     const { env, server } = world()
     const a = await device(server, env)

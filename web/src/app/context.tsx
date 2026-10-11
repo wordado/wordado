@@ -8,6 +8,7 @@ import type { ReminderActions } from '../reminders/reminders'
 import type { Backend } from '../storage/protocol'
 import type { CreditsPort } from './credits'
 import type { FixNoticesPort } from './fixNotices'
+import type { LegalNoticePort } from './legalNotice'
 import type { LifecyclePort } from './lifecycle'
 import type { PackSwitcher } from './packSwitch'
 
@@ -31,6 +32,8 @@ export interface AppServices {
   readonly credits: CreditsPort
   /** What the learner reported that is fixed now (spec §8.10). */
   readonly fixNotices: FixNoticesPort
+  /** The terms or the privacy policy changed since the learner last saw them (#184). */
+  readonly legalNotice: LegalNoticePort
   /** The one place that installs a language's pack (plan 11): the L1 watcher, the setup and Settings' language page. */
   readonly packs: PackSwitcher
   /**

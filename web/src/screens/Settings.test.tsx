@@ -8,6 +8,7 @@ import { fakeAccounts, fakeAudio, fakeLifecycle, fakeReminders, renderWith, setu
 import { saveFile } from '../download'
 import { SAVE_HOLD_MS } from '../app/updateSafety'
 import { AUTO_CONTINUE_KEY } from '../study/autoContinue'
+import { en } from '../i18n/en'
 import { Settings } from './Settings'
 
 vi.mock('../download', () => ({ saveFile: vi.fn() }))
@@ -281,6 +282,68 @@ describe('Settings: the account (spec §11)', () => {
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Download your data (JSON)' })))
     expect(screen.getByRole('alert').textContent).toBe('Your sign-in has expired. Sign in again.')
     expect(saveFile).not.toHaveBeenCalled()
+  })
+
+  const NEWS = 'I would like to receive news about Wordado and its new features by email. I can opt out at any time.'
+  const session = (newsConsent: 'none' | 'given' | 'withdrawn') => ({ ...ana, createdAt: 0, newsConsent })
+
+  it('shows news by email as the account has it, and withdraws the consent from the switch (#186)', async () => {
+    const ctx = await setup()
+    const api = fakeApi({}, session('given'))
+    renderWith(<Settings section="account" />, { ...ctx, account: ana, api })
+    // Until the server has said how the account stands, the switch cannot be used.
+    expect((page().getByRole('checkbox', { name: NEWS }) as HTMLInputElement).disabled).toBe(true)
+    await act(async () => undefined)
+    const news = page().getByRole('checkbox', { name: NEWS }) as HTMLInputElement
+    expect(news.disabled).toBe(false)
+    expect(news.checked).toBe(true)
+    expect(document.getElementById(news.getAttribute('aria-describedby')!)?.textContent).toBe(
+      'Notices about the service itself, such as a change to the terms, are sent either way.',
+    )
+    await act(async () => fireEvent.click(news))
+    expect(api.calls).toContain('setNewsConsent false')
+    expect(news.checked).toBe(false)
+    expect(page().getByText('Saved')).toBeTruthy()
+  })
+
+  it('gives the consent from the switch, with the wording on it (#186)', async () => {
+    const ctx = await setup()
+    for (const before of ['none', 'withdrawn'] as const) {
+      const api = fakeApi({}, session(before))
+      renderWith(<Settings section="account" />, { ...ctx, account: ana, api })
+      await act(async () => undefined)
+      const news = page().getByRole('checkbox', { name: NEWS }) as HTMLInputElement
+      expect(news.checked).toBe(false)
+      await act(async () => fireEvent.click(news))
+      expect(api.calls).toContain('setNewsConsent true news-1.en')
+      expect(news.checked).toBe(true)
+      cleanup()
+    }
+  })
+
+  it('leaves the switch as it was and says why when the change did not reach the server (#186)', async () => {
+    const ctx = await setup()
+    const api = fakeApi(
+      {
+        setNewsConsent: async () => {
+          throw new ApiError(500, null)
+        },
+      },
+      session('given'),
+    )
+    renderWith(<Settings section="account" />, { ...ctx, account: ana, api })
+    await act(async () => undefined)
+    const news = page().getByRole('checkbox', { name: NEWS }) as HTMLInputElement
+    await act(async () => fireEvent.click(news))
+    expect(news.checked).toBe(true)
+    expect(page().getByRole('alert').textContent).toBe(en['error.server'])
+    expect(page().queryByText('Saved')).toBeNull()
+  })
+
+  it('offers no news switch in the demo (#186)', async () => {
+    const ctx = await setup()
+    renderWith(<Settings section="account" />, ctx)
+    expect(screen.queryByRole('checkbox', { name: NEWS })).toBeNull()
   })
 
   it('signs out, and asks first when answers could not be synced', async () => {

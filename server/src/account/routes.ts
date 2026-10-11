@@ -1,9 +1,10 @@
-import { dayToIsoDate, utcDay } from '@wordado/core'
+import { dayToIsoDate, isNewsConsentText, utcDay, type NewsConsent } from '@wordado/core'
 import type { Hono, MiddlewareHandler } from 'hono'
 import type { ServerDeps } from '../deps'
 import { invalid, readJson, type AppEnv } from '../http'
 import { deleteAccount } from './deletion'
 import { buildExport } from './export'
+import { setNewsConsent } from './newsConsent'
 
 export function accountRoutes(
   app: Hono<AppEnv>,
@@ -13,12 +14,24 @@ export function accountRoutes(
   owner: MiddlewareHandler<AppEnv>,
 ): void {
   app.get('/v1/me', user, async (c) => {
-    const [row] = await deps.db.query<{ id: string; email: string; created_at: Date }>(
-      'select id, email, "createdAt" as created_at from "user" where id = $1',
+    const [row] = await deps.db.query<{ id: string; email: string; created_at: Date; news_consent: NewsConsent }>(
+      'select id, email, "createdAt" as created_at, news_consent from "user" where id = $1',
       [c.get('userId')],
     )
     if (!row) return c.json({ error: 'unauthorized' }, 401)
-    return c.json({ userId: row.id, email: row.email, createdAt: row.created_at.getTime() })
+    return c.json({ userId: row.id, email: row.email, createdAt: row.created_at.getTime(), newsConsent: row.news_consent })
+  })
+
+  /** The settings switch for news by email (#186): `{"consent": true, "text": <the wording shown>}` gives it, `{"consent": false}` withdraws it. */
+  app.put('/v1/account/news-consent', owner, async (c) => {
+    const body = await readJson(c)
+    const { consent, text } = (typeof body === 'object' && body !== null ? body : {}) as { consent?: unknown; text?: unknown }
+    if (typeof consent !== 'boolean') return invalid(c, ['consent must be true or false'])
+    if (consent && !isNewsConsentText(text)) return invalid(c, ['text must name the wording that was shown'])
+    const change = consent && isNewsConsentText(text) ? ({ consent: true, text } as const) : ({ consent: false } as const)
+    const newsConsent = await setNewsConsent(deps.db, c.get('userId'), change, deps.now())
+    if (newsConsent === null) return c.json({ error: 'unauthorized' }, 401)
+    return c.json({ newsConsent })
   })
 
   /** Cloudflare's reading of the request's country, to pre-fill sign-up (spec §11). XX is unknown, T1 is Tor. */

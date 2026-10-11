@@ -33,6 +33,7 @@ beforeEach(() => {
   vi.spyOn(hostedApi.admin, 'feedbackTopics').mockResolvedValue([])
   vi.spyOn(hostedApi.admin, 'feedbackWeek').mockResolvedValue({ since: 0, until: 1, read: 0, byCategory: { bug: 0, idea: 0, question: 0, praise: 0, junk: 0 }, blockingBugs: 0, topTopics: [], blocking: [], newTopics: [], paragraph: null })
   vi.spyOn(hostedApi.admin, 'feedbackAi').mockResolvedValue({ setUp: false, needs: 'FEEDBACK_AI_KEY', on: false, model: 'test/model', callsToday: 0, dailyCalls: 200, reads: ['en', 'bg'], repo: 'wordado/wordado' })
+  vi.spyOn(hostedApi.admin, 'accountSweep').mockResolvedValue({ connected: true, sweep: { months: 24, batch: 50, due: 0, undated: 0, taken: 0, lastRunAt: null, lastTaken: 0 } })
 })
 
 const openTab = async (name: string) => fireEvent.click(await screen.findByRole('tab', { name }))
@@ -75,10 +76,10 @@ describe('Admin', () => {
     expect(await screen.findByText(/No review data yet/)).toBeTruthy()
   })
 
-  it('has five tabs; a click or the arrow keys change the tab, and it is kept in the address', async () => {
+  it('has six tabs; a click or the arrow keys change the tab, and it is kept in the address', async () => {
     render(<Admin />)
     const tablist = await screen.findByRole('tablist')
-    expect(within(tablist).getAllByRole('tab').map((t) => t.textContent)).toEqual(['Overview', 'Reviewers', 'Assignments', 'Submissions', 'Feedback'])
+    expect(within(tablist).getAllByRole('tab').map((t) => t.textContent)).toEqual(['Overview', 'Reviewers', 'Assignments', 'Submissions', 'Feedback', 'Accounts'])
     await openTab('Reviewers')
     expect(window.location.hash).toBe('#reviewers')
     expect(screen.getByRole('tab', { name: 'Reviewers' }).getAttribute('aria-selected')).toBe('true')
@@ -98,10 +99,22 @@ describe('Admin', () => {
     fireEvent.keyDown(assignments, { key: 'ArrowLeft' })
     fireEvent.keyDown(screen.getByRole('tab', { name: 'Reviewers' }), { key: 'ArrowLeft' })
     fireEvent.keyDown(screen.getByRole('tab', { name: 'Overview' }), { key: 'ArrowLeft' })
-    expect(screen.getByRole('tab', { name: 'Feedback' }).getAttribute('aria-selected')).toBe('true')
-    expect(window.location.hash).toBe('#feedback')
-    fireEvent.keyDown(screen.getByRole('tab', { name: 'Feedback' }), { key: 'Home' })
+    expect(screen.getByRole('tab', { name: 'Accounts' }).getAttribute('aria-selected')).toBe('true')
+    expect(window.location.hash).toBe('#accounts')
+    fireEvent.keyDown(screen.getByRole('tab', { name: 'Accounts' }), { key: 'Home' })
     expect(screen.getByRole('tabpanel', { name: 'Overview' })).toBeTruthy()
+  })
+
+  it('reads the sweep’s counts when the Accounts tab is opened, not before (#187)', async () => {
+    render(<Admin />)
+    await screen.findByRole('tabpanel', { name: 'Overview' })
+    expect(hostedApi.admin.accountSweep).not.toHaveBeenCalled()
+    await openTab('Accounts')
+    expect(window.location.hash).toBe('#accounts')
+    const panel = screen.getByRole('tabpanel', { name: 'Accounts' })
+    expect(await within(panel).findByRole('list', { name: 'The sweep of inactive accounts' })).toBeTruthy()
+    expect(within(panel).getByRole('form', { name: 'Look an account up' })).toBeTruthy()
+    expect(hostedApi.admin.accountSweep).toHaveBeenCalledTimes(1)
   })
 
   it('reads the feedback when the Feedback tab is opened, not before, and keeps the tab in the address', async () => {

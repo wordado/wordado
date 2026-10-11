@@ -15,6 +15,7 @@ import { watchContentFiles } from './app/contentFiles'
 import { Credits } from './app/credits'
 import { FixNotices } from './app/fixNotices'
 import { watchL1 } from './app/l1Watch'
+import { fetchLegalDates, LegalNotice } from './app/legalNotice'
 import { AppLifecycle, AUTO_UPDATE_KEY, watchUpdates, type InstallEvent } from './app/lifecycle'
 import { PackSwitcher } from './app/packSwitch'
 import { Root, type OpeningDownload } from './app/Root'
@@ -78,6 +79,8 @@ const credits = new Credits({
 })
 /** What the learner reported that is fixed now (spec §8.10). */
 const fixNotices = new FixNotices({ storage: browserStorage('localStorage'), fetchFixes: (url) => fetchSibling(url, 'fixes.json', validateFixes) })
+/** The terms or the privacy policy changed since the learner last saw them (#184). */
+const legalNotice = new LegalNotice({ storage: browserStorage('localStorage'), fetch: () => fetchLegalDates(), now: env.now, online: () => navigator.onLine })
 /** The one place that installs a language's pack (plan 11): the L1 watcher, the setup's Language step and Settings. */
 const packs = new PackSwitcher({
   fetchManifest: (account) => fetchManifest(manifestUrlFor(account)),
@@ -234,12 +237,21 @@ createRoot(document.getElementById('root')!).render(
         localeMounted = true
       }}
     >
-      <Root boot={boot} download={openingDownload} services={{ env, audio, afterRun, api, accounts: controller!, reminders, lifecycle, credits, fixNotices, packs }} />
+      <Root boot={boot} download={openingDownload} services={{ env, audio, afterRun, api, accounts: controller!, reminders, lifecycle, credits, fixNotices, legalNotice, packs }} />
     </I18nProvider>
   </StrictMode>,
 )
 
 void boot.start()
+
+// The legal pages' dates (#184): looked at as the app starts and whenever it comes back, at most once a day. Beside
+// the start, never in its way: nothing waits for it, and a look that fails, or a device that is offline, says nothing.
+const checkLegal = () => void legalNotice.check()
+checkLegal()
+window.addEventListener('online', checkLegal)
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') checkLegal()
+})
 
 // iOS keeps a page left for another frozen in its back-forward cache, where its database Worker
 // would hold the file and its lock from the next page for good: let go as the page is hidden, open again if it returns

@@ -9,8 +9,9 @@ import { ProgressBar } from '../app/ProgressBar'
 import { useT } from '../i18n/i18n'
 import { Link, navigate } from '../router'
 import { useOnline } from '../useOnline'
+import { NewsSetting } from './NewsSetting'
 
-/** The account (spec §11): the export, signing out, and self-service deletion. The demo gets the way in. */
+/** The account (spec §11): news by email (#186), the export, signing out, and self-service deletion. The demo gets the way in. */
 export function AccountSettings() {
   const { t } = useT()
   const { account, accounts, api, lifecycle } = useApp()
@@ -59,6 +60,7 @@ export function AccountSettings() {
     <section aria-labelledby="settings-account">
       <h2 id="settings-account">{t('settings.account')}</h2>
       <p>{t('settings.signedInAs', { email: account.email })}</p>
+      <NewsSetting />
       <ul className="settings-actions">
         <li>
           {online ? (

@@ -88,3 +88,20 @@ describe('l1', () => {
     expect(isSupportedL1('en')).toBe(false)
   })
 })
+
+describe('termsSeen and privacySeen', () => {
+  it('hold the date of the terms and of the privacy policy the learner last dismissed a notice of: null until then', () => {
+    expect(DEFAULT_SETTINGS.termsSeen).toBeNull()
+    expect(DEFAULT_SETTINGS.privacySeen).toBeNull()
+    expect(validateSettingsPatch({ termsSeen: '2026-10-11' })).toEqual({ ok: true, fields: { termsSeen: '2026-10-11' } })
+    expect(validateSettingsPatch({ privacySeen: '2026-10-11', termsSeen: null })).toEqual({ ok: true, fields: { privacySeen: '2026-10-11', termsSeen: null } })
+  })
+
+  it('are calendar dates and nothing else', () => {
+    for (const value of ['2026-10-1', '11.10.2026', '2026-10-11T00:00:00Z', '', 20261011, true]) {
+      expect(errorsOf({ termsSeen: value }), String(value)).toEqual(['termsSeen'])
+      expect(errorsOf({ privacySeen: value }), String(value)).toEqual(['privacySeen'])
+    }
+    expect(settingsFromFields({ termsSeen: 'yesterday', privacySeen: '2026-10-10' })).toMatchObject({ termsSeen: null, privacySeen: '2026-10-10' })
+  })
+})

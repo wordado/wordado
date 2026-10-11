@@ -2,6 +2,7 @@ import { Hono, type Context } from 'hono'
 import { accessKeys, verifyAccessJwt } from './access'
 import type { Env } from './bindings'
 import { getReviewer, insertReviewerIfAbsent, type ReviewerRow } from './db'
+import { accountsRoutes } from './routes/accounts'
 import { adminRoutes } from './routes/admin'
 import { decisionRoutes } from './routes/decision'
 import { feedbackRoutes } from './routes/feedback'
@@ -84,6 +85,8 @@ export function createApp(deps: Deps): Hono<AppEnv> {
   decisionRoutes(app, deps)
   adminRoutes(app, deps)
   reviewersRoutes(app, deps)
+  // After adminRoutes, so every route of the Accounts tab is behind the admin-only middleware.
+  accountsRoutes(app, deps)
   // Before feedbackRoutes: the first route that matches is taken, and /api/admin/feedback/ai is not a message's mark,
   // nor is /api/admin/feedback/topics.
   feedbackAiRoutes(app, deps)
