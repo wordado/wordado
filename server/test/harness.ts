@@ -39,7 +39,8 @@ export interface Harness {
   /** What the next push sends answer. */
   pushResult: 'sent' | 'gone' | Error
   request(path: string, init?: RequestInit): Promise<Reply>
-  signIn(email?: string): Promise<Session>
+  /** `extra` joins the body sent with the code, as the consent to news does (#186). */
+  signIn(email?: string, extra?: Record<string, unknown>): Promise<Session>
   /** Waits for the work handed to `deps.background`. */
   settle(): Promise<void>
 }
@@ -144,7 +145,7 @@ export function harness(options: HarnessOptions = {}): Harness {
     async settle() {
       await Promise.all(pending.splice(0))
     },
-    async signIn(email) {
+    async signIn(email, extra = {}) {
       learners += 1
       const address = email ?? `learner-${learners}-${Math.random().toString(36).slice(2, 8)}@example.com`
       // A fresh address per call keeps each sign-in in its own rate-limit bucket.
@@ -156,12 +157,13 @@ export function harness(options: HarnessOptions = {}): Harness {
       })
       if (sent.status !== 200) throw new Error(`send code: ${sent.status} ${await sent.text()}`)
       await h.settle()
-      const code = [...codes].reverse().find((c) => c.email === address)?.code
+      // Better Auth lower-cases the address before it sends.
+      const code = [...codes].reverse().find((c) => c.email === address.toLowerCase())?.code
       if (!code) throw new Error(`no code was sent to ${address}`)
       const signedIn = await app.request('/api/auth/sign-in/email-otp', {
         method: 'POST',
         headers,
-        body: JSON.stringify({ email: address, otp: code }),
+        body: JSON.stringify({ email: address, otp: code, ...extra }),
       })
       if (signedIn.status !== 200) throw new Error(`sign in: ${signedIn.status} ${await signedIn.text()}`)
       const cookie = signedIn.headers
