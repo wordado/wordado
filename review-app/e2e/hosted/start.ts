@@ -99,14 +99,14 @@ learnerApp.accounts.set('leaving@example.com', {
   createdAt: Date.now() - 400 * DAY,
   lastSignInAt: Date.now() - 30 * DAY,
   details: {
-    lastStudiedAt: Date.now() - DAY, daysStudied30: 19, newsConsent: 'given', newsConsentAt: Date.now() - 38 * DAY, newsConsentLanguage: 'bg',
+    lastStudiedAt: Date.now() - DAY, daysStudied30: 19, language: 'bg', newsConsent: 'given', newsConsentAt: Date.now() - 38 * DAY, newsConsentLanguage: 'bg',
     reminders: [{ minute: 1170, tzOffsetMin: 180, paused: false }, { minute: 480, tzOffsetMin: 180, paused: true }], devices: 2, sweepNotBefore: Date.now() + 701 * DAY,
   },
 })
 learnerApp.accounts.set('staying@example.com', {
   createdAt: Date.now() - 900 * DAY,
   lastSignInAt: null,
-  details: { lastStudiedAt: null, daysStudied30: 0, newsConsent: 'none', newsConsentAt: null, newsConsentLanguage: null, reminders: [], devices: 0, sweepNotBefore: null },
+  details: { lastStudiedAt: null, daysStudied30: 0, language: null, newsConsent: 'none', newsConsentAt: null, newsConsentLanguage: null, reminders: [], devices: 0, sweepNotBefore: null },
 })
 learnerApp.sweep = { months: 24, batch: 50, due: 70, undated: 1, taken: 12, lastRunAt: Date.now() - DAY, lastTaken: 2 }
 learnerApp.stats = { readAt: Date.now(), accounts: 1204, made7: 4, made30: 31, studied7: 40, studied30: 75, newsGiven: 50, newsWithdrawn: 3, newsNone: 1151, reminders: 22 }

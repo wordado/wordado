@@ -309,6 +309,10 @@ export interface AccountDetails {
   readonly lastStudiedAt: number | null
   /** On how many of the last 30 UTC days, today among them, it gave at least one answer. */
   readonly daysStudied30: number
+  /** Its interface language as an announcement reads it (#199): what its app said, else the older signs of one;
+   * null when it left none, and an announcement is written to it in English. Absent from a server from before it
+   * said so. */
+  readonly language?: AnnouncementLanguage | null
   /** What it said to news by email, when, and in which language it read the question; the last two null when it
    * said nothing (the language also when the server does not know it). */
   readonly newsConsent: 'none' | 'given' | 'withdrawn'

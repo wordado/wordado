@@ -138,13 +138,15 @@ const MAX_REMINDERS = 10
 const MAX_SPLIT_ROWS = 10
 const MAX_POINTS = 400
 
-/** How an account is used, field by field; null when what the server sent is not that. */
+/** How an account is used, field by field; null when what the server sent is not that. A server from before #199
+ * says no language of the account: the rest is passed on without it. */
 function detailsOf(raw: unknown): AccountDetails | null {
   const fields = fieldsOf(raw)
   if (fields === null) return null
-  const { lastStudiedAt, daysStudied30, newsConsent, newsConsentAt, newsConsentLanguage, reminders, devices, sweepNotBefore } = fields
+  const { lastStudiedAt, daysStudied30, language, newsConsent, newsConsentAt, newsConsentLanguage, reminders, devices, sweepNotBefore } = fields
   if (!isTimeOrNull(lastStudiedAt) || !isCount(daysStudied30) || !isCount(devices) || !isTimeOrNull(sweepNotBefore)) return null
   if ((newsConsent !== 'none' && newsConsent !== 'given' && newsConsent !== 'withdrawn') || !isTimeOrNull(newsConsentAt) || !languageOrNull(newsConsentLanguage)) return null
+  if (language !== undefined && !languageOrNull(language)) return null
   if (!Array.isArray(reminders) || reminders.length > MAX_REMINDERS) return null
   const times: AccountDetails['reminders'][number][] = []
   for (const reminder of reminders) {
@@ -152,7 +154,7 @@ function detailsOf(raw: unknown): AccountDetails | null {
     if (!isCount(minute) || minute > 1439 || !isOffset(tzOffsetMin) || typeof paused !== 'boolean') return null
     times.push({ minute, tzOffsetMin, paused })
   }
-  return { lastStudiedAt, daysStudied30, newsConsent, newsConsentAt, newsConsentLanguage, reminders: times, devices, sweepNotBefore }
+  return { lastStudiedAt, daysStudied30, ...(language === undefined ? {} : { language }), newsConsent, newsConsentAt, newsConsentLanguage, reminders: times, devices, sweepNotBefore }
 }
 
 /** The account an address names, field by field: anything else the server may send is not passed on. A server

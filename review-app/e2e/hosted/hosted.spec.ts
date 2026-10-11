@@ -885,6 +885,7 @@ test('an admin reads the counts of accounts and the sweep’s, looks an account 
     /^Last sign-in.*\d{4}$/,
     /^Last studied.*\d{4}$/,
     /^Days studied, last 3019$/,
+    /^LanguageBulgarian$/,
     /^News by emailAgreed .*\d{4}, in Bulgarian$/,
     /^RemindersOn 19:30 \(UTC\+3\)Paused 08:00 \(UTC\+3\)$/,
     /^Devices2$/,

@@ -1,9 +1,9 @@
-import type { NewsConsent, StampedReviewEvent, WireDocument } from '@wordado/core'
+import type { InterfaceLanguage, NewsConsent, StampedReviewEvent, WireDocument } from '@wordado/core'
 import type { Db } from '../db/db'
 import { EVENT_COLUMNS, toStampedEvent, toStoredEvent, type EventRow } from '../sync/events'
 import { DOCUMENT_COLUMNS, toWire, type DocumentRow } from '../sync/documents'
 
-export const EXPORT_FORMAT = 'wordado-export-3'
+export const EXPORT_FORMAT = 'wordado-export-4'
 
 /** The learner's portable copy (spec §11). Words join it in Phase 2. */
 export interface AccountExport {
@@ -15,6 +15,8 @@ export interface AccountExport {
     readonly createdAt: number
     /** News by email (#186): the choice, when it was made and the wording it was given with; both null while none. */
     readonly newsConsent: { readonly state: NewsConsent; readonly at: number | null; readonly text: string | null }
+    /** The language the app's interface was in when it last said so (#199); null while it has not. */
+    readonly interfaceLanguage: InterfaceLanguage | null
   }
   /** Settings, flags, unlocks, reports and the entitlement, as the pull sends them. */
   readonly documents: readonly WireDocument[]
@@ -33,8 +35,8 @@ export interface AccountExport {
 export async function buildExport(db: Db, userId: string, now: number): Promise<AccountExport | null> {
   return db.transaction(async (tx) => {
     await tx.query('set transaction isolation level repeatable read, read only')
-    const [user] = await tx.query<{ id: string; email: string; created_at: Date; news_consent: NewsConsent; news_consent_at: Date | null; news_consent_text: string | null }>(
-      'select id, email, "createdAt" as created_at, news_consent, news_consent_at, news_consent_text from "user" where id = $1',
+    const [user] = await tx.query<{ id: string; email: string; created_at: Date; news_consent: NewsConsent; news_consent_at: Date | null; news_consent_text: string | null; interface_language: InterfaceLanguage | null }>(
+      'select id, email, "createdAt" as created_at, news_consent, news_consent_at, news_consent_text, interface_language from "user" where id = $1',
       [userId],
     )
     if (!user) return null
@@ -52,6 +54,7 @@ export async function buildExport(db: Db, userId: string, now: number): Promise<
         email: user.email,
         createdAt: user.created_at.getTime(),
         newsConsent: { state: user.news_consent, at: user.news_consent_at?.getTime() ?? null, text: user.news_consent_text },
+        interfaceLanguage: user.interface_language,
       },
       documents: documents.map((row) => toWire(row, null)),
       dayComplete: days.map((d) => d.local_date),

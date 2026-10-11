@@ -1,9 +1,10 @@
-import { dayToIsoDate, isNewsConsentText, utcDay, type NewsConsent } from '@wordado/core'
+import { dayToIsoDate, isInterfaceLanguage, isNewsConsentText, utcDay, type InterfaceLanguage, type NewsConsent } from '@wordado/core'
 import type { Hono, MiddlewareHandler } from 'hono'
 import type { ServerDeps } from '../deps'
 import { invalid, readJson, type AppEnv } from '../http'
 import { deleteAccount } from './deletion'
 import { buildExport } from './export'
+import { setInterfaceLanguage } from './interfaceLanguage'
 import { setNewsConsent } from './newsConsent'
 
 export function accountRoutes(
@@ -14,12 +15,12 @@ export function accountRoutes(
   owner: MiddlewareHandler<AppEnv>,
 ): void {
   app.get('/v1/me', user, async (c) => {
-    const [row] = await deps.db.query<{ id: string; email: string; created_at: Date; news_consent: NewsConsent }>(
-      'select id, email, "createdAt" as created_at, news_consent from "user" where id = $1',
+    const [row] = await deps.db.query<{ id: string; email: string; created_at: Date; news_consent: NewsConsent; interface_language: InterfaceLanguage | null }>(
+      'select id, email, "createdAt" as created_at, news_consent, interface_language from "user" where id = $1',
       [c.get('userId')],
     )
     if (!row) return c.json({ error: 'unauthorized' }, 401)
-    return c.json({ userId: row.id, email: row.email, createdAt: row.created_at.getTime(), newsConsent: row.news_consent })
+    return c.json({ userId: row.id, email: row.email, createdAt: row.created_at.getTime(), newsConsent: row.news_consent, interfaceLanguage: row.interface_language })
   })
 
   /** The settings switch for news by email (#186): `{"consent": true, "text": <the wording shown>}` gives it, `{"consent": false}` withdraws it. */
@@ -32,6 +33,19 @@ export function accountRoutes(
     const newsConsent = await setNewsConsent(deps.db, c.get('userId'), change, deps.now())
     if (newsConsent === null) return c.json({ error: 'unauthorized' }, 401)
     return c.json({ newsConsent })
+  })
+
+  /**
+   * The language the app's interface is in (#199): `{"language": "bg"}`, one of the interface languages. The app
+   * sends it at sign-in and when the learner changes it; announcements are written to the account in it.
+   */
+  app.put('/v1/account/interface-language', owner, async (c) => {
+    const body = await readJson(c)
+    const language = typeof body === 'object' && body !== null ? (body as { language?: unknown }).language : undefined
+    if (!isInterfaceLanguage(language)) return invalid(c, ['language must be one of the interface languages'])
+    const interfaceLanguage = await setInterfaceLanguage(deps.db, c.get('userId'), language)
+    if (interfaceLanguage === null) return c.json({ error: 'unauthorized' }, 401)
+    return c.json({ interfaceLanguage })
   })
 
   /** Cloudflare's reading of the request's country, to pre-fill sign-up (spec §11). XX is unknown, T1 is Tor. */

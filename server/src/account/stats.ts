@@ -157,7 +157,7 @@ const inOrder = <T extends { readonly language: AnnouncementLanguage | null }>(r
 /**
  * The splits. News is by the account's interface language as an announcement reads it (announcements/store.ts):
  * so the accounts that agreed, by language, are the ones a news announcement would be written to in that
- * language. Not known is an account that left no sign of a language; an announcement writes to it in English.
+ * language. Not known is an account whose app never said its language and that left no other sign of one; an announcement writes to it in English.
  * Reminders are by the language the account's newest device asks them in, an account with several devices once;
  * it is paused when every one of its devices is (schedule.ts), and sending otherwise. Two statements, over
  * `"user"` (with the probes of the language, by primary key and by `push_subscription_user`) and

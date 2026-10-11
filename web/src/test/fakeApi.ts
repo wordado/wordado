@@ -43,6 +43,11 @@ export function fakeApi(over: Partial<Api> = {}, session: Me | null = null): Fak
       if (api.session) api.session = { ...api.session, newsConsent }
       return newsConsent
     },
+    setInterfaceLanguage: async (language) => {
+      calls.push(`setInterfaceLanguage ${language}`)
+      if (api.session) api.session = { ...api.session, interfaceLanguage: language }
+      return language
+    },
     exportData: async () => {
       calls.push('exportData')
       return { name: 'wordado-export-2026-09-25.json', json: '{"format":"wordado-export-1"}' }

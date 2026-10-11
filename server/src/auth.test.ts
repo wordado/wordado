@@ -14,7 +14,7 @@ describe('sign-in (spec §8.6)', () => {
     expect(h.codes).toEqual([{ email: 'ana@example.com', code: expect.stringMatching(/^\d{6}$/) }])
     const me = await session.get('/v1/me')
     expect(me.status).toBe(200)
-    expect(me.body).toEqual({ userId: session.userId, email: 'ana@example.com', createdAt: expect.any(Number), newsConsent: 'none' })
+    expect(me.body).toEqual({ userId: session.userId, email: 'ana@example.com', createdAt: expect.any(Number), newsConsent: 'none', interfaceLanguage: null })
   })
 
   it('creates the user on the first sign-in and finds the same user on the next', async () => {
@@ -107,7 +107,7 @@ describe('sign-in (spec §8.6)', () => {
     const h = harness()
     const session = await h.signIn()
     expect((await session.post('/api/auth/update-user', { country: 'BG' })).status).toBe(400)
-    expect((await session.get('/v1/me')).body).toEqual({ userId: session.userId, email: session.email, createdAt: expect.any(Number), newsConsent: 'none' })
+    expect((await session.get('/v1/me')).body).toEqual({ userId: session.userId, email: session.email, createdAt: expect.any(Number), newsConsent: 'none', interfaceLanguage: null })
     expect(await h.deps.db.query(`select column_name from information_schema.columns where table_name = 'user' and column_name = 'country'`)).toEqual([])
   })
 
