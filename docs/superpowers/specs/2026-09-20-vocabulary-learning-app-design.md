@@ -547,8 +547,11 @@ settings (§9.2). Target values are tuning items (§15).
 
 The learner declares a CEFR level, or takes a **placement test**: roughly 30
 words, binary-searching across frequency bands to estimate a level in about two
-minutes. The placement test is optional and can be taken later from settings;
-it is never a blocking onboarding step (§8.6).
+minutes. The placement test is optional: the setup's level step offers it beside
+the choice of a level (it runs inside the setup, and its result comes back to the
+step as the chosen level, which can still be changed), and it can be taken later
+from settings; it is never a blocking onboarding step (§8.6). It is offered only
+where it can run: enough words of the first two levels at least.
 
 **Placement consequences.** A learner placed at level *L* has every unit below
 *L* unlocked and marked *assumed known*. Those words are **not** fed into the

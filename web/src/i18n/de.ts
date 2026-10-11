@@ -178,7 +178,8 @@ export const de: Messages = {
   'setup.skip': 'Überspringen',
   'setup.start': 'Lernen beginnen',
   'setup.level.title': 'Dein Englischniveau',
-  'setup.level.later': 'Nicht sicher? Du kannst später in den Einstellungen einen kurzen Einstufungstest machen.',
+  'setup.level.unsure': 'Nicht sicher? Ein kurzer Test mit etwa zwanzig Wörtern findet dein Niveau.',
+  'setup.level.placed': 'Der Test hat dich auf {level} eingestuft. Du kannst es noch ändern.',
   'setup.goal.title': 'Ein Tagesziel',
   'setup.goal.hint': 'Optional. Du kannst es jederzeit in den Einstellungen festlegen oder ändern.',
   'setup.language.title': 'Welche Sprache sprichst du?',
@@ -251,6 +252,7 @@ export const de: Messages = {
   'placement.acceptedTitle': 'Dein Niveau ist jetzt {level}',
   'placement.unavailableTitle': 'Der Einstufungstest ist noch nicht verfügbar',
   'placement.back': 'Zurück zu den Einstellungen',
+  'placement.backToSetup': 'Zurück zur Einrichtung',
   'placement.home': 'Zurück zu heute',
 
   'signin.title': 'Konto erstellen oder anmelden',

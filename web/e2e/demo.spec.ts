@@ -982,6 +982,56 @@ test('changing the native language to Spanish keeps progress, switches translati
 
 // Plan 11: a new demo opens in the first-run setup.
 
+test('the setup’s level step offers the placement test; its result comes back to the step as the chosen level (spec §7.2)', async ({ browser }, testInfo) => {
+  // The app's service worker would serve the bundled all-A1 sample, which has no level to choose and no test.
+  const context = await browser.newContext({ serviceWorkers: 'block', ...(testInfo.project.use.viewport ? { viewport: testInfo.project.use.viewport } : {}) })
+  forwardConsole(context)
+  await context.addInitScript(() => localStorage.setItem('wordado.locale', 'en'))
+  await serveTwoLevelSample(context)
+  try {
+    const page = await context.newPage()
+    await page.goto('/')
+    await page.getByRole('radio', { name: 'Български' }).check()
+    await page.getByRole('button', { name: 'Continue' }).click()
+    const step = page.getByRole('heading', { name: 'Your English level' })
+    await expect(step).toBeVisible()
+    await expect(page.getByText('Not sure? A short test of about twenty words finds your level.')).toBeVisible()
+    await expectAccessible(page, { dark: true })
+    await page.getByRole('button', { name: 'Find your level with a short test' }).click()
+    // The whole screen, as from Settings: no top row, and the way back is the setup.
+    await expect(page.getByRole('heading', { name: 'Find your level' })).toBeVisible()
+    await expect(page.locator('.masthead')).toHaveCount(0)
+    await page.getByRole('button', { name: 'Back to the setup' }).click()
+    await expect(step).toBeFocused()
+    await expect(page.getByRole('radio', { name: 'A1 · Beginner' })).toBeChecked()
+    // Again, to the end: knowing no word places at A1, over the A2 that was chosen by hand.
+    await page.getByRole('radio', { name: 'A2 · Elementary' }).click()
+    await expect(page.getByRole('radio', { name: 'A2 · Elementary' })).toBeChecked()
+    await page.getByRole('button', { name: 'Find your level with a short test' }).click()
+    const result = page.getByRole('heading', { name: 'Your level: A1' })
+    for (let i = 0; i < 40 && !(await result.isVisible()); i += 1) {
+      const count = await page.locator('.study-count').textContent()
+      // An answer given before the question has settled is not taken.
+      await page.waitForTimeout(SETTLE_MS)
+      await page.getByRole('button', { name: 'I don’t know' }).click()
+      await expect(page.locator('.study-count').or(result).first()).not.toHaveText(count ?? '')
+    }
+    await expect(result).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Keep A2' })).toBeVisible()
+    await page.getByRole('button', { name: 'Use A1' }).click()
+    await expect(step).toBeFocused()
+    await expect(page.locator('.masthead')).toBeVisible()
+    await expect(page.getByRole('radio', { name: 'A1 · Beginner' })).toBeChecked()
+    await expect(page.getByRole('status').filter({ hasText: 'The test placed you at A1. You can still change it.' })).toBeVisible()
+    await expectAccessible(page, { dark: true })
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
+    await page.getByRole('button', { name: 'Start studying' }).click()
+    await expect(today(page)).toBeVisible()
+  } finally {
+    await context.close()
+  }
+})
+
 test('a first visit opens the setup; choosing German ends on Home with German translations', async ({ page }) => {
   await page.goto('/')
   await expect(heading(page)).toHaveText('Set up Wordado')

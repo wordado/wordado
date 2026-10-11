@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { act, cleanup, fireEvent, screen } from '@testing-library/react'
-import { Client, type PackFetcher } from '@wordado/client-data'
+import { Client, ITEM_SETTLE_MS, type PackFetcher } from '@wordado/client-data'
 import { nodeSqliteDriver } from '@wordado/client-data/src/drivers/nodeSqlite'
 import { SAMPLE_DIR, sampleFetcher, sampleManifest } from '@wordado/client-data/src/testing/sample'
 import { testEnv } from '@wordado/client-data/src/testing/testEnv'
@@ -25,15 +25,15 @@ const packsFrom = (manifest: PackManifest, fetchPack: PackFetcher) => new PackSw
  * The sample's Bulgarian pack with its last unit (and that unit's words) moved up to B1: a corpus whose units span
  * two levels, A1 and B1.
  */
-function twoLevels(): { manifest: PackManifest; fetchPack: PackFetcher } {
+function twoLevels(level = 'B1'): { manifest: PackManifest; fetchPack: PackFetcher } {
   const descriptor = sampleManifest.packs.find((p) => p.l1 === 'bg')!
   const pack = JSON.parse(readFileSync(join(SAMPLE_DIR, descriptor.url), 'utf8')) as {
     units: { unit_id: string; level: string }[]
     entries: { unit_id: string; level: string }[]
   }
   const last = pack.units[pack.units.length - 1]!.unit_id
-  for (const unit of pack.units) if (unit.unit_id === last) unit.level = 'B1'
-  for (const entry of pack.entries) if (entry.unit_id === last) entry.level = 'B1'
+  for (const unit of pack.units) if (unit.unit_id === last) unit.level = level
+  for (const entry of pack.entries) if (entry.unit_id === last) entry.level = level
   const bytes = new TextEncoder().encode(JSON.stringify(pack))
   const sha256 = createHash('sha256').update(bytes).digest('hex')
   return {
@@ -177,7 +177,7 @@ describe('Setup, a corpus with two levels (plan 11)', () => {
     await pastLanguage()
     expect(document.activeElement).toBe(screen.getByRole('heading', { level: 2, name: 'Your English level' }))
     expect(screen.getByText('Step 2 of 4')).toBeTruthy()
-    expect(screen.getByText('A1 · Beginner. Not sure? You can take a short placement test later in Settings.')).toBeTruthy()
+    expect(screen.getByText('A1 · Beginner', { selector: 'p.note' })).toBeTruthy()
     const a1 = screen.getByRole('radio', { name: /^A1/ }) as HTMLInputElement
     expect(a1.checked).toBe(true)
     // Settings' segmented level control (Task 7a): every radio in one segmented group.
@@ -190,7 +190,7 @@ describe('Setup, a corpus with two levels (plan 11)', () => {
     expect(screen.queryByRole('radio', { name: /^A2/ })).toBeNull()
     await act(async () => fireEvent.click(screen.getByRole('radio', { name: /^B1/ })))
     expect(ctx.client.snapshot.settings.declaredLevel).toBe('B1')
-    expect(screen.getByText(/^B1 · Intermediate\. Not sure\?/)).toBeTruthy()
+    expect(screen.getByText('B1 · Intermediate', { selector: 'p.note' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
     expect(screen.getByRole('heading', { level: 2, name: 'What do you want English for?' })).toBeTruthy()
     expect(screen.getByText('Step 3 of 4')).toBeTruthy()
@@ -204,6 +204,57 @@ describe('Setup, a corpus with two levels (plan 11)', () => {
     await act(async () => fireEvent.click(screen.getByRole('radio', { name: /^B1/ })))
     expect(screen.getByRole('alert').textContent).toBe('Your change wasn’t saved: Something went wrong. Try again.')
     expect(ctx.client.snapshot.settings.declaredLevel).toBe('A1')
+  })
+
+  it('opens the placement test on the level step, over the whole screen, and comes back with nothing changed when it is left', async () => {
+    const ctx = await fresh(twoLevels('A2'))
+    const onFocus = vi.fn()
+    renderWith(<Setup onFinish={() => undefined} onFocus={onFocus} />, ctx)
+    await pastLanguage()
+    fireEvent.click(screen.getByRole('button', { name: 'Find your level with a short test' }))
+    expect(onFocus).toHaveBeenLastCalledWith(true)
+    expect(screen.getByRole('heading', { level: 1, name: 'Find your level' })).toBeTruthy()
+    expect(screen.queryByRole('heading', { name: 'Set up Wordado' })).toBeNull()
+    // The way back is the setup, not Settings: there is no Settings yet.
+    expect(screen.queryByRole('link', { name: 'Back to settings' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Back to the setup' }))
+    expect(onFocus).toHaveBeenLastCalledWith(false)
+    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 2, name: 'Your English level' }))
+    expect(screen.getByText('Step 2 of 4')).toBeTruthy()
+    expect(ctx.client.snapshot.settings.declaredLevel).toBe('A1')
+    expect(screen.queryByRole('status')).toBeNull()
+  })
+
+  it('comes back from the test with its level chosen, says so, and lets it be changed', async () => {
+    const ctx = await fresh(twoLevels('A2'))
+    renderWith(<Setup onFinish={() => undefined} />, ctx)
+    await pastLanguage()
+    await act(async () => fireEvent.click(screen.getByRole('radio', { name: /^A2/ })))
+    fireEvent.click(screen.getByRole('button', { name: 'Find your level with a short test' }))
+    for (let i = 0; i < 40 && document.querySelector('.hw-word'); i += 1) {
+      ctx.env.advance(ITEM_SETTLE_MS + 1_000)
+      await act(async () => fireEvent.click(screen.getByRole('button', { name: 'I don’t know' })))
+    }
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Your level: A1')
+    // Keeping the level that was chosen is a way back too.
+    expect(screen.getByRole('button', { name: 'Keep A2' })).toBeTruthy()
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Use A1' })))
+    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 2, name: 'Your English level' }))
+    expect(ctx.client.snapshot.settings.declaredLevel).toBe('A1')
+    expect((screen.getByRole('radio', { name: /^A1/ }) as HTMLInputElement).checked).toBe(true)
+    expect(screen.getByRole('status').textContent).toBe('The test placed you at A1. You can still change it.')
+    await act(async () => fireEvent.click(screen.getByRole('radio', { name: /^A2/ })))
+    expect(screen.queryByRole('status')).toBeNull()
+    expect(ctx.client.snapshot.settings.declaredLevel).toBe('A2')
+  })
+
+  it('does not offer the test where it cannot run: the levels have a gap', async () => {
+    const ctx = await fresh(twoLevels())
+    renderWith(<Setup onFinish={() => undefined} />, ctx)
+    await pastLanguage()
+    expect(screen.getByRole('heading', { level: 2, name: 'Your English level' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Find your level with a short test' })).toBeNull()
+    expect(screen.queryByText(/^Not sure\?/)).toBeNull()
   })
 
   it('Skip leaves A1', async () => {

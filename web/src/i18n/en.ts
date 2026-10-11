@@ -174,7 +174,8 @@ export const en = {
   'setup.skip': 'Skip',
   'setup.start': 'Start studying',
   'setup.level.title': 'Your English level',
-  'setup.level.later': 'Not sure? You can take a short placement test later in Settings.',
+  'setup.level.unsure': 'Not sure? A short test of about twenty words finds your level.',
+  'setup.level.placed': 'The test placed you at {level}. You can still change it.',
   'setup.goal.title': 'A daily goal',
   'setup.goal.hint': 'Optional. You can set it or change it any time in Settings.',
   'setup.language.title': 'Which language do you speak?',
@@ -243,6 +244,7 @@ export const en = {
   'placement.acceptedTitle': 'Your level is now {level}',
   'placement.unavailableTitle': 'The placement test isn’t available yet',
   'placement.back': 'Back to settings',
+  'placement.backToSetup': 'Back to the setup',
   'placement.home': 'Back to today',
 
   'signin.title': 'Create an account or sign in',
