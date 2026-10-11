@@ -27,7 +27,7 @@ export function parseJsonc(text: string): unknown {
 interface Prod { d1_databases?: { database_id?: string }[]; vars?: Record<string, string>; routes?: { pattern?: string }[] }
 
 /** Settings that are secrets: set with `wrangler secret put`, never written in the config. */
-const SECRETS = new Set(['ADMIN_EMAIL', 'FEEDBACK_READ_TOKEN', 'FEEDBACK_AI_KEY'])
+const SECRETS = new Set(['ADMIN_EMAIL', 'FEEDBACK_READ_TOKEN', 'ADMIN_WRITE_TOKEN', 'FEEDBACK_AI_KEY'])
 
 /** What still stops a production deploy (spec 2026-10-05 §14). */
 export function checkProductionConfig(jsonc: string): string[] {
@@ -38,10 +38,10 @@ export function checkProductionConfig(jsonc: string): string[] {
   for (const name of ['ACCESS_TEAM_DOMAIN', 'ACCESS_AUD', 'GITHUB_APP_ID', 'GITHUB_INSTALLATION_ID']) {
     if (!prod.vars?.[name]) problems.push(`env.production vars.${name} is empty (review-app/README.md, "Hosted")`)
   }
-  for (const name of ['ACCESS_JWKS', 'GITHUB_API_URL', 'ADMIN_EMAIL', 'FEEDBACK_READ_TOKEN', 'FEEDBACK_AI_KEY']) {
+  for (const name of ['ACCESS_JWKS', 'GITHUB_API_URL', 'ADMIN_EMAIL', 'FEEDBACK_READ_TOKEN', 'ADMIN_WRITE_TOKEN', 'FEEDBACK_AI_KEY']) {
     if (prod.vars && name in prod.vars) problems.push(`env.production vars.${name} must not be set: ${SECRETS.has(name) ? 'it is a secret' : 'it is for tests only'}`)
   }
-  // Optional: without it the Feedback tab says it is not connected. The token only ever goes to an https origin.
+  // Optional: without it the Feedback tab and the Accounts tab say they are not connected. The tokens only ever go to an https origin.
   const learnerApp = prod.vars?.['LEARNER_APP_URL'] ?? ''
   if (learnerApp !== '' && !/^https:\/\/[a-z0-9.-]+$/.test(learnerApp)) problems.push('env.production vars.LEARNER_APP_URL must be an https origin with no path, such as https://app.wordado.com')
   // Optional: without it no open issues are read, and the AI help proposes no match. Written wrong, the Worker would quietly read none.

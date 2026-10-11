@@ -10,6 +10,7 @@ describe('workerSecrets: what a deploy uploads (spec §4.4: secrets from the Git
       'RESEND_API_KEY',
       'EMAIL_FROM',
       'FEEDBACK_READ_TOKEN',
+      'ADMIN_WRITE_TOKEN',
       'VAPID_PUBLIC_KEY',
       'VAPID_PRIVATE_KEY',
       'VAPID_SUBJECT',
@@ -41,5 +42,16 @@ describe('workerSecrets: what a deploy uploads (spec §4.4: secrets from the Git
     expect(() => workerSecrets({ BETTER_AUTH_SECRET: secret, FEEDBACK_READ_TOKEN: 't'.repeat(31) })).toThrow('FEEDBACK_READ_TOKEN must be at least 32 characters')
     expect(workerSecrets({ BETTER_AUTH_SECRET: secret, FEEDBACK_READ_TOKEN: 't'.repeat(32) })).toEqual({ BETTER_AUTH_SECRET: secret, FEEDBACK_READ_TOKEN: 't'.repeat(32) })
     expect(workerSecrets({ BETTER_AUTH_SECRET: secret, FEEDBACK_READ_TOKEN: '' })).toEqual({ BETTER_AUTH_SECRET: secret })
+  })
+
+  it('refuses an ADMIN_WRITE_TOKEN under 32 characters or the same as FEEDBACK_READ_TOKEN, and takes a deploy without one (#187)', () => {
+    expect(() => workerSecrets({ BETTER_AUTH_SECRET: secret, ADMIN_WRITE_TOKEN: 'w'.repeat(31) })).toThrow('ADMIN_WRITE_TOKEN must be at least 32 characters')
+    expect(() => workerSecrets({ BETTER_AUTH_SECRET: secret, FEEDBACK_READ_TOKEN: 't'.repeat(32), ADMIN_WRITE_TOKEN: 't'.repeat(32) })).toThrow('ADMIN_WRITE_TOKEN must not be the same as FEEDBACK_READ_TOKEN')
+    expect(workerSecrets({ BETTER_AUTH_SECRET: secret, FEEDBACK_READ_TOKEN: 't'.repeat(32), ADMIN_WRITE_TOKEN: 'w'.repeat(32) })).toEqual({
+      BETTER_AUTH_SECRET: secret,
+      FEEDBACK_READ_TOKEN: 't'.repeat(32),
+      ADMIN_WRITE_TOKEN: 'w'.repeat(32),
+    })
+    expect(workerSecrets({ BETTER_AUTH_SECRET: secret, ADMIN_WRITE_TOKEN: '' })).toEqual({ BETTER_AUTH_SECRET: secret })
   })
 })

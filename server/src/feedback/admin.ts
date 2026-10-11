@@ -1,5 +1,6 @@
 import { FEEDBACK_KINDS, type FeedbackItem, type FeedbackKind, type FeedbackPage } from '@wordado/core'
 import type { Hono } from 'hono'
+import { hasBearerToken } from '../adminToken'
 import type { ServerDeps } from '../deps'
 import { invalid, type AppEnv } from '../http'
 
@@ -21,21 +22,8 @@ interface FeedbackRow {
   readonly received_at: number
 }
 
-const sha256 = async (text: string): Promise<Uint8Array> => new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)))
-
-/**
- * Whether a request carries the token, compared in constant time: both sides
- * are hashed first, so neither the time taken nor the length compared says
- * anything about the token.
- */
-export async function hasReadToken(token: string, authorization: string | undefined): Promise<boolean> {
-  const given = /^Bearer (.+)$/.exec(authorization ?? '')?.[1]
-  if (given === undefined) return false
-  const [want, got] = await Promise.all([sha256(token), sha256(given)])
-  let diff = 0
-  for (let i = 0; i < want.length; i += 1) diff |= want[i]! ^ got[i]!
-  return diff === 0
-}
+/** The token that reads feedback, compared as every token here is (src/adminToken.ts). */
+export const hasReadToken = hasBearerToken
 
 /** A whole number from 1 up in a query, `fallback` when the query has none, null when it is anything else. */
 function positive(raw: string | undefined, fallback: number | null): number | null {
