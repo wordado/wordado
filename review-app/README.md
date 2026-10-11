@@ -227,14 +227,24 @@ as a pull request against the content repository, with no local checkout and no 
     deletion work as before; the panel under the counts says its numbers could not be read, and the lookup
     shows the two dates only.
 
-11. Optional, for the Announcements tab (a mail to learners' account holders: a service notice to everyone, or
+11. Optional, for the Mail tab (a mail to learners' account holders: a service notice to everyone, or
     news to those who agreed to it; spec §18): nothing more than step 10. The tab uses the same
     `ADMIN_WRITE_TOKEN` and `LEARNER_APP_URL`, and says announcements are not connected while either is missing.
     The mails are sent by the learner app's server, with its mailer and under its limits (`docs/deploy.md`,
     "Announcements"); this Worker sends none of them. **Deploy that server first.**
 
+12. Optional, for the Mail tab to offer a service notice the notice prepared with a change (#215): `NOTICES_REPO`,
+    the repository that holds the prepared notices as `owner/name`, and `NOTICES_PATH`, the folder in it, both in
+    `vars` of the `production` block. They are read through the GitHub App of step 4, so **the App must be
+    installed on that repository too** (its installation's list of repositories, in the organization's
+    settings), where it needs to read the contents and nothing more; it is asked for the head of `main`, the
+    folder's list and the files, and writes nothing there. While either variable is empty, the App has no access,
+    or nothing in the folder is in the format ("Prepared notices" below), nothing is offered and nothing else
+    changes. **Translate**, the form's other help, needs no setting of its own: it uses the AI help of step 9,
+    its switch and its daily allowance.
+
 `scripts/check-config.ts` refuses to deploy while any of steps 1–4 is still a placeholder, a secret is written
-as a variable, `FEEDBACK_AI_AUTH` is neither of its two values, `APP_REPO` is not `owner/name`, or `FEEDBACK_AI_URL` is not an https address
+as a variable, `FEEDBACK_AI_AUTH` is neither of its two values, `APP_REPO` is not `owner/name`, `NOTICES_REPO` and `NOTICES_PATH` are not a repository and a folder (or one is set without the other), or `FEEDBACK_AI_URL` is not an https address
 (on `googleapis.com`, when the sign-in is `google-service-account`); it runs in
 `deploy-review.yml` before the Worker is built.
 
@@ -283,12 +293,15 @@ what is behind it: the accounts over time as a chart, or by language; how many a
 sweep of inactive accounts would delete next and how many it deleted; and one account deleted by hand, for an erasure asked for by mail or an account closed. The account is
 looked up by its whole address, which shows when it was made and last signed in and how it is used (its study,
 its consent to news, its reminders, its devices), and is deleted after a
-question answered by typing the address again. Nothing of an account is stored here) and **Announcements** (spec §18:
-a mail to learners' account holders, written here for each language and sent by the learner app's server. A
-service notice goes to every account holder; news goes only to the accounts that agreed to it, with a link to
-stop it. A version can be sent only after it went to one address as a test, and only by typing the kind and the
-number of accounts shown; it is sent once, a few at a time, and the list shows how far it is and lets it be
-stopped. Nothing of it is stored here). Inviting, assigning, splitting, reassigning and editing a reviewer's languages each open a dialog;
+question answered by typing the address again. Nothing of an account is stored here) and **Mail** (spec §18;
+its address is still `#announcements`: a mail to learners' account holders, written here and sent by the learner
+app's server. A service notice goes to every account holder; news goes only to the accounts that agreed to it,
+with a link to stop it. The form has one editor and a box for the language; marks say which languages are
+written. A service notice is offered the newest prepared notice that no announcement has used, and **Translate**
+fills the empty languages from the English text with the AI help; neither saves anything. A version can be sent
+only after it went to one address as a test, and only by typing the kind and the number of accounts shown; it is
+sent once, a few at a time, and the list shows how far it is and lets it be stopped. Nothing of it is stored
+here). Inviting, assigning, splitting, reassigning and editing a reviewer's languages each open a dialog;
 when the server refuses, the dialog stays open and says why. The page is made for a laptop and usable on a phone.
 
 ### Changing reviewers
@@ -309,3 +322,77 @@ To hand that work to someone, open *Admin → Assignments*, find the assignment 
 **Reassign…**, pick the reviewer and *Move their decisions*. Reassigning to the same reviewer (after enabling them
 again) works too. It is refused while another open assignment already holds any of its files; close or reassign
 that one first.
+
+### Prepared notices
+
+A notice about a change (new terms, say) is written with that change, in the repository that holds what changed,
+and the Mail tab's form offers it to a service notice so that nobody pastes it language by language (step 12
+above). The form reads the files of one folder, `NOTICES_PATH`, on `main`; folders inside it are not read. This is
+the format, and a file that is not in it is passed over whole, with its name in the Worker's log: nothing is ever
+half-read.
+
+**The file's name** is the day of the change and, if wanted, a few words: `YYYY-MM-DD.md` or
+`YYYY-MM-DD-some-words.md`, the words in small Latin letters and digits with hyphens between
+(`2026-10-11-new-terms.md`). The day has to be one the calendar has. Any other file in the folder, a `README.md`
+say, is not a notice. The newest notice is the one whose name sorts last; only the five newest are read.
+
+**The file** is UTF-8 text:
+
+``````markdown
+# The title, on one line
+
+Anything here is for people and is not read: a status line, who checked it, notes.
+
+## English (en)
+
+Subject:
+
+```text
+The subject, on one line
+```
+
+Body:
+
+```text
+The body, exactly as it is to be mailed.
+A link is its address written out.
+```
+
+## Bulgarian (bg)
+
+Subject:
+
+```text
+…
+```
+
+Body:
+
+```text
+…
+```
+``````
+
+1. The first line that is not blank is the title: `# `, then at most 200 characters.
+2. Everything from there to the first line that starts with `## ` is not read. No line of it may start with `## `.
+3. Each language is a section whose heading is `## `, any name for people, a space, and the language's code in
+   round brackets at the end of the line: `(en)`, `(bg)`, `(de)` or `(es)`, in small letters. The form reads the
+   code, never the name. English is needed; the others may be left out; none may be there twice, and the order is
+   free.
+4. A section holds, in this order and nothing else but blank lines: a line that is exactly `Subject:`, a fenced
+   block, a line that is exactly `Body:`, a fenced block. A block opens with a line of three or more backticks,
+   with or without a word such as `text` after them, and closes with a line of exactly as many backticks; what
+   is between them is the text, line for line. (A body that itself holds a line of three backticks goes in a
+   block of four.)
+5. From the first language heading on, the file holds nothing but such sections and blank lines: no closing
+   note, no other heading.
+6. Every text has to be one an announcement may hold, as a save checks it: a subject of one line, at most 150
+   characters; a body of at most 10,000 characters; plain text, with no control character but the new line and
+   the tab; neither of them empty. Blank lines and spaces at the ends of a subject and of a body are dropped.
+7. Line ends may be of either kind, a byte order mark at the start is ignored, and spaces at the end of a line
+   are dropped, in a block's text too.
+
+**Not used yet** needs nothing written anywhere: a notice counts as used once an announcement, a draft too and of
+either kind, has the notice's English subject, letter for letter. So a prepared notice whose subject is changed in
+the form before it is saved is still offered afterwards, and two notices should not share an English subject. The
+form offers the newest one that is not used, and no list of the others.

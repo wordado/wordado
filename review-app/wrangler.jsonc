@@ -15,6 +15,9 @@
     "CONTENT_REPO": "wordado/wordado-content",
     // The public app repository: its open issues are read once a day, without a token (spec 2026-10-10 §3.3).
     "APP_REPO": "wordado/wordado",
+    // The prepared notices the Mail tab offers (#215): the repository and the folder in it. Empty, none is offered.
+    "NOTICES_REPO": "",
+    "NOTICES_PATH": "",
     "GITHUB_APP_ID": "",
     "GITHUB_INSTALLATION_ID": "",
     "MAIL_FROM": "Wordado Review <review@wordado.com>",
@@ -51,6 +54,11 @@
         // The public app repository, whose open issues the AI help matches topics against (spec 2026-10-10 §3.3).
         // They are read from GitHub's public API with no token: the review app has no access to that repository.
         "APP_REPO": "wordado/wordado",
+        // The notices prepared with a change, which the Mail tab offers to a service notice (#215): the repository
+        // as owner/name and the folder in it, read through the GitHub App below, which must be installed on that
+        // repository too. Both empty, nothing is read and nothing is offered (review-app/README.md, "Prepared notices").
+        "NOTICES_REPO": "",
+        "NOTICES_PATH": "",
         "GITHUB_APP_ID": "5208152",
         "GITHUB_INSTALLATION_ID": "168429558",
         "MAIL_FROM": "Wordado Review <review@wordado.com>",
