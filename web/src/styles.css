@@ -1682,6 +1682,25 @@ dialog.report input[type='text'] {
   box-shadow: 0 0 0 5px var(--rose-soft);
 }
 
+/* The current unit's mark while it starts the session. */
+a.unit-marker {
+  cursor: pointer;
+}
+
+a.unit-marker:hover {
+  box-shadow: 0 0 0 8px var(--rose-soft);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  a.unit-marker {
+    transition: box-shadow 120ms ease;
+  }
+
+  a.unit-marker:active {
+    transform: scale(0.94);
+  }
+}
+
 .unit-current .unit-line {
   margin-top: var(--space-3);
 }

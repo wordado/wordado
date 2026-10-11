@@ -243,6 +243,20 @@ test('plays a matching board once five words are known', async ({ page }) => {
   await expect(page.getByRole('status')).toHaveText('✓ All pairs matched.')
 })
 
+test('starts the session from the current unit’s play mark on the path', async ({ page }) => {
+  await page.goto('/')
+  await finishSetup(page)
+  await page.goto('/path')
+  await expectAccessible(page, { dark: true })
+  const mark = page.locator('li.unit-current .unit-track a.unit-marker')
+  // As large as any control (2.5.8).
+  const box = (await mark.boundingBox())!
+  expect(Math.min(box.width, box.height)).toBeGreaterThanOrEqual(44)
+  await mark.click()
+  await expect(page).toHaveURL(/\/study$/)
+  await expect(page.getByRole('progressbar', { name: 'Session progress' })).toBeVisible()
+})
+
 test('practises one unit from the path, finishes, and comes back to the path', async ({ page }) => {
   await page.goto('/')
   await finishSetup(page)

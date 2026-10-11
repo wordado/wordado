@@ -201,6 +201,8 @@ export interface LinkProps {
   readonly 'aria-current'?: 'page' | undefined
   readonly 'aria-label'?: string
   readonly 'aria-describedby'?: string
+  /** Out of the keyboard's order: for a link that repeats one beside it. */
+  readonly tabIndex?: -1
 }
 
 /** An ordinary link that navigates in place; a modified click opens a tab as usual. */
@@ -217,6 +219,7 @@ export function Link(props: LinkProps) {
       aria-current={props['aria-current']}
       aria-label={props['aria-label']}
       aria-describedby={props['aria-describedby']}
+      tabIndex={props.tabIndex}
       onClick={onClick}
     >
       {props.children}
