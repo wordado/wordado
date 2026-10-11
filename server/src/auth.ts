@@ -1,5 +1,6 @@
 import { betterAuth } from 'better-auth'
 import { emailOTP } from 'better-auth/plugins/email-otp'
+import { recordSignIn } from './account/lastSignIn'
 import type { ServerDeps } from './deps'
 import { hashedRateLimit } from './rateLimitStore'
 
@@ -47,8 +48,9 @@ export function createAuth(deps: ServerDeps) {
         update: { before: async (account) => ({ data: withoutTokens(account) }) },
       },
       session: {
-        create: { before: async (session) => ({ data: withoutDevice(session) }) },
-        update: { before: async (session) => ({ data: withoutDevice(session) }) },
+        // The `after` of each: a sign-in, or a session extended after a day of use, dates the account (#187).
+        create: { before: async (session) => ({ data: withoutDevice(session) }), after: async (session) => recordSignIn(deps.db, session.userId, deps.now()) },
+        update: { before: async (session) => ({ data: withoutDevice(session) }), after: async (session) => recordSignIn(deps.db, session.userId, deps.now()) },
       },
     },
     rateLimit: {

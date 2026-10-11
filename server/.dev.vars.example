@@ -3,6 +3,10 @@ BETTER_AUTH_SECRET=local-development-only-secret-0123456789abcdef
 # Optional: lets the review app read feedback (GET /v1/admin/feedback); at least 32 characters, the same value as the
 # review app's FEEDBACK_READ_TOKEN. Without it the route does not exist.
 # FEEDBACK_READ_TOKEN=local-development-only-feedback-token-0123456789
+# Optional: lets the review app look an account up, delete one and read the sweep's counts (/v1/admin/accounts/*); at
+# least 32 characters, the same value as the review app's ADMIN_WRITE_TOKEN, and not the token above. Without it the
+# routes do not exist.
+# ADMIN_WRITE_TOKEN=local-development-only-admin-write-token-0123456789
 # Optional: reminders. `pnpm --filter @wordado/server vapid-keys` prints a pair.
 # VAPID_PUBLIC_KEY=
 # VAPID_PRIVATE_KEY=
