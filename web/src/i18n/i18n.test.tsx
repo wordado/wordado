@@ -136,10 +136,10 @@ describe('I18nProvider', () => {
         <Probe />
       </I18nProvider>,
     )
-    expect(screen.getByRole('button').textContent).toBe('Today')
+    expect(screen.getByRole('button').textContent).toBe('Study')
     expect(document.documentElement.lang).toBe('en')
     act(() => screen.getByRole('button').click())
-    expect(screen.getByRole('button').textContent).toBe('Днес')
+    expect(screen.getByRole('button').textContent).toBe('Учене')
     expect(document.documentElement.lang).toBe('bg')
     expect(saved.get(LOCALE_KEY)).toBe('bg')
   })
@@ -151,14 +151,14 @@ describe('I18nProvider', () => {
         <Probe />
       </I18nProvider>,
     )
-    expect(screen.getByRole('button').textContent).toBe('Днес')
+    expect(screen.getByRole('button').textContent).toBe('Учене')
     unmount()
     render(
       <I18nProvider storage={{ getItem: () => 'xx', setItem: () => undefined }}>
         <Probe />
       </I18nProvider>,
     )
-    expect(screen.getByRole('button').textContent).toBe('Today')
+    expect(screen.getByRole('button').textContent).toBe('Study')
   })
 
   it('works when storage throws (a private window), falling back to English', () => {
@@ -176,8 +176,8 @@ describe('I18nProvider', () => {
         <Probe />
       </I18nProvider>,
     )
-    expect(screen.getByRole('button').textContent).toBe('Today')
+    expect(screen.getByRole('button').textContent).toBe('Study')
     act(() => screen.getByRole('button').click())
-    expect(screen.getByRole('button').textContent).toBe('Днес')
+    expect(screen.getByRole('button').textContent).toBe('Учене')
   })
 })

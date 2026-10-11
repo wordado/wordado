@@ -19,7 +19,7 @@ test('studies the demo by keyboard from the first visit to a completed day', asy
   for (let i = 0; i < 40 && !(await page.locator('.done').isVisible()); i += 1) await answer(page)
   await expect(heading(page)).toHaveText('Session complete')
   await expect(page.getByText('Today counts toward your streak.')).toBeVisible()
-  await page.getByRole('link', { name: 'Back to today' }).click()
+  await page.getByRole('link', { name: 'Done', exact: true }).click()
   await expect(heading(page)).toHaveText('Nothing left for today.')
   await expect(page.getByText('1-day streak Today counts.')).toBeVisible()
 })
@@ -202,7 +202,7 @@ test('a new version waits while a run is in progress, then the app updates itsel
     await expect(page.locator('.done')).toBeVisible()
     await page.waitForTimeout(3_000)
     expect(loads).toBe(0)
-    await page.getByRole('link', { name: 'Back to today' }).click()
+    await page.getByRole('link', { name: 'Done', exact: true }).click()
     await expect(page.getByText('Wordado was updated.')).toBeVisible()
     await expect(today(page)).toBeVisible()
     // Once: the answers are there, nothing reloads again, and the line is not said twice.
