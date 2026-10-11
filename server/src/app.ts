@@ -4,6 +4,7 @@ import { every } from 'hono/combine'
 import { csrf } from 'hono/csrf'
 import { HTTPException } from 'hono/http-exception'
 import { accountAdminRoutes } from './account/admin'
+import { newsConsentAtSignIn } from './account/newsConsent'
 import { accountRoutes } from './account/routes'
 import { createAuth } from './auth'
 import type { ServerDeps } from './deps'
@@ -33,6 +34,7 @@ export function createApp(deps: ServerDeps): Hono<AppEnv> {
   const tooLarge = (c: Context) => c.json({ error: 'too_large' }, 413)
   app.use('/api/auth/*', bodyLimit({ maxSize: AUTH_MAX_BODY_BYTES, onError: tooLarge }))
   app.post('/api/auth/email-otp/send-verification-otp', signInEmailLimit(deps))
+  app.post('/api/auth/sign-in/email-otp', newsConsentAtSignIn(deps))
   app.on(['GET', 'POST'], '/api/auth/*', (c) => auth.handler(c.req.raw))
 
   // Before the /v1 guard, which is made for browsers: the review app's server calls this one route, with a token

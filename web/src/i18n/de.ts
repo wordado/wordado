@@ -194,6 +194,9 @@ export const de: Messages = {
 
   'settings.account': 'Konto',
   'settings.signedInAs': 'Angemeldet als {email}',
+  'news.consent': 'Ich möchte Neuigkeiten über Wordado und seine neuen Funktionen per E-Mail erhalten. Ich kann sie jederzeit abbestellen.',
+  'settings.newsHint': 'Mitteilungen zum Dienst selbst, etwa über geänderte Nutzungsbedingungen, kommen in jedem Fall.',
+  'settings.newsOffline': 'Stell eine Verbindung her, um das zu ändern.',
   'settings.export': 'Deine Daten herunterladen (JSON)',
   'settings.exportOffline': 'Stell eine Verbindung her, um deine Daten herunterzuladen.',
   'settings.exporting': 'Deine Daten werden vorbereitet …',
@@ -252,7 +255,7 @@ export const de: Messages = {
 
   'signin.title': 'Konto erstellen oder anmelden',
   'signin.againTitle': 'Erneut anmelden',
-  'signin.gateIntro': 'Das Gesetz legt je nach Land ein Alter für ein eigenes Konto fest. Nur dein Land wird gespeichert.',
+  'signin.gateIntro': 'Das Gesetz legt je nach Land ein Alter für ein eigenes Konto fest. Dein Land bleibt auf diesem Gerät und wird nicht gesendet. Wenn du das Kästchen für Neuigkeiten ankreuzt, wird diese Wahl mit deinem Konto gespeichert.',
   'signin.country': 'Land, in dem du lebst',
   'signin.countryUnknown': 'Das möchte ich nicht angeben',
   'signin.continue': 'Weiter',
