@@ -56,9 +56,9 @@
         "APP_REPO": "wordado/wordado",
         // The notices prepared with a change, which the Mail tab offers to a service notice (#215): the repository
         // as owner/name and the folder in it, read through the GitHub App below, which must be installed on that
-        // repository too. Both empty, nothing is read and nothing is offered (review-app/README.md, "Prepared notices").
-        "NOTICES_REPO": "",
-        "NOTICES_PATH": "",
+        // repository too. With both empty nothing is read and nothing is offered (review-app/README.md, "Prepared notices").
+        "NOTICES_REPO": "wordado/wordado-site",
+        "NOTICES_PATH": "docs/notices",
         "GITHUB_APP_ID": "5208152",
         "GITHUB_INSTALLATION_ID": "168429558",
         "MAIL_FROM": "Wordado Review <review@wordado.com>",
