@@ -472,6 +472,8 @@ test('marks a found word to learn, follows its theme, and says when the sample h
   const row = page.locator('.search-words > li').filter({ hasText: 'ключ' })
   await row.getByRole('button', { name: 'Word actions: key' }).click()
   await row.getByRole('button', { name: 'Learn this word: key' }).click()
+  // The mark is on the row before the menu is opened again.
+  await expect(row.locator('.word-status')).toHaveText('To learn')
   await row.getByRole('button', { name: 'Word actions: key' }).click()
   await expect(row.getByRole('button', { name: 'Don’t learn this word: key' })).toBeVisible()
   await page.keyboard.press('Escape')
