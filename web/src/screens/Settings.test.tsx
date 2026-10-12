@@ -34,6 +34,23 @@ async function typeAndLeave(label: string, value: string) {
 describe('Settings: the menu', () => {
   const row = (name: RegExp) => screen.getByRole('link', { name })
 
+  it('has a Help row that opens the guide on the website in a new tab; offline it says help needs a connection and is no link (#224)', async () => {
+    const ctx = await setup()
+    const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true)
+    const view = renderWith(<Settings section={null} />, ctx)
+    const help = row(/^Help/)
+    expect(help.getAttribute('href')).toBe('https://wordado.com/en/guide/')
+    expect(help.getAttribute('target')).toBe('_blank')
+    expect(help.textContent).toContain('How to use Wordado')
+    view.unmount()
+
+    online.mockReturnValue(false)
+    renderWith(<Settings section={null} />, ctx)
+    expect(screen.queryByRole('link', { name: /^Help/ })).toBeNull()
+    expect(screen.getByText('Help needs an internet connection')).toBeTruthy()
+    online.mockRestore()
+  })
+
   it('lists each section with what it is set to, each on its own page', async () => {
     const ctx = await setup()
     renderWith(<Settings section={null} />, ctx)

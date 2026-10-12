@@ -3179,6 +3179,15 @@ button.settings-row {
   background: var(--paper);
 }
 
+/* A row that leads nowhere for now (Help, offline): it does not answer the pointer. */
+.settings-row.is-off:hover {
+  background: none;
+}
+
+.settings-row.is-off .settings-row-title {
+  color: var(--ink-soft);
+}
+
 .settings-row-icon {
   display: grid;
   flex-shrink: 0;
