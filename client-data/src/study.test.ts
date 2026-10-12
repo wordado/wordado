@@ -85,15 +85,16 @@ describe('sessionPlan in a trial (spec 2026-10-12 §4.4)', () => {
   it('starts new words only in the declared level\'s unit, yet reviews a word of another level when due', async () => {
     const { db, env, learner, ctx } = await setup()
     const trial = trialCorpus(['A1', 'A2', 'B1'])
-    const b1 = trial.units.find((u) => u.level === 'B1')!
-    const settings = { ...DEFAULT_SETTINGS, declaredLevel: 'B1' as const, newWordLimit: 50 }
-    // An A1 word started earlier, at another level.
-    await appendAnswer(db, env, learner, answer('c:hello-1'))
+    const [a1, , b1] = trial.units
+    // A limit a course would fill by running on into the A2 and B1 units.
+    const settings = { ...DEFAULT_SETTINGS, declaredLevel: 'A1' as const, newWordLimit: 50 }
+    // A B1 word started earlier, at another level.
+    const started = b1!.wordIds[0]!
+    await appendAnswer(db, env, learner, answer(started))
     env.advance(10 * 86_400_000)
     const plan = sessionPlan(ctx({ corpus: trial, settings, now: env.now() }))
-    expect(plan.newWords.length).toBeGreaterThan(0)
-    expect(plan.newWords.every((id) => b1.wordIds.includes(id))).toBe(true)
-    expect(plan.reviews).toContain('c:hello-1')
+    expect([...plan.newWords].sort()).toEqual([...a1!.wordIds].sort())
+    expect(plan.reviews).toContain(started)
   })
 })
 
