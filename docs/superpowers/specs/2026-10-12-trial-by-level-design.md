@@ -98,13 +98,18 @@ A failure is a problem of the release, like any other: nothing is written.
 
 ### 4.1 Which words the trial reads
 
-Without an account the app installs from `trial-manifest.json`, beside the course's manifest on the content
-host. A build that names no content host uses the built-in sample, as now.
+Without an account the app installs from the trial manifest the build names (`VITE_TRIAL_MANIFEST_URL`, set by
+the deploy from the environment's `TRIAL_MANIFEST_URL` variable). A build that names none uses the built-in
+sample, as now: local development, the test suites, and a deployment made before the first trial files are
+published (§8).
+
+A trial pack has the course's pack ID for its language, so on a device that holds the sample it takes the
+sample's place like any newer version of a pack.
 
 The language step downloads the trial pack as it downloads the sample today, with the same progress and the
-same *could not download, try again* when it fails. There is no fall-back to the built-in sample on a deployed
-build: two kinds of trial on one device would need rules for moving between them, and a visitor who has just
-loaded the app is online.
+same *could not download, try again* when it fails. There is no fall-back to the built-in sample when a
+download fails: two kinds of trial on one device would need rules for moving between them, and a visitor who has
+just loaded the app is online.
 
 Clips are fetched as a learner's are (ahead of need, §9.3), not all at once.
 
@@ -135,6 +140,8 @@ In the trial, study takes new words from **the unit of the declared level only**
 - Finishing the unit opens no other. The lower levels' units count as assumed known, as in the course; the
   higher ones are not shown.
 - **Practice** of the unit works as everywhere.
+- **Themes** are not offered in the trial: a theme would bring in words of the other levels' units.
+- **Search** covers the trial's words and says so, as it does for the sample today.
 - **Changing the level** in Settings, or taking the test again, changes which unit the trial studies. Words
   already started keep their reviews. Nothing blocks this and nothing advertises it.
 - **The end of the unit:** once every word of the unit is started, the done screen and the home screen say so
@@ -158,9 +165,8 @@ A device that began the demo before this change holds the sample's words. At its
 the trial pack like any newer pack. Its level is A1 until chosen, and the level step shows once on the home
 screen, as it does after a carry-over.
 
-**To settle in the build plan:** what the app does with answers on sample words that the trial pack does not
-hold. The carry-over already sends such answers to an account on the real course, so some rule exists; the plan
-reads it and either relies on it or starts such a demo afresh with a notice.
+Answers on sample words that the trial pack does not hold are kept and not served: a run already skips a word
+its corpus lacks. They go to the account with the rest at sign-up, as they do today.
 
 ## 5. Texts
 
@@ -186,13 +192,13 @@ and Spanish ones wait for a native reader, tracked on #102.
 
 ## 8. Rollout
 
-1. Pipeline and app merge. The app still finds no `trial-manifest.json` on the content host.
+1. Pipeline and app merge. No environment names a trial manifest yet, so the deployed app keeps the built-in
+   sample: nothing changes for a visitor.
 2. **Operator, with the owner's go-ahead:** the content repository moves to the new pipeline version and
    publishes a release, which carries the trial files. Whether its publish step uploads files it does not know
    by name is to be read before this; if not, that workflow changes first.
-3. Until step 2 the deployed app must keep working: when the content host has no trial manifest, the app uses
-   the built-in sample. This one fall-back is for a missing file (404), not for a failed download, and is
-   removed once the trial files are live.
+3. **Owner:** the environment gets its `TRIAL_MANIFEST_URL` variable, and the app is deployed again. From then
+   on a visitor gets the trial at their level.
 
 ## 9. Tests
 
@@ -215,5 +221,5 @@ and Spanish ones wait for a native reader, tracked on #102.
 |---|---|
 | The probes are a poor sample and place people wrongly | The draw is uniform and tested; 40 per level is a setting |
 | The trial pack and the course disagree about a word | The release checks every trial entry against the course's pack |
-| The first release with trial files is late | The fall-back of §8, step 3 |
+| The first release with trial files is late | Until the variable of §8 is set, the app keeps the built-in sample |
 | The content host is down at a first visit | *Try again* in the language step, as for an account |
