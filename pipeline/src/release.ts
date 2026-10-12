@@ -95,17 +95,17 @@ export function planRelease(dir: string, opts: { draft: boolean; now: string }):
     pending.push(...a.pending.filter((p) => !pending.includes(p)))
     unreviewed.push(...a.unreviewed.filter((u) => !unreviewed.some((v) => v.line === u.line)))
     let out: BuildOutput
-    let trial: TrialOutput
     try {
       out = buildPack(a.source, a.clipIds.map((clipId) => ({ clipId, bytes: new Uint8Array(readFileSync(paths.clip(clipId))) })))
-      const planned = planTrial(out.pack, config.trial?.probes_per_level ?? TRIAL_PROBES_PER_LEVEL)
-      trial = planned.trial
-      problems.push(...planned.problems.map((p) => `${l1}: trial: ${p}`))
     } catch (err) {
       if (!(err instanceof BuildError)) throw err
       problems.push(...err.errors.map((e) => `${l1}: ${e.path || '(pack)'}: ${e.message}`))
       continue
     }
+    // The trial's own lines say so, a failed build of it included: they are not faults of the course pack.
+    const { trial, problems: trialProblems } = planTrial(out.pack, config.trial?.probes_per_level ?? TRIAL_PROBES_PER_LEVEL)
+    problems.push(...trialProblems.map((p) => `${l1}: trial: ${p}`))
+    if (trial === null) continue
     if (previous) problems.push(...checkPackSuccession(previous, out.pack, { allowRemovedUnits: unitsRebuilt }).map((e) => `${l1}: ${e.path}: ${e.message}`))
     for (const e of out.pack.entries) if (e.retired && last.live.has(e.entry_id)) retired.add(e.entry_id)
     for (const f of diffFixes(previous, out.pack)) {

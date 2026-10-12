@@ -95,7 +95,9 @@ per L1, a trial pack (`trial-v<version>-<l1>.trial`: the first unit of each leve
 words for a placement test) and `trial-manifest.json`, which lists them by checksum like the course's manifest. They
 are built from the course pack, so their entries and clips are the course's own, and a difference fails the release.
 `trial.probes_per_level` in `pipeline.json` sets the draw (default 40, at least 8). Publishing must upload these
-files with the rest; they are not copied into `last-published/`.
+files with the rest; they are not copied into `last-published/`. The workflow template uploads them (`*.trial` with
+the packs, `trial-manifest.json` before `manifest.json`); a content repository's own copy of this workflow must take
+the same change before a build names the trial manifest.
 
 **Attributions reach the app** as `credits.json` beside the manifest, from each cleared source's `attribution`.
 Every release writes and uploads it. After changing an attribution without a release (or for a version published

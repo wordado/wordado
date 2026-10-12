@@ -172,11 +172,21 @@ describe('planTrial', () => {
   it('builds the trial and reports no problem for a sound course', () => {
     const { trial, problems } = planTrial(course, 40)
     expect(problems).toEqual([])
-    expect(trial.packFile).toBe('trial-v7-bg.trial')
+    expect(trial?.packFile).toBe('trial-v7-bg.trial')
   })
 
   it('returns the trialProblems lines: with no probes drawn, every level that has a unit is named', () => {
     // probesPerLevel 0 leaves every level with a unit and no probes.
     expect(planTrial(course, 0).problems).toEqual(['A1: the trial has a unit and no probes', 'A2: the trial has a unit and no probes', 'B1: the trial has a unit and no probes'])
+  })
+
+  it('reports a trial that cannot be built as problems of the trial, by path, and gives no trial', () => {
+    // A doctored course pack: a word of the first unit lost its headword, which the trial pack's own validation refuses.
+    const first = course.units.find((u) => u.order === Math.min(...course.units.map((x) => x.order)))!.entry_ids[0]!
+    const broken: Pack = { ...course, entries: course.entries.map((e) => (e.entry_id === first ? { ...e, headword: '' } : e)) }
+    const { trial, problems } = planTrial(broken, 40)
+    expect(trial).toBeNull()
+    expect(problems.length).toBeGreaterThan(0)
+    for (const line of problems) expect(line).toMatch(/^entries\[\d+\]\.headword: \S/)
   })
 })

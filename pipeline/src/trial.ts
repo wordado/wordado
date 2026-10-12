@@ -118,8 +118,18 @@ export function trialProblems(course: Pack, trial: Pack): string[] {
   return p
 }
 
-/** A release's trial for one course pack, with what stands in its way; the caller prefixes the lines (`<l1>: trial: `). */
-export function planTrial(pack: Pack, probesPerLevel: number): { trial: TrialOutput; problems: string[] } {
-  const trial = buildTrial(pack, probesPerLevel)
+/**
+ * A release's trial for one course pack, with what stands in its way; the caller prefixes the lines (`<l1>: trial: `).
+ * A trial that cannot be built is one of those problems, `<path>: <message>`, and gives no trial: left to throw, it
+ * would read as a fault of the course pack.
+ */
+export function planTrial(pack: Pack, probesPerLevel: number): { trial: TrialOutput | null; problems: string[] } {
+  let trial: TrialOutput
+  try {
+    trial = buildTrial(pack, probesPerLevel)
+  } catch (err) {
+    if (!(err instanceof BuildError)) throw err
+    return { trial: null, problems: err.errors.map((e) => `${e.path || '(pack)'}: ${e.message}`) }
+  }
   return { trial, problems: trialProblems(pack, trial.pack) }
 }
