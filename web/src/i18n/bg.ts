@@ -173,6 +173,7 @@ export const bg: Messages = {
   'setup.level.placed': 'Тестът ви постави на {level}. Можете да го промените.',
   'levelAsk.title': 'Откъде започвате?',
   'levelAsk.lead': 'Профилът ви вече има целия курс, на всички нива.',
+  'levelAsk.leadDemo': 'Пробата вече има урок на всяко ниво.',
   'setup.goal.title': 'Дневна цел',
   'setup.goal.hint': 'По желание. Можете да я зададете или промените по всяко време в Настройки.',
   'setup.language.title': 'Кой език говорите?',

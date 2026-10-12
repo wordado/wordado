@@ -310,6 +310,9 @@ describe('the level, asked once of a visitor whose device got the trial after it
     const storage = memoryStorage()
     await renderRoot({ trial: true, storage })
     expect(asking()).toBeTruthy()
+    // A visitor has no account: the reason given is the demo's, not an account's.
+    expect(screen.getByText(/^The demo now has a unit at every level\./)).toBeTruthy()
+    expect(screen.queryByText(/Your account has the whole course/)).toBeNull()
     expect(screen.getByRole('button', { name: 'Find your level with a short test' })).toBeTruthy()
     expect(storage.getItem('wordado.trialLevelAsked')).toBeNull()
     await act(async () => fireEvent.click(screen.getByRole('radio', { name: /^B1/ })))
@@ -348,11 +351,11 @@ describe('the level, asked once of a visitor whose device got the trial after it
     expect(screen.getByRole('link', { name: 'Start studying' })).toBeTruthy()
   })
 
-  it('sets the mark when a setup on the sample finishes, which showed no level step', async () => {
+  it('leaves the mark unset when a setup on the sample finishes: it had no level to ask about, so a trial pack that comes later still asks', async () => {
     const storage = memoryStorage()
     await renderRoot({ fresh: true, storage })
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue' })))
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Start studying' })))
-    expect(storage.getItem('wordado.trialLevelAsked')).toBe('1')
+    expect(storage.getItem('wordado.trialLevelAsked')).toBeNull()
   })
 })

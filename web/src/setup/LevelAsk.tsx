@@ -1,7 +1,7 @@
 import { useClient } from '@wordado/client-data'
 import type { CefrLevel, Corpus } from '@wordado/core'
 import { useState } from 'react'
-import { useT } from '../i18n/i18n'
+import { useT, type MessageKey } from '../i18n/i18n'
 import { Placement } from '../screens/Placement'
 import { LevelStep } from './LevelStep'
 
@@ -17,7 +17,7 @@ export function hasLevels(corpus: Corpus | null): boolean {
  * of Today the first time the whole course is there (`App`); Continue ends it, whatever was chosen. The placement test runs inside it,
  * over the whole screen (`onFocus`), as in the setup.
  */
-export function LevelAsk(props: { onDone(): void; onFocus?(on: boolean): void }) {
+export function LevelAsk(props: { onDone(): void; onFocus?(on: boolean): void; /** Why it is asked; an account's reason unless told otherwise. */ readonly lead?: MessageKey }) {
   const { t } = useT()
   const client = useClient()
   const [testing, setTesting] = useState(false)
@@ -46,7 +46,7 @@ export function LevelAsk(props: { onDone(): void; onFocus?(on: boolean): void })
       <div className="setup-head">
         <h1 id="level-ask-title">{t('levelAsk.title')}</h1>
         <p className="note">
-          {t('levelAsk.lead')} {t('settings.levelHint')}
+          {t(props.lead ?? 'levelAsk.lead')} {t('settings.levelHint')}
         </p>
       </div>
       <div className="panel form-section">

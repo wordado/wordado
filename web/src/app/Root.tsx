@@ -19,8 +19,8 @@ const NO_DOWNLOAD: Store<OpeningDownload | null> = { get: () => null, set: () =>
 /**
  * The open app, and who is asked for a level on the home screen (`LevelAsk`), once: a learner whose demo was carried
  * into the account, and a visitor whose device got the trial pack after it had finished its setup on the bundled
- * sample (spec 2026-10-12 §4.6). The device remembers the second in `mark`; a setup that finishes sets it too, since
- * its own level step has asked.
+ * sample (spec 2026-10-12 §4.6). The device remembers the second in `mark`; a setup that finishes on a trial sets it
+ * too, since its own level step has asked.
  */
 function Opened(props: { readonly boot: Boot; readonly state: Extract<BootState, { status: 'ready' }>; readonly mark: TrialLevelMark }) {
   const { boot, state, mark } = props
@@ -37,10 +37,12 @@ function Opened(props: { readonly boot: Boot; readonly state: Extract<BootState,
       resumed={state.resumed}
       setup={state.setup}
       onFinishSetup={() => {
-        remember()
+        // Only a setup on a trial has asked: one on the bundled sample had no level to ask about.
+        if (corpus?.trial != null) remember()
         boot.finishSetup()
       }}
       askLevel={carried || visitor}
+      {...(!carried && visitor ? { levelLead: 'levelAsk.leadDemo' as const } : {})}
       onLevelAsked={() => (carried ? boot.levelAsked() : remember())}
     />
   )

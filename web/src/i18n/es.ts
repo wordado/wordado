@@ -182,6 +182,7 @@ export const es: Messages = {
   'setup.level.placed': 'La prueba te ha situado en {level}. Todavía puedes cambiarlo.',
   'levelAsk.title': '¿Por dónde empiezas?',
   'levelAsk.lead': 'Tu cuenta ya tiene el curso completo, en todos los niveles.',
+  'levelAsk.leadDemo': 'La demo ya tiene una unidad en cada nivel.',
   'setup.goal.title': 'Un objetivo diario',
   'setup.goal.hint': 'Opcional. Puedes fijarlo o cambiarlo cuando quieras en los ajustes.',
   'setup.language.title': '¿Qué idioma hablas?',

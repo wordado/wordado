@@ -165,7 +165,8 @@ Signing in to an existing account, or leaving the trial, deletes the trial's dat
 
 A device that began the demo before this change holds the sample's words. At its next pack check it installs
 the trial pack like any newer pack. Its level is A1 until chosen, and the level step shows once on the home
-screen, as it does after a carry-over. The device remembers that it asked (`wordado.trialLevelAsked`).
+screen, as it does after a carry-over. The device remembers that it asked (`wordado.trialLevelAsked`); a setup
+finished on the bundled sample does not count as asking.
 
 Answers on sample words that the trial pack does not hold are kept and not served: a run already skips a word
 its corpus lacks. They go to the account with the rest at sign-up, as they do today.

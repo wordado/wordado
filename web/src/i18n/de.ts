@@ -182,6 +182,7 @@ export const de: Messages = {
   'setup.level.placed': 'Der Test hat dich auf {level} eingestuft. Du kannst es noch ändern.',
   'levelAsk.title': 'Wo fängst du an?',
   'levelAsk.lead': 'Dein Konto hat jetzt den ganzen Kurs, auf allen Niveaus.',
+  'levelAsk.leadDemo': 'Die Demo hat jetzt eine Einheit auf jedem Niveau.',
   'setup.goal.title': 'Ein Tagesziel',
   'setup.goal.hint': 'Optional. Du kannst es jederzeit in den Einstellungen festlegen oder ändern.',
   'setup.language.title': 'Welche Sprache sprichst du?',
