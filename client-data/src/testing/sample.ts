@@ -68,11 +68,22 @@ export function trialPack(unitLevels: readonly CefrLevel[], probeLevels: readonl
   }
 }
 
-/** A manifest and fetcher serving `pack` in place of the sample's Bulgarian pack. */
+/**
+ * `pack` cut to its first unit, one version on: the trial pack a device that began on the whole sample installs
+ * over it, which lacks words that device has answered (spec 2026-10-12 §4.6).
+ */
+export function firstUnitOnly(pack: Pack): Pack {
+  const unit = pack.units[0]!
+  const entries = pack.entries.filter((e) => e.unit_id === unit.unit_id)
+  const clips = new Set(entries.flatMap((e) => Object.values(e.audio)))
+  return { ...pack, corpus_version: pack.corpus_version + 1, units: [unit], entries, audio: pack.audio.filter((c) => clips.has(c.clip_id)) }
+}
+
+/** A manifest and fetcher serving `pack`, at its own version, in place of the sample's Bulgarian pack. */
 export async function packServing(pack: Pack, env: TestEnv): Promise<{ manifest: PackManifest; fetch: PackFetcher }> {
   const bytes = new TextEncoder().encode(canonicalJson(pack))
-  const descriptor: PackDescriptor = { ...sampleManifest.packs[0]!, sha256: await env.sha256(bytes), bytes: bytes.byteLength }
-  return { manifest: { ...sampleManifest, packs: [descriptor] }, fetch: async () => bytes }
+  const descriptor: PackDescriptor = { ...sampleManifest.packs[0]!, corpus_version: pack.corpus_version, sha256: await env.sha256(bytes), bytes: bytes.byteLength }
+  return { manifest: { ...sampleManifest, corpus_version: pack.corpus_version, packs: [descriptor] }, fetch: async () => bytes }
 }
 
 /** A client on the sample as a trial. */
