@@ -246,6 +246,30 @@ describe('Path', () => {
     expect(row('milk').querySelector('.menu-standing')).toBeNull()
   })
 
+  it('reports a problem with a word from its menu, last in it, whatever the word’s standing (spec §8.10)', async () => {
+    const ctx = await setup()
+    renderWith(<Path />, ctx)
+    const food = unit('Food and drink')
+    fireEvent.click(within(food).getByText('20 words'))
+    const row = (headword: string) => within(food).getByText(headword).closest('li')!
+    // A word set aside keeps the way to report it.
+    await act(() => ctx.client.setFlag('c:cheese-1', 'known'))
+    for (const headword of ['milk', 'cheese']) {
+      wordMenu(row(headword), headword)
+      const choices = within(row(headword).querySelector('.menu-panel') as HTMLElement).getAllByRole('button')
+      expect(choices.at(-1)!.getAttribute('aria-label')).toBe(`Report a problem: ${headword}`)
+      expect(choices.at(-1)!.textContent).toBe('Report a problem')
+      fireEvent.keyDown(row(headword).querySelector('.word-menu')!, { key: 'Escape' })
+    }
+    wordMenu(row('milk'), 'milk')
+    await act(async () => fireEvent.click(within(row('milk')).getByRole('button', { name: 'Report a problem: milk' })))
+    // The menu is closed, and the dialog names the word.
+    expect(row('milk').querySelector('.menu-panel')).toBeNull()
+    expect(screen.getByRole('heading', { name: 'Report a problem with “milk”' })).toBeTruthy()
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Cancel' })))
+    expect(screen.queryByRole('heading', { name: 'Report a problem with “milk”' })).toBeNull()
+  })
+
   it('offers to play each word of a unit’s list, by name, when its clip can play; not otherwise (spec §11.1)', async () => {
     const ctx = await setup()
     const audio = fakeAudio({ streamable: () => true })
@@ -300,7 +324,7 @@ describe('Path', () => {
     fireEvent.click(within(food).getByText('20 words'))
     const bread = within(food).getByText('bread').closest('li')!
     wordMenu(bread, 'bread')
-    expect(within(bread).getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual(['Word actions: bread', 'Learn this word: bread', 'I know it: bread', 'Not now: bread'])
+    expect(within(bread).getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual(['Word actions: bread', 'Learn this word: bread', 'I know it: bread', 'Not now: bread', 'Report a problem: bread'])
     await act(async () => fireEvent.click(within(bread).getByRole('button', { name: 'Learn this word: bread' })))
     expect(ctx.client.snapshot.toLearn).toEqual(['c:bread-1'])
     expect(within(bread).getByText('To learn')).toBeTruthy()
@@ -308,7 +332,7 @@ describe('Path', () => {
     expect(within(bread).queryByRole('button', { name: /^Learn this word/ })).toBeNull()
     expect(document.activeElement?.getAttribute('aria-label')).toBe('Word actions: bread')
     wordMenu(bread, 'bread')
-    expect(within(bread).getAllByRole('button').map((b) => b.textContent)).toEqual(['', 'Don’t learn this word', 'I know it', 'Not now'])
+    expect(within(bread).getAllByRole('button').map((b) => b.textContent)).toEqual(['', 'Don’t learn this word', 'I know it', 'Not now', 'Report a problem'])
     await act(async () => fireEvent.click(within(bread).getByRole('button', { name: 'Don’t learn this word: bread' })))
     expect(ctx.client.snapshot.toLearn).toEqual([])
     expect(bread.querySelector('.word-status')).toBeNull()
@@ -319,7 +343,7 @@ describe('Path', () => {
     await act(async () => fireEvent.click(within(bread).getByRole('button', { name: 'Not now: bread' })))
     expect(ctx.client.snapshot.toLearn).toEqual([])
     wordMenu(bread, 'bread')
-    expect(within(bread).getAllByRole('button').map((b) => b.textContent)).toEqual(['', 'Bring back'])
+    expect(within(bread).getAllByRole('button').map((b) => b.textContent)).toEqual(['', 'Bring back', 'Report a problem'])
   })
 
   it('does not offer Learn this word in the word list of a level being studied, but lets a mark made earlier be taken back', async () => {
