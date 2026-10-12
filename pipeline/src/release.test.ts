@@ -144,6 +144,15 @@ describe('planRelease and writeRelease', () => {
     expect(publishProblems(reader(o))).toEqual(['release.json: a draft build cannot be published'])
   })
 
+  it('writes the trial files in a draft release too', async () => {
+    const dir = makeContent()
+    await runDraft({ dir, llm: sampleLlm(), offline: false })
+    const o = out()
+    writeRelease(dir, o, planRelease(dir, { draft: true, now: NOW }))
+    expect(existsSync(join(o, TRIAL_MANIFEST))).toBe(true)
+    expect(readdirSync(o).filter((f) => f.endsWith('.trial'))).toEqual(['trial-v1-bg.trial'])
+  })
+
   it('ships the open items of accepted queues as proposed, counts them in release.json, and still gates the rest', async () => {
     const dir = makeContent({ config: { accept_unreviewed: ['english', 'level', 'title-bg', 'audio'] } })
     await runDraft({ dir, llm: sampleLlm(), offline: false })
