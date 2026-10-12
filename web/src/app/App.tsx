@@ -103,8 +103,10 @@ export function App(props: {
   readonly resumed: boolean
   readonly setup: boolean
   onFinishSetup(): void
-  /** The demo was carried into this account and nobody asked for a level: Today gives way to that question once. */
+  /** Nobody asked for a level yet (a demo carried into this account, or a visitor's device that got the trial pack): Today gives way to that question once. */
   readonly askLevel?: boolean
+  /** Why it is asked, when not for an account. */
+  readonly levelLead?: MessageKey
   onLevelAsked?(): void
 }) {
   const { t } = useT()
@@ -227,7 +229,7 @@ export function App(props: {
         {inSetup ? (
           <Setup onFinish={finishSetup} onFocus={setSetupFocus} />
         ) : asking ? (
-          <LevelAsk onDone={() => props.onLevelAsked?.()} onFocus={setSetupFocus} />
+          <LevelAsk onDone={() => props.onLevelAsked?.()} onFocus={setSetupFocus} {...(props.levelLead ? { lead: props.levelLead } : {})} />
         ) : (
           <Screen route={route} />
         )}

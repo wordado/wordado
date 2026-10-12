@@ -8,9 +8,16 @@ export const SAMPLE_MANIFEST_URL = '/content/sample/manifest.json'
 /** A learner's manifest (spec §9.3): the CDN's when the build names one (plan 7), otherwise the bundled sample. */
 export const CONTENT_MANIFEST_URL: string = import.meta.env.VITE_CONTENT_MANIFEST_URL || SAMPLE_MANIFEST_URL
 
-/** The demo always studies the bundled sample (spec §8.6); a signed-in learner studies the CDN's packs. */
-export function manifestUrlFor(account: AccountRecord | null, learnerManifest: string = CONTENT_MANIFEST_URL): string {
-  return account === null ? SAMPLE_MANIFEST_URL : learnerManifest
+/** A visitor's manifest (spec 2026-10-12 §4.1): the trial's when the build names one, otherwise the bundled sample. */
+export const TRIAL_MANIFEST_URL: string = import.meta.env.VITE_TRIAL_MANIFEST_URL || SAMPLE_MANIFEST_URL
+
+/** A visitor studies the trial's packs (the bundled sample when the build names none); a signed-in learner studies the CDN's. */
+export function manifestUrlFor(
+  account: AccountRecord | null,
+  learnerManifest: string = CONTENT_MANIFEST_URL,
+  visitorManifest: string = TRIAL_MANIFEST_URL,
+): string {
+  return account === null ? visitorManifest : learnerManifest
 }
 
 export type Fetch = (input: string, init?: RequestInit) => Promise<Response>

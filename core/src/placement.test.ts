@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { MIN_PLACEMENT_LEVELS, nextPlacementWords, PLACEMENT_PASS_MIN, PLACEMENT_PROBE_SIZE, placementLevels, placementPool, placementProgress, type PlacementAnswer } from './placement'
+import { MIN_PLACEMENT_LEVELS, nextPlacementWords, placementCorpus, PLACEMENT_PASS_MIN, PLACEMENT_PROBE_SIZE, placementLevels, placementPool, placementProgress, type PlacementAnswer } from './placement'
+import type { Corpus } from './corpus'
 import { seededRng } from './rng'
 import { CEFR_LEVELS, type CefrLevel, type CorpusEntry } from './types'
 import { corpusWordId, type WordId } from './wordId'
@@ -149,5 +150,45 @@ describe('placementPool and placementLevels', () => {
     const gap = placementPool([...many('A1', 8), ...many('A2', 7), ...many('B1', 8)])
     expect(placementLevels(gap)).toEqual(['A1'])
     expect(MIN_PLACEMENT_LEVELS).toBe(2)
+  })
+})
+
+describe('placementCorpus', () => {
+  const withExamples = (e: CorpusEntry): CorpusEntry => ({ ...e, examples: ['An example.'], unitId: 'u-b1' })
+  const corpusOf = (entries: CorpusEntry[], trial: Corpus['trial']): Corpus => ({
+    l1: 'bg',
+    entries: new Map(entries.map((e) => [e.entryId, e])),
+    units: [],
+    themes: [],
+    clips: new Map(),
+    retired: new Set(),
+    trial,
+  })
+
+  it('is the course itself for a course', () => {
+    const corpus = corpusOf([entry('a', 'A1'), entry('b', 'B1')], null)
+    const got = placementCorpus(corpus)
+    expect(got.corpus).toBe(corpus)
+    expect(got.pool).toEqual(placementPool(corpus.entries.values()))
+  })
+
+  it('draws a trial test from the probes only, by level', () => {
+    const corpus = corpusOf([entry('unit-only', 'B1')], {
+      probes: [entry('p1', 'A1'), entry('p2', 'A1'), entry('p3', 'C1'), entry('p4', 'C1', true)],
+      course: {},
+    })
+    const { pool } = placementCorpus(corpus)
+    expect(pool.get('A1')).toEqual([corpusWordId('p1'), corpusWordId('p2')])
+    expect(pool.get('C1')).toEqual([corpusWordId('p3')])
+    expect(pool.has('B1')).toBe(false)
+  })
+
+  it('lets a question show a probe or a unit entry, and keeps the unit entry where both exist', () => {
+    const full = withExamples(entry('both', 'B1'))
+    const corpus = corpusOf([full, entry('unit-only', 'B1')], { probes: [entry('both', 'B1'), entry('p', 'A1')], course: {} })
+    const { corpus: merged } = placementCorpus(corpus)
+    expect([...merged.entries.keys()].sort()).toEqual(['both', 'p', 'unit-only'])
+    expect(merged.entries.get('both')).toBe(full)
+    expect(merged.trial).toBe(corpus.trial)
   })
 })

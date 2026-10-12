@@ -90,6 +90,15 @@ release, so publishing waits on the release actors (setup step 2). When the revi
 the reviewer's name and date. If it rejects a source, remove the source, draft again, and review the entries whose
 selection or level changes.
 
+**The trial files** are a small slice of the course for a placement test. Every release also writes,
+per L1, a trial pack (`trial-v<version>-<l1>.trial`: the first unit of each level plus a seeded draw of that level's
+words for a placement test) and `trial-manifest.json`, which lists them by checksum like the course's manifest. They
+are built from the course pack, so their entries and clips are the course's own, and a difference fails the release.
+`trial.probes_per_level` in `pipeline.json` sets the draw (default 40, at least 8). Publishing must upload these
+files with the rest; they are not copied into `last-published/`. The workflow template uploads them (`*.trial` with
+the packs, `trial-manifest.json` before `manifest.json`); a content repository's own copy of this workflow must take
+the same change before a build names the trial manifest.
+
 **Attributions reach the app** as `credits.json` beside the manifest, from each cleared source's `attribution`.
 Every release writes and uploads it. After changing an attribution without a release (or for a version published
 before 8b), run Actions › Corpus › `credits`. Removing a source from `sources.json` must go with a release (draft

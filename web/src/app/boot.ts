@@ -78,7 +78,7 @@ export interface BootDeps {
   readonly setupPullTimeoutMs?: number
   /** Tests shorten OPEN_TIMEOUT_MS. */
   readonly openTimeoutMs?: number
-  /** The manifest to install from: the demo's (the bundled sample) or a learner's (the CDN, plan 7). */
+  /** The manifest to install from: a visitor's (the trial manifest when the build names one, the bundled sample otherwise) or a learner's (the CDN, plan 7). */
   fetchManifest(account: AccountRecord | null): Promise<PackManifest>
   readonly fetchPack: PackFetcher
   /** Quick work before the app shows, such as reading the audio cache's index. Its failure never fails the boot. */

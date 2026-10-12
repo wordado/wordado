@@ -317,6 +317,7 @@ function release(dir: string, outDir: string): void {
   }
   const files = writeRelease(dir, outDir, plan)
   console.log(`wrote corpus v${plan.corpusVersion}${flag('--draft') ? ' (draft)' : ''} to ${outDir}: ${plan.outputs.length} packs, ${plan.clipIds.length} clips, ${files.length} files`)
+  console.log(`trial: ${plan.trials.length} packs, ${Math.max(0, ...plan.trials.map((t) => t.packBytes.byteLength))} bytes each at most`)
   const unreviewed = Object.entries(plan.releaseInfo.unreviewed ?? {})
   if (unreviewed.length > 0) console.log(`shipped unreviewed: ${unreviewed.map(([q, n]) => `${n} ${q}`).join(', ')}`)
   if (plan.retired.length > 0) console.log(`retired: ${plan.retired.join(', ')}`)

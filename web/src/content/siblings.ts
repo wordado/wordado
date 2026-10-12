@@ -3,7 +3,7 @@ import { manifestBase, type Fetch } from './packs'
 /** The small files the CDN serves beside the manifest (plan 8b). */
 export type SiblingFile = 'credits.json' | 'fixes.json'
 
-/** Where `name` is: beside the manifest, so the demo's sample and a learner's CDN each have their own. */
+/** Where `name` is: beside the manifest, so a visitor's trial or sample and a learner's CDN each have their own. */
 export function siblingUrl(manifestUrl: string, name: SiblingFile, page?: string): string {
   // manifestBase's page defaults to the current location when undefined.
   return new URL(name, manifestBase(manifestUrl, page)).href

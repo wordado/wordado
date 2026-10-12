@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test'
 import { WORKER_LOG } from './accounts.setup'
-import { expectAccessible, finishSetup, forwardConsole, heading, studyNew, today } from './helpers'
+import { expectAccessible, finishSetup, finishSetupAt, forwardConsole, heading, serveTrialSample, studyNew, today } from './helpers'
 
 let clientIp = 0
 // The second octet, one per run: Better Auth's own per-IP-and-path rate limit (window 60s,
@@ -151,6 +151,39 @@ test('carries the demo into a new account, from the demo’s own device, and syn
   await page.reload()
   await page.goto('/settings/account')
   await expect(page.getByText(`Signed in as ${email}`)).toBeVisible()
+  await ctx.close()
+})
+
+test('carries the level chosen in the trial into the account: the level step asks once with it selected (#230)', async ({ browser }) => {
+  // The app's service worker would serve the bundled sample. This suite builds the app with no CDN manifest, so the
+  // account's course is the same URLs: the trial pack serves both, which still spans three levels, so the step shows.
+  const ctx = await context(browser, { serviceWorkers: 'block' })
+  const entries = await serveTrialSample(ctx)
+  const page = await ctx.newPage()
+  await page.goto('/')
+  await finishSetupAt(page, 'B1 · Intermediate')
+  await studyNew(page, 2)
+  await signIn(page, address('trial-level'))
+  await expect(page.getByText('Your account is ready, and the words you studied in the demo are in it.')).toBeVisible()
+  await synced(page)
+  // The trial's level is the account's already; the question comes once more, to confirm it or to test again.
+  const step = page.getByRole('heading', { name: 'Where do you start?' })
+  await expect(step).toBeVisible()
+  await expect(page.getByRole('radio', { name: 'B1 · Intermediate' })).toBeChecked()
+  const settings = (await exported(page)).documents.find((d) => d.type === 'settings')
+  expect(settings?.fields).toMatchObject({ declaredLevel: 'B1' })
+  await page.getByRole('button', { name: 'Continue' }).click()
+  await expect(step).toHaveCount(0)
+  // The B1 unit is the path's current one, with the two words the visitor started.
+  await page.goto('/path')
+  const unit = page.locator('li.unit', { has: page.getByRole('heading', { name: 'Home and every day' }) })
+  await expect(unit).toContainText('Current')
+  await expect(unit.getByText('2 of 20 started')).toBeVisible()
+  expect(entries.B1).toHaveLength(20)
+  // Asked once: a reload goes to Today.
+  await page.goto('/')
+  await expect(step).toHaveCount(0)
+  await expect(today(page)).toBeVisible()
   await ctx.close()
 })
 

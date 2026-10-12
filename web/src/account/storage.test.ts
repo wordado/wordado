@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { accountStorage, DEMO_FILE, learnerFile, memoryStorage } from './storage'
+import { accountStorage, DEMO_FILE, learnerFile, memoryStorage, trialLevelMark } from './storage'
 
 describe('the account record', () => {
   it('round-trips, and clears', () => {
@@ -36,6 +36,31 @@ describe('the account record', () => {
     const store = accountStorage(refusing)
     expect(store.read()).toBeNull()
     expect(() => store.save({ userId: 'u1', email: 'a@b.c' })).not.toThrow()
+  })
+})
+
+describe('the mark that a visitor was asked for a level (spec 2026-10-12 §4.6)', () => {
+  it('is unset on a new device, and stays once set', () => {
+    const raw = memoryStorage()
+    expect(trialLevelMark(raw).read()).toBe(false)
+    trialLevelMark(raw).set()
+    expect(raw.getItem('wordado.trialLevelAsked')).toBe('1')
+    expect(trialLevelMark(raw).read()).toBe(true)
+  })
+
+  it('reads as asked when the browser refuses storage, so nobody is asked on every load', () => {
+    const refusing = {
+      getItem: () => {
+        throw new DOMException('denied', 'SecurityError')
+      },
+      setItem: () => {
+        throw new DOMException('denied', 'SecurityError')
+      },
+      removeItem: () => undefined,
+    }
+    const mark = trialLevelMark(refusing)
+    expect(mark.read()).toBe(true)
+    expect(() => mark.set()).not.toThrow()
   })
 })
 

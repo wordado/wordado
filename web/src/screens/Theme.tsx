@@ -1,5 +1,5 @@
 import { useClient, useClientSnapshot } from '@wordado/client-data'
-import { corpusWordId, levelIndex, MIN_THEME_SIZE, searchEntries, themeEntries, type CefrLevel, type CorpusEntry } from '@wordado/core'
+import { corpusWordId, levelIndex, offeredThemes, searchEntries, themeEntries, type CefrLevel, type CorpusEntry } from '@wordado/core'
 import { ChevronDown, ChevronLeft, Search } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { localized, useT } from '../i18n/i18n'
@@ -15,7 +15,8 @@ import { Themes } from './Themes'
  * folded level mounts no rows. A search keeps the matching words in one list. Any word not yet started can be
  * marked "Learn this word" here, whatever its level: choosing the theme would bring it forward all the same.
  *
- * An address that names no offered theme shows the themes, as a practice address falls back to practice.
+ * An address that names no offered theme shows the themes, as a practice address falls back to practice: a theme too
+ * small yet, and any theme in a trial, which offers none (spec 2026-10-12 §4.4).
  */
 export function ThemeWords(props: { readonly themeId: string; /** What the word search starts with: a Themes search carried over. */ readonly query: string }) {
   const { t, locale } = useT()
@@ -35,10 +36,10 @@ export function ThemeWords(props: { readonly themeId: string; /** What the word 
     chosen.current = false
     title.current?.focus()
   }, [active])
-  const theme = corpus?.themes.find((candidate) => candidate.themeId === props.themeId)
+  const theme = useMemo(() => (corpus ? offeredThemes(corpus).find((candidate) => candidate.themeId === props.themeId) : undefined), [corpus, props.themeId])
   const entries = useMemo(() => (corpus && theme ? themeEntries(corpus, theme.themeId) : []), [corpus, theme])
   if (!corpus) return null
-  if (!theme || entries.length < MIN_THEME_SIZE) return <Themes />
+  if (!theme) return <Themes />
 
   const name = localized(theme.name, locale, corpus.l1)
   const isStarted = (e: CorpusEntry) => states.has(corpusWordId(e.entryId))

@@ -1,5 +1,5 @@
 import { useClientSnapshot } from '@wordado/client-data'
-import { offeredThemes, searchWordIndex, type CorpusEntry } from '@wordado/core'
+import { offeredThemes, searchWordIndex, studyUnits, type CorpusEntry } from '@wordado/core'
 import { Lock, Search as SearchIcon, X } from 'lucide-react'
 import { Fragment, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { useApp } from '../app/context'
@@ -15,12 +15,13 @@ export const RESULTS_STEP = 30
  * The search for the whole course (issue #144): any word, by its headword or a variant, a translation or its
  * sense note, best match first. Each result is the path's word row with a line saying where the word is: its
  * level, its unit (a link to the path, opened there) and its themes. The query lives in the address, so coming
- * back from a unit or a theme finds the same results.
+ * back from a unit or a theme finds the same results. A trial finds the words of every level's unit, but only its
+ * own unit is a place to go and to learn from (spec 2026-10-12 §4.4): another level's is named, no more.
  */
 export function Search(props: { readonly q: string }) {
   const { t, locale } = useT()
   const { account } = useApp()
-  const { corpus, path } = useClientSnapshot()
+  const { corpus, path, settings } = useClientSnapshot()
   const [query, setQuery] = useState(props.q)
   const [shown, setShown] = useState(RESULTS_STEP)
   // Opened with nothing to search for, the field takes focus; opened on a query, the page does, as on any arrival.
@@ -67,7 +68,10 @@ export function Search(props: { readonly q: string }) {
       offered: new Set(offeredThemes(corpus).map((theme) => theme.themeId)),
     }
   }, [corpus])
+  // The units the path lists: every unit of a course, a trial's one.
+  const studied = useMemo(() => new Set(corpus ? studyUnits(corpus, settings.declaredLevel).map((unit) => unit.unitId) : []), [corpus, settings.declaredLevel])
   if (!corpus || !index || !places) return null
+  const onPath = (entry: CorpusEntry) => corpus.trial === null || studied.has(entry.unitId)
 
   const search = (next: string) => {
     setQuery(next)
@@ -94,7 +98,8 @@ export function Search(props: { readonly q: string }) {
           {entry.level}
         </span>
         {unit && <span className="visually-hidden">{t('search.whereUnit')} </span>}
-        {unit && (
+        {unit && !onPath(entry) && <span>{title}</span>}
+        {unit && onPath(entry) && (
           <Link to={{ name: 'path', unit: unit.unitId }} {...(locked ? { className: 'is-locked', 'aria-label': t('search.unitLocked', { title: title! }) } : {})}>
             {locked && <Lock aria-hidden="true" size={14} />}
             {title}
@@ -156,13 +161,13 @@ export function Search(props: { readonly q: string }) {
         </p>
       )}
       {typed === '' && <p className="note">{t('search.hint')}</p>}
-      {found !== null && found.length === 0 && account === null && <p className="note">{t('search.sample', { count: index.words.length })}</p>}
+      {found !== null && found.length === 0 && account === null && <p className="note">{t(corpus.trial === null ? 'search.sample' : 'search.trial', { count: index.words.length })}</p>}
       {found !== null && found.length > 0 && (
         <>
           <ul className="panel unit-words search-words" ref={list}>
             {found.slice(0, shown).map((entryId) => {
               const entry = corpus.entries.get(entryId)
-              return entry ? <WordRow key={entryId} entry={entry} lang={corpus.l1} learn where={where(entry)} /> : null
+              return entry ? <WordRow key={entryId} entry={entry} lang={corpus.l1} learn={onPath(entry)} where={where(entry)} /> : null
             })}
           </ul>
           {found.length > shown && (

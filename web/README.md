@@ -43,7 +43,9 @@ For local development with accounts, run `pnpm --filter @wordado/server dev` bes
 
 ## Content
 
-The demo always studies the bundled sample (`/content/sample/`). A signed-in learner installs
+A visitor without an account studies the bundled sample (`/content/sample/`) unless the build names a trial
+manifest in `VITE_TRIAL_MANIFEST_URL` (for example `https://content.example.test/trial-manifest.json`), which the
+visitor then installs from, as a learner does from theirs. A signed-in learner installs
 from `VITE_CONTENT_MANIFEST_URL`, the CDN's manifest, which the deploy sets at build time
 (`docs/deploy.md`). It falls back to the sample when the variable is unset, as it is in
 development and in both end-to-end suites.

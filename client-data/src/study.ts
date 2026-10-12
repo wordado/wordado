@@ -16,7 +16,9 @@ import {
   RETENTION_TARGETS,
   retentionRate,
   streakStatus,
+  studyUnits,
   themeEntries,
+  trialFinished,
   unitProgress,
   type AudioClip,
   type CefrLevel,
@@ -27,6 +29,7 @@ import {
   type MasteryTier,
   type Mode,
   type PathContext,
+  type ReviewState,
   type SessionPlan,
   type Settings,
   type StreakStatus,
@@ -56,7 +59,7 @@ export function today(ctx: StudyContext): number {
 
 export function pathContext(ctx: StudyContext): PathContext {
   return {
-    units: ctx.corpus.units,
+    units: studyUnits(ctx.corpus, ctx.settings.declaredLevel),
     retired: ctx.corpus.retired,
     flags: ctx.flags,
     // A word has review state only after a scheduled review, which is what "introduced" means (spec §7.2).
@@ -75,15 +78,28 @@ export function toLearnWords(ctx: Pick<StudyContext, 'corpus' | 'learner' | 'toL
   return learnQueue(ctx.toLearn, ctx.learner.states).filter((wordId) => entryOf(ctx.corpus, wordId) !== null && !ctx.corpus.retired.has(wordId))
 }
 
+/**
+ * The review states a session can serve: a corpus word the loaded corpus lacks (a device that began on the sample,
+ * spec 2026-10-12 §4.6) keeps its state and is never due here, or the home screen would count it for ever and no
+ * day could complete. A word of another kind is the run's to skip.
+ */
+function servableStates(ctx: Pick<StudyContext, 'corpus' | 'learner'>): ReadonlyMap<WordId, ReviewState> {
+  const { states } = ctx.learner
+  const held = (wordId: WordId) => parseWordId(wordId).kind !== 'corpus' || entryOf(ctx.corpus, wordId) !== null
+  // The usual case keeps the learner's own map.
+  return [...states.keys()].every(held) ? states : new Map([...states].filter(([wordId]) => held(wordId)))
+}
+
 /** The session, from the same inputs the home screen shows (spec §7.4). */
 export function sessionPlan(ctx: StudyContext): SessionPlan {
   const day = today(ctx)
   const counts = todayCounts(ctx.learner, day)
-  const theme = ctx.settings.activeTheme
+  // A trial serves no theme collection, whatever the settings name: it would bring in the other levels' units (spec 2026-10-12 §4.4).
+  const theme = ctx.corpus.trial === null ? ctx.settings.activeTheme : null
   return composeSession({
     now: ctx.now,
     today: day,
-    states: ctx.learner.states,
+    states: servableStates(ctx),
     flags: ctx.flags,
     retention: RETENTION_TARGETS[ctx.settings.retention],
     newWordLimit: ctx.settings.newWordLimit,
@@ -136,17 +152,19 @@ export interface ProgressView {
 export function progressView(ctx: StudyContext, plan: SessionPlan): ProgressView {
   const day = today(ctx)
   const visibility = { retired: ctx.corpus.retired, flags: ctx.flags, declaredLevel: ctx.settings.declaredLevel }
+  // A trial shows the one unit it studies, not the other levels' units it cannot (spec 2026-10-12 §4.4).
+  const shown = studyUnits(ctx.corpus, ctx.settings.declaredLevel)
+  const words = ctx.corpus.trial === null ? [...ctx.corpus.entries.values()].map((entry) => corpusWordId(entry.entryId)) : shown.flatMap((u) => u.wordIds)
   const tiers: Record<MasteryTier, number> = { new: 0, learning: 0, young: 0, mature: 0 }
-  for (const entry of ctx.corpus.entries.values()) {
-    const wordId = corpusWordId(entry.entryId)
+  for (const wordId of words) {
     if (!isLive(wordId, visibility)) continue
     tiers[masteryTier(ctx.learner.states.get(wordId))] += 1
   }
   const levels: Partial<Record<CefrLevel, LevelCompletion>> = {}
-  for (const level of new Set(ctx.corpus.units.map((u) => u.level))) {
-    levels[level] = levelCompletion(level, ctx.corpus.units, ctx.learner.states, visibility)
+  for (const level of new Set(shown.map((u) => u.level))) {
+    levels[level] = levelCompletion(level, shown, ctx.learner.states, visibility)
   }
-  const units = new Map(ctx.corpus.units.map((u) => [u.unitId, unitProgress(u, ctx.learner.states, visibility)]))
+  const units = new Map(shown.map((u) => [u.unitId, unitProgress(u, ctx.learner.states, visibility)]))
   return {
     dueToday: plan.reviews.length,
     backlogTotal: plan.backlogTotal,
@@ -185,11 +203,18 @@ export interface PathView {
   readonly unlocked: ReadonlySet<string>
   /** Null once every live word on the path has been introduced. */
   readonly currentUnitId: string | null
+  /** A trial whose unit has no word left to start; always false for a course (spec 2026-10-12 §4.4). */
+  readonly trialFinished: boolean
 }
 
 export function pathView(ctx: StudyContext): PathView {
   const path = pathContext(ctx)
-  return { unlocked: new Set([...ctx.unlocked, ...computeUnlocks(path)]), currentUnitId: currentUnit(path)?.unitId ?? null }
+  const currentUnitId = currentUnit(path)?.unitId ?? null
+  return {
+    unlocked: new Set([...ctx.unlocked, ...computeUnlocks(path)]),
+    currentUnitId,
+    trialFinished: trialFinished(ctx.corpus, currentUnitId),
+  }
 }
 
 /** Days of upcoming reviews whose audio is fetched ahead (spec §9.3). Tuning (§15). */

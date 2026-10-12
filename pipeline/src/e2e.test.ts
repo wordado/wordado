@@ -75,6 +75,7 @@ describe('the corpus pipeline, end to end (spec §13)', () => {
     expect(checkPackSuccession(v0, v1)).toEqual([])
     expect(v1.entries.find((e) => e.entry_id === 'go-1')).toMatchObject({ translation: 'отивам', alternates: ['ходя', 'вървя'] })
     expect(offeredThemes(loadCorpus([v1])).map((t) => t.themeId)).toEqual(offeredThemes(loadCorpus([v0])).map((t) => t.themeId))
+    expect(readdirSync(v1Dir)).toEqual(expect.arrayContaining(['trial-v1-bg.trial', 'trial-manifest.json']))
     adoptRelease(dir, v1Dir)
 
     const reports = ['a', 'b'].map((reporter, i) => ({
@@ -95,6 +96,11 @@ describe('the corpus pipeline, end to end (spec §13)', () => {
     writeRelease(dir, v2Dir, planRelease(dir, { draft: false, now: '2026-10-04T03:00:00Z' }))
     const v2 = pack(v2Dir, 'corpus-v2-bg.pack')
     expect(checkPackSuccession(v1, v2)).toEqual([])
+    expect(readdirSync(v2Dir)).toEqual(expect.arrayContaining(['trial-v2-bg.trial', 'trial-manifest.json']))
+    // The trial follows the course: its units are the course's first unit of each level, as built in this version.
+    const t2 = pack(v2Dir, 'trial-v2-bg.trial')
+    const firstOfLevel = [...new Set(v2.units.map((u) => u.level))].map((l) => v2.units.filter((u) => u.level === l).sort((a, b) => a.order - b.order)[0]!.unit_id)
+    expect(t2.units.map((u) => u.unit_id)).toEqual(firstOfLevel)
     expect(v2.entries.find((e) => e.entry_id === 'go-1')!.alternates).toEqual(['ходя', 'ида'])
     const fixes = JSON.parse(readFileSync(join(v2Dir, 'fixes.json'), 'utf8'))
     expect(fixes.fixes.filter((f: { fixed_in: number }) => f.fixed_in === 2)).toEqual([{ word_id: 'c:go-1', field: 'translation', fixed_in: 2, l1: 'bg' }])

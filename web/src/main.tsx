@@ -35,7 +35,7 @@ import { TabLock } from './storage/tabLock'
 import { openWorkerDriver, terminateWorkerDrivers } from './storage/workerDriver'
 
 const env = webEnv()
-/** One AudioStore per manifest (a clip's URL is relative to it): the demo's sample and a learner's CDN manifest (plan 7). */
+/** One AudioStore per manifest (a clip's URL is relative to it): a visitor's (the trial manifest when the build names one, the bundled sample otherwise) and a learner's CDN manifest (plan 7). */
 const audio = new AudioSwitch((manifestUrl) => new AudioStore({ manifestUrl, sha256: env.sha256 }), SAMPLE_MANIFEST_URL)
 const accounts = accountStorage()
 /** The recorded learner: sync and reminders name them, so a session that is someone else's is refused (spec §8.6). */
@@ -181,7 +181,7 @@ startPackChecks({
     const state = boot.store.get()
     return state.status === 'ready' ? state.client : null
   },
-  // Whoever is studying now: the demo's sample, or the learner's CDN manifest.
+  // Whoever is studying now: a visitor's trial manifest or the bundled sample, or the learner's CDN manifest.
   fetchManifest: () => {
     const state = boot.store.get()
     return fetchManifest(manifestUrlFor(state.status === 'ready' ? state.account : null))
