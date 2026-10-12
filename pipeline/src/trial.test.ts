@@ -1,7 +1,7 @@
 import { loadCorpus, validatePack, type CefrLevel, type Pack, type PackEntry } from '@wordado/core'
 import { describe, expect, it } from 'vitest'
 import { sha256Hex } from './checksum'
-import { buildTrial, trialProblems } from './trial'
+import { buildTrial, planTrial, trialProblems } from './trial'
 
 type Shape = Partial<Record<CefrLevel, number[]>>
 
@@ -69,6 +69,11 @@ describe('buildTrial', () => {
     expect(pack.entries).toEqual(course.entries.filter((e) => first.has(e.entry_id)))
     expect(pack.themes.map((t) => t.theme_id)).toEqual(['food'])
     expect(pack.audio.map((c) => c.clip_id)).toEqual(pack.entries.map((e) => `${e.entry_id}-uk`))
+  })
+
+  it('gives the same bytes whatever the order of the course pack\'s arrays', () => {
+    const shuffled = { ...course, entries: [...course.entries].reverse(), units: [...course.units].reverse(), themes: [...course.themes].reverse(), audio: [...course.audio].reverse() }
+    expect(buildTrial(shuffled, 40).packBytes).toEqual(buildTrial(course, 40).packBytes)
   })
 
   it('takes the second unit of a level whose first is all retired', () => {
@@ -160,5 +165,18 @@ describe('trialProblems', () => {
     const t = buildTrial(course, 40).pack
     const edited = { ...t, audio: t.audio.map((c, i) => (i === 0 ? { ...c, sha256: 'f'.repeat(64) } : c)) }
     expect(trialProblems(course, edited)).toEqual([`${t.audio[0]!.clip_id}: differs from the course's clip`])
+  })
+})
+
+describe('planTrial', () => {
+  it('builds the trial and reports no problem for a sound course', () => {
+    const { trial, problems } = planTrial(course, 40)
+    expect(problems).toEqual([])
+    expect(trial.packFile).toBe('trial-v7-bg.trial')
+  })
+
+  it('returns the trialProblems lines: with no probes drawn, every level that has a unit is named', () => {
+    // probesPerLevel 0 leaves every level with a unit and no probes.
+    expect(planTrial(course, 0).problems).toEqual(['A1: the trial has a unit and no probes', 'A2: the trial has a unit and no probes', 'B1: the trial has a unit and no probes'])
   })
 })

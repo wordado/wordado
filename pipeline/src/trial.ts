@@ -75,7 +75,7 @@ export function buildTrial(pack: Pack, probesPerLevel: number): TrialOutput {
     entries: entries.sort((a, b) => byString(a.entry_id, b.entry_id)),
     units: units.sort((a, b) => a.order - b.order),
     themes: pack.themes.filter((t) => themeIds.has(t.theme_id)).sort((a, b) => byString(a.theme_id, b.theme_id)),
-    audio: pack.audio.filter((c) => clipIds.has(c.clip_id)),
+    audio: pack.audio.filter((c) => clipIds.has(c.clip_id)).sort((a, b) => byString(a.clip_id, b.clip_id)),
     trial: { probes, course },
   }
   const result = validatePack(JSON.parse(canonicalJson(candidate)))
@@ -116,4 +116,10 @@ export function trialProblems(course: Pack, trial: Pack): string[] {
     if (clips.get(c.clip_id) !== canonicalJson(c)) p.push(`${c.clip_id}: differs from the course's clip`)
   }
   return p
+}
+
+/** A release's trial for one course pack, with what stands in its way; the caller prefixes the lines (`<l1>: trial: `). */
+export function planTrial(pack: Pack, probesPerLevel: number): { trial: TrialOutput; problems: string[] } {
+  const trial = buildTrial(pack, probesPerLevel)
+  return { trial, problems: trialProblems(pack, trial.pack) }
 }

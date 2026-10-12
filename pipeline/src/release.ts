@@ -16,6 +16,7 @@ import { diffFixes, nextFixesFile } from './fixes'
 import { readLastPublished, type Fix, type FixesFile } from './lastPublished'
 import { pendingItems } from './queues'
 import { readClearedSources } from './sources'
+import { planTrial, TRIAL_MANIFEST, TRIAL_PROBES_PER_LEVEL, type TrialOutput } from './trial'
 
 export interface ReleaseInfo {
   readonly corpus_version: number
@@ -33,6 +34,9 @@ export interface ReleasePlan {
   readonly outputs: readonly BuildOutput[]
   readonly clipIds: readonly string[]
   readonly manifest: PackManifest
+  /** One trial pack per L1 (spec 2026-10-12 §3), listed by `trial-manifest.json` beside the course's manifest. */
+  readonly trials: readonly TrialOutput[]
+  readonly trialManifest: PackManifest
   readonly fixes: FixesFile
   readonly credits: CreditsFile
   readonly releaseInfo: ReleaseInfo
@@ -70,6 +74,7 @@ export function planRelease(dir: string, opts: { draft: boolean; now: string }):
 
   const hasClip = (id: string) => existsSync(paths.clip(id))
   const outputs: BuildOutput[] = []
+  const trials: TrialOutput[] = []
   const clipIds = new Set<string>()
   const fixes: Fix[] = []
   const seenFix = new Set<string>()
@@ -90,8 +95,12 @@ export function planRelease(dir: string, opts: { draft: boolean; now: string }):
     pending.push(...a.pending.filter((p) => !pending.includes(p)))
     unreviewed.push(...a.unreviewed.filter((u) => !unreviewed.some((v) => v.line === u.line)))
     let out: BuildOutput
+    let trial: TrialOutput
     try {
       out = buildPack(a.source, a.clipIds.map((clipId) => ({ clipId, bytes: new Uint8Array(readFileSync(paths.clip(clipId))) })))
+      const planned = planTrial(out.pack, config.trial?.probes_per_level ?? TRIAL_PROBES_PER_LEVEL)
+      trial = planned.trial
+      problems.push(...planned.problems.map((p) => `${l1}: trial: ${p}`))
     } catch (err) {
       if (!(err instanceof BuildError)) throw err
       problems.push(...err.errors.map((e) => `${l1}: ${e.path || '(pack)'}: ${e.message}`))
@@ -108,12 +117,18 @@ export function planRelease(dir: string, opts: { draft: boolean; now: string }):
     }
     for (const id of a.clipIds) clipIds.add(id)
     outputs.push(out)
+    trials.push(trial)
   }
 
   const manifest: PackManifest = {
     schema_version: MANIFEST_SCHEMA_VERSION,
     corpus_version: corpusVersion,
     packs: outputs.flatMap((o) => o.manifest.packs).sort((a, b) => (a.l1 < b.l1 ? -1 : 1)),
+  }
+  const trialManifest: PackManifest = {
+    schema_version: MANIFEST_SCHEMA_VERSION,
+    corpus_version: corpusVersion,
+    packs: trials.map((t) => t.descriptor).sort((a, b) => (a.l1 < b.l1 ? -1 : 1)),
   }
   const counts: Record<string, number> = {}
   for (const u of unreviewed) counts[u.queue] = (counts[u.queue] ?? 0) + 1
@@ -131,6 +146,8 @@ export function planRelease(dir: string, opts: { draft: boolean; now: string }):
     outputs,
     clipIds: [...clipIds].sort(),
     manifest,
+    trials,
+    trialManifest,
     fixes: nextFixesFile(last.fixes, fixes, corpusVersion),
     credits,
     releaseInfo,
@@ -142,7 +159,7 @@ export function planRelease(dir: string, opts: { draft: boolean; now: string }):
   }
 }
 
-/** The CDN directory (plan 7's layout): manifest.json, the packs, audio/, fixes.json and release.json. */
+/** The CDN directory (plan 7's layout): manifest.json, the packs, the trial packs and trial-manifest.json, audio/, fixes.json and release.json. */
 export function writeRelease(dir: string, outDir: string, plan: ReleasePlan): string[] {
   if (plan.problems.length > 0) throw new Error(`the release has ${plan.problems.length} problems:\n${plan.problems.join('\n')}`)
   if (!plan.releaseInfo.draft && plan.pending.length > 0) throw new Error(`the release awaits review (${plan.pending.length} items); release with --draft to build anyway`)
@@ -154,6 +171,10 @@ export function writeRelease(dir: string, outDir: string, plan: ReleasePlan): st
     writeFileSync(join(outDir, o.packFile), o.packBytes)
     files.push(o.packFile)
   }
+  for (const t of plan.trials) {
+    writeFileSync(join(outDir, t.packFile), t.packBytes)
+    files.push(t.packFile)
+  }
   for (const id of plan.clipIds) {
     cpSync(paths.clip(id), join(outDir, 'audio', `${id}.${AUDIO_EXT}`))
     files.push(`audio/${id}.${AUDIO_EXT}`)
@@ -161,8 +182,10 @@ export function writeRelease(dir: string, outDir: string, plan: ReleasePlan): st
   writeJson(join(outDir, 'fixes.json'), plan.fixes)
   writeJson(join(outDir, 'credits.json'), plan.credits)
   writeJson(join(outDir, 'release.json'), plan.releaseInfo)
+  // Each manifest goes after the files it lists; the course's stays last, as it is what the app reads first.
+  writeJson(join(outDir, TRIAL_MANIFEST), plan.trialManifest)
   writeJson(join(outDir, 'manifest.json'), plan.manifest)
-  return [...files, 'fixes.json', 'credits.json', 'release.json', 'manifest.json']
+  return [...files, 'fixes.json', 'credits.json', 'release.json', TRIAL_MANIFEST, 'manifest.json']
 }
 
 /** After a publish: the release becomes last-published/, the predecessor of the next (Decision 14). Audio stays in audio/. */

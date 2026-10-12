@@ -9,7 +9,9 @@ import { Decisions, QUEUES } from './decisions'
 import { readDraft, runDraft } from './draft'
 import { levelSampled, pendingItems } from './queues'
 import { writeJson } from './files'
+import { readLastPublished } from './lastPublished'
 import { publishProblems } from './publishable'
+import { TRIAL_MANIFEST } from './trial'
 import { adoptRelease, planRelease, writeRelease } from './release'
 import { approveAll, makeContent, recordAudio, sampleLlm } from './testing/fixture'
 
@@ -115,7 +117,7 @@ describe('planRelease and writeRelease', () => {
     expect([plan.problems, plan.pending]).toEqual([[], []])
     const o = out()
     writeRelease(dir, o, plan)
-    expect(readdirSync(o).sort()).toEqual(['audio', 'corpus-v1-bg.pack', 'credits.json', 'fixes.json', 'manifest.json', 'release.json'])
+    expect(readdirSync(o).sort()).toEqual(['audio', 'corpus-v1-bg.pack', 'credits.json', 'fixes.json', 'manifest.json', 'release.json', 'trial-manifest.json', 'trial-v1-bg.trial'])
     expect(publishProblems(reader(o))).toEqual([])
     const v1 = packOf(o, 'corpus-v1-bg.pack')
     const v0 = packOf(join(dir, 'last-published'), 'corpus-v0-bg.pack')
@@ -327,5 +329,42 @@ describe('planRelease and writeRelease', () => {
     ])
     const cleared = planRelease(dir, { draft: false, now: NOW })
     expect(cleared.pending.some((l) => l.endsWith('not yet AI-reviewed (level)'))).toBe(false)
+  })
+
+  it('plans one trial per L1 with a manifest, and writes both beside the course, the course manifest last', async () => {
+    const dir = await reviewed()
+    const plan = planRelease(dir, { draft: false, now: NOW })
+    expect(plan.problems).toEqual([])
+    expect(plan.trials.map((t) => t.packFile)).toEqual(['trial-v1-bg.trial'])
+    expect(plan.trialManifest).toEqual({ schema_version: plan.manifest.schema_version, corpus_version: 1, packs: plan.trials.map((t) => t.descriptor) })
+    const o = out()
+    const files = writeRelease(dir, o, plan)
+    expect(files.slice(-2)).toEqual([TRIAL_MANIFEST, 'manifest.json'])
+    expect(files).toContain('trial-v1-bg.trial')
+    const written = JSON.parse(readFileSync(join(o, TRIAL_MANIFEST), 'utf8')) as typeof plan.trialManifest
+    expect(written).toEqual(plan.trialManifest)
+    for (const d of written.packs) {
+      const bytes = new Uint8Array(readFileSync(join(o, d.url)))
+      expect([bytes.length, sha256Hex(bytes)]).toEqual([d.bytes, d.sha256])
+    }
+    expect(packOf(o, 'trial-v1-bg.trial').trial?.probes.length).toBeGreaterThan(0)
+  })
+
+  it('leaves the trial files out of last-published/, which is still read', async () => {
+    const dir = await reviewed()
+    const o = out()
+    writeRelease(dir, o, planRelease(dir, { draft: false, now: NOW }))
+    adoptRelease(dir, o)
+    expect(readdirSync(join(dir, 'last-published')).sort()).toEqual(['corpus-v1-bg.pack', 'fixes.json', 'manifest.json'])
+    expect(readLastPublished(dir).manifest.corpus_version).toBe(1)
+  })
+
+  it('draws the number of probes the setting names', async () => {
+    const dir = await reviewed()
+    setConfig(dir, { trial: { probes_per_level: 8 } })
+    const plan = planRelease(dir, { draft: false, now: NOW })
+    const perLevel = new Map<string, number>()
+    for (const p of plan.trials[0]!.pack.trial!.probes) perLevel.set(p.level, (perLevel.get(p.level) ?? 0) + 1)
+    expect(Math.max(...perLevel.values())).toBeLessThanOrEqual(8)
   })
 })
