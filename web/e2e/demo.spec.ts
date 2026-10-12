@@ -657,6 +657,19 @@ for (const [locale, l1] of [
       const panel = (await page.locator('.help-panel').boundingBox())!
       expect(panel.x).toBeGreaterThanOrEqual(0)
       expect(panel.x + panel.width).toBeLessThanOrEqual(360)
+      // The tab bar's labels stay apart, on the tab with the longest label too, where it is bold (#247).
+      await page.goto('/settings')
+      await expect(page.locator('.nav a[aria-current="page"] span')).toBeVisible()
+      for (const width of [360, 320]) {
+        await page.setViewportSize({ width, height: 720 })
+        const labels = await page.locator('.nav a span').evaluateAll((spans) => spans.map((span) => span.getBoundingClientRect()).map((r) => ({ left: r.left, right: r.right })))
+        // A long note on a Settings row is cut short; it does not widen the page.
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
+        expect(labels).toHaveLength(5)
+        expect(labels[0]!.left).toBeGreaterThanOrEqual(0)
+        expect(labels[4]!.right).toBeLessThanOrEqual(width)
+        for (let i = 1; i < labels.length; i++) expect(labels[i]!.left - labels[i - 1]!.right).toBeGreaterThanOrEqual(4)
+      }
     } finally {
       await context.close()
     }
