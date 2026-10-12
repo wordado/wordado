@@ -92,7 +92,7 @@ export function accountStorage(storage: KeyValue = browserStorage('localStorage'
   return jsonKey(storage, ACCOUNT_KEY, isRecord)
 }
 
-/** That this device asked a visitor for a level, or had no need to (spec 2026-10-12 §4.6). */
+/** That this device asked a visitor for a level (spec 2026-10-12 §4.6). */
 export const TRIAL_LEVEL_ASKED_KEY = 'wordado.trialLevelAsked'
 
 export interface TrialLevelMark {
