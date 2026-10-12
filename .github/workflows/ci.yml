@@ -132,8 +132,6 @@ jobs:
     env:
       E2E_PROJECTS: ${{ matrix.project }}
       PART: ${{ matrix.part }}
-      # TEMPORARY, to try the retry: removed before merge.
-      INSTALL_FIRST_LIMIT_SECONDS: ${{ matrix.part == 'accounts' && '6' || '180' }}
     steps:
       - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v6
