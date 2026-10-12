@@ -166,6 +166,8 @@ private `wordado/wordado-research`, cloned into `docs/research/` and ignored her
    the push and restored straight after. To set it up again:
    `gh api -X PUT repos/wordado/wordado/branches/main/protection -F "required_status_checks[strict]=true" -f "required_status_checks[contexts][]=Typecheck, lint, workflows, deploy config" -f "required_status_checks[contexts][]=Suites and the Worker smoke run" -f "required_status_checks[contexts][]=End to end (chromium)" -f "required_status_checks[contexts][]=End to end (firefox)" -f "required_status_checks[contexts][]=End to end (webkit)" -F enforce_admins=false -F "required_pull_request_reviews=null" -F "restrictions=null"`
    Those names are the CI jobs' names (`.github/workflows/ci.yml`), and a check must have run once on a pull request before GitHub offers it.
+   The three `End to end` jobs are summaries: the browsers run in the `Browser tests (…)` jobs, in parts side by side, and each
+   summary passes when all of them passed or none was needed (#239).
 8. **The transport rate limit** (spec §10). Dashboard › wordado.com › Security › WAF › Rate limiting
    rules: *URI Path starts with `/v1/sync/`*, 60 requests per 10 seconds per IP, block for 10 seconds.
    A week offline is a few 500-event pages and a pull, far below it. Sign-in has its own limits (plan 5).
@@ -181,6 +183,10 @@ private `wordado/wordado-research`, cloned into `docs/research/` and ignored her
 
 - **Release:**
   1. Open a pull request. Once its checks pass, CI deploys it to the preview and runs `smoke:remote` there.
+     CI runs what the change can affect (#239, `.github/scripts/changes.sh`): a change to `review-app/`, `docs/` or
+     top-level Markdown alone skips the learner app's browser tests and both of its deployments, documents alone skip
+     the suites too, and anything else runs everything. On `main` the comparison is with the last commit deployed, so
+     a run that failed leaves nothing behind: the next merge deploys its changes as well.
   2. Try it on `https://wordado-preview.danchom.workers.dev`. Sign-in codes appear in
      `pnpm --filter @wordado/server exec wrangler tail --env preview`, since the preview has no mailer. The
      preview is shared, so with several pull requests open it shows the one deployed last.
