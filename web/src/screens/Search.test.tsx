@@ -172,7 +172,7 @@ describe('Search', () => {
   it('calls a trial’s corpus the trial, not the sample', async () => {
     const ctx = await setupTrial()
     renderWith(<Search q="zzzz" />, ctx)
-    expect(screen.getByText(/^The trial has \d+ words\. Sign in to search the whole course\.$/)).toBeTruthy()
+    expect(screen.getByText(/^The demo has \d+ words\. Sign in to search the whole course\.$/)).toBeTruthy()
     expect(screen.queryByText(/The sample has/)).toBeNull()
   })
 

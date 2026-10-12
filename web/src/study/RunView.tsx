@@ -511,7 +511,7 @@ function Done(props: { readonly snapshot: RunSnapshot; readonly kind: RunKind; r
           {t('done.unlocked', { title: unitTitle(unitId) })}
         </p>
       ))}
-      {props.kind === 'session' && path?.trialFinished === true && <TrialInvite />}
+      {props.kind === 'session' && path?.trialFinished === true && <TrialInvite line="done-line done-note" />}
       {snapshot.toLearn > 0 && <p className="done-line done-note">{t('done.toLearn', { count: snapshot.toLearn })}</p>}
       {snapshot.setAside > 0 && <p className="done-line done-note">{t('done.setAside', { count: snapshot.setAside })}</p>}
       {studying !== null && (

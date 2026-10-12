@@ -871,7 +871,7 @@ describe('RunView: the end of a trial', () => {
   it('invites an account when a session has started the last word, and opens no unit', async () => {
     await lastWord('session')
     expect(screen.getByRole('heading', { name: 'Session complete' })).toBeTruthy()
-    expect(screen.getByText('You have started every word of the trial.')).toBeTruthy()
+    expect(screen.getByText('You have started every word of the demo.')).toBeTruthy()
     expect(screen.getByText(/Create an account to go on with the whole course\./)).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Create an account' }).getAttribute('href')).toBe('/signin')
     expect(screen.queryByText(/New unit open/)).toBeNull()
@@ -880,7 +880,7 @@ describe('RunView: the end of a trial', () => {
   it('does not say it after practice', async () => {
     await lastWord('practice')
     expect(screen.getByRole('heading', { level: 1 }).id).toBe('done-title')
-    expect(screen.queryByText('You have started every word of the trial.')).toBeNull()
+    expect(screen.queryByText('You have started every word of the demo.')).toBeNull()
     expect(screen.queryByRole('link', { name: 'Create an account' })).toBeNull()
   })
 })

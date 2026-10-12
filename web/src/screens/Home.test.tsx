@@ -129,7 +129,7 @@ describe('Home: listening follows the connection and the audio setting (spec §9
       const ctx = await setupTrial()
       await finishTrial(ctx.client, ctx.env)
       renderWith(<Home />, ctx)
-      expect(screen.getByText('You have started every word of the trial.')).toBeTruthy()
+      expect(screen.getByText('You have started every word of the demo.')).toBeTruthy()
       expect(screen.getByText(/Create an account to go on with the whole course\./)).toBeTruthy()
       expect(screen.getByRole('link', { name: 'Create an account' }).getAttribute('href')).toBe('/signin')
       expect(screen.getByRole('link', { name: 'Practise words you know' })).toBeTruthy()
@@ -140,7 +140,7 @@ describe('Home: listening follows the connection and the audio setting (spec §9
 
     it('says nothing of it while the trial has words to start, or in a course', async () => {
       renderWith(<Home />, await setupTrial())
-      expect(screen.queryByText('You have started every word of the trial.')).toBeNull()
+      expect(screen.queryByText('You have started every word of the demo.')).toBeNull()
       cleanup()
       renderWith(<Home />, await setup())
       expect(screen.queryByRole('link', { name: 'Create an account' })).toBeNull()

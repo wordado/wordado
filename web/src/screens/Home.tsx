@@ -36,7 +36,7 @@ export function Home() {
             {nothing ? t('home.allDone') : reviews > 0 ? t('home.reviews', { count: reviews }) : t('home.newWords', { count: fresh })}
           </h1>
           {nothing && !trialFinished && <p className="today-more">{t('home.allDoneHint')}</p>}
-          {trialFinished && <TrialInvite />}
+          {trialFinished && <TrialInvite line="today-more" />}
           {!nothing && reviews > 0 && fresh > 0 && <p className="today-more">{t('home.newWords', { count: fresh })}</p>}
           {progress.backlogTotal > progress.dueToday && <p className="note">{t('home.backlog', { count: progress.backlogTotal })}</p>}
           {progress.newWordsPaused && <p className="note">{t('home.paused')}</p>}
