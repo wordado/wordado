@@ -11,9 +11,10 @@ export function hasLevels(corpus: Corpus | null): boolean {
 }
 
 /**
- * The setup's level step on its own, once, for a learner who came through the demo: its sample has one level, so its
- * setup never asked, and the account's course starts at A1 unless somebody does. Shown in place of Today the first
- * time the whole course is there (`App`); Continue ends it, whatever was chosen. The placement test runs inside it,
+ * The setup's level step on its own, once, for a learner who came through the demo: the trial's level (if the visitor
+ * chose one) is already selected, so the learner confirms it or takes the test again on the whole course; a demo on the
+ * old one-level sample never asked at all, and the account's course starts at A1 unless somebody does. Shown in place
+ * of Today the first time the whole course is there (`App`); Continue ends it, whatever was chosen. The placement test runs inside it,
  * over the whole screen (`onFocus`), as in the setup.
  */
 export function LevelAsk(props: { onDone(): void; onFocus?(on: boolean): void }) {

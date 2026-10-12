@@ -14,8 +14,9 @@ export interface AccountRecord {
    */
   readonly carryOver?: boolean
   /**
-   * The demo was carried into this account and its learner has not been asked for a level yet: the demo's sample
-   * has one level, so its setup never asked. The app asks once, when the course it opens has more (`LevelAsk`).
+   * The demo was carried into this account and its learner has not been asked for a level yet. The app asks once,
+   * when the course it opens has more than one level (`LevelAsk`): the trial's level comes preselected, so the learner
+   * can confirm it or take the test again on the whole course (owner's decision, 2026-10-12).
    */
   readonly askLevel?: boolean
 }

@@ -1,7 +1,7 @@
 import { expect, test, type Locator } from '@playwright/test'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { answer, expectAccessible, finishSetup, finishSetupAt, forwardConsole, heading, serveGlossedSample, serveTwoLevelSample, SETTLE_MS, studyNew, today } from './helpers'
+import { answer, expectAccessible, finishSetup, finishSetupAt, forwardConsole, heading, serveGlossedSample, serveTrialSample, serveTwoLevelSample, SETTLE_MS, studyNew, today } from './helpers'
 
 test.beforeEach(async ({ context }) => {
   forwardConsole(context)
@@ -1234,5 +1234,97 @@ test.describe('a notice when the terms or the privacy policy change (#184)', () 
     await expect(page.getByText(/have changed|has changed/)).toHaveCount(0)
     await expect(page.getByRole('alert')).toHaveCount(0)
     expect(await page.evaluate(() => localStorage.getItem('wordado.legal'))).toBeNull()
+  })
+})
+
+// The trial (spec 2026-10-12): a visitor chooses a level or takes the test, and studies the one unit of it.
+test.describe('the trial at the visitor’s level', () => {
+  test('studies the unit of the chosen level, and the path says so', async ({ browser }, testInfo) => {
+    const context = await browser.newContext({ serviceWorkers: 'block', ...(testInfo.project.use.viewport ? { viewport: testInfo.project.use.viewport } : {}) })
+    forwardConsole(context)
+    await context.addInitScript(() => localStorage.setItem('wordado.locale', 'en'))
+    const entries = await serveTrialSample(context)
+    try {
+      const page = await context.newPage()
+      await page.goto('/')
+      await finishSetupAt(page, 'B1 · Intermediate')
+      await page.goto('/study?mode=flashcard')
+      const card = page.locator('.card[data-phase="prompt"]')
+      await expect(card).toBeVisible()
+      // The side shown is the English word or its translation, whole: a substring would find "no" in other words.
+      const shown = ((await card.locator('.hw-word, .translation').first().textContent()) ?? '').trim()
+      const has = (list: readonly { headword: string; translation: string }[]) => list.some((e) => e.headword === shown || e.translation === shown)
+      expect(has(entries.B1)).toBe(true)
+      expect(has([...entries.A1, ...entries.A2])).toBe(false)
+      await page.goto('/path')
+      await expect(page.locator('li.unit')).toHaveCount(1)
+      await expect(page.getByText('This is the demo: one unit of B1.')).toBeVisible()
+      await expect(page.locator('#main').getByRole('link', { name: 'Create an account' })).toBeVisible()
+    } finally {
+      await context.close()
+    }
+  })
+
+  test('the setup’s test places the visitor, and the level comes back selected', async ({ browser }, testInfo) => {
+    const context = await browser.newContext({ serviceWorkers: 'block', ...(testInfo.project.use.viewport ? { viewport: testInfo.project.use.viewport } : {}) })
+    forwardConsole(context)
+    await context.addInitScript(() => localStorage.setItem('wordado.locale', 'en'))
+    await serveTrialSample(context)
+    try {
+      const page = await context.newPage()
+      await page.goto('/')
+      await page.getByRole('radio', { name: 'Български' }).check()
+      await page.getByRole('button', { name: 'Continue' }).click()
+      await expect(page.getByRole('heading', { name: 'Your English level' })).toBeVisible()
+      await page.getByRole('radio', { name: 'B1 · Intermediate' }).click()
+      await expect(page.getByRole('radio', { name: 'B1 · Intermediate' })).toBeChecked()
+      await page.getByRole('button', { name: 'Find your level with a short test' }).click()
+      const result = page.getByRole('heading', { name: 'Your level: A1' })
+      for (let i = 0; i < 40 && !(await result.isVisible()); i += 1) {
+        const count = await page.locator('.study-count').textContent()
+        await page.waitForTimeout(SETTLE_MS)
+        await page.getByRole('button', { name: 'I don’t know' }).click()
+        await expect(page.locator('.study-count').or(result).first()).not.toHaveText(count ?? '')
+      }
+      await expect(result).toBeVisible()
+      await page.getByRole('button', { name: 'Use A1' }).click()
+      await expect(page.getByRole('radio', { name: 'A1 · Beginner' })).toBeChecked()
+      await page.getByRole('button', { name: 'Start studying' }).click()
+      await expect(today(page)).toBeVisible()
+      await page.goto('/path')
+      await expect(page.getByText('This is the demo: one unit of A1.')).toBeVisible()
+    } finally {
+      await context.close()
+    }
+  })
+
+  test('ends on the invitation once every word of the unit is started', async ({ browser }, testInfo) => {
+    test.slow()
+    const context = await browser.newContext({ serviceWorkers: 'block', ...(testInfo.project.use.viewport ? { viewport: testInfo.project.use.viewport } : {}) })
+    forwardConsole(context)
+    await context.addInitScript(() => localStorage.setItem('wordado.locale', 'en'))
+    await serveTrialSample(context)
+    try {
+      const page = await context.newPage()
+      await page.goto('/')
+      await finishSetupAt(page, 'B1 · Intermediate')
+      // The unit holds twenty words: a day's limit that covers it.
+      await page.goto('/settings/study')
+      await page.getByLabel('New words a day', { exact: true }).fill('20')
+      await page.getByLabel('New words a day', { exact: true }).press('Enter')
+      // By the nav, not a reload: the setting is saved a moment after Enter.
+      await page.locator('.nav').getByRole('link', { name: 'Study' }).click()
+      await expect(today(page)).toHaveText('20 new words')
+      await page.goto('/study?mode=flashcard')
+      for (let i = 0; i < 40 && !(await page.locator('.done').isVisible()); i += 1) await answer(page)
+      await expect(page.locator('.done')).toBeVisible()
+      await expect(page.getByText('You have started every word of the demo.')).toBeVisible()
+      await expect(page.getByText('Create an account to go on with the whole course.')).toBeVisible()
+      await page.goto('/')
+      await expect(page.getByText('You have started every word of the demo.')).toBeVisible()
+      await expect(page.locator('#main').getByRole('link', { name: 'Create an account' })).toBeVisible()
+    } finally {
+      await context.close()
+    }
   })
 })
