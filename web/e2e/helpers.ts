@@ -205,7 +205,7 @@ export async function serveTrialSample(context: BrowserContext): Promise<TrialEn
   for (const entry of pack.entries) entry.level = levelOf.get(entry.unit_id)!
   // A probe that is also an entry equals it in these fields (validatePack).
   const probes = pack.entries.map(({ entry_id, headword, pos, sense, level, translation }) => ({ entry_id, headword, pos, sense, level, translation }))
-  pack.trial = { probes, course: { A1: { units: 10, words: 200 }, A2: { units: 12, words: 240 }, B1: { units: 14, words: 280 } } }
+  pack.trial = { probes, course: { A1: { units: 10, words: 200 }, A2: { units: 12, words: 240 }, B1: { units: 14, words: 280 } }, themes: { 'daily-life': 240, food: 130 } }
   const body = Buffer.from(JSON.stringify(pack))
   const manifest = JSON.parse(readFileSync(join(SAMPLE_DIR, 'manifest.json'), 'utf8')) as { packs: { pack_id: string; sha256: string; bytes: number }[] }
   for (const p of manifest.packs) {

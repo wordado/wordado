@@ -2215,6 +2215,8 @@ li:not(:has(> .play-word)) > .word-where {
   gap: 0.125rem;
 }
 
+/* A trial's cards (h2) stand right under the page title; a course's (h3) under a group's. */
+.theme-text h2,
 .theme-text h3 {
   margin: 0;
   font: 600 var(--step-1) / 1.2 var(--font-entry);

@@ -138,7 +138,12 @@ function parseTrial(r: Report, raw: unknown, path: string): PackTrial {
       else course[level as CefrLevel] = { units: integer(r, size, 'units', sizePath, 1), words: integer(r, size, 'words', sizePath, 1) }
     }
   }
-  return { probes, course }
+  const rawThemes = raw['themes']
+  if (rawThemes === undefined) return { probes, course }
+  const themes: Record<string, number> = {}
+  if (!isRecord(rawThemes)) r.add(at(path, 'themes'), 'must be an object of word counts by theme')
+  else for (const themeId of Object.keys(rawThemes)) themes[themeId] = integer(r, rawThemes, themeId, at(path, 'themes'), 1)
+  return { probes, course, themes }
 }
 
 /** Referential integrity and the stability rules that hold inside one pack (spec §5.1, §13). */
@@ -183,6 +188,9 @@ function crossCheck(r: Report, pack: Pack): void {
     }
   })
 
+  for (const themeId of Object.keys(pack.trial?.themes ?? {})) {
+    if (!themes.has(themeId)) r.add(`trial.themes.${themeId}`, `unknown theme ${JSON.stringify(themeId)}`)
+  }
   // A probe may be a unit entry (the trial draws from the first unit too), but then it is the same word.
   pack.trial?.probes.forEach((p, i) => {
     const e = entries.get(p.entry_id)

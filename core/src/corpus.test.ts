@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { entryClips, loadCorpus, MIN_THEME_SIZE, offeredThemes, themeEntries } from './corpus'
+import { entryClips, loadCorpus, MIN_THEME_SIZE, offeredThemes, themeEntries, trialThemes } from './corpus'
 import type { Pack, PackEntry, PackTrial, PackUnit } from './pack'
 import { corpusWordId } from './wordId'
 
@@ -176,7 +176,20 @@ describe('trial', () => {
         },
       ],
       course: { A1: { units: 2, words: 40 } },
+      themes: {},
     })
+  })
+
+  it('lists the themes the course offers, with their sizes there, in the pack\'s order; none for a course or an older trial pack (#244)', () => {
+    const themes = [
+      { theme_id: 'travel', name: { en: 'Travel', l1: 'Пътуване' }, description: { en: 'On the road', l1: 'На път' } },
+      { theme_id: 'food', name: { en: 'Food', l1: 'Храна' }, description: { en: 'At the table', l1: 'На масата' } },
+      { theme_id: 'small', name: { en: 'Small', l1: 'Малка' }, description: { en: 'Too few words', l1: 'Твърде малко думи' } },
+    ]
+    const corpus = loadCorpus([pack({ themes, trial: { ...trial, themes: { food: 120, travel: 60 } } })])
+    expect(trialThemes(corpus).map(({ theme, words }) => [theme.themeId, words])).toEqual([['travel', 60], ['food', 120]])
+    expect(trialThemes(loadCorpus([pack({ themes, trial })]))).toEqual([])
+    expect(trialThemes(loadCorpus([pack({ themes })]))).toEqual([])
   })
 
   it('offers no themes', () => {

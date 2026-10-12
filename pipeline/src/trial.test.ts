@@ -67,7 +67,7 @@ describe('buildTrial', () => {
     expect(pack.units.map((u) => u.unit_id)).toEqual(['a1-1', 'a2-1', 'b1-1'])
     const first = new Set(pack.units.flatMap((u) => u.entry_ids))
     expect(pack.entries).toEqual(course.entries.filter((e) => first.has(e.entry_id)))
-    expect(pack.themes.map((t) => t.theme_id)).toEqual(['food'])
+    expect(pack.themes.map((t) => t.theme_id)).toEqual(['food', 'home'])
     expect(pack.audio.map((c) => c.clip_id)).toEqual(pack.entries.map((e) => `${e.entry_id}-uk`))
   })
 
@@ -115,6 +115,19 @@ describe('buildTrial', () => {
     expect(buildTrial(course, 40).packBytes).toEqual(buildTrial(coursePack(shape), 40).packBytes)
     const a1 = (v: number) => buildTrial(coursePack(shape, v), 40).pack.trial!.probes.filter((p) => p.level === 'A1').map((p) => p.entry_id)
     expect(a1(8)).not.toEqual(a1(7))
+  })
+
+  it('names the themes the course offers with their sizes there, and defines each; a theme too small is not named (#244)', () => {
+    // food: the first unit of every level (30 + 30 + 5); home: the other units (60 + 30).
+    const { pack } = buildTrial(course, 40)
+    expect(pack.trial!.themes).toEqual({ food: 65, home: 90 })
+    expect(pack.themes.map((t) => t.theme_id)).toEqual(['food', 'home'])
+    // A course of five words: its one theme is defined, since the unit's entries name it, and is not on offer.
+    const small = buildTrial(coursePack({ B1: [5] }), 40).pack
+    expect(small.trial!.themes).toEqual({})
+    expect(small.themes.map((t) => t.theme_id)).toEqual(['food'])
+    // Retired words do not count.
+    expect(buildTrial(coursePack(shape, 7, ['a1-2']), 40).pack.trial!.themes).toEqual({ food: 65, home: 60 })
   })
 
   it('counts the course per level', () => {
