@@ -545,7 +545,7 @@ describe('Settings: how the translations were checked (spec §8.10)', () => {
     const ctx = await setup()
     renderWith(<Settings section="about" />, ctx)
     expect(screen.getByText('Translations are checked by AI. If something looks wrong, tell us: it takes one tap.')).toBeTruthy()
-    expect(screen.getByText('While you study, open the ⋯ menu on the card and choose “Report a problem”.')).toBeTruthy()
+    expect(screen.getByText('While you study, open the ⋯ menu on the card and choose “Report this word”.')).toBeTruthy()
   })
 })
 

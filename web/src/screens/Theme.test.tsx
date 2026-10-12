@@ -117,7 +117,7 @@ describe('ThemeWords', () => {
     const entry = themeEntries(ctx.client.snapshot.corpus!, 'daily-life')[0]!
     const row = screen.getByText(entry.headword).closest('li')!
     fireEvent.click(within(row).getByRole('button', { name: `Word actions: ${entry.headword}` }))
-    await act(async () => fireEvent.click(within(row).getByRole('button', { name: `Report a problem: ${entry.headword}` })))
+    await act(async () => fireEvent.click(within(row).getByRole('button', { name: `Report this word: ${entry.headword}` })))
     expect(screen.getByRole('heading', { name: `Report a problem with “${entry.headword}”` })).toBeTruthy()
   })
 

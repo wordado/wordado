@@ -24,7 +24,7 @@ const send = () => act(async () => fireEvent.click(screen.getByRole('button', { 
 describe('Feedback (spec §8.12)', () => {
   it('asks for a kind, a message and an optional address, the address left empty even when signed in', async () => {
     await render({}, { account: { userId: 'u1', email: 'ana@example.com' } })
-    expect(screen.getByRole('heading', { level: 1, name: 'Send feedback' })).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 1, name: 'Write to us' })).toBeTruthy()
     const kinds = within(screen.getByRole('group', { name: 'What is it about?' })).getAllByRole('radio') as HTMLInputElement[]
     expect(kinds.map((radio) => radio.value)).toEqual(['bug', 'idea', 'other'])
     expect(kinds.map((radio) => radio.checked)).toEqual([true, false, false])
@@ -198,7 +198,7 @@ describe('Feedback (spec §8.12)', () => {
 
   it('is in Bulgarian, German and Spanish too', async () => {
     await render({}, { locale: 'bg' })
-    expect(screen.getByRole('heading', { level: 1, name: 'Изпратете обратна връзка' })).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 1, name: 'Пишете ни' })).toBeTruthy()
     expect(screen.getAllByRole('radio').map((radio) => radio.closest('label')!.textContent)).toEqual(['Нещо не работи', 'Имам идея', 'Нещо друго'])
     expect(screen.getByLabelText('Вашето съобщение')).toBeTruthy()
     expect(screen.getByLabelText('Имейл, ако искате отговор (по желание)')).toBeTruthy()

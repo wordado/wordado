@@ -351,11 +351,11 @@ describe('RunView: the top bar', () => {
 
   it('keeps setting aside and reporting in the ⋯ menu', async () => {
     await start('flashcard')
-    expect(screen.queryByRole('button', { name: 'Report a problem' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Report this word' })).toBeNull()
     more()
     expect(screen.getByRole('button', { name: 'I know this word' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Not now' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Report a problem' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Report this word' })).toBeTruthy()
   })
 })
 
@@ -581,7 +581,7 @@ describe('RunView: reporting a problem', () => {
     const { run, client } = await start('flashcard')
     const report = vi.spyOn(client, 'report')
     more()
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Report a problem' })))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Report this word' })))
     await press(' ')
     expect(run.snapshot.phase).toBe('prompt')
     // The dialog says what checked the translations (spec §8.10), until the report is sent.
@@ -599,7 +599,7 @@ describe('RunView: reporting a problem', () => {
     const { run, client } = await start('flashcard')
     const report = vi.spyOn(client, 'report')
     more()
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Report a problem' })))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Report this word' })))
     // The translation is the field chosen first, and one a text can be suggested for.
     const suggestion = screen.getByRole('textbox', { name: 'What should it be? (optional)' }) as HTMLInputElement
     expect(suggestion.maxLength).toBe(200)
@@ -611,7 +611,7 @@ describe('RunView: reporting a problem', () => {
     const again = await start('flashcard')
     const second = vi.spyOn(again.client, 'report')
     more()
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Report a problem' })))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Report this word' })))
     fireEvent.change(screen.getByRole('textbox', { name: 'What should it be? (optional)' }), { target: { value: '   ' } })
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Send report' })))
     expect(second).toHaveBeenLastCalledWith({ wordId: again.run.snapshot.item!.wordId, field: 'translation', note: '', packVersion: 0 })
@@ -621,7 +621,7 @@ describe('RunView: reporting a problem', () => {
     const { run, client } = await start('flashcard')
     const report = vi.spyOn(client, 'report')
     more()
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Report a problem' })))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Report this word' })))
     const asked = () => screen.queryByRole('textbox', { name: 'What should it be? (optional)' }) !== null
     for (const [name, shown] of [['Wrong or odd translation', true], ['Bad example sentence', true], ['Something else', true], ['Wrong level', false], ['Bad audio', false]] as const) {
       await act(async () => fireEvent.click(screen.getByRole('radio', { name })))
@@ -635,7 +635,7 @@ describe('RunView: reporting a problem', () => {
   })
 
   it('asks for the suggestion in every interface language', async () => {
-    for (const [locale, open, label] of [['bg', 'Съобщете за проблем', 'Как трябва да бъде? (по желание)'], ['de', 'Problem melden', 'Wie sollte es heißen? (optional)'], ['es', 'Informar de un problema', '¿Cómo debería ser? (opcional)']] as const) {
+    for (const [locale, open, label] of [['bg', 'Докладвайте думата', 'Как трябва да бъде? (по желание)'], ['de', 'Wort melden', 'Wie sollte es heißen? (optional)'], ['es', 'Informar sobre esta palabra', '¿Cómo debería ser? (opcional)']] as const) {
       const ctx = await setup()
       const run = await StudyRun.start(ctx.client, ctx.env, { kind: 'session', mode: 'flashcard', cachedClips: () => new Set(), online: () => false })
       renderWith(<RunView run={run} kind="session" />, { ...ctx, locale })
@@ -650,7 +650,7 @@ describe('RunView: reporting a problem', () => {
   it('returns focus to the card when the dialog is cancelled', async () => {
     await start('flashcard')
     more()
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Report a problem' })))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Report this word' })))
     const cancel = screen.getByRole('button', { name: 'Cancel' })
     cancel.focus()
     expect(document.activeElement).toBe(cancel)
@@ -662,7 +662,7 @@ describe('RunView: reporting a problem', () => {
     const { client } = await start('flashcard')
     const report = vi.spyOn(client, 'report')
     more()
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Report a problem' })))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Report this word' })))
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Send report' }))
       fireEvent.click(screen.getByRole('button', { name: 'Send report' }))
@@ -674,7 +674,7 @@ describe('RunView: reporting a problem', () => {
     const { client } = await start('flashcard')
     vi.spyOn(client, 'report').mockRejectedValueOnce(new Error('offline'))
     more()
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Report a problem' })))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Report this word' })))
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Send report' })))
     expect(screen.getByRole('alert').textContent).toBe('Your answer wasn’t saved: Something went wrong. Try again.')
     expect((screen.getByRole('button', { name: 'Send report' }) as HTMLButtonElement).disabled).toBe(false)

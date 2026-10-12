@@ -257,12 +257,12 @@ describe('Path', () => {
     for (const headword of ['milk', 'cheese']) {
       wordMenu(row(headword), headword)
       const choices = within(row(headword).querySelector('.menu-panel') as HTMLElement).getAllByRole('button')
-      expect(choices.at(-1)!.getAttribute('aria-label')).toBe(`Report a problem: ${headword}`)
-      expect(choices.at(-1)!.textContent).toBe('Report a problem')
+      expect(choices.at(-1)!.getAttribute('aria-label')).toBe(`Report this word: ${headword}`)
+      expect(choices.at(-1)!.textContent).toBe('Report this word')
       fireEvent.keyDown(row(headword).querySelector('.word-menu')!, { key: 'Escape' })
     }
     wordMenu(row('milk'), 'milk')
-    await act(async () => fireEvent.click(within(row('milk')).getByRole('button', { name: 'Report a problem: milk' })))
+    await act(async () => fireEvent.click(within(row('milk')).getByRole('button', { name: 'Report this word: milk' })))
     // The menu is closed, and the dialog names the word.
     expect(row('milk').querySelector('.menu-panel')).toBeNull()
     expect(screen.getByRole('heading', { name: 'Report a problem with “milk”' })).toBeTruthy()
@@ -324,7 +324,7 @@ describe('Path', () => {
     fireEvent.click(within(food).getByText('20 words'))
     const bread = within(food).getByText('bread').closest('li')!
     wordMenu(bread, 'bread')
-    expect(within(bread).getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual(['Word actions: bread', 'Learn this word: bread', 'I know it: bread', 'Not now: bread', 'Report a problem: bread'])
+    expect(within(bread).getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual(['Word actions: bread', 'Learn this word: bread', 'I know it: bread', 'Not now: bread', 'Report this word: bread'])
     await act(async () => fireEvent.click(within(bread).getByRole('button', { name: 'Learn this word: bread' })))
     expect(ctx.client.snapshot.toLearn).toEqual(['c:bread-1'])
     expect(within(bread).getByText('To learn')).toBeTruthy()
@@ -332,7 +332,7 @@ describe('Path', () => {
     expect(within(bread).queryByRole('button', { name: /^Learn this word/ })).toBeNull()
     expect(document.activeElement?.getAttribute('aria-label')).toBe('Word actions: bread')
     wordMenu(bread, 'bread')
-    expect(within(bread).getAllByRole('button').map((b) => b.textContent)).toEqual(['', 'Don’t learn this word', 'I know it', 'Not now', 'Report a problem'])
+    expect(within(bread).getAllByRole('button').map((b) => b.textContent)).toEqual(['', 'Don’t learn this word', 'I know it', 'Not now', 'Report this word'])
     await act(async () => fireEvent.click(within(bread).getByRole('button', { name: 'Don’t learn this word: bread' })))
     expect(ctx.client.snapshot.toLearn).toEqual([])
     expect(bread.querySelector('.word-status')).toBeNull()
@@ -343,7 +343,7 @@ describe('Path', () => {
     await act(async () => fireEvent.click(within(bread).getByRole('button', { name: 'Not now: bread' })))
     expect(ctx.client.snapshot.toLearn).toEqual([])
     wordMenu(bread, 'bread')
-    expect(within(bread).getAllByRole('button').map((b) => b.textContent)).toEqual(['', 'Bring back', 'Report a problem'])
+    expect(within(bread).getAllByRole('button').map((b) => b.textContent)).toEqual(['', 'Bring back', 'Report this word'])
   })
 
   it('does not offer Learn this word in the word list of a level being studied, but lets a mark made earlier be taken back', async () => {
