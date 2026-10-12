@@ -315,6 +315,30 @@ test('asks about news by email at sign-up, the account settings change the answe
   await anew.close()
 })
 
+test('tells the server the interface language at sign-in and when it changes, and the export shows it (#199)', async ({ browser }) => {
+  const languageOf = async (page: Page) => ((await (await page.request.get('/v1/me')).json()) as { interfaceLanguage: string | null }).interfaceLanguage
+  const email = address('language')
+  const ctx = await context(browser)
+  const page = await ctx.newPage()
+  await signIn(page, email)
+  await finishSetup(page)
+  // Nothing is asked of the learner: the app says the language it is in.
+  await expect.poll(() => languageOf(page)).toBe('en')
+  await page.getByRole('button', { name: 'Interface language: English (EN)' }).click()
+  await page.getByRole('button', { name: 'Български', exact: true }).click()
+  await expect(page.locator('html')).toHaveAttribute('lang', 'bg')
+  await expect.poll(() => languageOf(page)).toBe('bg')
+  expect(((await exported(page)) as unknown as { format: string; account: { interfaceLanguage: string | null } })).toMatchObject({ format: 'wordado-export-4', account: { interfaceLanguage: 'bg' } })
+  await ctx.close()
+
+  // Another browser, in English, signs in to the same account: the language is the one of the last to say it.
+  const other = await context(browser)
+  const b = await other.newPage()
+  await signIn(b, email)
+  await expect.poll(() => languageOf(b)).toBe('en')
+  await other.close()
+})
+
 test('sends feedback from the account menu; the export names neither it nor a country (spec §8.12, §11, #166)', async ({ browser }) => {
   const ctx = await context(browser)
   const page = await ctx.newPage()

@@ -1,6 +1,7 @@
 import { ANNOUNCEMENT_LANGUAGES, type AnnouncementLanguage, type NewsConsent } from '@wordado/core'
 import type { Hono } from 'hono'
 import { requireAdminWriteToken } from '../adminToken'
+import { KNOWN_LANGUAGE_OF } from '../announcements/store'
 import type { ServerDeps } from '../deps'
 import { invalid, readJson, type AppEnv } from '../http'
 import { MAX_IGNORED_REMINDERS } from '../reminders/schedule'
@@ -31,6 +32,7 @@ interface AccountRow {
   readonly news_consent: NewsConsent
   readonly news_consent_at: Date | null
   readonly news_consent_text: string | null
+  readonly language: string | null
 }
 
 /** What the lookup says of an account beyond its two dates (#209): how it is used, never what it holds. */
@@ -39,6 +41,9 @@ export interface AccountDetails {
   readonly lastStudiedAt: number | null
   /** On how many of the last 30 UTC days, today among them, it gave at least one answer. */
   readonly daysStudied30: number
+  /** Its interface language as an announcement reads it (announcements/store.ts): what its app said, else the
+   * older signs of one; null when it left none, and an announcement writes to it in English. */
+  readonly language: AnnouncementLanguage | null
   /** What it said to news by email, when, and in which language it read the question; the last two null when it said nothing. */
   readonly newsConsent: NewsConsent
   readonly newsConsentAt: number | null
@@ -70,7 +75,8 @@ export function accountAdminRoutes(app: Hono<AppEnv>, deps: ServerDeps): void {
   /** The accounts an address names: the whole address, whatever its capitals. More than one cannot be told apart, and is refused. */
   const find = (email: string): Promise<AccountRow[]> =>
     deps.db.query<AccountRow>(
-      'select id, "createdAt" as created_at, last_sign_in_at, news_consent, news_consent_at, news_consent_text from "user" where lower(email) = $1 limit 2',
+      `select u.id, u."createdAt" as created_at, u.last_sign_in_at, u.news_consent, u.news_consent_at, u.news_consent_text, ${KNOWN_LANGUAGE_OF} as language
+       from "user" u where lower(u.email) = $1 limit 2`,
       [email],
     )
 
@@ -88,6 +94,7 @@ export function accountAdminRoutes(app: Hono<AppEnv>, deps: ServerDeps): void {
     return {
       lastStudiedAt: devices?.last_studied ?? null,
       daysStudied30: days?.days ?? 0,
+      language: ANNOUNCEMENT_LANGUAGES.find((l) => l === row.language) ?? null,
       newsConsent: row.news_consent,
       newsConsentAt: row.news_consent_at?.getTime() ?? null,
       newsConsentLanguage: row.news_consent === 'none' ? null : consentLanguage(row.news_consent_text),

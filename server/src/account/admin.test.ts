@@ -19,7 +19,7 @@ const ask = (h: Harness, path: string, body?: unknown, authorization: string | n
 const users = async (h: Harness): Promise<string[]> => (await h.deps.db.query<{ email: string }>('select email from "user" order by email')).map((r) => r.email)
 
 /** What the lookup says of an account that was only ever signed in to. */
-const unused = { lastStudiedAt: null, daysStudied30: 0, newsConsent: 'none', newsConsentAt: null, newsConsentLanguage: null, reminders: [], devices: 0 }
+const unused = { lastStudiedAt: null, daysStudied30: 0, language: null, newsConsent: 'none', newsConsentAt: null, newsConsentLanguage: null, reminders: [], devices: 0 }
 
 describe('the accounts routes of the review app (#187)', () => {
   it('looks an account up by its address: when it was made and last signed in, how it is used, and nothing else', async () => {
@@ -77,6 +77,8 @@ describe('the accounts routes of the review app (#187)', () => {
       expect(reply.body.details).toEqual({
         lastStudiedAt: today + 120_000,
         daysStudied30: 2,
+        // What an announcement would be written in: the language its newest device reminds in.
+        language: 'bg',
         newsConsent: 'withdrawn',
         newsConsentAt: agreed,
         newsConsentLanguage: 'bg',
@@ -93,6 +95,9 @@ describe('the accounts routes of the review app (#187)', () => {
     // The 30 days move with the clock: a day on, the first of them is out.
     h.clock.advance(DAY)
     expect((await ask(h, 'lookup', { email: 'ana@example.com' })).body.details).toMatchObject({ daysStudied30: 1 })
+    // What its app says its language is comes before every older sign of one (#199).
+    await s.put('/v1/account/interface-language', { language: 'en' })
+    expect((await ask(h, 'lookup', { email: 'ana@example.com' })).body.details).toMatchObject({ language: 'en', newsConsentLanguage: 'bg' })
   })
 
   it('deletes by address as the learner’s own deletion does, and only when the request confirms it', async () => {

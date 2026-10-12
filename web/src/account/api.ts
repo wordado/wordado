@@ -1,4 +1,4 @@
-import type { FeedbackInput, NewsConsent } from '@wordado/core'
+import type { FeedbackInput, InterfaceLanguage, NewsConsent } from '@wordado/core'
 import type { Fetch } from '../content/packs'
 import type { Locale } from '../i18n/i18n'
 import { expectedUserHeader } from './transport'
@@ -29,6 +29,8 @@ export interface Me {
   readonly createdAt: number
   /** News by email (#186): whether the learner said yes, took it back, or was never asked. */
   readonly newsConsent: NewsConsent
+  /** The interface language the server was last told for the account (#199); null before any app told it. */
+  readonly interfaceLanguage: InterfaceLanguage | null
 }
 
 /** `PUT /v1/push/subscription` (plan 5, spec §8.11). */
@@ -67,6 +69,8 @@ export interface Api {
   deleteAccount(): Promise<void>
   /** The news switch (#186), for the recorded learner only: `text` is the wording on it, recorded when the consent is given. Answers what the server now holds. */
   setNewsConsent(consent: boolean, text: string): Promise<NewsConsent>
+  /** Tells the server the interface language (#199), for the recorded learner only. Answers what the server now holds. */
+  setInterfaceLanguage(language: InterfaceLanguage): Promise<InterfaceLanguage>
   /** The data export, for the recorded learner only (409 when the session is someone else's). */
   exportData(): Promise<ExportFile>
   /** The VAPID key, or null when this server sends no reminders. */
@@ -86,7 +90,7 @@ const codeOf = (body: unknown): string | null => {
 /**
  * The app's calls to its own origin: `/api/auth` (Better Auth) and `/v1` (plan 5), with the session cookie.
  * `expectedUser` names the recorded learner on the push-subscription calls, the account deletion, the news
- * switch and the export, so a session that is someone else's is refused (409) rather than acted on; on feedback,
+ * switch, the interface language and the export, so a session that is someone else's is refused (409) rather than acted on; on feedback,
  * so such a session's account is not attached to it.
  */
 export function httpApi(fetchFn: Fetch = (input, init) => fetch(input, init), expectedUser: () => string | null = () => null): Api {
@@ -152,6 +156,8 @@ export function httpApi(fetchFn: Fetch = (input, init) => fetch(input, init), ex
       const body = consent ? { consent, text } : { consent }
       return ((await call('PUT', '/v1/account/news-consent', body, expectedUserHeader(expectedUser()))) as { newsConsent: NewsConsent }).newsConsent
     },
+    setInterfaceLanguage: async (language) =>
+      ((await call('PUT', '/v1/account/interface-language', { language }, expectedUserHeader(expectedUser()))) as { interfaceLanguage: InterfaceLanguage }).interfaceLanguage,
     exportData: async () => {
       const { response, text } = await request('GET', '/v1/export', undefined, expectedUserHeader(expectedUser()))
       const name = /filename="([^"]+)"/.exec(response.headers.get('content-disposition') ?? '')?.[1] ?? 'wordado-export.json'

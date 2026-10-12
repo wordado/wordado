@@ -59,13 +59,24 @@ describe('httpApi (plan 5 contract)', () => {
     await expect(httpApi(refused.fetchFn, () => 'u1').setNewsConsent(false, 'news-1.en')).rejects.toMatchObject({ status: 409, code: 'wrong_user' })
   })
 
+  it('tells the server the interface language for the recorded learner, and reads back what the server holds (#199)', async () => {
+    const { fetchFn, calls } = fakeFetch({ 'PUT /v1/account/interface-language': [200, { interfaceLanguage: 'bg' }] })
+    expect(await httpApi(fetchFn, () => 'u1').setInterfaceLanguage('bg')).toBe('bg')
+    expect(bodyOf(calls[0]!)).toEqual({ language: 'bg' })
+    expect(calls[0]!.init?.credentials).toBe('include')
+    expect(new Headers(calls[0]!.init?.headers).get('x-wordado-user')).toBe('u1')
+    const refused = fakeFetch({ 'PUT /v1/account/interface-language': [409, { error: 'wrong_user' }] })
+    await expect(httpApi(refused.fetchFn, () => 'u1').setInterfaceLanguage('en')).rejects.toMatchObject({ status: 409, code: 'wrong_user' })
+    await expect(httpApi(fakeFetch({}).fetchFn, () => 'u1').setInterfaceLanguage('en')).rejects.toBeInstanceOf(OfflineError)
+  })
+
   it('reports no answer at all as OfflineError', async () => {
     const { fetchFn } = fakeFetch({})
     await expect(httpApi(fetchFn).sendCode('a@b.c')).rejects.toBeInstanceOf(OfflineError)
   })
 
   it('reads the signed-in learner, and null without a session', async () => {
-    const me = { userId: 'u1', email: 'ana@example.com', createdAt: 1, newsConsent: 'none' }
+    const me = { userId: 'u1', email: 'ana@example.com', createdAt: 1, newsConsent: 'none', interfaceLanguage: null }
     expect(await httpApi(fakeFetch({ 'GET /v1/me': [200, me] }).fetchFn).me()).toEqual(me)
     expect(await httpApi(fakeFetch({ 'GET /v1/me': [401, { error: 'unauthorized' }] }).fetchFn).me()).toBeNull()
   })

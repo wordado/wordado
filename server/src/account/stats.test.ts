@@ -294,6 +294,23 @@ describe('the accounts by language (#209)', () => {
     expect(news.reduce((sum, row) => sum + row.none, 0)).toBe(stats.newsNone)
   })
 
+  it('split news by the language the account’s app said, before the older signs of one (#199)', async () => {
+    const h = withToken()
+    const [said, silent, saidOnly] = await Promise.all([0, 0, 0].map(() => account(h, 400 * DAY)))
+    for (const id of [said, silent]) {
+      await consent(h, id!, 'given', 'news-1.de')
+      await reminder(h, id!, `device-${id}`, 'es', 0)
+      await l1(h, id!, 'bg')
+    }
+    await h.deps.db.query(`update "user" set interface_language = 'en' where id = $1`, [said])
+    await h.deps.db.query(`update "user" set interface_language = 'bg' where id = $1`, [saidOnly])
+    expect((await accountSplits(h.deps)).news).toEqual([
+      { language: 'bg', given: 0, withdrawn: 0, none: 1 },
+      { language: 'en', given: 1, withdrawn: 0, none: 0 },
+      { language: 'es', given: 1, withdrawn: 0, none: 0 },
+    ])
+  })
+
   it('split reminders by the language of the newest device, each account once: paused only when every device is', async () => {
     const h = withToken()
     const [sending, paused, mixed, off] = await Promise.all([0, 0, 0, 0].map(() => account(h, 400 * DAY)))

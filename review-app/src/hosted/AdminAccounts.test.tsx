@@ -151,7 +151,7 @@ describe('AdminAccounts: the Accounts tab (#187)', () => {
 
   it('looks an account up by the whole address: when it was made and last signed in, and how it is used (#209)', async () => {
     const used = details({
-      lastStudiedAt: STUDIED, daysStudied30: 19, newsConsent: 'given', newsConsentAt: AGREED, newsConsentLanguage: 'bg',
+      lastStudiedAt: STUDIED, daysStudied30: 19, language: 'en', newsConsent: 'given', newsConsentAt: AGREED, newsConsentLanguage: 'bg',
       reminders: [{ minute: 1170, tzOffsetMin: 180, paused: false }, { minute: 480, tzOffsetMin: -300, paused: true }], devices: 2, sweepNotBefore: NOT_BEFORE,
     })
     const { lookUp: asked } = shown(undefined, { found: true, createdAt: CREATED, lastSignInAt: SIGNED_IN, details: used })
@@ -164,6 +164,7 @@ describe('AdminAccounts: the Accounts tab (#187)', () => {
       `Last sign-in: ${dayWithYear(SIGNED_IN)}`,
       `Last studied: ${dayWithYear(STUDIED)}`,
       'Days studied, last 30: 19',
+      'Language: English',
       `News by email: Agreed ${dayWithYear(AGREED)}, in Bulgarian`,
       'Reminders: On 19:30 (UTC+3) | Paused 08:00 (UTC−5)',
       'Devices: 2',
@@ -199,6 +200,15 @@ describe('AdminAccounts: the Accounts tab (#187)', () => {
     asked.mockResolvedValue({ found: true, createdAt: CREATED, lastSignInAt: SIGNED_IN, details: details({ newsConsent: 'given', newsConsentAt: AGREED }) })
     await lookUp('ben@example.com')
     await waitFor(() => expect(facts(screen.getByRole('region', { name: 'The account' }))[4]).toBe(`News by email: Agreed ${dayWithYear(AGREED)}`))
+  })
+
+  it('says an account’s language is not known, and nothing of it when the app’s server is from before it said one (#199)', async () => {
+    const { lookUp: asked } = shown(undefined, { found: true, createdAt: CREATED, lastSignInAt: SIGNED_IN, details: details({ language: null }) })
+    await lookUp('ana@example.com')
+    expect(facts(await screen.findByRole('region', { name: 'The account' }))[4]).toBe('Language: not known: written to in English')
+    asked.mockResolvedValue({ found: true, createdAt: CREATED, lastSignInAt: SIGNED_IN, details: details() })
+    await lookUp('ben@example.com')
+    await waitFor(() => expect(facts(screen.getByRole('region', { name: 'The account' }))[4]).toBe('News by email: Said nothing'))
   })
 
   it('shows the two dates and says so when the app’s server is from before it said more: the account can still be deleted', async () => {

@@ -7,6 +7,7 @@ import { createStore } from '@wordado/client-data'
 import { dayToIsoDate, localDay, validateCredits, validateFixes } from '@wordado/core'
 import { httpApi } from './account/api'
 import { AccountController } from './account/controller'
+import { InterfaceLanguageReport } from './account/interfaceLanguage'
 import { accountStorage, browserStorage } from './account/storage'
 import { httpTransport } from './account/transport'
 import { Boot, defaultL1 } from './app/boot'
@@ -26,7 +27,7 @@ import { AudioSwitch } from './content/audioSwitch'
 import { fetchManifest, manifestUrlFor, packFetcher, SAMPLE_MANIFEST_URL } from './content/packs'
 import { fetchSibling } from './content/siblings'
 import { webEnv } from './env'
-import { I18nProvider, initialLocale, LOCALES } from './i18n/i18n'
+import { I18nProvider, initialLocale, LOCALES, type Locale } from './i18n/i18n'
 import { writeInterfaceLanguage } from './reminders/prefs'
 import { browserPushPlatform, ReminderService } from './reminders/reminders'
 import { deleteDatabase, listDatabases } from './storage/erase'
@@ -49,6 +50,10 @@ const reminders = new ReminderService({
   // back to English, consistent with English now being the default interface language.
   language: () => LOCALES.find((x) => x === document.documentElement.lang) ?? 'en',
 })
+/** The interface language once the interface has one (I18nProvider): what the server is told of (#199). */
+let interfaceLanguage: Locale | null = null
+const languageReport = new InterfaceLanguageReport({ api, storage: browserStorage('localStorage'), account: expectedUser, language: () => interfaceLanguage })
+const sayLanguage = () => void languageReport.check()
 let controller: AccountController | null = null
 // A 401 from sync means the sign-in expired, a 409 that the session is another learner's (spec §8.6):
 // either way the controller shows "sign in again" and the outbox waits.
@@ -197,6 +202,18 @@ if (ios && !standalone) lifecycle.iosInstallable()
 
 controller = new AccountController({ api, boot, accounts, transport: () => transport, reminders })
 
+// The server is told the account's interface language (#199) when it is not what this device last told it: after a
+// sign-in (the app opens the learner's file), after a sign-in that had expired, and when the device is back online
+// or the app back in front, for a change made offline. A sign-out makes it forget what it said.
+boot.store.subscribe(() => {
+  if (boot.store.get().status === 'ready') sayLanguage()
+})
+controller.store.subscribe(sayLanguage)
+window.addEventListener('online', sayLanguage)
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') sayLanguage()
+})
+
 let persistenceAsked = false
 
 /** After a run: fetch ahead (spec §9.3), flush (spec §9.1), and ask once to keep storage (spec §9.1). */
@@ -233,6 +250,9 @@ createRoot(document.getElementById('root')!).render(
     <I18nProvider
       onLocale={(locale) => {
         void writeInterfaceLanguage(locale).catch(() => undefined)
+        // At the start too, unlike the reminders: an account signed in before the app said its language says it now.
+        interfaceLanguage = locale
+        sayLanguage()
         if (localeMounted) void reminders.refresh().catch(() => undefined)
         localeMounted = true
       }}

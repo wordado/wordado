@@ -137,15 +137,17 @@ export async function deleteDraft(db: Db, id: number): Promise<void> {
 const quoted = (values: readonly string[]): string => values.map((v) => `'${v}'`).join(', ')
 
 /**
- * The interface language of an account `u`, as far as the server knows it. The app keeps that choice on the
- * device and does not send it as such, so it is read from what the app did send, the most direct first: the
- * language the account's newest device asks its reminders in (the interface language at that moment); the
- * language it read the question about news in (`news-1.bg`, 0009); its native language from the synced settings,
- * which the interface speaks unless the learner chose English. Null for an account that left none of these: the
- * counts by language (account/stats.ts) show it as not known. The lists are this module's own constants, never a
- * request's text.
+ * The interface language of an account `u`, as far as the server knows it. First what the app said it is (#199,
+ * 0012, account/interfaceLanguage.ts). An account whose app has not been opened since it began to say so has
+ * none, so for it the language is read from what the app did send before, the most direct first: the language
+ * the account's newest device asks its reminders in (the interface language at that moment); the language it
+ * read the question about news in (`news-1.bg`, 0009); its native language from the synced settings, which the
+ * interface speaks unless the learner chose English. Null for an account that left none of these: the counts by
+ * language (account/stats.ts) show it as not known. The lists are this module's own constants, never a request's
+ * text.
  */
 export const KNOWN_LANGUAGE_OF = `coalesce(
+  case when u.interface_language in (${quoted(ANNOUNCEMENT_LANGUAGES)}) then u.interface_language end,
   (select p.language from push_subscription p where p.user_id = u.id and p.language in (${quoted(ANNOUNCEMENT_LANGUAGES)}) order by p.created_at desc, p.endpoint limit 1),
   case when right(u.news_consent_text, 3) in (${quoted(ANNOUNCEMENT_LANGUAGES.map((l) => `.${l}`))}) then right(u.news_consent_text, 2) end,
   (select s.fields->>'l1' from document s where s.user_id = u.id and s.type = '${DOCUMENT_TYPES.settings}' and s.key = '' and not s.deleted

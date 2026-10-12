@@ -833,10 +833,11 @@ Six routes on the learner app's server, for the review app's server alone:
 
 - `POST /v1/admin/accounts/lookup` with `{ email }` → `{ found: false }` or `{ found: true, createdAt, lastSignInAt,
   details }`. `details` (#209) is how the account is used, never what it holds: `{ lastStudiedAt, daysStudied30,
-  newsConsent, newsConsentAt, newsConsentLanguage, reminders: [{ minute, tzOffsetMin, paused }], devices,
-  sweepNotBefore }`. The last answer is read from the `device` rows, as the counts read it; the days studied are
+  language, newsConsent, newsConsentAt, newsConsentLanguage, reminders: [{ minute, tzOffsetMin, paused }], devices,
+  sweepNotBefore }`. `language` (#199) is the account's interface language as an announcement reads it (§18), null
+  where it is not known; a server from before it leaves it out, and the page then shows no such line. The last answer is read from the `device` rows, as the counts read it; the days studied are
   the UTC days with an answer among the last 30, today among them, from the answer log by its index on
-  `(user_id, utc_day)`; the language is the one the consent's wording was read in; the reminders are the
+  `(user_id, utc_day)`; `newsConsentLanguage` is the one the consent's wording was read in; the reminders are the
   account's push subscriptions, newest first and at most 10, paused once ignored three times in a row;
   `sweepNotBefore` is the last sign-in plus the sweep's threshold, null when there is no date.
 - `POST /v1/admin/accounts/delete` with `{ email, confirm: true }` → `{ deleted }`.
@@ -964,10 +965,12 @@ Under the text, after a signature line, the server adds why the mail came (for n
 who sent it: the name of the service, the website and the public contact address. The sender is the server's
 `EMAIL_FROM`, as for sign-in codes; `Reply-To` is the contact address, since the sending address has no mailbox.
 
-**Language.** The app keeps the interface language on the device and does not send it as such. The server reads it
-from what the app did send, the most direct first: the language the account's newest device asks its reminders
-in; the language the account read the question about news in (`news-1.bg`); its native language from the synced
-settings. An account that left none of these gets English. The account then gets the announcement's text in that
+**Language.** The app tells the server the interface language of a signed-in account (#199, §11 of the app's
+design), and the account keeps it: that is the language read first. An account whose app has not been opened
+since has none, and for it the server reads the language from what the app did send before, the most direct
+first: the language the account's newest device asks its reminders in; the language the account read the question
+about news in (`news-1.bg`); its native language from the synced settings. An account that left none of these
+gets English. The account then gets the announcement's text in that
 language where there is one, and the English one otherwise; the footer and the unsubscribe page follow the text.
 
 ### 18.4 The safeguards on a send

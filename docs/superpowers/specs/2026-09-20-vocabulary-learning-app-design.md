@@ -1742,6 +1742,20 @@ on their next pull. That failure is far worse than the cheating it prevents.
   choice (none, given, withdrawn), when it was made, and which wording in
   which language (`news-1.bg`); the data export shows all three. Notices
   about the service itself do not depend on it.
+- **The account keeps its interface language** (#199, decided 2026-10-11),
+  so that what the server writes to the account (a notice about the service,
+  news) is in the language the learner reads the app in. Nothing is asked:
+  the choice stays on the device (§11.2), and the app tells the server which
+  language it is (`PUT /v1/account/interface-language`) after a sign-in,
+  whenever the learner changes it, and once from a device that was signed in
+  before the app said it at all. The device remembers what it last said for
+  which account, so it says it again only when that is no longer so; a change
+  made offline is said when the device is back online or the app is opened
+  again. The account keeps one value, one of the interface languages or
+  none, and nothing beside it (not when, not from which device): with several
+  devices it is that of the last to say it. It goes with the account, and the
+  data export shows it (`account.interfaceLanguage`, export format
+  `wordado-export-4`).
 - Words a learner submits for enrichment are sent to third-party processors
   (dictionary, LLM, TTS) without any user identifier; the privacy policy says
   so.

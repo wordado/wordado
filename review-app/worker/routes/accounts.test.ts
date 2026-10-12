@@ -14,7 +14,7 @@ const CREATED = Date.parse('2026-01-05T09:00:00Z')
 const SIGNED_IN = Date.parse('2026-09-30T18:00:00Z')
 
 const DETAILS: AccountDetails = {
-  lastStudiedAt: SIGNED_IN, daysStudied30: 19, newsConsent: 'given', newsConsentAt: CREATED, newsConsentLanguage: 'bg',
+  lastStudiedAt: SIGNED_IN, daysStudied30: 19, language: 'en', newsConsent: 'given', newsConsentAt: CREATED, newsConsentLanguage: 'bg',
   reminders: [{ minute: 1170, tzOffsetMin: 180, paused: false }, { minute: 480, tzOffsetMin: -300, paused: true }], devices: 2, sweepNotBefore: SIGNED_IN + 731 * 86_400_000,
 }
 const UNUSED: AccountDetails = { lastStudiedAt: null, daysStudied30: 0, newsConsent: 'none', newsConsentAt: null, newsConsentLanguage: null, reminders: [], devices: 0, sweepNotBefore: null }
@@ -103,7 +103,7 @@ describe('the Accounts tab’s routes (#187)', () => {
     expect(logged).toEqual([])
     const wrong: unknown[] = [
       null, 'none', [],
-      { ...DETAILS, daysStudied30: undefined }, { ...DETAILS, lastStudiedAt: 'yesterday' }, { ...DETAILS, newsConsent: 'maybe' }, { ...DETAILS, newsConsentLanguage: 'xx' },
+      { ...DETAILS, daysStudied30: undefined }, { ...DETAILS, lastStudiedAt: 'yesterday' }, { ...DETAILS, newsConsent: 'maybe' }, { ...DETAILS, newsConsentLanguage: 'xx' }, { ...DETAILS, language: 'xx' }, { ...DETAILS, language: 5 },
       { ...DETAILS, devices: -1 }, { ...DETAILS, reminders: {} }, { ...DETAILS, reminders: [{ minute: 1440, tzOffsetMin: 0, paused: false }] },
       { ...DETAILS, reminders: [{ minute: 60, tzOffsetMin: 900, paused: false }] }, { ...DETAILS, reminders: [{ minute: 60, tzOffsetMin: 0 }] },
       { ...DETAILS, reminders: Array.from({ length: 11 }, () => ({ minute: 60, tzOffsetMin: 0, paused: false })) },

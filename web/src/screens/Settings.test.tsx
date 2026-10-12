@@ -285,7 +285,7 @@ describe('Settings: the account (spec §11)', () => {
   })
 
   const NEWS = 'I would like to receive news about Wordado and its new features by email. I can opt out at any time.'
-  const session = (newsConsent: 'none' | 'given' | 'withdrawn') => ({ ...ana, createdAt: 0, newsConsent })
+  const session = (newsConsent: 'none' | 'given' | 'withdrawn') => ({ ...ana, createdAt: 0, newsConsent, interfaceLanguage: null })
 
   it('shows news by email as the account has it, and withdraws the consent from the switch (#186)', async () => {
     const ctx = await setup()

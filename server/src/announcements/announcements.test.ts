@@ -378,6 +378,28 @@ describe('the language of the mail (#185)', () => {
     expect(subjectOf(h, both!)).toBe('Hallo')
   })
 
+  it('is the one the account’s app said its interface is in, before any of those (#199)', async () => {
+    const h = withToken()
+    const [said, saidEnglish, silent] = await accounts(h, 3)
+    // Each left every older sign of Bulgarian.
+    for (const id of [said, saidEnglish, silent]) {
+      await h.deps.db.query(
+        `insert into push_subscription (endpoint, user_id, p256dh, auth, reminder_minute, tz_offset_min, language, created_at) values ($1, $2, 'k', 'a', 600, 0, 'bg', 1)`,
+        [`https://push.example/${id}`, id],
+      )
+      await h.deps.db.query(`update "user" set news_consent = 'given', news_consent_at = now(), news_consent_text = 'news-1.bg' where id = $1`, [id])
+      await h.deps.db.query(`insert into document (user_id, type, key, class, version, fields, field_versions) values ($1, 'settings', '', 'versioned', 1, '{"l1": "bg"}', '{}')`, [id])
+    }
+    await h.deps.db.query(`update "user" set interface_language = 'es' where id = $1`, [said])
+    // English that was chosen is a language like the others, not the lack of one.
+    await h.deps.db.query(`update "user" set interface_language = 'en' where id = $1`, [saidEnglish])
+    await start(h, await tested(h, 'service', all))
+    await run(h)
+    expect(subjectOf(h, said!)).toBe('Hola')
+    expect(subjectOf(h, saidEnglish!)).toBe(en.subject)
+    expect(subjectOf(h, silent!)).toBe(bg.subject)
+  })
+
   it('falls back to English where the announcement has no text in the account’s language', async () => {
     const h = withToken()
     const [german, bulgarian] = await accounts(h, 2)

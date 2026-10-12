@@ -337,8 +337,8 @@ function News(props: { details: AccountDetails }) {
 }
 
 /**
- * What the lookup says of one account (#209): its dates, how it is used, and the earliest month the sweep could
- * take it. Use only: nothing the account holds is here. From a server that does not say how an account is used
+ * What the lookup says of one account (#209): its dates, how it is used, the language it is written to in (#199),
+ * and the earliest month the sweep could take it. Use only: nothing the account holds is here. From a server that does not say how an account is used
  * yet, the two dates and a line that says so.
  */
 function Facts(props: { account: Extract<AccountFound, { found: true }> }) {
@@ -365,6 +365,12 @@ function Facts(props: { account: Extract<AccountFound, { found: true }> }) {
               <dt>Days studied, last 30</dt>
               <dd>{d.daysStudied30}</dd>
             </div>
+            {d.language !== undefined && (
+              <div>
+                <dt>Language</dt>
+                <dd>{d.language === null ? 'not known: written to in English' : LANGUAGE_NAMES[d.language]}</dd>
+              </div>
+            )}
             <div>
               <dt>News by email</dt>
               <dd>
