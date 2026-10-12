@@ -1,9 +1,9 @@
 import { useClient, useClientSnapshot } from '@wordado/client-data'
 import type { L1 } from '@wordado/core'
-import { BookOpen, ChevronLeft, ChevronRight, Globe, Info, Package, Smartphone, User, Bell, Volume2, type LucideIcon } from 'lucide-react'
+import { BookOpen, ChevronLeft, ChevronRight, CircleHelp, ExternalLink, Globe, Info, Package, Smartphone, User, Bell, Volume2, type LucideIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { useApp } from '../app/context'
-import { privacyUrl } from '../app/site'
+import { guideUrl, privacyUrl } from '../app/site'
 import { ENDONYM, languageName, useT, type MessageKey } from '../i18n/i18n'
 import { Link, type Route, type SettingsSection } from '../router'
 import { AboutSettings } from '../settings/AboutSettings'
@@ -15,6 +15,7 @@ import { NativeLanguageSettings } from '../settings/NativeLanguageSettings'
 import { ReminderSettings } from '../settings/ReminderSettings'
 import { SetAsideWords } from '../settings/SetAsideWords'
 import { StudySettings } from '../settings/StudySettings'
+import { useOnline } from '../useOnline'
 import { useStore } from '../useStore'
 
 const toTime = (minute: number) => `${String(Math.floor(minute / 60)).padStart(2, '0')}:${String(minute % 60).padStart(2, '0')}`
@@ -100,6 +101,11 @@ export function Settings(props: { readonly section: SettingsSection | null; read
                     </li>
                   )
                 })}
+                {group.label === 'settings.groupWordado' && (
+                  <li>
+                    <HelpRow />
+                  </li>
+                )}
               </ul>
             </div>
           )
@@ -113,6 +119,33 @@ export function Settings(props: { readonly section: SettingsSection | null; read
         {props.page ? <div className="panel settings-section">{props.page.content}</div> : <SectionPage section={shown} />}
       </div>
     </div>
+  )
+}
+
+/**
+ * The way to the user guide on the website (#224), in the interface language and in a new tab, so the app stays
+ * where it was. The guide is not kept on the device: offline the row says so and is no link.
+ */
+function HelpRow() {
+  const { t, locale } = useT()
+  const online = useOnline()
+  const text = (
+    <>
+      <span className="settings-row-icon" aria-hidden="true">
+        <CircleHelp size={20} strokeWidth={1.75} />
+      </span>
+      <span className="settings-row-text">
+        <span className="settings-row-title">{t('settings.help')}</span>
+        <span className="note">{t(online ? 'settings.helpNote' : 'settings.helpOffline')}</span>
+      </span>
+    </>
+  )
+  if (!online) return <div className="settings-row is-off">{text}</div>
+  return (
+    <a className="settings-row" href={guideUrl(locale)} target="_blank" rel="noopener">
+      {text}
+      <ExternalLink aria-hidden="true" size={18} className="settings-chevron" />
+    </a>
   )
 }
 

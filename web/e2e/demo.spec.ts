@@ -784,6 +784,20 @@ test('Settings › About links to the privacy policy on the website, in the inte
   await expect(page.getByRole('link', { name: 'Privacy policy', exact: true })).toHaveAttribute('href', 'https://wordado.com/en/privacy/')
 })
 
+test('Settings has a Help row that opens the guide on the website in a new tab; offline it is no link (#224)', async ({ page, context }) => {
+  await page.goto('/')
+  await finishSetup(page)
+  await page.goto('/settings')
+  const help = page.getByRole('link', { name: /^Help/ })
+  await expect(help).toHaveAttribute('href', 'https://wordado.com/en/guide/')
+  await expect(help).toHaveAttribute('target', '_blank')
+  await context.setOffline(true)
+  await expect(page.getByText('Help needs an internet connection')).toBeVisible()
+  await expect(help).toHaveCount(0)
+  await context.setOffline(false)
+  await expect(help).toBeVisible()
+})
+
 test('Settings › About says the demo’s word list is Wordado’s own, from the bundled sample’s credits', async ({ page }) => {
   await page.goto('/')
   await finishSetup(page)

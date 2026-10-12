@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { LOCALES } from '../i18n/i18n'
-import { LEGAL_DATES_URL, legalUrl, privacyUrl, SITE_URL } from './site'
+import { guideUrl, LEGAL_DATES_URL, legalUrl, privacyUrl, SITE_URL } from './site'
 
 describe('privacyUrl', () => {
   it('is the website’s privacy page in the interface language', () => {
@@ -29,5 +29,12 @@ describe('legalUrl', () => {
 describe('LEGAL_DATES_URL', () => {
   it('is the website’s file of the legal pages’ dates', () => {
     expect(LEGAL_DATES_URL).toBe('https://wordado.com/legal.json')
+  })
+})
+
+describe('guideUrl', () => {
+  it('is the user guide’s start page on the website, in the interface language', () => {
+    expect(guideUrl('bg')).toBe('https://wordado.com/bg/guide/')
+    expect(guideUrl('en')).toBe('https://wordado.com/en/guide/')
   })
 })

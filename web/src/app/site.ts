@@ -11,6 +11,11 @@ export function siteLocale(locale: Locale): Locale {
   return SITE_LOCALES.has(locale) ? locale : 'en'
 }
 
+/** The user guide's start page in the interface language, or in English where the website has no pages in it yet. */
+export function guideUrl(locale: Locale): string {
+  return `${SITE_URL}/${siteLocale(locale)}/guide/`
+}
+
 /** The legal pages a change of which the app tells its learners about (#184). */
 export const LEGAL_DOCS = ['terms', 'privacy'] as const
 export type LegalDoc = (typeof LEGAL_DOCS)[number]
