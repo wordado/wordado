@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, screen, within } from '@testing-library/react'
 import { corpusWordId } from '@wordado/core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { ReactElement } from 'react'
-import { renderWith, setup, withProviders } from '../test/fixtures'
+import { renderWith, setup, setupTrial, withProviders } from '../test/fixtures'
 import { RESULTS_STEP, Search } from './Search'
 
 afterEach(cleanup)
@@ -166,6 +166,13 @@ describe('Search', () => {
     expect(screen.getByText('The sample has 60 words. Sign in to search the whole course.')).toBeTruthy()
     cleanup()
     renderWith(<Search q="zzzz" />, { ...ctx, account })
+    expect(screen.queryByText(/The sample has/)).toBeNull()
+  })
+
+  it('calls a trial’s corpus the trial, not the sample', async () => {
+    const ctx = await setupTrial()
+    renderWith(<Search q="zzzz" />, ctx)
+    expect(screen.getByText(/^The trial has \d+ words\. Sign in to search the whole course\.$/)).toBeTruthy()
     expect(screen.queryByText(/The sample has/)).toBeNull()
   })
 

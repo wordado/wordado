@@ -2,6 +2,7 @@ import { useClientSnapshot } from '@wordado/client-data'
 import type { Mode } from '@wordado/core'
 import { Flame, Headphones, Layers, ListChecks, type LucideIcon } from 'lucide-react'
 import { useApp } from '../app/context'
+import { TrialInvite } from '../app/TrialInvite'
 import { useT } from '../i18n/i18n'
 import { MODE_LABEL } from '../labels'
 import { Link } from '../router'
@@ -15,7 +16,7 @@ const MODE_ICON: Readonly<Record<(typeof ONE_WAY)[number], LucideIcon>> = { flas
 export function Home() {
   const { t } = useT()
   const { audio } = useApp()
-  const { plan, progress, xp, settings } = useClientSnapshot()
+  const { plan, progress, xp, settings, path } = useClientSnapshot()
   useOnline() // re-renders on every `online`/`offline` event, so `canListen` below is re-evaluated
   if (!plan || !progress) return null
   const { reviews, fresh, nothing } = todayCounts(plan)
@@ -23,6 +24,7 @@ export function Home() {
   const canListen = settings.audio && (audio.streamable() || audio.cachedClips().size > 0)
   const modes = ONE_WAY.filter((mode) => mode !== 'listening_select' || canListen)
   const { streak } = progress
+  const trialFinished = path?.trialFinished === true
   return (
     <section className="home" aria-labelledby="today">
       <div className="panel home-main">
@@ -33,7 +35,8 @@ export function Home() {
           <h1 id="today" className="today">
             {nothing ? t('home.allDone') : reviews > 0 ? t('home.reviews', { count: reviews }) : t('home.newWords', { count: fresh })}
           </h1>
-          {nothing && <p className="today-more">{t('home.allDoneHint')}</p>}
+          {nothing && !trialFinished && <p className="today-more">{t('home.allDoneHint')}</p>}
+          {trialFinished && <TrialInvite />}
           {!nothing && reviews > 0 && fresh > 0 && <p className="today-more">{t('home.newWords', { count: fresh })}</p>}
           {progress.backlogTotal > progress.dueToday && <p className="note">{t('home.backlog', { count: progress.backlogTotal })}</p>}
           {progress.newWordsPaused && <p className="note">{t('home.paused')}</p>}

@@ -3,6 +3,7 @@ import { entryClips, Grade, isAboveLevel, type ChoiceItem, type CorpusEntry, typ
 import { BookPlus, Check, Clock, Ellipsis, Flag, Flame, LockOpen, Play, Volume2, X } from 'lucide-react'
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { useApp } from '../app/context'
+import { TrialInvite } from '../app/TrialInvite'
 import { usePopover } from '../app/usePopover'
 import { ClipSuperseded } from '../content/audio'
 import { errorMessageKey } from '../errors'
@@ -451,7 +452,7 @@ function Done(props: { readonly snapshot: RunSnapshot; readonly kind: RunKind; r
   const { t, locale } = useT()
   const { afterRun } = useApp()
   const client = useClient()
-  const { corpus, settings } = useClientSnapshot()
+  const { corpus, settings, path } = useClientSnapshot()
   const { snapshot, scope } = props
   const heading = useRef<HTMLHeadingElement>(null)
   const studyingLine = useRef<HTMLParagraphElement>(null)
@@ -510,6 +511,7 @@ function Done(props: { readonly snapshot: RunSnapshot; readonly kind: RunKind; r
           {t('done.unlocked', { title: unitTitle(unitId) })}
         </p>
       ))}
+      {props.kind === 'session' && path?.trialFinished === true && <TrialInvite />}
       {snapshot.toLearn > 0 && <p className="done-line done-note">{t('done.toLearn', { count: snapshot.toLearn })}</p>}
       {snapshot.setAside > 0 && <p className="done-line done-note">{t('done.setAside', { count: snapshot.setAside })}</p>}
       {studying !== null && (

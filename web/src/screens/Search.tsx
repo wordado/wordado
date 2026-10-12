@@ -156,7 +156,7 @@ export function Search(props: { readonly q: string }) {
         </p>
       )}
       {typed === '' && <p className="note">{t('search.hint')}</p>}
-      {found !== null && found.length === 0 && account === null && <p className="note">{t('search.sample', { count: index.words.length })}</p>}
+      {found !== null && found.length === 0 && account === null && <p className="note">{t(corpus.trial === null ? 'search.sample' : 'search.trial', { count: index.words.length })}</p>}
       {found !== null && found.length > 0 && (
         <>
           <ul className="panel unit-words search-words" ref={list}>

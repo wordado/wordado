@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AUTO_CONTINUE_KEY, AUTO_CONTINUE_MS } from './autoContinue'
 import type { AudioPort } from '../content/audio'
 import { ClipSuperseded } from '../content/audio'
-import { fakeAudio, renderWith, setup } from '../test/fixtures'
+import { fakeAudio, finishTrial, renderWith, setup, setupTrial } from '../test/fixtures'
 import { RunView } from './RunView'
 
 afterEach(() => {
@@ -836,5 +836,51 @@ describe('Learn this word (spec §7.4)', () => {
     expect(screen.getByRole('group', { name: /./ })).toBeTruthy()
     expect(screen.queryByRole('button', { name: /^Learn this word/ })).toBeNull()
     expect(run.snapshot.toLearn).toBe(0)
+  })
+})
+
+describe('RunView: the end of a trial', () => {
+  /** A trial with one word left to start; the run is a session over it, or a practice run. */
+  async function lastWord(kind: 'session' | 'practice') {
+    const audio = fakeAudio()
+    const ctx = await setupTrial({ audio })
+    const unit = ctx.client.snapshot.corpus!.units.find((u) => u.level === 'B1')!
+    const answer = (wordId: (typeof unit.wordIds)[number]) =>
+      ctx.client.answer({ wordId, mode: 'flashcard', direction: 'en_to_l1', grade: Grade.Good, latencyMs: 2_000, practice: false })
+    await ctx.client.updateSettings({ newWordLimit: 30 })
+    if (kind === 'practice') await finishTrial(ctx.client, ctx.env)
+    else for (const wordId of unit.wordIds.slice(0, -1)) await answer(wordId)
+    const run = await StudyRun.start(ctx.client, ctx.env, {
+      kind,
+      mode: 'flashcard',
+      ...(kind === 'practice' && { scope: { kind: 'unit' as const, id: unit.unitId } }),
+      cachedClips: () => audio.cachedClips(),
+      online: () => audio.streamable(),
+    })
+    renderWith(<RunView run={run} kind={kind} />, ctx)
+    ctx.env.advance(ITEM_SETTLE_MS)
+    await press(' ')
+    ctx.env.advance(ITEM_SETTLE_MS)
+    await press('3')
+    // A run that has nothing more ends by itself; one that has, is stopped.
+    const stop = screen.queryByRole('button', { name: 'Stop for now' })
+    if (stop) await act(async () => fireEvent.click(stop))
+    return ctx
+  }
+
+  it('invites an account when a session has started the last word, and opens no unit', async () => {
+    await lastWord('session')
+    expect(screen.getByRole('heading', { name: 'Session complete' })).toBeTruthy()
+    expect(screen.getByText('You have started every word of the trial.')).toBeTruthy()
+    expect(screen.getByText(/Create an account to go on with the whole course\./)).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Create an account' }).getAttribute('href')).toBe('/signin')
+    expect(screen.queryByText(/New unit open/)).toBeNull()
+  })
+
+  it('does not say it after practice', async () => {
+    await lastWord('practice')
+    expect(screen.getByRole('heading', { level: 1 }).id).toBe('done-title')
+    expect(screen.queryByText('You have started every word of the trial.')).toBeNull()
+    expect(screen.queryByRole('link', { name: 'Create an account' })).toBeNull()
   })
 })
