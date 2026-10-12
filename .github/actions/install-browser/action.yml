@@ -1,0 +1,44 @@
+name: Install a browser
+description: >-
+  One Playwright browser with its system packages. The packages are kept in the Actions cache, so most
+  runs download nothing from the runner's package mirror, which is now and then very slow (issue #248).
+
+inputs:
+  browser:
+    description: chromium, firefox or webkit
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - id: key
+      shell: bash
+      # The packages a browser needs change with Playwright's version; the month renews the copy, so
+      # packages that Ubuntu has since updated do not pile up as downloads.
+      run: |
+        version=$(node -p "require('./web/node_modules/@playwright/test/package.json').version")
+        echo "prefix=browser-packages-$ImageOS-${{ inputs.browser }}-$version-" >> "$GITHUB_OUTPUT"
+        echo "month=$(date -u +%Y-%m)" >> "$GITHUB_OUTPUT"
+    - id: cache
+      uses: actions/cache@v5
+      with:
+        path: ~/browser-packages
+        key: ${{ steps.key.outputs.prefix }}${{ steps.key.outputs.month }}
+        restore-keys: ${{ steps.key.outputs.prefix }}
+    - name: Hand the kept packages to the package manager
+      shell: bash
+      run: |
+        mkdir -p ~/browser-packages
+        if compgen -G "$HOME/browser-packages/*.deb" > /dev/null; then
+          sudo cp ~/browser-packages/*.deb /var/cache/apt/archives/
+        fi
+    - shell: bash
+      run: .github/scripts/install-browser.sh "${{ inputs.browser }}"
+    - name: Keep the packages for the next run
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        if compgen -G "/var/cache/apt/archives/*.deb" > /dev/null; then
+          cp /var/cache/apt/archives/*.deb ~/browser-packages/
+        fi
+        du -sh ~/browser-packages
