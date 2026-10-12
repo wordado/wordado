@@ -1,3 +1,4 @@
+import type { Corpus } from './corpus'
 import { shuffle, type Rng } from './rng'
 import { CEFR_LEVELS, type CefrLevel, type CorpusEntry } from './types'
 import { corpusWordId, type WordId } from './wordId'
@@ -99,4 +100,18 @@ export function placementLevels(pool: ReadonlyMap<CefrLevel, readonly WordId[]>)
     out.push(level)
   }
   return out
+}
+
+/**
+ * The corpus a placement test asks from (spec 2026-10-12 §4.3): for a trial, the probes are the pool, and the
+ * entries a question may show are the probes and the units' entries together (a unit's own entry wins over the
+ * probe of the same id, since it carries the examples). For a course, the corpus itself.
+ */
+export function placementCorpus(corpus: Corpus): { readonly corpus: Corpus; readonly pool: Map<CefrLevel, WordId[]> } {
+  const trial = corpus.trial
+  if (trial === null) return { corpus, pool: placementPool(corpus.entries.values()) }
+  return {
+    corpus: { ...corpus, entries: new Map([...trial.probes.map((p): [string, CorpusEntry] => [p.entryId, p]), ...corpus.entries]) },
+    pool: placementPool(trial.probes),
+  }
 }
