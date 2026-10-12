@@ -559,9 +559,9 @@ test('reports a problem with a word from a list: the search and a unit’s words
   const menu = found.getByRole('button', { name: 'Word actions: key' })
   await menu.click()
   // Last in the menu, after the choices about learning the word.
-  await expect(found.locator('.menu-panel button').last()).toHaveText('Report a problem')
+  await expect(found.locator('.menu-panel button').last()).toHaveText('Report this word')
   await expectAccessible(page, { dark: true })
-  await found.getByRole('button', { name: 'Report a problem: key' }).click()
+  await found.getByRole('button', { name: 'Report this word: key' }).click()
   const dialog = page.getByRole('dialog')
   await expect(dialog.getByRole('heading')).toHaveText('Report a problem with “key”')
   await expectAccessible(page, { dark: true })
@@ -578,7 +578,7 @@ test('reports a problem with a word from a list: the search and a unit’s words
   await unit.getByText('20 words').click()
   const row = unit.locator('.unit-words li').first()
   await row.getByRole('button', { name: /^Word actions: / }).click()
-  await row.getByRole('button', { name: /^Report a problem: / }).click()
+  await row.getByRole('button', { name: /^Report this word: / }).click()
   await expect(page.getByRole('dialog')).toBeVisible()
   await page.keyboard.press('Escape')
   await expect(page.getByRole('dialog')).toHaveCount(0)
@@ -612,7 +612,7 @@ test('fits the top row on a narrow phone while signed out', async ({ page }) => 
   const box = (await row.boundingBox())!
   // One line of controls: the row is no taller than a control and its padding, and nothing reaches past its edge.
   expect(box.height).toBeLessThan(80)
-  for (const control of [page.getByRole('link', { name: 'Search', exact: true }), page.getByRole('link', { name: 'Sign in' })]) {
+  for (const control of [page.getByRole('link', { name: 'Search', exact: true }), page.getByRole('button', { name: 'Help', exact: true }), page.getByRole('link', { name: 'Sign in' })]) {
     const b = (await control.boundingBox())!
     expect(b.x).toBeGreaterThanOrEqual(box.x)
     expect(b.x + b.width).toBeLessThanOrEqual(box.x + box.width + 0.5)
@@ -645,13 +645,18 @@ for (const [locale, l1] of [
       await finishSetup(page, l1)
       const box = (await page.locator('.masthead-top').boundingBox())!
       expect(box.height).toBeLessThan(80)
-      for (const control of [page.locator('.search-circle'), page.locator('.account-signin')]) {
+      for (const control of [page.locator('.search-circle'), page.locator('.help-circle'), page.locator('.account-signin')]) {
         const b = (await control.boundingBox())!
         expect(b.x).toBeGreaterThanOrEqual(box.x)
         expect(b.x + b.width).toBeLessThanOrEqual(box.x + box.width + 0.5)
         expect(b.height).toBeLessThan(50)
       }
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
+      // Help is not the last button: its panel stays on the screen beside the long "Sign in" of this language (#243).
+      await page.locator('.help-circle').click()
+      const panel = (await page.locator('.help-panel').boundingBox())!
+      expect(panel.x).toBeGreaterThanOrEqual(0)
+      expect(panel.x + panel.width).toBeLessThanOrEqual(360)
     } finally {
       await context.close()
     }
@@ -829,10 +834,10 @@ test.describe('feedback about the app (spec §8.12)', () => {
       expect(box.height).toBeGreaterThanOrEqual(44)
       expect(box.width).toBeGreaterThanOrEqual(44)
     }
-    const open = page.getByRole('link', { name: 'Feedback', exact: true })
+    const open = page.getByRole('link', { name: 'Write to us', exact: true })
     await expectTapTarget(open)
     await open.click()
-    await expect(heading(page)).toHaveText('Send feedback')
+    await expect(heading(page)).toHaveText('Write to us')
     // Nothing is sent unseen: the screen it was opened from is listed with the rest.
     const details = page.getByRole('list', { name: 'Sent with your message' })
     await expect(details.getByRole('listitem')).toHaveCount(5)
@@ -882,12 +887,35 @@ test.describe('feedback about the app (spec §8.12)', () => {
   })
 })
 
+test('Help in the top row leads to the guide’s page about the screen and to the form (#243)', async ({ page }) => {
+  await page.goto('/')
+  // Not during the setup: the language button stands there instead.
+  await expect(page.getByRole('button', { name: /^Interface language/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Help', exact: true })).toHaveCount(0)
+  await finishSetup(page)
+  await expect(page.getByRole('button', { name: /^Interface language/ })).toHaveCount(0)
+  const help = page.getByRole('button', { name: 'Help', exact: true })
+  await help.click()
+  const about = page.getByRole('link', { name: 'About this screen Your first session' })
+  await expect(about).toHaveAttribute('href', 'https://wordado.com/en/guide/first-session/')
+  await expect(about).toHaveAttribute('target', '_blank')
+  await expect(page.getByRole('link', { name: 'All help topics' })).toHaveAttribute('href', 'https://wordado.com/en/guide/')
+  await expect(page.getByRole('list', { name: 'Interface language' }).getByRole('button')).toHaveText(['Български', 'English'])
+  // The open panel alone: on a phone it lies over part of the banner's small buttons, and what is left of one
+  // under it is no target to measure.
+  await expectAccessible(page, { dark: true, within: '.help' })
+  await page.locator('.help-panel').getByRole('link', { name: 'Write to us', exact: true }).click()
+  await expect(heading(page)).toHaveText('Write to us')
+  await expect(page.getByText('Opened from: /')).toBeVisible()
+  await expect(page.locator('.help-panel')).toHaveCount(0)
+})
+
 test('Settings › About leads to feedback about the app', async ({ page }) => {
   await page.goto('/')
   await finishSetup(page)
   await page.goto('/settings/about')
-  await page.getByRole('link', { name: 'Send feedback about the app' }).click()
-  await expect(heading(page)).toHaveText('Send feedback')
+  await page.getByRole('link', { name: 'Write to us about the app' }).click()
+  await expect(heading(page)).toHaveText('Write to us')
   await expect(page.getByText('Opened from: /settings/about')).toBeVisible()
 })
 
@@ -910,7 +938,7 @@ test('meets WCAG 2.2 A and AA on the study screens (spec §11.1)', async ({ page
   await expectAccessible(page)
   await page.getByRole('button', { name: 'More' }).click()
   await expectAccessible(page)
-  await page.getByRole('button', { name: 'Report a problem' }).click()
+  await page.getByRole('button', { name: 'Report this word' }).click()
   await expect(page.getByRole('dialog')).toBeVisible()
   // The suggestion is asked for the translation, the field chosen first; it is as tall as any control (2.5.8).
   const suggestion = page.getByRole('textbox', { name: 'What should it be? (optional)' })
@@ -1090,9 +1118,9 @@ test('changing the native language to Spanish keeps progress, switches translati
   await page.goto('/path')
   await expect(page.getByText('1 of 20 started')).toBeVisible()
 
-  // The header's language menu now offers only the learner's L1 (Español) and English.
+  // The Help menu's languages now are only the learner's L1 (Español) and English.
   await page.goto('/')
-  await page.getByRole('button', { name: 'Interface language: English (EN)' }).click()
+  await page.getByRole('button', { name: 'Help', exact: true }).click()
   await expect(page.getByRole('button', { name: 'Español', exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'English', exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Deutsch', exact: true })).toHaveCount(0)
@@ -1308,6 +1336,15 @@ test.describe('the trial at the visitor’s level', () => {
       await expect(page.locator('li.unit')).toHaveCount(1)
       await expect(page.getByText('This is the demo: one unit of B1.')).toBeVisible()
       await expect(page.locator('#main').getByRole('link', { name: 'Create an account' })).toBeVisible()
+      // The Themes screen shows what the whole course offers, to look at: a trial studies no theme (#244).
+      await page.goto('/themes')
+      await expect(page.getByText('Themes come with the whole course: pick one and its words come first.')).toBeVisible()
+      const cards = page.locator('.theme-grid > li')
+      await expect(cards).toHaveCount(2)
+      await expect(cards.filter({ hasText: 'Daily life' })).toContainText('240 words')
+      await expect(cards.getByRole('link')).toHaveCount(0)
+      await expect(page.locator('#main').getByRole('button')).toHaveCount(0)
+      await expectAccessible(page, { dark: true })
     } finally {
       await context.close()
     }

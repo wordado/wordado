@@ -296,11 +296,13 @@ p {
 /* The masthead's circles and the panels they open */
 
 .language,
+.help,
 .account {
   position: relative;
 }
 
 .language-circle,
+.help-circle,
 .account-circle {
   position: relative;
   display: grid;
@@ -312,7 +314,8 @@ p {
   cursor: pointer;
 }
 
-.language-circle {
+.language-circle,
+.help-circle {
   font: 600 var(--step--1) / 1 var(--font-ui);
   letter-spacing: 0.04em;
   color: var(--ink);
@@ -320,7 +323,14 @@ p {
   border: 1.5px solid var(--rule);
 }
 
-.language-circle[aria-expanded='true'] {
+/* Help's question mark: one sign, so it is set larger than the language's two letters. */
+.help-circle {
+  font-size: var(--step-1);
+  letter-spacing: 0;
+}
+
+.language-circle[aria-expanded='true'],
+.help-circle[aria-expanded='true'] {
   border-color: var(--ink);
 }
 
@@ -371,7 +381,7 @@ p {
   white-space: nowrap;
 }
 
-/* Signed out on a narrow phone, the search, the language and "Sign in" leave no room for the name: the icon
+/* Signed out on a narrow phone, the search, Help and "Sign in" leave no room for the name: the icon
    stands alone. The link keeps its name for a screen reader. */
 @media (max-width: 24.99rem) {
   .masthead-top:has(.search-circle):has(.account-signin) .wordmark-name {
@@ -423,6 +433,77 @@ p {
 
 .language-panel svg {
   color: var(--rose);
+}
+
+/* Help's panel: the ways to help as rows, then the interface languages under a small heading. */
+.help-panel {
+  min-width: 15rem;
+  padding: var(--space-1);
+}
+
+.help-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.help-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: 2.75rem;
+  padding: var(--space-2) var(--space-3);
+  color: var(--ink);
+  text-decoration: none;
+  border-radius: calc(var(--radius) - 0.125rem);
+}
+
+a.help-item:hover {
+  background: var(--paper);
+}
+
+.help-item svg {
+  flex-shrink: 0;
+  color: var(--ink-soft);
+}
+
+.help-text {
+  display: grid;
+  gap: 0.125rem;
+}
+
+.help-title {
+  font: 500 var(--step-0) / 1.25 var(--font-ui);
+}
+
+.help-item.is-off .help-title {
+  color: var(--ink-soft);
+}
+
+.help-heading {
+  margin: var(--space-1) 0 0;
+  padding: var(--space-3) var(--space-3) var(--space-1);
+  font-size: var(--step--1);
+  color: var(--ink-soft);
+  border-top: 1px solid var(--rule);
+}
+
+/* The languages lie in Help's panel, which has the padding already. */
+.help-panel .language-panel {
+  padding: 0;
+}
+
+/* On a phone Help is not the last button, and a panel hung from its right edge would reach past the left of the
+   screen beside a long "Sign in": there it hangs from the right end of the row. */
+@media (max-width: 39.99rem) {
+  .masthead-actions {
+    position: relative;
+  }
+
+  .help {
+    position: static;
+  }
 }
 
 .account-panel {
@@ -2215,6 +2296,8 @@ li:not(:has(> .play-word)) > .word-where {
   gap: 0.125rem;
 }
 
+/* A trial's cards (h2) stand right under the page title; a course's (h3) under a group's. */
+.theme-text h2,
 .theme-text h3 {
   margin: 0;
   font: 600 var(--step-1) / 1.2 var(--font-entry);

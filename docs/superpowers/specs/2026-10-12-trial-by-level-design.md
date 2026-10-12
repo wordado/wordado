@@ -61,6 +61,8 @@ A trial pack is a pack (§5.1) with fewer units and one more field:
     what a test question needs: `entry_id`, `headword`, `pos`, `sense`, `level`, `translation`.
   - `course`: for every level, how many units and live words the whole course has. The invitation (§4.4) says
     it.
+  - `themes` (#244): for every theme the whole course offers, its live words there, by theme ID. The pack's
+    `themes` define each of them, beside those its own entries name.
 
 The extension differs from `.pack` so that nothing which handles the course's packs by name (the adopt step,
 `last-published/`) takes a trial pack for one.
@@ -83,8 +85,8 @@ third take, which 40 words cover.
 
 ### 3.3 Size
 
-About 100 unit entries and 200 probes per language. Estimated at well under 100 KB before compression; to be
-measured on the first draft release and written here.
+About 100 unit entries and 200 probes per language. Measured on the first release that carried them (corpus
+version 8): 84–90 KB per language, about 23 KB as a browser downloads it compressed.
 
 ### 3.4 What the release checks
 
@@ -140,7 +142,10 @@ In the trial, study takes new words from **the unit of the declared level only**
 - Finishing the unit opens no other. The lower levels' units count as assumed known, as in the course; the
   higher ones are not shown.
 - **Practice** of the unit works as everywhere.
-- **Themes** are not offered in the trial: a theme would bring in words of the other levels' units.
+- **Themes** are not studied in the trial: a theme would bring in words of the other levels' units. The Themes
+  screen shows the themes the whole course offers, each with its name, description and size there
+  (`trial.themes`), with no page and no button, and the way to an account (#244). A trial pack built before the
+  sizes names none, and the screen then says only that themes come with the whole course.
 - **Search** covers the trial's words and says so, as it does for the sample today. A word of another level's
   unit is found, but is not a way into it: its unit is named, not linked.
 - **Learn this word** from the search is offered only for words of the trial's unit.

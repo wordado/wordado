@@ -2524,6 +2524,14 @@ owner.
   problem*, which opens the dialog a card opens. It is there whatever the
   word's standing, and without an account too.
 
+**2026-10-12 — the course's themes in the trial.** Decided by the product
+owner (#244).
+
+- **Demo mode (§8.6), themes (§8.9):** the demo's Themes screen shows the
+  themes the whole course offers, each with its name, its description and
+  its size there, to look at; none can be opened, chosen or practised, and
+  the way on is an account. The trial pack carries the sizes (`trial.themes`).
+
 ## 17. Technology choices
 
 The sections above describe roles; this appendix names who fills them today.

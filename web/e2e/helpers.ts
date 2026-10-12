@@ -105,11 +105,12 @@ export async function studyNew(page: Page, count: number): Promise<void> {
   await expect(page.locator('.done')).toBeVisible()
 }
 
-/** Scans the page for WCAG 2.2 A and AA (spec §11.1); `dark` repeats the scan in the dark theme. */
-export async function expectAccessible(page: Page, options: { readonly dark?: boolean } = {}): Promise<void> {
+/** Scans the page for WCAG 2.2 A and AA (spec §11.1); `dark` repeats the scan in the dark theme, `within` keeps it to what a selector matches. */
+export async function expectAccessible(page: Page, options: { readonly dark?: boolean; readonly within?: string } = {}): Promise<void> {
   for (const colorScheme of options.dark ? (['light', 'dark'] as const) : (['light'] as const)) {
     await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' })
-    const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze()
+    const axe = new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+    const results = await (options.within ? axe.include(options.within) : axe).analyze()
     expect(results.violations.map((v) => `${colorScheme} ${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`)).toEqual([])
   }
   await page.emulateMedia({ colorScheme: 'light', reducedMotion: null })
@@ -205,7 +206,7 @@ export async function serveTrialSample(context: BrowserContext): Promise<TrialEn
   for (const entry of pack.entries) entry.level = levelOf.get(entry.unit_id)!
   // A probe that is also an entry equals it in these fields (validatePack).
   const probes = pack.entries.map(({ entry_id, headword, pos, sense, level, translation }) => ({ entry_id, headword, pos, sense, level, translation }))
-  pack.trial = { probes, course: { A1: { units: 10, words: 200 }, A2: { units: 12, words: 240 }, B1: { units: 14, words: 280 } } }
+  pack.trial = { probes, course: { A1: { units: 10, words: 200 }, A2: { units: 12, words: 240 }, B1: { units: 14, words: 280 } }, themes: { 'daily-life': 240, food: 130 } }
   const body = Buffer.from(JSON.stringify(pack))
   const manifest = JSON.parse(readFileSync(join(SAMPLE_DIR, 'manifest.json'), 'utf8')) as { packs: { pack_id: string; sha256: string; bytes: number }[] }
   for (const p of manifest.packs) {

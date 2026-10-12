@@ -171,10 +171,10 @@ describe('Root', () => {
 
   it('switches the interface language', async () => {
     await renderRoot()
-    fireEvent.click(screen.getByRole('button', { name: 'Interface language: English (EN)' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Help' }))
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Български' })))
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('10 нови думи')
-    expect(screen.getByRole('button', { name: 'Език на интерфейса: Български (BG)' }).textContent).toBe('BG')
+    expect(screen.getByRole('button', { name: 'Помощ' })).toBeTruthy()
   })
 
   it('opens a new learner in the first-run setup, without the navigation or banners (plan 11)', async () => {
@@ -184,7 +184,7 @@ describe('Root', () => {
     expect(screen.queryByRole('heading', { name: '10 new words' })).toBeNull()
     expect(screen.queryByRole('navigation', { name: 'Main' })).toBeNull()
     expect(screen.queryByText(/You are trying Wordado/)).toBeNull()
-    // The masthead's first row stays: the wordmark, the interface language and the account.
+    // The masthead's first row stays: the wordmark, the interface language (Help comes after the setup) and the account.
     // The wordmark is plain text while the setup shows: home would only show the setup again (review, fix 1).
     expectWordmark()
     expect(screen.queryByRole('link', { name: 'Wordado' })).toBeNull()

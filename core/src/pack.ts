@@ -73,6 +73,11 @@ export interface PackCourseSize {
 export interface PackTrial {
   readonly probes: readonly PackProbe[]
   readonly course: Readonly<Partial<Record<CefrLevel, PackCourseSize>>>
+  /**
+   * The themes the whole course offers, each with its live words there, by theme ID; each is defined in the pack's
+   * `themes`. A trial shows them and studies none (#244). Absent from a trial pack built before them.
+   */
+  readonly themes?: Readonly<Record<string, number>>
 }
 
 /** A corpus pack as shipped: one JSON document per (corpus version, L1) (spec §5.1). */

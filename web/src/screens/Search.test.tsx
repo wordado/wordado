@@ -123,7 +123,7 @@ describe('Search', () => {
     const report = vi.spyOn(ctx.client, 'report')
     renderWith(<Search q="teacher" />, ctx)
     fireEvent.click(screen.getByRole('button', { name: 'Word actions: teacher' }))
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Report a problem: teacher' })))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Report this word: teacher' })))
     expect(screen.getByRole('heading', { name: 'Report a problem with “teacher”' })).toBeTruthy()
     await act(async () => fireEvent.click(screen.getByRole('radio', { name: 'Wrong level' })))
     fireEvent.change(screen.getByRole('textbox', { name: 'Details (optional)' }), { target: { value: 'Too easy for A1' } })
