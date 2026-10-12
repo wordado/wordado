@@ -371,12 +371,12 @@ const SHOTS_DECIDED: readonly Shot[] = [
 const SHOTS_DONE: readonly Shot[] = [{ name: 'hosted-review-done', who: 'reviewer', steps: openAssignment }]
 
 const SHOTS_ADMIN: readonly Shot[] = [
-  { name: 'hosted-admin-overview', who: 'admin', path: '/#overview', steps: async (page) => void (await page.getByText('rows to decide').waitFor()) },
-  { name: 'hosted-admin-account-menu', who: 'admin', path: '/#overview', steps: async (page) => (await page.getByText('rows to decide').waitFor(), await openAccount(page)) },
-  { name: 'hosted-admin-overview-unassigned', who: 'admin', path: '/#overview', api: [SPANISH], steps: async (page) => void (await page.getByRole('button', { name: 'Assign Spanish' }).waitFor()) },
-  { name: 'hosted-admin-reviewers', who: 'admin', path: '/#reviewers', steps: async (page) => void (await page.getByText('reviewer@example.com', { exact: true }).waitFor()) },
-  { name: 'hosted-admin-assignments', who: 'admin', path: '/#assignments', steps: async (page) => void (await page.getByRole('button', { name: 'Reassign…' }).first().waitFor()) },
-  { name: 'hosted-admin-submissions', who: 'admin', path: '/#submissions', steps: async (page) => void (await page.getByRole('link', { name: /pull request/ }).first().waitFor()) },
+  { name: 'hosted-admin-overview', who: 'admin', path: '/#review/overview', steps: async (page) => void (await page.getByText('rows to decide').waitFor()) },
+  { name: 'hosted-admin-account-menu', who: 'admin', path: '/#review/overview', steps: async (page) => (await page.getByText('rows to decide').waitFor(), await openAccount(page)) },
+  { name: 'hosted-admin-overview-unassigned', who: 'admin', path: '/#review/overview', api: [SPANISH], steps: async (page) => void (await page.getByRole('button', { name: 'Assign Spanish' }).waitFor()) },
+  { name: 'hosted-admin-reviewers', who: 'admin', path: '/#review/reviewers', steps: async (page) => void (await page.getByText('reviewer@example.com', { exact: true }).waitFor()) },
+  { name: 'hosted-admin-assignments', who: 'admin', path: '/#review/assignments', steps: async (page) => void (await page.getByRole('button', { name: 'Reassign…' }).first().waitFor()) },
+  { name: 'hosted-admin-submissions', who: 'admin', path: '/#review/submissions', steps: async (page) => void (await page.getByRole('link', { name: /pull request/ }).first().waitFor()) },
   { name: 'hosted-admin-feedback', who: 'admin', path: '/#feedback', steps: async (page) => void (await page.getByText('Thank you for the app.').waitFor()) },
   {
     name: 'hosted-admin-feedback-details',
@@ -478,7 +478,7 @@ const SHOTS_ADMIN: readonly Shot[] = [
   {
     name: 'hosted-admin-dialog-invite',
     who: 'admin',
-    path: '/#reviewers',
+    path: '/#review/reviewers',
     steps: async (page) => {
       await openDialog(page, 'Invite a reviewer', 'Invite a reviewer')
       const form = page.getByRole('form', { name: 'Invite a reviewer' })
@@ -487,12 +487,12 @@ const SHOTS_ADMIN: readonly Shot[] = [
       await form.getByLabel('German').check()
     },
   },
-  { name: 'hosted-admin-dialog-languages', who: 'admin', path: '/#reviewers', steps: (page) => openDialog(page, 'Edit Rita', /Languages of Rita/) },
-  { name: 'hosted-admin-dialog-assign', who: 'admin', path: '/#assignments', steps: assignDialog },
+  { name: 'hosted-admin-dialog-languages', who: 'admin', path: '/#review/reviewers', steps: (page) => openDialog(page, 'Edit Rita', /Languages of Rita/) },
+  { name: 'hosted-admin-dialog-assign', who: 'admin', path: '/#review/assignments', steps: assignDialog },
   {
     name: 'hosted-admin-dialog-assign-refused',
     who: 'admin',
-    path: '/#assignments',
+    path: '/#review/assignments',
     steps: async (page) => {
       await assignDialog(page)
       const form = page.getByRole('form', { name: 'Assign' })
@@ -504,7 +504,7 @@ const SHOTS_ADMIN: readonly Shot[] = [
   {
     name: 'hosted-admin-dialog-split',
     who: 'admin',
-    path: '/#assignments',
+    path: '/#review/assignments',
     api: [PROPOSAL],
     steps: async (page) => {
       await openDialog(page, 'Split a queue', 'Split a queue')
@@ -516,7 +516,7 @@ const SHOTS_ADMIN: readonly Shot[] = [
       await form.getByRole('button', { name: 'Create these assignments' }).waitFor()
     },
   },
-  { name: 'hosted-admin-dialog-reassign', who: 'admin', path: '/#assignments', steps: (page) => openDialog(page, 'Reassign…', 'Reassign') },
+  { name: 'hosted-admin-dialog-reassign', who: 'admin', path: '/#review/assignments', steps: (page) => openDialog(page, 'Reassign…', 'Reassign') },
 ]
 
 const SHOTS_LOCAL_NAME: readonly Shot[] = [{ name: 'local-name', steps: async (page) => void (await page.getByLabel(/Your name/).waitFor()) }]
@@ -569,7 +569,7 @@ const MEASURE = `(() => {
     wide: document.documentElement.scrollWidth > width,
     long: !dialog && document.documentElement.scrollHeight > window.innerHeight + 1,
     // the admin tabs slide inside their own strip
-    out: [...document.querySelectorAll('body *')].filter((el) => seen(el) && !el.closest('.admin-tabs') && el.getBoundingClientRect().right > width + 0.5).map((el) => el.tagName.toLowerCase() + '.' + String(el.className)),
+    out: [...document.querySelectorAll('body *')].filter((el) => seen(el) && !el.closest('.admin-tabs, .sub-tabs') && el.getBoundingClientRect().right > width + 0.5).map((el) => el.tagName.toLowerCase() + '.' + String(el.className)),
     header: main.filter((el) => el.closest('.app-header')).map(text),
     page: main.filter((el) => !el.closest('.app-header')).map(text),
   }
@@ -654,7 +654,7 @@ async function main(): Promise<void> {
       await page.getByRole('link', { name: /pull request/ }).waitFor()
     })
     await act(browser, 'admin', async (page) => {
-      await page.goto('/#reviewers')
+      await page.goto('/#review/reviewers')
       await openDialog(page, 'Invite a reviewer', 'Invite a reviewer')
       const invite = page.getByRole('form', { name: 'Invite a reviewer' })
       await invite.getByLabel('Email').fill('nora@example.com')

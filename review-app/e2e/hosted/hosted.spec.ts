@@ -10,13 +10,13 @@ const as = async (browser: Browser, who: 'admin' | 'reviewer' | 'phone' | 'hans'
 }
 
 /** Nothing is wider than the screen: the page does not scroll sideways, and no part of the row or the header (or of
- * what `selector` names) sticks out. The admin tabs are left out: on a phone they are a strip that slides sideways
- * inside the header, and the tabs after the chosen one are meant to lie beyond its edge. */
+ * what `selector` names) sticks out. The admin tabs are left out, and the review's pages under them: on a phone each
+ * row is a strip that slides sideways, and the tabs after the chosen one are meant to lie beyond its edge. */
 async function expectFits(page: Page, selector = 'header *, article *, dialog[open] *') {
   const sizes = await page.evaluate((sel) => {
     const width = document.documentElement.clientWidth
     const out = [...document.querySelectorAll(sel)]
-      .filter((el) => !el.closest('.admin-tabs') && el.getClientRects().length > 0 && el.getBoundingClientRect().right > width + 0.5)
+      .filter((el) => !el.closest('.admin-tabs, .sub-tabs') && el.getClientRects().length > 0 && el.getBoundingClientRect().right > width + 0.5)
       .map((el) => `${el.tagName.toLowerCase()}.${el.className}`)
     return { scrollWidth: document.documentElement.scrollWidth, width, out }
   }, selector)
@@ -225,10 +225,12 @@ test('a reviewer decides rows with the keys and submits a pull request', async (
 test('an admin invites a reviewer and assigns files; an overlap is refused', async ({ browser }) => {
   const page = await as(browser, 'admin')
   await page.goto('/')
-  await page.getByRole('button', { name: 'Admin' }).click()
-  // The admin page opens on the Overview; the tab is in the address.
+  // An admin starts on the admin page, on Feedback; the page is in the address. The review's pages are under Review.
+  await expect(page.getByRole('tab', { name: 'Feedback' })).toHaveAttribute('aria-selected', 'true')
+  await expect(page).toHaveURL(/#feedback$/)
+  await page.getByRole('tab', { name: 'Review' }).click()
   await expect(page.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true')
-  await expect(page).toHaveURL(/#overview$/)
+  await expect(page).toHaveURL(/#review\/overview$/)
   await expect(page.getByRole('tabpanel', { name: 'Overview' }).getByText('rows to decide')).toBeVisible()
 
   await page.getByRole('tab', { name: 'Reviewers' }).click()
@@ -251,7 +253,7 @@ test('an admin invites a reviewer and assigns files; an overlap is refused', asy
   await page.getByRole('tab', { name: 'Reviewers' }).focus()
   await page.keyboard.press('ArrowRight')
   await expect(page.getByRole('tab', { name: 'Assignments' })).toBeFocused()
-  await expect(page).toHaveURL(/#assignments$/)
+  await expect(page).toHaveURL(/#review\/assignments$/)
   await page.getByRole('button', { name: 'Assign work' }).click()
   const dialog = page.getByRole('dialog', { name: 'Assign work' })
   const assign = dialog.getByRole('form', { name: 'Assign' })
@@ -270,9 +272,10 @@ test('an admin invites a reviewer and assigns files; an overlap is refused', asy
   await page.reload()
   await expect(page.getByRole('tab', { name: 'Assignments' })).toHaveAttribute('aria-selected', 'true')
   await expect(page.getByText('Bulgarian translations · flagged rows')).toBeVisible()
-  await page.getByRole('button', { name: 'My work' }).click()
+  // The admin's own assignments are a page of the review too.
+  await page.getByRole('tab', { name: 'My work' }).click()
   await expect(page.getByRole('heading', { name: 'Your assignments' })).toBeVisible()
-  await expect(page).not.toHaveURL(/#/)
+  await expect(page).toHaveURL(/#review\/my-work$/)
 })
 
 // After the test above: its refusal names the assignment it meets first, and this one adds a spot check to the queue.
@@ -367,7 +370,7 @@ test('an admin makes a spot check; its reviewer says how serious each fault was;
 test('@phone an admin reads the Overview and moves between the tabs', async ({ browser }) => {
   const page = await as(browser, 'admin')
   await page.goto('/')
-  await page.getByRole('button', { name: 'Admin' }).tap()
+  await page.getByRole('tab', { name: 'Review' }).tap()
   const overview = page.getByRole('tabpanel', { name: 'Overview' })
   // The four numbers, two by two.
   const stats = overview.getByRole('list', { name: 'In numbers' }).getByRole('listitem')
@@ -386,13 +389,13 @@ test('@phone an admin reads the Overview and moves between the tabs', async ({ b
   await expect(bulgarian).toContainText('Rita')
   await expect(bulgarian.getByText('on track')).toBeVisible()
   await expect(overview.getByText(/Review data built .* from commit e2e0000/)).toBeVisible()
-  // Nothing sticks out of the screen; the tabs slide inside their own strip.
+  // Nothing sticks out of the screen; the tabs slide inside their own strips.
   await expectFits(page, '.admin *')
 
   await page.getByRole('tab', { name: 'Reviewers' }).tap()
   const reviewers = page.getByRole('tabpanel', { name: 'Reviewers' })
   await expect(reviewers.getByText('reviewer@example.com', { exact: true })).toBeVisible()
-  await expect(page).toHaveURL(/#reviewers$/)
+  await expect(page).toHaveURL(/#review\/reviewers$/)
   await expectFits(page, '.admin *')
   // A form is the whole screen.
   await reviewers.getByRole('button', { name: 'Invite a reviewer' }).tap()
@@ -402,9 +405,14 @@ test('@phone an admin reads the Overview and moves between the tabs', async ({ b
   await expectFits(page, '.admin *, dialog[open] *')
   await dialog.getByRole('button', { name: 'Close' }).tap()
   await expect(dialog).toBeHidden()
-  // The last tab is reached by sliding the strip; it comes into view when chosen.
   await page.getByRole('tab', { name: 'Submissions' }).tap()
   await expect(page.getByRole('tab', { name: 'Submissions' })).toBeInViewport({ ratio: 1 })
+  await expectFits(page, '.admin *')
+  // The admin's own assignments, in the admin page's column. The last tab is reached by sliding the strip; it comes
+  // into view when chosen.
+  await page.getByRole('tab', { name: 'My work' }).tap()
+  await expect(page.getByRole('tab', { name: 'My work' })).toBeInViewport({ ratio: 1 })
+  await expect(page.getByRole('heading', { name: 'Your assignments' })).toBeVisible()
   await expectFits(page, '.admin *')
 })
 

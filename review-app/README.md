@@ -282,10 +282,14 @@ pull request as an extra commit, so merging it lands both the decisions and the 
 
 ### The admin page
 
-An admin has **Admin** in the header. The page has six tabs, kept in the address so a reload stays put:
-**Overview** (rows to decide, decided and not submitted, open pull requests, active reviewers, then a line per
-language with its progress and **Assign** where nobody holds it), **Reviewers**, **Assignments**,
-**Submissions**, **Feedback** (what learners wrote about the app, read from the learner app's server each
+An admin starts on the admin page (a reviewer starts on their assignments). The page has four tabs in the
+header, and the page shown is kept in the address so a reload stays put: **Feedback**, which it opens on,
+**Accounts**, **Mail** and **Review**. Review holds the pages of the word review as a second row of tabs, under
+addresses like `#review/reviewers` (the addresses they had before, like `#reviewers`, still open them), and reads
+the review's data when one of them is opened: **Overview** (rows to decide, decided and not submitted, open pull
+requests, active reviewers, then a line per language with its progress and **Assign** where nobody holds it),
+**Reviewers**, **Assignments**, **Submissions** and **My work** (the admin's own assignments, as a reviewer sees
+theirs). The other tabs: **Feedback** (what learners wrote about the app, read from the learner app's server each
 time the tab is opened; the coordinator marks each message New, Looked at, Done or Not doing and can keep a note
 on it; those marks are stored here, and, with the AI help switched on, the AI's reading of each message: spec §16),
 **Accounts** (spec §17: how many accounts there are and how many are used, in counts only, each count opening
@@ -318,7 +322,7 @@ when the server refuses, the dialog stays open and says why. The page is made fo
 
 Closing an assignment, disabling its reviewer or removing their language closes the assignment but keeps its
 unsubmitted decisions; so does a pull request closed without merging, whose decisions become unsubmitted again.
-To hand that work to someone, open *Admin → Assignments*, find the assignment under *Closed*, choose
+To hand that work to someone, open *Review → Assignments*, find the assignment under *Closed*, choose
 **Reassign…**, pick the reviewer and *Move their decisions*. Reassigning to the same reviewer (after enabling them
 again) works too. It is refused while another open assignment already holds any of its files; close or reassign
 that one first.

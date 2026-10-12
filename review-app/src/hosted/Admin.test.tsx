@@ -25,6 +25,7 @@ const annasGerman = { id: 3, reviewer: anna.email, reviewerName: 'Anna', queue: 
 const submission = { id: 1, assignment: 3, reviewer: anna.email, reviewerName: 'Anna', queue: 'translation-de', branch: 'b', pr: 31, url: 'https://github.com/x/pull/31', count: 2, leftOut: 0, status: 'open' as const, createdAt: '2026-10-05T12:00:00Z' }
 
 beforeEach(() => {
+  vi.spyOn(hostedApi, 'assignments').mockResolvedValue([])
   vi.spyOn(hostedApi.admin, 'snapshot').mockResolvedValue(snapshot)
   vi.spyOn(hostedApi.admin, 'reviewers').mockResolvedValue([anna])
   vi.spyOn(hostedApi.admin, 'assignments').mockResolvedValue([])
@@ -39,7 +40,13 @@ beforeEach(() => {
   vi.spyOn(hostedApi.admin, 'announcements').mockResolvedValue({ connected: true, announcements: [], limits: { perDay: 50, sentToday: 0, batch: 20 } })
 })
 
-const openTab = async (name: string) => fireEvent.click(await screen.findByRole('tab', { name }))
+const noOpen = () => {}
+const REVIEW_PAGES = ['Overview', 'Reviewers', 'Assignments', 'Submissions', 'My work']
+/** Opens a tab; a page of the review through the Review tab, which holds them. */
+const openTab = async (name: string) => {
+  if (REVIEW_PAGES.includes(name) && !screen.queryByRole('tab', { name })) fireEvent.click(await screen.findByRole('tab', { name: 'Review' }))
+  fireEvent.click(await screen.findByRole('tab', { name }))
+}
 /** Opens a tab, then the dialog behind one of its buttons; gives the dialog. */
 async function openDialog(tab: string, button: string, title = button) {
   await openTab(tab)
@@ -48,12 +55,29 @@ async function openDialog(tab: string, button: string, title = button) {
 }
 
 describe('Admin', () => {
-  it('opens on the Overview: the four numbers, a row per language and what the review data was built from', async () => {
+  it('opens on Feedback, the page that is read most, and reads the review’s data when Review is opened, not before (#232)', async () => {
+    render(<Admin onOpen={noOpen} />)
+    expect((await screen.findByRole('tab', { name: 'Feedback' })).getAttribute('aria-selected')).toBe('true')
+    expect(screen.getByRole('tabpanel', { name: 'Feedback' })).toBeTruthy()
+    expect(window.location.hash).toBe('#feedback')
+    // the review's pages are behind Review
+    expect(screen.queryByRole('tab', { name: 'Overview' })).toBeNull()
+    for (const read of ['snapshot', 'reviewers', 'assignments', 'submissions'] as const) expect(hostedApi.admin[read]).not.toHaveBeenCalled()
+    await openTab('Review')
+    expect(window.location.hash).toBe('#review/overview')
+    expect(screen.getByRole('tab', { name: 'Review' }).getAttribute('aria-selected')).toBe('true')
+    expect(screen.getByRole('tab', { name: 'Overview' }).getAttribute('aria-selected')).toBe('true')
+    expect(await within(screen.getByRole('tabpanel', { name: 'Overview' })).findByText('rows to decide')).toBeTruthy()
+    for (const read of ['snapshot', 'reviewers', 'assignments', 'submissions'] as const) expect(hostedApi.admin[read]).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows the Overview: the four numbers, a row per language and what the review data was built from', async () => {
     vi.spyOn(hostedApi.admin, 'reviewers').mockResolvedValue([anna, carmen, { ...carmen, email: 'old@example.com', name: 'Old', disabledAt: 't' }])
     vi.spyOn(hostedApi.admin, 'assignments').mockResolvedValue([annasGerman])
     vi.spyOn(hostedApi.admin, 'submissions').mockResolvedValue([submission])
-    render(<Admin />)
-    expect((await screen.findByRole('tab', { name: 'Overview' })).getAttribute('aria-selected')).toBe('true')
+    render(<Admin onOpen={noOpen} />)
+    await openTab('Overview')
+    expect(screen.getByRole('tab', { name: 'Overview' }).getAttribute('aria-selected')).toBe('true')
     const panel = screen.getByRole('tabpanel', { name: 'Overview' })
     const tile = async (label: string) => (await within(panel).findByText(label)).closest('li')!.textContent
     expect(await tile('rows to decide')).toBe('19rows to decide')
@@ -75,42 +99,85 @@ describe('Admin', () => {
 
   it('says so when there is no review data yet', async () => {
     vi.spyOn(hostedApi.admin, 'snapshot').mockResolvedValue(null)
-    render(<Admin />)
+    render(<Admin onOpen={noOpen} />)
+    await openTab('Overview')
     expect(await screen.findByText(/No review data yet/)).toBeTruthy()
   })
 
-  it('has seven tabs; a click or the arrow keys change the tab, and it is kept in the address', async () => {
-    render(<Admin />)
-    const tablist = await screen.findByRole('tablist')
-    expect(within(tablist).getAllByRole('tab').map((t) => t.textContent)).toEqual(['Overview', 'Reviewers', 'Assignments', 'Submissions', 'Feedback', 'Accounts', 'Mail'])
+  it('has four tabs, and five pages under Review; a click or the arrow keys change the page, and it is kept in the address', async () => {
+    render(<Admin onOpen={noOpen} />)
+    const tablist = await screen.findByRole('tablist', { name: 'Admin pages' })
+    expect(within(tablist).getAllByRole('tab').map((t) => t.textContent)).toEqual(['Feedback', 'Accounts', 'Mail', 'Review'])
+    await openTab('Review')
+    expect(within(screen.getByRole('tablist', { name: 'Review pages' })).getAllByRole('tab').map((t) => t.textContent)).toEqual(['Overview', 'Reviewers', 'Assignments', 'Submissions', 'My work'])
     await openTab('Reviewers')
-    expect(window.location.hash).toBe('#reviewers')
+    expect(window.location.hash).toBe('#review/reviewers')
     expect(screen.getByRole('tab', { name: 'Reviewers' }).getAttribute('aria-selected')).toBe('true')
+    expect(screen.getByRole('tab', { name: 'Review' }).getAttribute('aria-selected')).toBe('true')
     const panel = screen.getByRole('tabpanel', { name: 'Reviewers' })
     expect(await within(panel).findByText('Anna')).toBeTruthy()
     expect(within(panel).getByText('anna@example.com')).toBeTruthy()
     expect(within(panel).getByText('invite not sent')).toBeTruthy()
     expect(screen.queryByRole('tabpanel', { name: 'Overview' })).toBeNull()
 
+    // the arrows keep to the row they are in
     fireEvent.keyDown(screen.getByRole('tab', { name: 'Reviewers' }), { key: 'ArrowRight' })
     const assignments = screen.getByRole('tab', { name: 'Assignments' })
     expect(assignments.getAttribute('aria-selected')).toBe('true')
     expect(document.activeElement).toBe(assignments)
     expect(assignments.tabIndex).toBe(0)
     expect(screen.getByRole('tab', { name: 'Reviewers' }).tabIndex).toBe(-1)
-    expect(window.location.hash).toBe('#assignments')
+    expect(window.location.hash).toBe('#review/assignments')
     fireEvent.keyDown(assignments, { key: 'ArrowLeft' })
     fireEvent.keyDown(screen.getByRole('tab', { name: 'Reviewers' }), { key: 'ArrowLeft' })
     fireEvent.keyDown(screen.getByRole('tab', { name: 'Overview' }), { key: 'ArrowLeft' })
-    expect(screen.getByRole('tab', { name: 'Mail' }).getAttribute('aria-selected')).toBe('true')
-    expect(window.location.hash).toBe('#announcements')
-    fireEvent.keyDown(screen.getByRole('tab', { name: 'Mail' }), { key: 'Home' })
+    expect(screen.getByRole('tab', { name: 'My work' }).getAttribute('aria-selected')).toBe('true')
+    expect(window.location.hash).toBe('#review/my-work')
+    fireEvent.keyDown(screen.getByRole('tab', { name: 'My work' }), { key: 'Home' })
     expect(screen.getByRole('tabpanel', { name: 'Overview' })).toBeTruthy()
+
+    fireEvent.keyDown(screen.getByRole('tab', { name: 'Review' }), { key: 'ArrowRight' })
+    const feedback = screen.getByRole('tab', { name: 'Feedback' })
+    expect(feedback.getAttribute('aria-selected')).toBe('true')
+    expect(document.activeElement).toBe(feedback)
+    expect(window.location.hash).toBe('#feedback')
+    expect(screen.queryByRole('tablist', { name: 'Review pages' })).toBeNull()
+    fireEvent.keyDown(feedback, { key: 'End' })
+    expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Review' }))
+  })
+
+  it('goes back to the review page last shown when Review is opened again', async () => {
+    render(<Admin onOpen={noOpen} />)
+    await openTab('Submissions')
+    await openTab('Accounts')
+    await openTab('Review')
+    expect(screen.getByRole('tabpanel', { name: 'Submissions' })).toBeTruthy()
+    expect(window.location.hash).toBe('#review/submissions')
+  })
+
+  it('has the admin’s own assignments as My work, read when it is opened; it opens one', async () => {
+    const mine = vi.spyOn(hostedApi, 'assignments').mockResolvedValue([annasGerman])
+    const onOpen = vi.fn()
+    render(<Admin onOpen={onOpen} />)
+    await openTab('Review')
+    expect(mine).not.toHaveBeenCalled()
+    await openTab('My work')
+    const panel = screen.getByRole('tabpanel', { name: 'My work' })
+    expect(within(panel).getByRole('region', { name: 'Your assignments' })).toBeTruthy()
+    fireEvent.click(await within(panel).findByRole('button', { name: 'Continue' }))
+    expect(onOpen).toHaveBeenCalledWith(annasGerman)
+  })
+
+  it('still knows a review page by the address it had before the pages were grouped, and puts it in today’s form', async () => {
+    window.location.hash = '#reviewers'
+    render(<Admin onOpen={noOpen} />)
+    expect(await screen.findByRole('tabpanel', { name: 'Reviewers' })).toBeTruthy()
+    expect(window.location.hash).toBe('#review/reviewers')
   })
 
   it('reads the sweep’s counts and the counts of accounts when the Accounts tab is opened, not before (#187, #206)', async () => {
-    render(<Admin />)
-    await screen.findByRole('tabpanel', { name: 'Overview' })
+    render(<Admin onOpen={noOpen} />)
+    await screen.findByRole('tabpanel', { name: 'Feedback' })
     expect(hostedApi.admin.accountSweep).not.toHaveBeenCalled()
     expect(hostedApi.admin.accountStats).not.toHaveBeenCalled()
     await openTab('Accounts')
@@ -124,8 +191,8 @@ describe('Admin', () => {
   })
 
   it('reads the announcements when the Mail tab is opened, not before (#185, #215)', async () => {
-    render(<Admin />)
-    await screen.findByRole('tabpanel', { name: 'Overview' })
+    render(<Admin onOpen={noOpen} />)
+    await screen.findByRole('tabpanel', { name: 'Feedback' })
     expect(hostedApi.admin.announcements).not.toHaveBeenCalled()
     await openTab('Mail')
     expect(window.location.hash).toBe('#announcements')
@@ -136,23 +203,24 @@ describe('Admin', () => {
   })
 
   it('reads the feedback when the Feedback tab is opened, not before, and keeps the tab in the address', async () => {
-    const first = render(<Admin />)
-    await screen.findByRole('tabpanel', { name: 'Overview' })
+    window.location.hash = '#accounts'
+    const first = render(<Admin onOpen={noOpen} />)
+    await screen.findByRole('tabpanel', { name: 'Accounts' })
     expect(hostedApi.admin.feedback).not.toHaveBeenCalled()
     await openTab('Feedback')
     expect(window.location.hash).toBe('#feedback')
     expect(await within(screen.getByRole('tabpanel', { name: 'Feedback' })).findByText('No feedback yet.')).toBeTruthy()
     expect(hostedApi.admin.feedback).toHaveBeenCalledWith({ kind: '', state: 'open' })
     first.unmount()
-    render(<Admin />)
+    render(<Admin onOpen={noOpen} />)
     expect((await screen.findByRole('tab', { name: 'Feedback' })).getAttribute('aria-selected')).toBe('true')
   })
 
   it('opens on the tab in the address, so a reload stays put', async () => {
-    const first = render(<Admin />)
+    const first = render(<Admin onOpen={noOpen} />)
     await openTab('Submissions')
     first.unmount()
-    render(<Admin />)
+    render(<Admin onOpen={noOpen} />)
     expect((await screen.findByRole('tab', { name: 'Submissions' })).getAttribute('aria-selected')).toBe('true')
     expect(screen.getByRole('tabpanel', { name: 'Submissions' })).toBeTruthy()
     // …and follows the address when it changes (the browser's Back)
@@ -163,7 +231,7 @@ describe('Admin', () => {
 
   it('invites a reviewer from a dialog and shows the link when the mail failed', async () => {
     const invite = vi.spyOn(hostedApi.admin, 'invite').mockResolvedValue({ reviewer: { ...anna, email: 'b@example.com', name: 'B' }, inviteSent: false, link: 'https://review.wordado.com' })
-    render(<Admin />)
+    render(<Admin onOpen={noOpen} />)
     const dialog = await openDialog('Reviewers', 'Invite a reviewer')
     const form = within(dialog).getByRole('form', { name: 'Invite a reviewer' })
     fireEvent.change(within(form).getByLabelText('Email'), { target: { value: 'b@example.com' } })
@@ -179,7 +247,7 @@ describe('Admin', () => {
 
   it('assigns free files of a queue in the reviewer’s language, and shows who holds the others', async () => {
     const assign = vi.spyOn(hostedApi.admin, 'assign').mockResolvedValue({ id: 1, reviewer: anna.email, reviewerName: 'Anna', queue: 'translation-de', files: ['review/translation-de/a.csv'], flaggedOnly: false, spotCheck: null, createdAt: 't', closedAt: null, progress: null })
-    render(<Admin />)
+    render(<Admin onOpen={noOpen} />)
     const dialog = await openDialog('Assignments', 'Assign work')
     const form = within(dialog).getByRole('form', { name: 'Assign' })
     fireEvent.change(within(form).getByLabelText('Reviewer'), { target: { value: anna.email } })
@@ -194,7 +262,7 @@ describe('Admin', () => {
 
   it('keeps the dialog open with the error in it when the server refuses, and says it once on the page', async () => {
     vi.spyOn(hostedApi.admin, 'assign').mockRejectedValue(new Error('a.csv is already assigned to Rita'))
-    render(<Admin />)
+    render(<Admin onOpen={noOpen} />)
     const dialog = await openDialog('Assignments', 'Assign work')
     const form = within(dialog).getByRole('form', { name: 'Assign' })
     fireEvent.change(within(form).getByLabelText('Reviewer'), { target: { value: anna.email } })
@@ -216,7 +284,8 @@ describe('Admin', () => {
   it('opens Assign from an unassigned language of the Overview with its translation queue chosen', async () => {
     vi.spyOn(hostedApi.admin, 'reviewers').mockResolvedValue([anna, carmen])
     const assign = vi.spyOn(hostedApi.admin, 'assign').mockResolvedValue({ ...annasGerman, id: 9 })
-    render(<Admin />)
+    render(<Admin onOpen={noOpen} />)
+    await openTab('Overview')
     fireEvent.click(await screen.findByRole('button', { name: 'Assign Spanish' }))
     expect(screen.getByRole('tab', { name: 'Assignments' }).getAttribute('aria-selected')).toBe('true')
     const form = within(screen.getByRole('dialog', { name: 'Assign work' })).getByRole('form', { name: 'Assign' })
@@ -231,7 +300,8 @@ describe('Admin', () => {
 
   it('drops the chosen queue when the reviewer does not have its language', async () => {
     vi.spyOn(hostedApi.admin, 'reviewers').mockResolvedValue([anna, carmen])
-    render(<Admin />)
+    render(<Admin onOpen={noOpen} />)
+    await openTab('Overview')
     fireEvent.click(await screen.findByRole('button', { name: 'Assign Spanish' }))
     const form = within(screen.getByRole('dialog', { name: 'Assign work' })).getByRole('form', { name: 'Assign' })
     fireEvent.change(within(form).getByLabelText('Reviewer'), { target: { value: anna.email } })
@@ -248,7 +318,7 @@ describe('Admin', () => {
     const split = vi.spyOn(hostedApi.admin, 'split')
       .mockResolvedValueOnce({ proposal: [{ reviewer: anna.email, files: ['review/translation-de/a.csv'], rows: 200 }, { reviewer: 'hans@example.com', files: ['review/translation-de/c.csv'], rows: 190 }] })
       .mockResolvedValueOnce({ assignments: [] })
-    render(<Admin />)
+    render(<Admin onOpen={noOpen} />)
     const dialog = await openDialog('Assignments', 'Split a queue')
     const form = within(dialog).getByRole('form', { name: 'Split a queue' })
     fireEvent.change(within(form).getByLabelText('Queue'), { target: { value: 'translation-de' } })
@@ -269,7 +339,7 @@ describe('Admin', () => {
     it('asks for a reviewer, a queue in their language and the number of rows, 50 unless changed', async () => {
       vi.spyOn(hostedApi.admin, 'reviewers').mockResolvedValue([anna, carmen, { ...carmen, email: 'old@example.com', name: 'Old', disabledAt: 't' }])
       const make = vi.spyOn(hostedApi.admin, 'spotCheck').mockResolvedValue({ assignment: annasSpot, asked: 50, drawn: 50 })
-      render(<Admin />)
+      render(<Admin onOpen={noOpen} />)
       const f = await form()
       const draw = within(f).getByRole<HTMLButtonElement>('button', { name: 'Draw the sample' })
       expect(within(f).getByLabelText<HTMLInputElement>('Rows in the sample').value).toBe('50')
@@ -299,7 +369,7 @@ describe('Admin', () => {
 
     it('stays to say how many rows it took when the queue had fewer than asked for', async () => {
       vi.spyOn(hostedApi.admin, 'spotCheck').mockResolvedValue({ assignment: annasSpot, asked: 50, drawn: 37 })
-      render(<Admin />)
+      render(<Admin onOpen={noOpen} />)
       const f = await form()
       fireEvent.change(within(f).getByLabelText('Reviewer'), { target: { value: anna.email } })
       fireEvent.change(within(f).getByLabelText('Queue'), { target: { value: 'translation-de' } })
@@ -312,7 +382,7 @@ describe('Admin', () => {
 
     it('says in the dialog why the server refused: the overlap rule in words', async () => {
       vi.spyOn(hostedApi.admin, 'spotCheck').mockRejectedValue(new Error('This queue already has an open spot check, with Hans'))
-      render(<Admin />)
+      render(<Admin onOpen={noOpen} />)
       const f = await form()
       fireEvent.change(within(f).getByLabelText('Reviewer'), { target: { value: anna.email } })
       fireEvent.change(within(f).getByLabelText('Queue'), { target: { value: 'translation-de' } })
@@ -324,7 +394,7 @@ describe('Admin', () => {
 
     it('shows the result on its row: the sample, checked, fine, minor, serious, and the serious rows', async () => {
       vi.spyOn(hostedApi.admin, 'assignments').mockResolvedValue([annasSpot, annasGerman])
-      render(<Admin />)
+      render(<Admin onOpen={noOpen} />)
       await openTab('Assignments')
       const row = (await screen.findByText('German translations · spot check')).closest('li')!
       expect(within(row).getByText('Anna · 50 in the sample · checked 12 · fine 9 · minor 2 · serious 1')).toBeTruthy()
@@ -338,7 +408,7 @@ describe('Admin', () => {
 
     it('names no serious rows when there are none', async () => {
       vi.spyOn(hostedApi.admin, 'assignments').mockResolvedValue([{ ...annasSpot, spotCheck: { sample: 50, result: { checked: 2, fine: 2, minor: 0, serious: 0, seriousKeys: [] } } }])
-      render(<Admin />)
+      render(<Admin onOpen={noOpen} />)
       await openTab('Assignments')
       const row = (await screen.findByText('German translations · spot check')).closest('li')!
       expect(within(row).getByText('Anna · 50 in the sample · checked 2 · fine 2 · minor 0 · serious 0')).toBeTruthy()
@@ -348,7 +418,7 @@ describe('Admin', () => {
 
   it('lists an open assignment by its plain name, with who has it and how far it is', async () => {
     vi.spyOn(hostedApi.admin, 'assignments').mockResolvedValue([annasGerman])
-    render(<Admin />)
+    render(<Admin onOpen={noOpen} />)
     await openTab('Assignments')
     const row = (await screen.findByText('German translations · flagged rows')).closest('li')!
     expect(within(row).getByText('Anna · 14 rows · 3 decided · 2 submitted · 9 to go')).toBeTruthy()
@@ -361,7 +431,7 @@ describe('Admin', () => {
     vi.spyOn(hostedApi.admin, 'assignments').mockResolvedValue([closedOne])
     vi.spyOn(hostedApi.admin, 'reviewers').mockResolvedValue([anna, { ...anna, email: 'hans@example.com', name: 'Hans' }])
     const reassign = vi.spyOn(hostedApi.admin, 'reassign').mockResolvedValue({ ...closedOne, id: 8, reviewer: 'hans@example.com', reviewerName: 'Hans', closedAt: null })
-    render(<Admin />)
+    render(<Admin onOpen={noOpen} />)
     await openTab('Assignments')
     const open = await screen.findByRole('button', { name: 'Reassign…' })
     // a closed assignment cannot be closed again (asked before the dialog, which has a Close of its own, opens)
@@ -375,7 +445,7 @@ describe('Admin', () => {
 
   it('edits a reviewer’s languages in a dialog', async () => {
     const patch = vi.spyOn(hostedApi.admin, 'patchReviewer').mockResolvedValue({ ...anna, languages: ['de', 'es'] })
-    render(<Admin />)
+    render(<Admin onOpen={noOpen} />)
     await openTab('Reviewers')
     fireEvent.click(await screen.findByRole('button', { name: 'Edit Anna' }))
     const dialog = screen.getByRole('dialog', { name: 'Languages of Anna' })
@@ -389,7 +459,7 @@ describe('Admin', () => {
   it('disables a reviewer after confirming', async () => {
     const patch = vi.spyOn(hostedApi.admin, 'patchReviewer').mockResolvedValue({ ...anna, disabledAt: 't' })
     vi.spyOn(window, 'confirm').mockReturnValue(true)
-    render(<Admin />)
+    render(<Admin onOpen={noOpen} />)
     await openTab('Reviewers')
     fireEvent.click(await screen.findByRole('button', { name: 'Disable Anna' }))
     await waitFor(() => expect(patch).toHaveBeenCalledWith(anna.email, { disabled: true }))
@@ -398,7 +468,7 @@ describe('Admin', () => {
   it('drops the page notice when the tab changes', async () => {
     vi.spyOn(hostedApi.admin, 'patchReviewer').mockRejectedValue(new Error('the last admin cannot be disabled'))
     vi.spyOn(window, 'confirm').mockReturnValue(true)
-    render(<Admin />)
+    render(<Admin onOpen={noOpen} />)
     await openTab('Reviewers')
     fireEvent.click(await screen.findByRole('button', { name: 'Disable Anna' }))
     expect((await screen.findByRole('status')).textContent).toBe('the last admin cannot be disabled')
@@ -411,7 +481,7 @@ describe('Admin', () => {
 
   it('lists the submissions with the queue’s plain name, the state and the pull request', async () => {
     vi.spyOn(hostedApi.admin, 'submissions').mockResolvedValue([submission])
-    render(<Admin />)
+    render(<Admin onOpen={noOpen} />)
     await openTab('Submissions')
     const row = (await screen.findByText('Anna · German translations')).closest('li')!
     expect(within(row).getByText('open')).toBeTruthy()
