@@ -1,18 +1,21 @@
 import type { CorpusEntry } from '@wordado/core'
 import { corpusWordId } from '@wordado/core'
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { FlagControls } from './FlagControls'
 import { Translation } from './Headword'
+import { ReportDialog } from './ReportDialog'
 import { PlayWord } from './RunView'
 
 /**
  * A word in a list of the course's words (the path's units, a theme's page): its audio, the word with its
- * translation, its standing as a mark, and the ⋯ menu that changes it. With `learn`, a word that is not
- * started can be marked "Learn this word" from the menu. With `where`, a line under the word says where it is in
- * the course (the search).
+ * translation, its standing as a mark, and the ⋯ menu that changes it or reports a problem with the word (spec
+ * §8.10). With `learn`, a word that is not started can be marked "Learn this word" from the menu. With `where`, a
+ * line under the word says where it is in the course (the search).
  */
 export function WordRow(props: { readonly entry: CorpusEntry; readonly lang: string; readonly learn: boolean; readonly where?: ReactNode }) {
   const { entry } = props
+  const wordId = corpusWordId(entry.entryId)
+  const [reporting, setReporting] = useState(false)
   return (
     <li>
       <PlayWord entry={entry} inList />
@@ -22,8 +25,9 @@ export function WordRow(props: { readonly entry: CorpusEntry; readonly lang: str
         </span>
         <Translation entry={entry} lang={props.lang} />
       </span>
-      <FlagControls wordId={corpusWordId(entry.entryId)} headword={entry.headword} menu learn={props.learn} />
+      <FlagControls wordId={wordId} headword={entry.headword} menu learn={props.learn} onReport={() => setReporting(true)} />
       {props.where !== undefined && <span className="word-where">{props.where}</span>}
+      {reporting && <ReportDialog wordId={wordId} entry={entry} onClose={() => setReporting(false)} />}
     </li>
   )
 }

@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, screen, within } from '@testing-library/react'
 import { corpusWordId } from '@wordado/core'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactElement } from 'react'
 import { renderWith, setup, setupTrial, withProviders } from '../test/fixtures'
 import { RESULTS_STEP, Search } from './Search'
@@ -116,6 +116,21 @@ describe('Search', () => {
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Learn this word: teacher' })))
     const entry = [...ctx.client.snapshot.corpus!.entries.values()].find((e) => e.headword === 'teacher')!
     expect(ctx.client.snapshot.toLearn).toContain(corpusWordId(entry.entryId))
+  })
+
+  it('reports a problem with a word found, from its menu (spec §8.10)', async () => {
+    const ctx = await setup()
+    const report = vi.spyOn(ctx.client, 'report')
+    renderWith(<Search q="teacher" />, ctx)
+    fireEvent.click(screen.getByRole('button', { name: 'Word actions: teacher' }))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Report a problem: teacher' })))
+    expect(screen.getByRole('heading', { name: 'Report a problem with “teacher”' })).toBeTruthy()
+    await act(async () => fireEvent.click(screen.getByRole('radio', { name: 'Wrong level' })))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Details (optional)' }), { target: { value: 'Too easy for A1' } })
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Send report' })))
+    const entry = [...ctx.client.snapshot.corpus!.entries.values()].find((e) => e.headword === 'teacher')!
+    expect(report).toHaveBeenCalledWith({ wordId: corpusWordId(entry.entryId), field: 'level', note: 'Too easy for A1', packVersion: 0 })
+    expect(screen.getByText('Report saved. Thank you.')).toBeTruthy()
   })
 
   describe('in a trial (spec 2026-10-12 §4.4)', () => {

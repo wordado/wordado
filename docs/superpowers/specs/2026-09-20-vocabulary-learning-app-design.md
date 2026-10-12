@@ -1308,7 +1308,9 @@ Phase 1a. Five other parts of this design rely on it — translation quality
 (R2), the audio quality bar (§5.4), enrichment correction (§8.2, R4) — so it
 is a feature, not an afterthought.
 
-From any card the learner can report a problem: wrong or odd translation, bad
+From any card, and from the ⋯ menu of any word in a list of the course's words
+(a unit's words on the path, a theme's words, the search results), the learner
+can report a problem: wrong or odd translation, bad
 example sentence, bad audio, wrong level, or other, with an optional note. For
 a translation, an example sentence or "other" the dialog also asks "What
 should it be?": one optional line of at most 200 characters, the learner's
@@ -2513,6 +2515,14 @@ owner.
   offers no themes, and invites the visitor to create an account when every
   word of the unit is started. This replaces the small A1 sample as the
   demo's content.
+
+**2026-10-12 — a report from the word lists.** Decided by the product owner
+(#237).
+
+- **Reporting an error (§8.10):** the ⋯ menu of a word in a list (a unit's
+  words on the path, a theme's words, the search results) ends with *Report a
+  problem*, which opens the dialog a card opens. It is there whatever the
+  word's standing, and without an account too.
 
 ## 17. Technology choices
 

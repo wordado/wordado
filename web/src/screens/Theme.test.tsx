@@ -111,6 +111,16 @@ describe('ThemeWords', () => {
     expect(within(row).getByRole('button', { name: `I know it: ${entry.headword}` })).toBeTruthy()
   })
 
+  it('reports a problem with a word of the theme, from its row’s menu (spec §8.10)', async () => {
+    const ctx = await setup()
+    renderWith(<ThemeWords themeId="daily-life" query="" />, ctx)
+    const entry = themeEntries(ctx.client.snapshot.corpus!, 'daily-life')[0]!
+    const row = screen.getByText(entry.headword).closest('li')!
+    fireEvent.click(within(row).getByRole('button', { name: `Word actions: ${entry.headword}` }))
+    await act(async () => fireEvent.click(within(row).getByRole('button', { name: `Report a problem: ${entry.headword}` })))
+    expect(screen.getByRole('heading', { name: `Report a problem with “${entry.headword}”` })).toBeTruthy()
+  })
+
   it('finds words of the theme, in one list in place of the levels, and brings the levels back', async () => {
     const ctx = await setupWithTwoLevels()
     renderWith(<ThemeWords themeId="daily-life" query="" />, ctx)

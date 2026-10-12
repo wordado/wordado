@@ -1,6 +1,6 @@
 import { useClient, useClientSnapshot } from '@wordado/client-data'
 import { masteryTier, type WordId } from '@wordado/core'
-import { BookMinus, BookPlus, Check, Clock, Ellipsis, Undo2 } from 'lucide-react'
+import { BookMinus, BookPlus, Check, Clock, Ellipsis, Flag, Undo2 } from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { usePopover } from '../app/usePopover'
 import { errorMessageKey } from '../errors'
@@ -17,7 +17,9 @@ import { TIER_LABEL } from '../labels'
  * that may drop the row instead.
  *
  * With `menu`, the buttons sit behind a ⋯ button that says which word it is
- * for; a change closes the menu and focus returns to that button.
+ * for; a change closes the menu and focus returns to that button. With
+ * `onReport`, the menu ends with "Report a problem" (spec §8.10), whatever
+ * the word's standing: the list that shows the word opens the report.
  *
  * A word marked with "Learn this word" (spec §7.4) can have the mark taken
  * back here; with `learn`, a word that is not started can be marked here too.
@@ -29,6 +31,8 @@ export function FlagControls(props: {
   /** Offer "Learn this word" on a word that was never started: the path's list of a skipped level's unit. */
   readonly learn?: boolean
   onChange?(next: 'known' | 'suspended' | null): void
+  /** Behind the menu only: the word's row opens the report dialog. */
+  onReport?(): void
 }) {
   const { t } = useT()
   const client = useClient()
@@ -111,7 +115,7 @@ export function FlagControls(props: {
       {error}
     </p>
   )
-  if (props.menu) return <FlagMenu headword={props.headword} status={statusTag} standingLabel={kind === 'new' ? null : status} error={errorLine} flagged={flag !== undefined} standing={`${flag ?? ''}:${chosen}`} learn={learnButton} button={button} />
+  if (props.menu) return <FlagMenu headword={props.headword} status={statusTag} standingLabel={kind === 'new' ? null : status} error={errorLine} flagged={flag !== undefined} standing={`${flag ?? ''}:${chosen}`} learn={learnButton} button={button} {...(props.onReport ? { onReport: props.onReport } : {})} />
   return (
     <>
       {statusTag}
@@ -160,6 +164,7 @@ function FlagMenu(props: {
   /** "Learn this word" or its taking back, when either applies. */
   readonly learn: ReactNode
   readonly button: (label: string, next: 'known' | 'suspended' | null, icon?: ReactNode) => ReactNode
+  onReport?(): void
 }) {
   const { t } = useT()
   const { open, close, root, trigger, onKeyDown, triggerProps, panelId } = usePopover()
@@ -187,6 +192,22 @@ function FlagMenu(props: {
                 {props.button(t('flag.markKnown'), 'known', <Check aria-hidden="true" size={18} className="menu-icon-known" />)}
                 {props.button(t('flag.markLater'), 'suspended', <Clock aria-hidden="true" size={18} />)}
               </>
+            )}
+            {props.onReport && (
+              <div className="menu-separated">
+                <button
+                  type="button"
+                  aria-label={t('flag.action', { action: t('report.open'), word: props.headword })}
+                  onClick={() => {
+                    // Closed first, so the dialog gives focus back to the ⋯ button when it closes (spec §11.1).
+                    close()
+                    props.onReport?.()
+                  }}
+                >
+                  <Flag aria-hidden="true" size={18} />
+                  {t('report.open')}
+                </button>
+              </div>
             )}
           </div>
         )}
