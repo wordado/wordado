@@ -92,6 +92,39 @@ export function accountStorage(storage: KeyValue = browserStorage('localStorage'
   return jsonKey(storage, ACCOUNT_KEY, isRecord)
 }
 
+/** That this device asked a visitor for a level, or had no need to (spec 2026-10-12 §4.6). */
+export const TRIAL_LEVEL_ASKED_KEY = 'wordado.trialLevelAsked'
+
+export interface TrialLevelMark {
+  read(): boolean
+  set(): void
+}
+
+/**
+ * Whether a visitor on this device has been through the level step: in the first-run setup, or on the home screen
+ * when the trial pack came to a device that had finished its setup on the bundled sample (`LevelAsk`). It is never
+ * cleared: leaving the demo, signing out and deleting an account all start a new demo, which opens in the setup.
+ */
+export function trialLevelMark(storage: KeyValue = browserStorage('localStorage')): TrialLevelMark {
+  return {
+    read(): boolean {
+      try {
+        return storage.getItem(TRIAL_LEVEL_ASKED_KEY) === '1'
+      } catch {
+        // A private window may refuse storage: asked, or the question would come back on every load.
+        return true
+      }
+    },
+    set(): void {
+      try {
+        storage.setItem(TRIAL_LEVEL_ASKED_KEY, '1')
+      } catch {
+        // Refused: `read` answers as if it were set.
+      }
+    },
+  }
+}
+
 /** A learner's own database file: a name safe for OPFS and IndexedDB whatever the server's id looks like. */
 export function learnerFile(userId: string): string {
   return `user-${userId.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 64)}`
