@@ -20,6 +20,31 @@ env:
   WRANGLER_SEND_METRICS: 'false'
 
 jobs:
+  # What this run needs (issue #239): a change to the review app or to the docs cannot break the learner
+  # app, so its browser tests are not run for one. The rules, and why they are wide, are in changes.sh.
+  changes:
+    name: What changed
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      # On main the comparison is with the last commit that was deployed.
+      deployments: read
+    outputs:
+      app: ${{ steps.rules.outputs.app }}
+      code: ${{ steps.rules.outputs.code }}
+      review: ${{ steps.rules.outputs.review }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - id: rules
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+        run: .github/scripts/changes-since.sh
+
   static:
     name: Typecheck, lint, workflows, deploy config
     runs-on: ubuntu-24.04
@@ -34,6 +59,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm lint
+      - name: The rules for what a change needs
+        run: .github/scripts/changes.test.sh
       - name: Lint the workflows
         run: docker run --rm -v "$PWD:/repo" --workdir /repo rhysd/actionlint:1.7.7 -color
       - name: Lint the content repository's workflows
@@ -47,6 +74,9 @@ jobs:
 
   test:
     name: Suites and the Worker smoke run
+    needs: changes
+    # Skipped for documents alone; a skipped job counts as passed for the branch protection.
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
@@ -85,8 +115,12 @@ jobs:
           retention-days: 7
       - run: pnpm --filter @wordado/server smoke
 
-  e2e:
-    name: End to end (${{ matrix.project }})
+  # Each browser's tests run as three jobs side by side: the demo suite in two halves, and the accounts
+  # suite. One job per browser took as long as the two suites one after the other (issue #239).
+  e2e-parts:
+    name: Browser tests (${{ matrix.project }}, ${{ matrix.part }})
+    needs: changes
+    if: needs.changes.outputs.app == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
@@ -94,8 +128,10 @@ jobs:
       matrix:
         # Spec §13's matrix. Pull requests run the three engines; main adds both mobile projects (Actions minutes, §17.2).
         project: ${{ fromJSON(github.event_name == 'pull_request' && '["chromium","firefox","webkit"]' || '["chromium","firefox","webkit","mobile-chrome","mobile-safari"]') }}
+        part: [demo 1/2, demo 2/2, accounts]
     env:
       E2E_PROJECTS: ${{ matrix.project }}
+      PART: ${{ matrix.part }}
     steps:
       - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v6
@@ -113,9 +149,11 @@ jobs:
             *) echo "::error::no browser for $E2E_PROJECTS"; exit 1 ;;
           esac
           pnpm --filter @wordado/web exec playwright install --with-deps "$browser"
-      - name: The demo
-        run: pnpm --filter @wordado/web e2e
+      - name: The demo, this half of it
+        if: startsWith(matrix.part, 'demo')
+        run: pnpm --filter @wordado/web e2e --shard="${PART#demo }"
       - name: Accounts, against the Worker and Postgres
+        if: matrix.part == 'accounts'
         run: pnpm --filter @wordado/web e2e:accounts
       # A trace is kept for every failed attempt, including one a WebKit retry got past (web/e2e/projects.ts), so a
       # passing job with a trace had a flaky test: keep those too.
@@ -123,15 +161,46 @@ jobs:
         if: ${{ failure() || hashFiles('web/test-results/**/trace.zip') != '' }}
         uses: actions/upload-artifact@v7
         with:
-          name: e2e-${{ matrix.project }}
+          name: e2e-${{ matrix.project }}-${{ strategy.job-index }}
           path: web/test-results/
           retention-days: 7
 
+  # The names the branch protection requires, one per engine. Each says the same thing: every browser
+  # job of this run passed, or none was needed. Which part failed is in the job with that part's name.
+  e2e:
+    name: End to end (${{ matrix.project }})
+    needs: [changes, e2e-parts]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    strategy:
+      matrix:
+        project: [chromium, firefox, webkit]
+    steps:
+      - env:
+          CHANGES: ${{ needs.changes.result }}
+          APP: ${{ needs.changes.outputs.app }}
+          PARTS: ${{ needs.e2e-parts.result }}
+        run: |
+          if [ "$CHANGES" != success ]; then
+            echo "::error::what changed could not be worked out ($CHANGES)"
+            exit 1
+          fi
+          if [ "$APP" = false ] && [ "$PARTS" = skipped ]; then
+            echo "Nothing of the learner app changed: its browser tests were not needed."
+            exit 0
+          fi
+          if [ "$PARTS" != success ]; then
+            echo "::error::the browser tests did not pass ($PARTS)"
+            exit 1
+          fi
+
   deploy-preview:
     name: Preview deployment
-    needs: [static, test, e2e]
-    # Only once the operator has provisioned Cloudflare and Neon (docs/deploy.md), and never for a fork.
-    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && vars.DEPLOY_ENABLED == 'true'
+    needs: [changes, static, test, e2e]
+    # Only once the operator has provisioned Cloudflare and Neon (docs/deploy.md), never for a fork, and
+    # only for a change to the learner app or what it is built from.
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && vars.DEPLOY_ENABLED == 'true' && needs.changes.outputs.app == 'true'
     uses: ./.github/workflows/deploy.yml
     with:
       environment: preview
@@ -140,37 +209,19 @@ jobs:
 
   deploy-production:
     name: Production deployment
-    needs: [static, test, e2e]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.DEPLOY_ENABLED == 'true'
+    needs: [changes, static, test, e2e]
+    # Skipped when nothing of the learner app changed since the last commit deployed (changes-since.sh).
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.DEPLOY_ENABLED == 'true' && needs.changes.outputs.app == 'true'
     uses: ./.github/workflows/deploy.yml
     with:
       environment: production
       smoke: false
     secrets: inherit
 
-  review-changes:
-    name: Did the review app change
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-24.04
-    outputs:
-      changed: ${{ steps.diff.outputs.changed }}
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-      - id: diff
-        env:
-          BEFORE: ${{ github.event.before }}
-        run: |
-          if git diff --name-only "$BEFORE" "$GITHUB_SHA" | grep -qE '^(review-app/|pipeline/src/|core/src/|pnpm-lock.yaml)'; then
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-          fi
-
   deploy-review:
     name: Review app deployment
-    needs: [static, test, review-changes]
-    if: needs.review-changes.outputs.changed == 'true' && vars.REVIEW_DEPLOY_ENABLED == 'true'
+    needs: [changes, static, test]
+    # When review-app/ or what it builds on changed since the last commit deployed there.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.changes.outputs.review == 'true' && vars.REVIEW_DEPLOY_ENABLED == 'true'
     uses: ./.github/workflows/deploy-review.yml
     secrets: inherit
