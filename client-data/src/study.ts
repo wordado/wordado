@@ -16,7 +16,9 @@ import {
   RETENTION_TARGETS,
   retentionRate,
   streakStatus,
+  studyUnits,
   themeEntries,
+  trialFinished,
   unitProgress,
   type AudioClip,
   type CefrLevel,
@@ -56,7 +58,7 @@ export function today(ctx: StudyContext): number {
 
 export function pathContext(ctx: StudyContext): PathContext {
   return {
-    units: ctx.corpus.units,
+    units: studyUnits(ctx.corpus, ctx.settings.declaredLevel),
     retired: ctx.corpus.retired,
     flags: ctx.flags,
     // A word has review state only after a scheduled review, which is what "introduced" means (spec §7.2).
@@ -185,11 +187,18 @@ export interface PathView {
   readonly unlocked: ReadonlySet<string>
   /** Null once every live word on the path has been introduced. */
   readonly currentUnitId: string | null
+  /** A trial whose unit has no word left to start; always false for a course (spec 2026-10-12 §4.4). */
+  readonly trialFinished: boolean
 }
 
 export function pathView(ctx: StudyContext): PathView {
   const path = pathContext(ctx)
-  return { unlocked: new Set([...ctx.unlocked, ...computeUnlocks(path)]), currentUnitId: currentUnit(path)?.unitId ?? null }
+  const currentUnitId = currentUnit(path)?.unitId ?? null
+  return {
+    unlocked: new Set([...ctx.unlocked, ...computeUnlocks(path)]),
+    currentUnitId,
+    trialFinished: trialFinished(ctx.corpus, currentUnitId),
+  }
 }
 
 /** Days of upcoming reviews whose audio is fetched ahead (spec §9.3). Tuning (§15). */

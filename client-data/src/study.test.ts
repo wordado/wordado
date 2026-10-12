@@ -8,6 +8,7 @@ import { appendAnswer, loadLearner, type AnswerInput, type Learner } from './lea
 import { ensureDevice } from './meta'
 import { migrate } from './schema'
 import { availableModes, dayCompleteInput, newUnlocks, progressView, sessionPlan, type StudyContext } from './study'
+import { trialCorpus } from './testing/sample'
 import { testEnv, type TestEnv } from './testing/testEnv'
 
 const SAMPLE = fileURLToPath(new URL('../../pipeline/samples/a1/corpus-v0-bg.pack', import.meta.url))
@@ -77,6 +78,22 @@ describe('sessionPlan', () => {
     await learnUnit(db, env, learner, 'a1-01')
     expect(newUnlocks(ctx({ now: env.now() }))).toEqual(['a1-01', 'a1-02'])
     expect(newUnlocks(ctx({ now: env.now(), unlocked: new Set(['a1-01', 'a1-02']) }))).toEqual([])
+  })
+})
+
+describe('sessionPlan in a trial (spec 2026-10-12 §4.4)', () => {
+  it('starts new words only in the declared level\'s unit, yet reviews a word of another level when due', async () => {
+    const { db, env, learner, ctx } = await setup()
+    const trial = trialCorpus(['A1', 'A2', 'B1'])
+    const b1 = trial.units.find((u) => u.level === 'B1')!
+    const settings = { ...DEFAULT_SETTINGS, declaredLevel: 'B1' as const, newWordLimit: 50 }
+    // An A1 word started earlier, at another level.
+    await appendAnswer(db, env, learner, answer('c:hello-1'))
+    env.advance(10 * 86_400_000)
+    const plan = sessionPlan(ctx({ corpus: trial, settings, now: env.now() }))
+    expect(plan.newWords.length).toBeGreaterThan(0)
+    expect(plan.newWords.every((id) => b1.wordIds.includes(id))).toBe(true)
+    expect(plan.reviews).toContain('c:hello-1')
   })
 })
 

@@ -2,7 +2,7 @@ import { PLACEMENT_PROBE_SIZE, type CefrLevel, type Corpus } from '@wordado/core
 import { describe, expect, it } from 'vitest'
 import { PlacementRun, placementAvailable, type PlacementSource } from './placement'
 import { ITEM_SETTLE_MS } from './run'
-import { leveledCorpus, openSampleClient } from './testing/sample'
+import { leveledCorpus, openSampleClient, trialCorpus } from './testing/sample'
 import { testEnv, type TestEnv } from './testing/testEnv'
 
 async function source(levels: readonly CefrLevel[]): Promise<PlacementSource & { chosen: CefrLevel[] }> {
@@ -99,5 +99,24 @@ describe('PlacementRun (spec §7.2)', () => {
     for (let i = 0; i < 40 && run.snapshot.phase === 'question'; i += 1) answer(run, env, true)
     await run.accept()
     expect(run.snapshot).toMatchObject({ phase: 'result', error: 'disk full' })
+  })
+
+  describe('on a trial', () => {
+    it('is available when the probes cover two levels, though the units hold one', () => {
+      expect(placementAvailable(trialCorpus(['A1', 'A1', 'A1'], ['A1', 'A2']))).toBe(true)
+      expect(placementAvailable(trialCorpus(['A1', 'A2', 'B1'], ['A1']))).toBe(false)
+    })
+
+    it('asks only words from the probes', () => {
+      const corpus = trialCorpus(['A1', 'A1', 'A1'], ['A1', 'A2', 'B1'])
+      const env = testEnv()
+      const run = PlacementRun.start({ corpus, setLevel: async () => undefined }, env)
+      expect(run.snapshot.levels).toEqual(['A1', 'A2', 'B1'])
+      for (let i = 0; i < 40 && run.snapshot.phase === 'question'; i += 1) {
+        expect(run.snapshot.item!.wordId).toMatch(/^c:probe-/)
+        answer(run, env, true)
+      }
+      expect(run.snapshot).toMatchObject({ phase: 'result', result: 'B1' })
+    })
   })
 })

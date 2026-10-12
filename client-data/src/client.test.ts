@@ -13,6 +13,7 @@ import type { AnswerInput } from './learner'
 import { installPacks, type PackFetcher } from './packs'
 import { accountIsEmpty, UpgradeRequiredError } from './sync'
 import { FakeServer } from './testing/fakeServer'
+import { openTrialClient } from './testing/sample'
 import { testEnv, type TestEnv } from './testing/testEnv'
 
 const SAMPLE_DIR = fileURLToPath(new URL('../../pipeline/samples/a1/', import.meta.url))
@@ -60,6 +61,19 @@ describe('Client', () => {
     for (const wordId of first!.wordIds) opened.push((await client.answer(answer(wordId))).opened)
     expect(opened.slice(0, -1).every((ids) => ids.length === 0)).toBe(true)
     expect(opened.at(-1)).toEqual([second!.unitId])
+  })
+
+  it('finishes a trial when its one unit is learnt, and opens nothing', async () => {
+    const client = await openTrialClient(['A1', 'A2', 'B1'])
+    const unit = client.snapshot.corpus!.units.find((u) => u.level === 'A1')!
+    expect(client.snapshot.path).toMatchObject({ currentUnitId: unit.unitId, trialFinished: false })
+    let last: readonly string[] = ['unset']
+    for (const wordId of unit.wordIds) {
+      expect(client.snapshot.path?.trialFinished).toBe(false)
+      last = (await client.answer(answer(wordId))).opened
+    }
+    expect(last).toEqual([])
+    expect(client.snapshot.path).toMatchObject({ currentUnitId: null, trialFinished: true })
   })
 
   it('records an answer, unlocks, completes the day and notifies subscribers', async () => {
@@ -124,7 +138,7 @@ describe('Client', () => {
 describe('Client views for the screens', () => {
   it('shows the first unit unlocked and current before any answer', async () => {
     const client = await openClient()
-    expect(client.snapshot.path).toEqual({ unlocked: new Set(['a1-01']), currentUnitId: 'a1-01' })
+    expect(client.snapshot.path).toEqual({ unlocked: new Set(['a1-01']), currentUnitId: 'a1-01', trialFinished: false })
     expect(client.snapshot.packVersion).toBe(0)
   })
 

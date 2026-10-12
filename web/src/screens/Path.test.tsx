@@ -474,7 +474,7 @@ describe('Path, opened at a unit', () => {
       const more = (id: string, level: 'A1' | 'A2', order: number) => ({ unitId: id, level, order, title: { en: `Extra ${id}`, l1: `Extra ${id}` }, wordIds: [] })
       const units = [...corpus.units, more('x4', 'A1', 4), more('x5', 'A1', 5), more('x6', 'A1', 6), more('b1', 'A2', 7)]
       const progress = { ...snapshot.progress!, units: new Map(snapshot.progress!.units).set(first!.unitId, { ...snapshot.progress!.units.get(first!.unitId)!, complete: true }) }
-      const path = { unlocked: new Set([first!.unitId, second!.unitId]), currentUnitId: second!.unitId }
+      const path = { unlocked: new Set([first!.unitId, second!.unitId]), currentUnitId: second!.unitId, trialFinished: false }
       ctx.client.store.set({ ...snapshot, corpus: { ...corpus, units }, progress, path })
       return { ctx, first: first!.unitId, third: corpus.units[2]!.unitId }
     }
