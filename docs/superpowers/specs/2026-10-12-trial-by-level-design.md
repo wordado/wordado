@@ -1,6 +1,6 @@
 # The trial at the visitor's level: a level or the test, then one unit — design
 
-**Date:** 2026-10-12 · **Status:** draft for the product owner's review · **Issue:** #230
+**Date:** 2026-10-12 · **Status:** approved 2026-10-12, built by plan 2026-10-12-trial-by-level · **Issue:** #230
 **Parent spec:** `2026-09-20-vocabulary-learning-app-design.md`, §5.1 (corpus packs), §7.2 (level path and
 placement test), §8.6 (accounts and the demo), §9.3 (content sync).
 **Related:** #213 (the placement test opened from the site).
@@ -135,7 +135,7 @@ are never studied.
 
 In the trial, study takes new words from **the unit of the declared level only**.
 
-- **Path:** shows that one unit, and under it a line: *This is the trial: one unit of B1. The whole course has
+- **Path:** shows that one unit, and under it a line: *This is the demo: one unit of B1. The whole course has
   38 units at B1. Create an account to study all of it.* (numbers from `trial.course`), with the way to sign-up.
 - Finishing the unit opens no other. The lower levels' units count as assumed known, as in the course; the
   higher ones are not shown.
@@ -145,7 +145,7 @@ In the trial, study takes new words from **the unit of the declared level only**
 - **Changing the level** in Settings, or taking the test again, changes which unit the trial studies. Words
   already started keep their reviews. Nothing blocks this and nothing advertises it.
 - **The end of the unit:** once every word of the unit is started, the done screen and the home screen say so
-  and invite: *You have started every word of the trial. Create an account to go on with the whole course.*
+  and invite: *You have started every word of the demo. Create an account to go on with the whole course.*
   Reviews of the started words keep coming on later days, as now.
 
 ### 4.5 Into an account
