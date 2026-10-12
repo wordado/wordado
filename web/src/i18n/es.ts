@@ -421,6 +421,7 @@ export const es: Messages = {
   'trial.course': { one: 'El curso completo tiene {count} unidad en {level}.', other: 'El curso completo tiene {count} unidades en {level}.' },
   'trial.finished': 'Has empezado todas las palabras de la demo.',
   'trial.invite': 'Crea una cuenta para seguir con el curso completo.',
+  'trial.themes': 'Los temas vienen con el curso completo: elige un tema y sus palabras irán primero.',
 
   'flag.known': 'Conocida',
   'flag.suspended': 'Ahora no',

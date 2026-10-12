@@ -1,5 +1,5 @@
 import { useClient, useClientSnapshot } from '@wordado/client-data'
-import { corpusWordId, levelIndex, offeredThemes, searchIndex, searchThemes, themeEntries, type CorpusEntry, type Theme, type ThemeSearch } from '@wordado/core'
+import { corpusWordId, levelIndex, offeredThemes, searchIndex, searchThemes, themeEntries, trialThemes, type Corpus, type CorpusEntry, type Theme, type ThemeSearch } from '@wordado/core'
 import { Search } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { localized, useT, type MessageKey } from '../i18n/i18n'
@@ -37,6 +37,7 @@ export function Themes() {
   const [query, setQuery] = useState('')
   const index = useMemo(() => (corpus ? searchIndex(corpus) : null), [corpus])
   if (!corpus || !index) return null
+  if (corpus.trial !== null) return <TrialThemes corpus={corpus} />
   const offered = offeredThemes(corpus)
   const active = settings.activeTheme
   const choose = (theme: Theme | null, movedId: string | null) =>
@@ -169,6 +170,43 @@ export function Themes() {
           {section('studied')}
           {section('new')}
         </>
+      )}
+    </section>
+  )
+}
+
+/**
+ * The Themes screen of a trial (#244): the themes the whole course offers, each with its size there, to look at.
+ * A trial studies no theme (spec 2026-10-12 §4.4), so a card has no page and no button; the way on is an account.
+ * A trial pack built before the sizes names none: the line stands alone.
+ */
+function TrialThemes(props: { readonly corpus: Corpus }) {
+  const { t, locale } = useT()
+  const { corpus } = props
+  const themes = trialThemes(corpus)
+  return (
+    <section className="themes-page" aria-labelledby="themes-title">
+      <div className="themes-head">
+        <h1 id="themes-title">{t('themes.title')}</h1>
+        <p className="lede">
+          {t('trial.themes')} <Link to={{ name: 'signin' }}>{t('banner.demoCreate')}</Link>
+        </p>
+      </div>
+      {themes.length > 0 && (
+        <ul className="theme-grid">
+          {themes.map(({ theme, words }) => (
+            <li key={theme.themeId} className="panel theme-card is-new">
+              <span className="theme-icon" aria-hidden="true">
+                <ThemeIcon themeId={theme.themeId} size={24} />
+              </span>
+              <div className="theme-text">
+                <h2>{localized(theme.name, locale, corpus.l1)}</h2>
+                <p className="note">{localized(theme.description, locale, corpus.l1)}</p>
+                <p className="note">{t('path.words', { count: words })}</p>
+              </div>
+            </li>
+          ))}
+        </ul>
       )}
     </section>
   )

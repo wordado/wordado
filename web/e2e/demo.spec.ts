@@ -1308,6 +1308,15 @@ test.describe('the trial at the visitor’s level', () => {
       await expect(page.locator('li.unit')).toHaveCount(1)
       await expect(page.getByText('This is the demo: one unit of B1.')).toBeVisible()
       await expect(page.locator('#main').getByRole('link', { name: 'Create an account' })).toBeVisible()
+      // The Themes screen shows what the whole course offers, to look at: a trial studies no theme (#244).
+      await page.goto('/themes')
+      await expect(page.getByText('Themes come with the whole course: pick one and its words come first.')).toBeVisible()
+      const cards = page.locator('.theme-grid > li')
+      await expect(cards).toHaveCount(2)
+      await expect(cards.filter({ hasText: 'Daily life' })).toContainText('240 words')
+      await expect(cards.getByRole('link')).toHaveCount(0)
+      await expect(page.locator('#main').getByRole('button')).toHaveCount(0)
+      await expectAccessible(page, { dark: true })
     } finally {
       await context.close()
     }

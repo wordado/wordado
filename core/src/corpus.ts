@@ -25,6 +25,8 @@ export interface CorpusTrial {
   /** The test's words as entries: no unit (`unitId: ''`), no examples, clips or themes. */
   readonly probes: readonly CorpusEntry[]
   readonly course: Readonly<Partial<Record<CefrLevel, PackCourseSize>>>
+  /** The themes the whole course offers, with their live words there, by theme ID; empty for a pack built before them. */
+  readonly themes: Readonly<Record<string, number>>
 }
 
 /** Every loaded pack, merged: what `PathContext`, `DistractorContext` and the screens read. */
@@ -102,6 +104,7 @@ export function loadCorpus(packs: readonly Pack[]): Corpus {
           retired: false,
         })),
         course: pack.trial.course,
+        themes: pack.trial.themes ?? {},
       }
     }
     for (const u of pack.units) {
@@ -151,6 +154,18 @@ export function offeredThemes(corpus: Corpus): Theme[] {
   // A trial pack holds one unit per level, so a theme's size there says nothing about the course (spec 2026-10-12 §4.4).
   if (corpus.trial !== null) return []
   return corpus.themes.filter((t) => themeEntries(corpus, t.themeId).length >= MIN_THEME_SIZE)
+}
+
+/**
+ * What a trial shows of the course's themes (#244): each theme the course offers, with its size there, in the
+ * pack's order. Empty for a course, whose own themes are `offeredThemes`.
+ */
+export function trialThemes(corpus: Corpus): { readonly theme: Theme; readonly words: number }[] {
+  const sizes = corpus.trial?.themes ?? {}
+  return corpus.themes.flatMap((theme) => {
+    const words = sizes[theme.themeId]
+    return words === undefined ? [] : [{ theme, words }]
+  })
 }
 
 /** The clips an entry can play, UK first: what the audio prefetch and mode availability look at (spec §9.3). */

@@ -64,7 +64,7 @@ export function trialPack(unitLevels: readonly CefrLevel[], probeLevels: readonl
     ...pack,
     entries: pack.entries.map((e) => ({ ...e, level: levelOf.get(e.unit_id)! })),
     units: pack.units.map((u) => ({ ...u, level: levelOf.get(u.unit_id)! })),
-    trial: { probes: trialProbes(probeLevels), course: { A1: { units: 10, words: 200 }, B1: { units: 12, words: 300 } } },
+    trial: { probes: trialProbes(probeLevels), course: { A1: { units: 10, words: 200 }, B1: { units: 12, words: 300 } }, themes: { 'daily-life': 240, travel: 1 } },
   }
 }
 
