@@ -1,5 +1,5 @@
 import { useClient, useClientSnapshot, type PathView } from '@wordado/client-data'
-import { unitPractisable, type Unit, type UnitProgress } from '@wordado/core'
+import { studyUnits, unitPractisable, type CefrLevel, type Unit, type UnitProgress } from '@wordado/core'
 import { Check, ChevronDown, CircleDashed, Lock, Play, Star, type LucideIcon } from 'lucide-react'
 import { useEffect, useState, type ReactNode } from 'react'
 import { localized, useT, type MessageKey } from '../i18n/i18n'
@@ -54,7 +54,7 @@ const toggled = (set: ReadonlySet<string>, key: string): ReadonlySet<string> => 
  */
 export function Path(props: { readonly unit?: string | undefined }) {
   const { t } = useT()
-  const { corpus, progress, path, plan } = useClientSnapshot()
+  const { corpus, progress, path, plan, settings } = useClientSnapshot()
   // Levels the learner opened or folded, over the default (only the level being studied is open).
   const [levelChoice, setLevelChoice] = useState<ReadonlyMap<string, boolean>>(new Map())
   const [doneOpen, setDoneOpen] = useState<ReadonlySet<string>>(new Set())
@@ -70,8 +70,10 @@ export function Path(props: { readonly unit?: string | undefined }) {
   }, [arrived])
   if (!corpus || !progress || !path) return null
 
-  const levels = [...new Set(corpus.units.map((u) => u.level))].map((level) => {
-    const units = corpus.units.filter((unit) => unit.level === level)
+  // A trial studies the declared level's unit only; a course, every unit.
+  const shownUnits = studyUnits(corpus, settings.declaredLevel)
+  const levels = [...new Set(shownUnits.map((u) => u.level))].map((level) => {
+    const units = shownUnits.filter((unit) => unit.level === level)
     const statuses = units.map((unit) => statusOf(unit, progress.units.get(unit.unitId), path))
     return { level, units, statuses, skipped: progress.levels[level]?.kind === 'skipped' }
   })
@@ -183,7 +185,19 @@ export function Path(props: { readonly unit?: string | undefined }) {
           </section>
         )
       })}
+      {corpus.trial !== null && <TrialNote level={settings.declaredLevel} units={corpus.trial.course[settings.declaredLevel]?.units} />}
     </section>
+  )
+}
+
+/** What the trial is, and how much more the course holds at this level; the way to the course is a link. */
+function TrialNote(props: { readonly level: CefrLevel; readonly units: number | undefined }) {
+  const { t } = useT()
+  return (
+    <p className="note">
+      {t('trial.path', { level: props.level })}
+      {props.units !== undefined && ` ${t('trial.course', { count: props.units, level: props.level })}`} <Link to={{ name: 'signin' }}>{t('banner.demoCreate')}</Link>
+    </p>
   )
 }
 

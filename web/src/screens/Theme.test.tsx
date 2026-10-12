@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, screen, within } from '@testing-library/react'
 import { corpusWordId, Grade, themeEntries } from '@wordado/core'
 import { afterEach, describe, expect, it } from 'vitest'
-import { answerNew, renderWith, setup } from '../test/fixtures'
+import { answerNew, renderWith, setup, setupTrial } from '../test/fixtures'
 import { ThemeWords } from './Theme'
 
 afterEach(cleanup)
@@ -149,6 +149,15 @@ describe('ThemeWords', () => {
     cleanup()
     renderWith(<ThemeWords themeId="nonsense" query="" />, ctx)
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Themes')
+  })
+
+  it('shows the themes for a theme’s address in a trial, which offers none (spec 2026-10-12 §4.4)', async () => {
+    const ctx = await setupTrial()
+    // Big enough to offer in a course: the trial holds the sample's words.
+    expect(themeEntries(ctx.client.snapshot.corpus!, 'daily-life').length).toBeGreaterThanOrEqual(25)
+    renderWith(<ThemeWords themeId="daily-life" query="" />, ctx)
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Themes')
+    expect(screen.queryByRole('button', { name: 'Study this next' })).toBeNull()
   })
 
   it('reads in Bulgarian', async () => {

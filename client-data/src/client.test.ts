@@ -13,6 +13,7 @@ import type { AnswerInput } from './learner'
 import { installPacks, type PackFetcher } from './packs'
 import { accountIsEmpty, UpgradeRequiredError } from './sync'
 import { FakeServer } from './testing/fakeServer'
+import { firstUnitOnly, openSampleClient, openTrialClient, packServing, trialPack } from './testing/sample'
 import { testEnv, type TestEnv } from './testing/testEnv'
 
 const SAMPLE_DIR = fileURLToPath(new URL('../../pipeline/samples/a1/', import.meta.url))
@@ -60,6 +61,41 @@ describe('Client', () => {
     for (const wordId of first!.wordIds) opened.push((await client.answer(answer(wordId))).opened)
     expect(opened.slice(0, -1).every((ids) => ids.length === 0)).toBe(true)
     expect(opened.at(-1)).toEqual([second!.unitId])
+  })
+
+  it('finishes a trial when its one unit is learnt, and opens nothing', async () => {
+    const client = await openTrialClient(['A1', 'A2', 'B1'])
+    const unit = client.snapshot.corpus!.units.find((u) => u.level === 'A1')!
+    expect(client.snapshot.path).toMatchObject({ currentUnitId: unit.unitId, trialFinished: false })
+    let last: readonly string[] = ['unset']
+    for (const wordId of unit.wordIds) {
+      expect(client.snapshot.path?.trialFinished).toBe(false)
+      last = (await client.answer(answer(wordId))).opened
+    }
+    expect(last).toEqual([])
+    expect(client.snapshot.path).toMatchObject({ currentUnitId: null, trialFinished: true })
+  })
+
+  it('leaves reviews of words the corpus no longer holds out of the plan, the backlog and the day (spec 2026-10-12 §4.6)', async () => {
+    const env = testEnv()
+    const client = await openSampleClient(env)
+    const [first, second, third] = client.snapshot.corpus!.units
+    const kept = first!.wordIds[0]!
+    const lost = [second!.wordIds[0]!, second!.wordIds[1]!, third!.wordIds[0]!]
+    for (const wordId of [kept, ...lost]) await client.answer(answer(wordId))
+    // The trial pack takes the sample's place, and holds the first unit only.
+    const served = await packServing(firstUnitOnly(trialPack(['A1', 'A2', 'B1'])), env)
+    expect((await client.installPacks(served.manifest, served.fetch)).rejected).toEqual([])
+    env.advance(10 * 86_400_000)
+    await client.startSession()
+    expect(client.snapshot.corpus?.units).toHaveLength(1)
+    expect(lost.every((wordId) => client.snapshot.states.has(wordId))).toBe(true)
+    expect(client.snapshot.plan?.reviews).toEqual([kept])
+    expect(client.snapshot.plan?.backlogTotal).toBe(1)
+    expect(client.snapshot.progress).toMatchObject({ dueToday: 1, backlogTotal: 1 })
+    // One answer, and nothing that can be served is left: the day is complete.
+    expect((await client.answer(answer(kept))).dayCompleted).toBe(true)
+    expect(client.snapshot.plan).toMatchObject({ reviews: [], backlogTotal: 0 })
   })
 
   it('records an answer, unlocks, completes the day and notifies subscribers', async () => {
@@ -124,7 +160,7 @@ describe('Client', () => {
 describe('Client views for the screens', () => {
   it('shows the first unit unlocked and current before any answer', async () => {
     const client = await openClient()
-    expect(client.snapshot.path).toEqual({ unlocked: new Set(['a1-01']), currentUnitId: 'a1-01' })
+    expect(client.snapshot.path).toEqual({ unlocked: new Set(['a1-01']), currentUnitId: 'a1-01', trialFinished: false })
     expect(client.snapshot.packVersion).toBe(0)
   })
 

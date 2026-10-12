@@ -45,6 +45,7 @@ const corpus = (entries: readonly CorpusEntry[] = ENTRIES): Corpus => ({
   themes: [],
   clips: new Map(),
   retired: new Set(entries.filter((e) => e.retired).map((e) => corpusWordId(e.entryId))),
+  trial: null,
 })
 
 const id = (e: CorpusEntry): WordId => corpusWordId(e.entryId)

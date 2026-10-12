@@ -180,3 +180,41 @@ export async function finishSetupAt(page: Page, level: string): Promise<void> {
   await page.getByRole('button', { name: en['setup.start'] }).click()
   await expect(today(page)).toBeVisible()
 }
+
+/** The trial the helper serves: its entries per level, in the order of the pack. */
+export type TrialEntries = Readonly<Record<'A1' | 'A2' | 'B1', readonly SampleEntry[]>>
+
+/**
+ * Serves the Bulgarian sample as a trial pack: its three units relabelled A1, A2 and B1 (their entries with them), the
+ * unit's own words as the placement test's probes (twenty a level, so each test draws its eight), and made-up course
+ * sizes. The app's visitor fetches the bundled sample's URLs when the build names no trial manifest, so these are
+ * the routes to doctor. Returns each level's entries, so a test knows what the unit holds. The context must block
+ * service workers, as above.
+ */
+export async function serveTrialSample(context: BrowserContext): Promise<TrialEntries> {
+  interface Entry extends SampleEntry {
+    entry_id: string
+    unit_id: string
+    level: string
+    pos: string
+  }
+  const pack = JSON.parse(readFileSync(join(SAMPLE_DIR, 'corpus-v0-bg.pack'), 'utf8')) as { units: { unit_id: string; level: string }[]; entries: Entry[]; trial?: unknown }
+  const levels = ['A1', 'A2', 'B1'] as const
+  const levelOf = new Map(pack.units.map((unit, i) => [unit.unit_id, levels[i]!]))
+  for (const unit of pack.units) unit.level = levelOf.get(unit.unit_id)!
+  for (const entry of pack.entries) entry.level = levelOf.get(entry.unit_id)!
+  // A probe that is also an entry equals it in these fields (validatePack).
+  const probes = pack.entries.map(({ entry_id, headword, pos, sense, level, translation }) => ({ entry_id, headword, pos, sense, level, translation }))
+  pack.trial = { probes, course: { A1: { units: 10, words: 200 }, A2: { units: 12, words: 240 }, B1: { units: 14, words: 280 } } }
+  const body = Buffer.from(JSON.stringify(pack))
+  const manifest = JSON.parse(readFileSync(join(SAMPLE_DIR, 'manifest.json'), 'utf8')) as { packs: { pack_id: string; sha256: string; bytes: number }[] }
+  for (const p of manifest.packs) {
+    if (p.pack_id !== 'corpus-bg') continue
+    p.sha256 = createHash('sha256').update(body).digest('hex')
+    p.bytes = body.length
+  }
+  await context.route('**/content/sample/manifest.json', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify(manifest) }))
+  await context.route('**/content/sample/corpus-v0-bg.pack', (route) => route.fulfill({ contentType: 'application/json', body }))
+  const of = (level: string) => pack.entries.filter((e) => e.level === level)
+  return { A1: of('A1'), A2: of('A2'), B1: of('B1') }
+}

@@ -173,18 +173,20 @@ jobs:
           $CORPUS release "$GITHUB_WORKSPACE/content" "$OUT"
       - name: Every file the manifest reaches is present, with its checksum
         run: $CORPUS publishable "$OUT"
-      - name: Upload the packs and the audio (not the manifest)
+      - name: Upload the packs, the trial files and the audio (not the manifest)
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
         run: |
-          aws s3 sync "$OUT" "$BUCKET" --endpoint-url "$R2" --exclude '*' --include '*.pack' \
+          aws s3 sync "$OUT" "$BUCKET" --endpoint-url "$R2" --exclude '*' --include '*.pack' --include '*.trial' \
             --content-type application/json --cache-control 'public, max-age=31536000, immutable'
           aws s3 sync "$OUT/audio" "$BUCKET/audio" --endpoint-url "$R2" \
             --content-type audio/mp4 --cache-control 'public, max-age=86400'
           aws s3 cp "$OUT/fixes.json" "$BUCKET/fixes.json" --endpoint-url "$R2" \
             --content-type application/json --cache-control no-cache
           aws s3 cp "$OUT/credits.json" "$BUCKET/credits.json" --endpoint-url "$R2" \
+            --content-type application/json --cache-control no-cache
+          aws s3 cp "$OUT/trial-manifest.json" "$BUCKET/trial-manifest.json" --endpoint-url "$R2" \
             --content-type application/json --cache-control no-cache
       - name: Publish the manifest, last
         env:

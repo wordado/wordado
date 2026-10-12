@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { nodeSqliteDriver } from '@wordado/client-data/src/drivers/nodeSqlite'
-import { sampleFetcher, sampleManifest } from '@wordado/client-data/src/testing/sample'
+import { packServing, sampleFetcher, sampleManifest, trialPack } from '@wordado/client-data/src/testing/sample'
 import { testEnv } from '@wordado/client-data/src/testing/testEnv'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { I18nProvider } from '../i18n/i18n'
@@ -10,6 +10,7 @@ import { chosenL1 } from '../test/disk'
 import { fakeApi } from '../test/fakeApi'
 import type { Backend } from '../storage/protocol'
 import type { AccountActions, AccountState } from '../account/controller'
+import { memoryStorage, trialLevelMark, type KeyValue } from '../account/storage'
 import { Boot, type LockPort } from './boot'
 import type { LifecyclePort } from './lifecycle'
 import { PackSwitcher } from './packSwitch'
@@ -19,7 +20,7 @@ beforeEach(() => window.history.replaceState(null, '', '/'))
 afterEach(cleanup)
 
 async function renderRoot(
-  options: { free?: boolean; backend?: Backend; fresh?: boolean; packs?: PackSwitcher; accounts?: AccountActions; lifecycle?: LifecyclePort } = {},
+  options: { free?: boolean; backend?: Backend; fresh?: boolean; packs?: PackSwitcher; accounts?: AccountActions; lifecycle?: LifecyclePort; /** The content host serves a trial pack, one unit per level. */ trial?: boolean; /** Where the device keeps that it asked for a level. */ storage?: KeyValue } = {},
 ) {
   let owner = options.free ?? true
   const lock: LockPort = {
@@ -30,20 +31,22 @@ async function renderRoot(
     drop: () => undefined,
   }
   const env = testEnv()
+  const served = options.trial ? await packServing(trialPack(['A1', 'A2', 'B1']), env) : { manifest: sampleManifest, fetch: sampleFetcher }
   const boot = new Boot(
     {
       env,
       l1: () => 'bg',
       // The learner has chosen Bulgarian already, so the app opens without the first-run setup (plan 11); a `fresh` file opens in it.
       openDriver: async () => ({ driver: options.fresh ? nodeSqliteDriver() : await chosenL1(nodeSqliteDriver()), backend: options.backend ?? 'opfs' }),
-      fetchManifest: async () => sampleManifest,
-      fetchPack: sampleFetcher,
+      fetchManifest: async () => served.manifest,
+      fetchPack: served.fetch,
     },
     () => lock,
   )
+  const packs = options.packs ?? (options.fresh ? new PackSwitcher({ fetchManifest: async () => served.manifest, fetcher: () => served.fetch }) : fakePacks())
   render(
     <I18nProvider storage={{ getItem: () => 'en', setItem: () => undefined }}>
-      <Root boot={boot} services={{ env, audio: fakeAudio(), afterRun: () => undefined, api: fakeApi(), accounts: options.accounts ?? fakeAccounts(), reminders: fakeReminders(), lifecycle: options.lifecycle ?? fakeLifecycle(), credits: fakeCredits(), fixNotices: fakeFixNotices(), legalNotice: fakeLegalNotice(), packs: options.packs ?? (options.fresh ? samplePacks() : fakePacks()) }} />
+      <Root boot={boot} trialLevel={trialLevelMark(options.storage ?? memoryStorage())} services={{ env, audio: fakeAudio(), afterRun: () => undefined, api: fakeApi(), accounts: options.accounts ?? fakeAccounts(), reminders: fakeReminders(), lifecycle: options.lifecycle ?? fakeLifecycle(), credits: fakeCredits(), fixNotices: fakeFixNotices(), legalNotice: fakeLegalNotice(), packs }} />
     </I18nProvider>,
   )
   await act(() => boot.start())
@@ -297,5 +300,62 @@ describe('Root', () => {
     )
     await act(() => boot.start())
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Wordado could not check whether it is open in another tab. Try again.')
+  })
+})
+
+describe('the level, asked once of a visitor whose device got the trial after its setup (spec 2026-10-12 §4.6)', () => {
+  const asking = () => screen.queryByRole('heading', { level: 1, name: 'Where do you start?' })
+
+  it('stands in place of today until Continue, and the device remembers that it asked', async () => {
+    const storage = memoryStorage()
+    await renderRoot({ trial: true, storage })
+    expect(asking()).toBeTruthy()
+    // A visitor has no account: the reason given is the demo's, not an account's.
+    expect(screen.getByText(/^The demo now has a unit at every level\./)).toBeTruthy()
+    expect(screen.queryByText(/Your account has the whole course/)).toBeNull()
+    expect(screen.getByRole('button', { name: 'Find your level with a short test' })).toBeTruthy()
+    expect(storage.getItem('wordado.trialLevelAsked')).toBeNull()
+    await act(async () => fireEvent.click(screen.getByRole('radio', { name: /^B1/ })))
+    // Choosing does not end it: Continue does.
+    expect(asking()).toBeTruthy()
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue' })))
+    expect(storage.getItem('wordado.trialLevelAsked')).toBe('1')
+    expect(asking()).toBeNull()
+    expect(screen.getByRole('link', { name: 'Start studying' })).toBeTruthy()
+    // The next load does not ask.
+    cleanup()
+    await renderRoot({ trial: true, storage })
+    expect(asking()).toBeNull()
+    expect(screen.getByRole('link', { name: 'Start studying' })).toBeTruthy()
+  })
+
+  it('never asks a visitor on the bundled sample', async () => {
+    const storage = memoryStorage()
+    await renderRoot({ storage })
+    expect(asking()).toBeNull()
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('10 new words')
+    expect(storage.getItem('wordado.trialLevelAsked')).toBeNull()
+  })
+
+  it('does not ask again a new visitor who went through the setup on the trial', async () => {
+    const storage = memoryStorage()
+    await renderRoot({ trial: true, fresh: true, storage })
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue' })))
+    // The setup's own level step.
+    expect(screen.getByRole('heading', { level: 2, name: 'Your English level' })).toBeTruthy()
+    expect(storage.getItem('wordado.trialLevelAsked')).toBeNull()
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Start studying' })))
+    expect(storage.getItem('wordado.trialLevelAsked')).toBe('1')
+    expect(asking()).toBeNull()
+    expect(screen.getByRole('navigation', { name: 'Main' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Start studying' })).toBeTruthy()
+  })
+
+  it('leaves the mark unset when a setup on the sample finishes: it had no level to ask about, so a trial pack that comes later still asks', async () => {
+    const storage = memoryStorage()
+    await renderRoot({ fresh: true, storage })
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue' })))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Start studying' })))
+    expect(storage.getItem('wordado.trialLevelAsked')).toBeNull()
   })
 })

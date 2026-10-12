@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { entryClips, loadCorpus, MIN_THEME_SIZE, offeredThemes, themeEntries } from './corpus'
-import type { Pack, PackEntry, PackUnit } from './pack'
+import type { Pack, PackEntry, PackTrial, PackUnit } from './pack'
 import { corpusWordId } from './wordId'
 
 const clip = (id: string) => ({ clip_id: id, url: `audio/${id}.m4a`, sha256: 'a'.repeat(64), bytes: 1000, mime: 'audio/mp4' })
@@ -142,5 +142,56 @@ describe('entryClips', () => {
     expect(entryClips(corpus, corpus.entries.get('hello-1')!).map((c) => c.clipId)).toEqual(['hello-1-uk', 'hello-1-us'])
     expect(entryClips(corpus, corpus.entries.get('water-1')!).map((c) => c.clipId)).toEqual(['water-1-uk'])
     expect(entryClips(corpus, corpus.entries.get('bread-1')!)).toEqual([])
+  })
+})
+
+describe('trial', () => {
+  const trial: PackTrial = {
+    probes: [{ entry_id: 'cat-1', headword: 'cat', pos: 'noun', sense: 'animal', level: 'B1', translation: 'котка' }],
+    course: { A1: { units: 2, words: 40 } },
+  }
+
+  it('is null for a pack without trial', () => {
+    expect(loadCorpus([pack()]).trial).toBeNull()
+  })
+
+  it('reads probes as entries without unit, examples, clips or themes', () => {
+    const corpus = loadCorpus([pack({ trial })])
+    expect(corpus.trial).toEqual({
+      probes: [
+        {
+          entryId: 'cat-1',
+          headword: 'cat',
+          pos: 'noun',
+          sense: 'animal',
+          level: 'B1',
+          translations: ['котка'],
+          unitId: '',
+          examples: [],
+          audio: {},
+          themes: [],
+          variants: [],
+          ipa: '',
+          retired: false,
+        },
+      ],
+      course: { A1: { units: 2, words: 40 } },
+    })
+  })
+
+  it('offers no themes', () => {
+    const ids = Array.from({ length: MIN_THEME_SIZE }, (_, i) => `food${i}-1`)
+    const full = pack({
+      entries: ids.map((id) => entry({ entry_id: id, unit_id: 'a1-01', themes: ['food'] })),
+      units: [unit('a1-01', 'A1', 1, ids)],
+      audio: [],
+    })
+    expect(offeredThemes(loadCorpus([full])).map((t) => t.themeId)).toEqual(['food'])
+    expect(offeredThemes(loadCorpus([{ ...full, trial }]))).toEqual([])
+  })
+
+  it('rejects two packs that carry a trial', () => {
+    const other = pack({ pack_id: 'x', entries: [], units: [], audio: [], trial })
+    expect(() => loadCorpus([pack({ trial }), other])).toThrow('More than one pack carries a trial')
   })
 })

@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, screen, within } from '@testing-library/react'
 import { DAY_MS, entryClips, Grade } from '@wordado/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { answerNew, fakeAudio, renderWith, setup, withProviders } from '../test/fixtures'
+import { answerNew, fakeAudio, renderWith, setup, setupTrial, withProviders } from '../test/fixtures'
 import { translate, type Locale } from '../i18n/i18n'
 import { LEVEL_STATUS, Path } from './Path'
 
@@ -474,7 +474,7 @@ describe('Path, opened at a unit', () => {
       const more = (id: string, level: 'A1' | 'A2', order: number) => ({ unitId: id, level, order, title: { en: `Extra ${id}`, l1: `Extra ${id}` }, wordIds: [] })
       const units = [...corpus.units, more('x4', 'A1', 4), more('x5', 'A1', 5), more('x6', 'A1', 6), more('b1', 'A2', 7)]
       const progress = { ...snapshot.progress!, units: new Map(snapshot.progress!.units).set(first!.unitId, { ...snapshot.progress!.units.get(first!.unitId)!, complete: true }) }
-      const path = { unlocked: new Set([first!.unitId, second!.unitId]), currentUnitId: second!.unitId }
+      const path = { unlocked: new Set([first!.unitId, second!.unitId]), currentUnitId: second!.unitId, trialFinished: false }
       ctx.client.store.set({ ...snapshot, corpus: { ...corpus, units }, progress, path })
       return { ctx, first: first!.unitId, third: corpus.units[2]!.unitId }
     }
@@ -515,5 +515,32 @@ describe('Path, opened at a unit', () => {
     renderWith(<Path />, ctx)
     expect(unit('People and greetings').id).toBe(`unit-${unitId(ctx, 'People and greetings')}`)
     expect(document.querySelector('[data-route-focus]')).toBeNull()
+  })
+
+  describe('in a trial', () => {
+    it('lists the declared level’s one unit, with a note on the trial and the whole course', async () => {
+      const ctx = await setupTrial({ declared: 'B1' })
+      renderWith(<Path />, ctx)
+      const units = ctx.client.snapshot.corpus!.units
+      expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual([expect.stringContaining('B1')])
+      expect(screen.getAllByRole('heading', { level: 3 })).toHaveLength(1)
+      expect(unit(units[2]!.title.en!)).toBeTruthy()
+      const note = screen.getByText(/This is the demo: one unit of B1\./)
+      expect(note.textContent).toContain('The whole course has 12 units at B1.')
+      expect(within(note).getByRole('link', { name: 'Create an account' }).getAttribute('href')).toBe('/signin')
+    })
+
+    it('says only that it is the trial when the course has no size for the level', async () => {
+      const ctx = await setupTrial({ declared: 'A2' })
+      renderWith(<Path />, ctx)
+      const note = screen.getByText(/This is the demo: one unit of A2\./)
+      expect(note.textContent).not.toContain('whole course has')
+      expect(within(note).getByRole('link', { name: 'Create an account' })).toBeTruthy()
+    })
+
+    it('adds no note to a course', async () => {
+      renderWith(<Path />, await setup())
+      expect(screen.queryByText(/This is the demo/)).toBeNull()
+    })
   })
 })

@@ -17,6 +17,7 @@ const corpusOf = (clips: readonly AudioClip[]): Corpus => ({
   entries: new Map(),
   units: [],
   themes: [],
+  trial: null,
   clips: new Map(clips.map((c) => [c.clipId, c])),
   retired: new Set(),
 })

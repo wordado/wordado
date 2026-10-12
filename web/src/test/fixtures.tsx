@@ -1,8 +1,8 @@
 import { render, type RenderResult } from '@testing-library/react'
 import { ClientProvider, createStore, type Client } from '@wordado/client-data'
-import { openSampleClient } from '@wordado/client-data/src/testing/sample'
+import { openSampleClient, openTrialClient } from '@wordado/client-data/src/testing/sample'
 import { testEnv, type TestEnv } from '@wordado/client-data/src/testing/testEnv'
-import { corpusWordId, Grade, type AudioClip } from '@wordado/core'
+import { corpusWordId, Grade, type AudioClip, type CefrLevel } from '@wordado/core'
 import type { ReactElement } from 'react'
 import type { Api } from '../account/api'
 import type { AccountActions, AccountState } from '../account/controller'
@@ -44,6 +44,23 @@ export async function setup(options: { readonly env?: TestEnv; readonly audio?: 
   const env = options.env ?? testEnv()
   const client = await openSampleClient(env)
   return { env, client, audio: options.audio ?? fakeAudio() }
+}
+
+/** A visitor's client over the sample as a trial: one unit per level, studying the declared level's. */
+export async function setupTrial(options: { readonly levels?: readonly CefrLevel[]; readonly declared?: CefrLevel; readonly audio?: AudioPort } = {}) {
+  const env = testEnv()
+  const client = await openTrialClient(options.levels ?? ['A1', 'A2', 'B1'], env, options.declared ?? 'B1')
+  return { env, client, audio: options.audio ?? fakeAudio() }
+}
+
+/** Starts every word of the trial's unit, so the trial is finished. */
+export async function finishTrial(client: Client, env: TestEnv): Promise<void> {
+  const corpus = client.snapshot.corpus!
+  const unit = corpus.units.find((u) => u.level === client.snapshot.settings.declaredLevel)!
+  for (const wordId of unit.wordIds) {
+    await client.answer({ wordId, mode: 'flashcard', direction: 'en_to_l1', grade: Grade.Good, latencyMs: 2_000, practice: false })
+    env.advance(3_000)
+  }
 }
 
 export interface RenderContext {

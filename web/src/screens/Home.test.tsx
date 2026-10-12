@@ -1,7 +1,7 @@
 import { act, cleanup, screen, within } from '@testing-library/react'
 import { DAY_MS } from '@wordado/core'
 import { afterEach, describe, expect, it } from 'vitest'
-import { answerNew, fakeAudio, renderWith, setup } from '../test/fixtures'
+import { answerNew, fakeAudio, finishTrial, renderWith, setup, setupTrial } from '../test/fixtures'
 import { Home } from './Home'
 
 afterEach(cleanup)
@@ -122,5 +122,39 @@ describe('Home: listening follows the connection and the audio setting (spec §9
     await ctx.client.updateSettings({ audio: false })
     renderWith(<Home />, { ...ctx, audio: fakeAudio({ streamable: () => true }) })
     expect(screen.queryByRole('link', { name: 'Listening' })).toBeNull()
+  })
+
+  describe('at the end of a trial', () => {
+    it('says every word is started and invites an account, above the practice link', async () => {
+      const ctx = await setupTrial()
+      await finishTrial(ctx.client, ctx.env)
+      renderWith(<Home />, ctx)
+      expect(screen.getByText('You have started every word of the demo.')).toBeTruthy()
+      expect(screen.getByText(/Create an account to go on with the whole course\./)).toBeTruthy()
+      expect(screen.getByRole('link', { name: 'Create an account' }).getAttribute('href')).toBe('/signin')
+      expect(screen.getByRole('link', { name: 'Practise words you know' })).toBeTruthy()
+      const invite = screen.getByRole('link', { name: 'Create an account' })
+      const practise = screen.getByRole('link', { name: 'Practise words you know' })
+      expect(invite.compareDocumentPosition(practise) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    })
+
+    it('says nothing of it while the trial has words to start, or in a course', async () => {
+      renderWith(<Home />, await setupTrial())
+      expect(screen.queryByText('You have started every word of the demo.')).toBeNull()
+      cleanup()
+      renderWith(<Home />, await setup())
+      expect(screen.queryByRole('link', { name: 'Create an account' })).toBeNull()
+    })
+
+    it('still offers reviews that are due', async () => {
+      const ctx = await setupTrial()
+      await finishTrial(ctx.client, ctx.env)
+      ctx.env.advance(30 * DAY_MS)
+      await ctx.client.updateSettings({ reviewCap: 3 })
+      renderWith(<Home />, ctx)
+      expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('3 words to review')
+      expect(screen.getByRole('link', { name: 'Start studying' })).toBeTruthy()
+      expect(screen.getByRole('link', { name: 'Create an account' })).toBeTruthy()
+    })
   })
 })

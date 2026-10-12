@@ -1,5 +1,5 @@
-import type { Pack } from './pack'
-import { levelIndex, type CorpusEntry, type LocalizedText, type Unit } from './types'
+import type { Pack, PackCourseSize } from './pack'
+import { levelIndex, type CefrLevel, type CorpusEntry, type LocalizedText, type Unit } from './types'
 import { norm } from './validation'
 import { corpusWordId, type WordId } from './wordId'
 
@@ -21,6 +21,12 @@ export interface AudioClip {
   readonly mime: string
 }
 
+export interface CorpusTrial {
+  /** The test's words as entries: no unit (`unitId: ''`), no examples, clips or themes. */
+  readonly probes: readonly CorpusEntry[]
+  readonly course: Readonly<Partial<Record<CefrLevel, PackCourseSize>>>
+}
+
 /** Every loaded pack, merged: what `PathContext`, `DistractorContext` and the screens read. */
 export interface Corpus {
   readonly l1: string
@@ -32,6 +38,8 @@ export interface Corpus {
   readonly clips: ReadonlyMap<string, AudioClip>
   /** For `PathContext.retired`. */
   readonly retired: ReadonlySet<WordId>
+  /** Set only when a loaded pack is a trial pack (spec 2026-10-12 §3.1). */
+  readonly trial: CorpusTrial | null
 }
 
 /**
@@ -49,6 +57,7 @@ export function loadCorpus(packs: readonly Pack[]): Corpus {
   const clips = new Map<string, AudioClip>()
   const retired = new Set<WordId>()
   const senses = new Map<string, string>()
+  let trial: CorpusTrial | null = null
   for (const pack of packs) {
     if (pack.l1 !== first.l1) throw new Error(`Pack ${pack.pack_id} is for L1 ${pack.l1}, not ${first.l1}`)
     for (const e of pack.entries) {
@@ -74,6 +83,27 @@ export function loadCorpus(packs: readonly Pack[]): Corpus {
       })
       if (e.retired) retired.add(corpusWordId(e.entry_id))
     }
+    if (pack.trial) {
+      if (trial) throw new Error('More than one pack carries a trial')
+      trial = {
+        probes: pack.trial.probes.map((p) => ({
+          entryId: p.entry_id,
+          headword: p.headword,
+          variants: [],
+          pos: p.pos,
+          sense: p.sense,
+          level: p.level,
+          ipa: '',
+          unitId: '',
+          themes: [],
+          translations: [p.translation],
+          examples: [],
+          audio: {},
+          retired: false,
+        })),
+        course: pack.trial.course,
+      }
+    }
     for (const u of pack.units) {
       const clash = units.find((x) => x.unitId === u.unit_id || x.order === u.order)
       if (clash) throw new Error(`Unit ${u.unit_id} (order ${u.order}) clashes with unit ${clash.unitId} (order ${clash.order}) of another pack`)
@@ -93,7 +123,7 @@ export function loadCorpus(packs: readonly Pack[]): Corpus {
     }
   }
   units.sort((a, b) => a.order - b.order)
-  return { l1: first.l1, entries, units, themes: [...themes.values()], clips, retired }
+  return { l1: first.l1, entries, units, themes: [...themes.values()], clips, retired, trial }
 }
 
 /** Each word's position along the path, for stable ordering inside a level. */
@@ -118,6 +148,8 @@ export function themeEntries(corpus: Corpus, themeId: string): CorpusEntry[] {
 
 /** The themes big enough to offer (spec §8.9). A theme appears as the corpus grows; nothing is stored. */
 export function offeredThemes(corpus: Corpus): Theme[] {
+  // A trial pack holds one unit per level, so a theme's size there says nothing about the course (spec 2026-10-12 §4.4).
+  if (corpus.trial !== null) return []
   return corpus.themes.filter((t) => themeEntries(corpus, t.themeId).length >= MIN_THEME_SIZE)
 }
 

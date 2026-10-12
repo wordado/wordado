@@ -92,6 +92,15 @@ describe('configProblems', () => {
   })
 })
 
+describe('trial.probes_per_level', () => {
+  it('accepts 8 or more and refuses anything else', () => {
+    expect(configProblems({ ...validConfig, trial: { probes_per_level: 40 } })).toEqual([])
+    for (const bad of [7, 1.5, '40']) {
+      expect(configProblems({ ...validConfig, trial: { probes_per_level: bad } })).toEqual(['trial.probes_per_level: must be an integer of 8 or more'])
+    }
+  })
+})
+
 describe('themeProblems', () => {
   const theme = { theme_id: 'food', name: { en: 'Food', bg: 'Храна' }, description: { en: 'Food.', bg: 'Храна.' } }
 

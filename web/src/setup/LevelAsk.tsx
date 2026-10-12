@@ -1,7 +1,7 @@
 import { useClient } from '@wordado/client-data'
 import type { CefrLevel, Corpus } from '@wordado/core'
 import { useState } from 'react'
-import { useT } from '../i18n/i18n'
+import { useT, type MessageKey } from '../i18n/i18n'
 import { Placement } from '../screens/Placement'
 import { LevelStep } from './LevelStep'
 
@@ -11,12 +11,13 @@ export function hasLevels(corpus: Corpus | null): boolean {
 }
 
 /**
- * The setup's level step on its own, once, for a learner who came through the demo: its sample has one level, so its
- * setup never asked, and the account's course starts at A1 unless somebody does. Shown in place of Today the first
- * time the whole course is there (`App`); Continue ends it, whatever was chosen. The placement test runs inside it,
+ * The setup's level step on its own, once, for a learner who came through the demo: the trial's level (if the visitor
+ * chose one) is already selected, so the learner confirms it or takes the test again on the whole course; a demo on the
+ * old one-level sample never asked at all, and the account's course starts at A1 unless somebody does. Shown in place
+ * of Today the first time the whole course is there (`App`); Continue ends it, whatever was chosen. The placement test runs inside it,
  * over the whole screen (`onFocus`), as in the setup.
  */
-export function LevelAsk(props: { onDone(): void; onFocus?(on: boolean): void }) {
+export function LevelAsk(props: { onDone(): void; onFocus?(on: boolean): void; /** Why it is asked; an account's reason unless told otherwise. */ readonly lead?: MessageKey }) {
   const { t } = useT()
   const client = useClient()
   const [testing, setTesting] = useState(false)
@@ -45,7 +46,7 @@ export function LevelAsk(props: { onDone(): void; onFocus?(on: boolean): void })
       <div className="setup-head">
         <h1 id="level-ask-title">{t('levelAsk.title')}</h1>
         <p className="note">
-          {t('levelAsk.lead')} {t('settings.levelHint')}
+          {t(props.lead ?? 'levelAsk.lead')} {t('settings.levelHint')}
         </p>
       </div>
       <div className="panel form-section">

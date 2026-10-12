@@ -3,7 +3,7 @@ import {
   MIN_PLACEMENT_LEVELS,
   nextPlacementWords,
   placementLevels,
-  placementPool,
+  placementCorpus,
   placementProgress,
   type CefrLevel,
   type ChoiceItem,
@@ -33,7 +33,7 @@ export function placementSource(client: Client): PlacementSource {
 
 /** Whether the corpus has the bands a test needs (spec §7.2). The A1-only sample has not. */
 export function placementAvailable(corpus: Corpus | null): boolean {
-  return corpus !== null && placementLevels(placementPool(corpus.entries.values())).length >= MIN_PLACEMENT_LEVELS
+  return corpus !== null && placementLevels(placementCorpus(corpus).pool).length >= MIN_PLACEMENT_LEVELS
 }
 
 /** unavailable → question → … → result → (accept) accepted. */
@@ -63,6 +63,8 @@ export class PlacementRun {
   /** Words that could not be asked as a choice (too few distractors): never offered again. */
   private readonly unusable = new Set<WordId>()
   private readonly pool: Map<CefrLevel, WordId[]>
+  /** The corpus questions are built from: for a trial, the probes joined to the units' entries. */
+  private readonly corpus: Corpus | null
   private readonly levels: CefrLevel[]
   private shownAt = 0
 
@@ -70,8 +72,9 @@ export class PlacementRun {
     private readonly source: PlacementSource,
     private readonly env: RunEnv,
   ) {
-    const corpus = source.corpus
-    this.pool = corpus ? placementPool(corpus.entries.values()) : new Map()
+    const placement = source.corpus ? placementCorpus(source.corpus) : null
+    this.corpus = placement?.corpus ?? null
+    this.pool = placement?.pool ?? new Map()
     this.levels = placementLevels(this.pool)
     this.store = createStore<PlacementSnapshot>({ phase: 'unavailable', item: null, asked: 0, levels: this.levels, result: null, error: null })
   }
@@ -91,7 +94,7 @@ export class PlacementRun {
   }
 
   private advance(): void {
-    const corpus = this.source.corpus!
+    const corpus = this.corpus!
     for (;;) {
       const progress = placementProgress(this.answers, this.levels)
       if (progress.probing === null) {

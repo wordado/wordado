@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Pack, PackEntry } from './pack'
+import type { Pack, PackEntry, PackProbe, PackTrial } from './pack'
 import { validatePack } from './packValidation'
 
 const clip = (id: string) => ({ clip_id: id, url: `audio/${id}.m4a`, sha256: 'a'.repeat(64), bytes: 1000, mime: 'audio/mp4' })
@@ -185,5 +185,55 @@ describe('validatePack', () => {
 
   it('accepts an empty pack: the checks are on what is there', () => {
     expect(paths(fixture({ entries: [], units: [], themes: [], audio: [] }))).toEqual([])
+  })
+})
+
+describe('validatePack: trial', () => {
+  const probe = (over: Partial<PackProbe> = {}): PackProbe => ({
+    entry_id: 'cat-1',
+    headword: 'cat',
+    pos: 'noun',
+    sense: '',
+    level: 'B1',
+    translation: 'котка',
+    ...over,
+  })
+  const trial = (over: Partial<PackTrial> = {}): PackTrial => ({
+    probes: [probe(), probe({ entry_id: 'dog-1', headword: 'dog', translation: 'куче' })],
+    course: { A1: { units: 2, words: 40 }, B1: { units: 3, words: 90 } },
+    ...over,
+  })
+  const withTrial = (value: unknown): unknown => ({ ...fixture(), trial: value })
+
+  it('leaves a pack without trial without a trial key', () => {
+    const result = validatePack(fixture())
+    expect(result.status).toBe('ok')
+    if (result.status === 'ok') expect('trial' in result.pack).toBe(false)
+  })
+
+  it('returns a valid trial', () => {
+    const result = validatePack(withTrial(trial()))
+    expect(result.status).toBe('ok')
+    if (result.status === 'ok') expect(result.pack.trial).toEqual(trial())
+  })
+
+  it('reports each fault with its path', () => {
+    expect(paths(withTrial('x'))).toEqual(['trial'])
+    expect(paths(withTrial(trial({ probes: [probe({ entry_id: 'bad id!' })] })))).toEqual(['trial.probes[0].entry_id'])
+    expect(paths(withTrial(trial({ probes: [probe({ level: 'Z9' as never })] })))).toEqual(['trial.probes[0].level'])
+    expect(paths(withTrial(trial({ probes: [probe({ translation: '' })] })))).toEqual(['trial.probes[0].translation'])
+    expect(paths(withTrial(trial({ probes: [probe(), probe()] })))).toEqual(['trial.probes[1].entry_id'])
+    expect(paths(withTrial(trial({ course: { B1: { units: 0, words: 5 } } })))).toEqual(['trial.course.B1.units'])
+    expect(paths(withTrial(trial({ course: { X1: { units: 1, words: 5 } } as never })))).toEqual(['trial.course.X1'])
+  })
+
+  it('accepts a probe that is also an entry only when the shared fields are equal', () => {
+    const same = probe({ entry_id: 'hello-1', headword: 'hello', pos: 'intj', level: 'A1', translation: 'hello-1' })
+    expect(validatePack(withTrial(trial({ probes: [same] }))).status).toBe('ok')
+    const result = validatePack(withTrial(trial({ probes: [{ ...same, translation: 'other' }] })))
+    expect(result.status).toBe('invalid')
+    if (result.status === 'invalid') {
+      expect(result.errors).toEqual([{ path: 'trial.probes[0]', message: 'differs from the entry of the same id' }])
+    }
   })
 })

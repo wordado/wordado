@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { SAMPLE_DIR } from '@wordado/client-data/src/testing/sample'
 import { describe, expect, it } from 'vitest'
-import { clipUrl, fetchManifest, manifestUrlFor, packFetcher, SAMPLE_MANIFEST_URL, type Fetch } from './packs'
+import { clipUrl, fetchManifest, manifestUrlFor, packFetcher, SAMPLE_MANIFEST_URL, TRIAL_MANIFEST_URL, type Fetch } from './packs'
 
 const PAGE = 'https://wordado.test/study'
 
@@ -126,5 +126,17 @@ describe('learner content (plan 7)', () => {
     expect(manifestUrlFor(null, 'https://content.wordado.com/manifest.json')).toBe(SAMPLE_MANIFEST_URL)
     expect(manifestUrlFor({ userId: 'u1', email: 'a@b.c' }, 'https://content.wordado.com/manifest.json')).toBe('https://content.wordado.com/manifest.json')
     expect(manifestUrlFor({ userId: 'u1', email: 'a@b.c' }, SAMPLE_MANIFEST_URL)).toBe(SAMPLE_MANIFEST_URL)
+  })
+
+  it('gives a visitor the trial manifest when the build names one, and a learner still the learner manifest', () => {
+    const learner = 'https://content.example.test/manifest.json'
+    const trial = 'https://content.example.test/trial-manifest.json'
+    expect(manifestUrlFor(null, learner, trial)).toBe(trial)
+    expect(manifestUrlFor({ userId: 'u1', email: 'a@b.c' }, learner, trial)).toBe(learner)
+  })
+
+  it('defaults a visitor to the bundled sample when the build names no trial manifest', () => {
+    expect(TRIAL_MANIFEST_URL).toBe(SAMPLE_MANIFEST_URL)
+    expect(manifestUrlFor(null)).toBe(SAMPLE_MANIFEST_URL)
   })
 })

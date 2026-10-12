@@ -1,5 +1,14 @@
-import { PACK_SCHEMA_VERSION, type Pack, type PackAudioClip, type PackEntry, type PackTheme, type PackUnit } from './pack'
-import { CEFR_LEVELS, PARTS_OF_SPEECH, levelIndex, type Accent } from './types'
+import {
+  PACK_SCHEMA_VERSION, type Pack,
+  type PackAudioClip,
+  type PackCourseSize,
+  type PackEntry,
+  type PackProbe,
+  type PackTheme,
+  type PackTrial,
+  type PackUnit,
+} from './pack'
+import { CEFR_LEVELS, PARTS_OF_SPEECH, levelIndex, type Accent, type CefrLevel } from './types'
 import {
   at,
   bool,
@@ -97,6 +106,41 @@ function parseClip(r: Report, raw: Raw, path: string): PackAudioClip {
   }
 }
 
+function parseProbe(r: Report, raw: Raw, path: string): PackProbe {
+  const entryId = text(r, raw, 'entry_id', path)
+  if (entryId !== '' && !isWordId(`c:${entryId}`)) r.add(at(path, 'entry_id'), 'must be a valid word_id key')
+  return {
+    entry_id: entryId,
+    headword: text(r, raw, 'headword', path),
+    pos: oneOf(r, raw, 'pos', path, PARTS_OF_SPEECH),
+    sense: text(r, raw, 'sense', path, false),
+    level: oneOf(r, raw, 'level', path, CEFR_LEVELS),
+    translation: text(r, raw, 'translation', path),
+  }
+}
+
+function parseTrial(r: Report, raw: unknown, path: string): PackTrial {
+  const probes: PackProbe[] = []
+  const course: Partial<Record<CefrLevel, PackCourseSize>> = {}
+  if (!isRecord(raw)) {
+    r.add(path, 'must be an object with "probes" and "course"')
+    return { probes, course }
+  }
+  records(r, raw, 'probes', path).forEach((p, i) => probes.push(parseProbe(r, p, `${at(path, 'probes')}[${i}]`)))
+  checkUnique(r, probes.map((p) => p.entry_id), (i) => `${at(path, 'probes')}[${i}].entry_id`, 'entry_id')
+  const rawCourse = raw['course']
+  if (!isRecord(rawCourse)) r.add(at(path, 'course'), 'must be an object of course sizes by level')
+  else {
+    for (const [level, size] of Object.entries(rawCourse)) {
+      const sizePath = `${at(path, 'course')}.${level}`
+      if (!(CEFR_LEVELS as readonly string[]).includes(level)) r.add(sizePath, `must be one of ${CEFR_LEVELS.join(', ')}`)
+      else if (!isRecord(size)) r.add(sizePath, 'must be an object with "units" and "words"')
+      else course[level as CefrLevel] = { units: integer(r, size, 'units', sizePath, 1), words: integer(r, size, 'words', sizePath, 1) }
+    }
+  }
+  return { probes, course }
+}
+
 /** Referential integrity and the stability rules that hold inside one pack (spec §5.1, §13). */
 function crossCheck(r: Report, pack: Pack): void {
   checkUnique(r, pack.entries.map((e) => e.entry_id), (i) => `entries[${i}].entry_id`, 'entry_id')
@@ -136,6 +180,14 @@ function crossCheck(r: Report, pack: Pack): void {
       const owner = referencedBy.get(clip)
       if (owner !== undefined) r.add(`${path}.audio.${accent}`, `clip ${clip} is already the audio of ${owner}`)
       else referencedBy.set(clip, e.entry_id)
+    }
+  })
+
+  // A probe may be a unit entry (the trial draws from the first unit too), but then it is the same word.
+  pack.trial?.probes.forEach((p, i) => {
+    const e = entries.get(p.entry_id)
+    if (e && (e.headword !== p.headword || e.pos !== p.pos || e.sense !== p.sense || e.level !== p.level || e.translation !== p.translation)) {
+      r.add(`trial.probes[${i}]`, 'differs from the entry of the same id')
     }
   })
 
@@ -184,6 +236,7 @@ export function validatePack(value: unknown, options: ValidatePackOptions = {}):
   if (l1 !== '' && !LANG.test(l1)) r.add('l1', 'must be a two-letter lowercase language code')
   const target = text(r, value, 'target', '')
   if (target !== '' && !LANG.test(target)) r.add('target', 'must be a two-letter lowercase language code')
+  const trial = value['trial'] === undefined ? undefined : parseTrial(r, value['trial'], 'trial')
   const pack: Pack = {
     schema_version: schema,
     pack_id: id(r, value, 'pack_id', ''),
@@ -194,6 +247,7 @@ export function validatePack(value: unknown, options: ValidatePackOptions = {}):
     units: records(r, value, 'units', '').map((u, i) => parseUnit(r, u, `units[${i}]`)),
     themes: records(r, value, 'themes', '').map((t, i) => parseTheme(r, t, `themes[${i}]`)),
     audio: records(r, value, 'audio', '').map((c, i) => parseClip(r, c, `audio[${i}]`)),
+    ...(trial ? { trial } : {}),
   }
   if (r.errors.length === 0) crossCheck(r, pack)
   return r.errors.length > 0 ? { status: 'invalid', errors: r.errors } : { status: 'ok', pack }

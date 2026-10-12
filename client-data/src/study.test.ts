@@ -8,6 +8,7 @@ import { appendAnswer, loadLearner, type AnswerInput, type Learner } from './lea
 import { ensureDevice } from './meta'
 import { migrate } from './schema'
 import { availableModes, dayCompleteInput, newUnlocks, progressView, sessionPlan, type StudyContext } from './study'
+import { trialCorpus } from './testing/sample'
 import { testEnv, type TestEnv } from './testing/testEnv'
 
 const SAMPLE = fileURLToPath(new URL('../../pipeline/samples/a1/corpus-v0-bg.pack', import.meta.url))
@@ -80,6 +81,33 @@ describe('sessionPlan', () => {
   })
 })
 
+describe('sessionPlan in a trial (spec 2026-10-12 §4.4)', () => {
+  it('starts new words only in the declared level\'s unit, yet reviews a word of another level when due', async () => {
+    const { db, env, learner, ctx } = await setup()
+    const trial = trialCorpus(['A1', 'A2', 'B1'])
+    const [a1, , b1] = trial.units
+    // A limit a course would fill by running on into the A2 and B1 units.
+    const settings = { ...DEFAULT_SETTINGS, declaredLevel: 'A1' as const, newWordLimit: 50 }
+    // A B1 word started earlier, at another level.
+    const started = b1!.wordIds[0]!
+    await appendAnswer(db, env, learner, answer(started))
+    env.advance(10 * 86_400_000)
+    const plan = sessionPlan(ctx({ corpus: trial, settings, now: env.now() }))
+    expect([...plan.newWords].sort()).toEqual([...a1!.wordIds].sort())
+    expect(plan.reviews).toContain(started)
+  })
+
+  it('serves no theme collection, whatever theme the settings name', async () => {
+    const { ctx } = await setup()
+    const trial = trialCorpus(['A1', 'A2', 'B1'])
+    const [a1] = trial.units
+    // A theme the A2 and B1 units' entries carry, and the A1 unit's do not: a course would start with its words.
+    const settings = { ...DEFAULT_SETTINGS, declaredLevel: 'A1' as const, newWordLimit: 3, activeTheme: 'daily-life' }
+    expect(sessionPlan(ctx({ corpus: trial, settings })).newWords).toEqual(a1!.wordIds.slice(0, 3))
+    expect(sessionPlan(ctx({ corpus: { ...trial, trial: null }, settings })).newWords.some((wordId) => a1!.wordIds.includes(wordId))).toBe(false)
+  })
+})
+
 describe('dayCompleteInput and progressView', () => {
   it('reports the day complete after one answer when nothing is due', async () => {
     const { db, env, learner, ctx } = await setup()
@@ -101,6 +129,27 @@ describe('dayCompleteInput and progressView', () => {
     expect(view.streak).toEqual({ length: 0, todayComplete: false, freezesLeft: 2 })
     expect(view.xpProvisional).toBe(200)
     expect(view.dueToday).toBe(0)
+  })
+
+  it('shows a trial the declared level\'s unit only, and a course every unit (spec 2026-10-12 §4.4)', async () => {
+    const { db, env, learner, ctx } = await setup()
+    const trial = trialCorpus(['A1', 'A2', 'B1'])
+    const [a1, , b1] = trial.units
+    // A word of another level's unit, started before the level changed: its reviews go on, its unit is not shown.
+    await appendAnswer(db, env, learner, answer(a1!.wordIds[0]!))
+    await appendAnswer(db, env, learner, answer(b1!.wordIds[0]!))
+    const settings = { ...DEFAULT_SETTINGS, declaredLevel: 'B1' as const }
+    const at = ctx({ corpus: trial, settings, now: env.now() })
+    const view = progressView(at, sessionPlan(at))
+    expect([...view.units.keys()]).toEqual([b1!.unitId])
+    expect(Object.keys(view.levels)).toEqual(['B1'])
+    expect(view.tiers).toEqual({ new: 19, learning: 1, young: 0, mature: 0 })
+
+    const course = ctx({ corpus: { ...trial, trial: null }, settings, now: env.now() })
+    const whole = progressView(course, sessionPlan(course))
+    expect([...whole.units.keys()]).toEqual(trial.units.map((u) => u.unitId))
+    expect(Object.keys(whole.levels).sort()).toEqual(['A1', 'A2', 'B1'])
+    expect(Object.values(whole.tiers).reduce((a, b) => a + b, 0)).toBe(60)
   })
 })
 

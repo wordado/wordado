@@ -101,6 +101,9 @@ private `wordado/wordado-research`, cloned into `docs/research/` and ignored her
      `gh secret set BETTER_AUTH_SECRET --repo wordado/wordado`
      (`openssl rand -base64 48`, a different one per environment). Also
      `gh variable set CONTENT_MANIFEST_URL --repo wordado/wordado --body https://content.wordado.com/manifest.json`.
+   - Optional, per environment: `TRIAL_MANIFEST_URL`, the manifest a visitor without an account installs from
+     (built in as `VITE_TRIAL_MANIFEST_URL`, e.g. `https://content.example.test/trial-manifest.json`). Without it a
+     visitor studies the bundled sample, as before; the deploy does not refuse an environment that lacks it.
    - `APP_ORIGIN`: `https://wordado-preview.<subdomain>.workers.dev` for preview, `https://app.wordado.com` for production.
    - The R2 token pair is the content repository's secret (`pipeline/README.md`), not this one's: the copies
      kept here during the first corpus releases were removed on 2026-10-10.

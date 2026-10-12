@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, screen, within } from '@testing-library/react'
 import { corpusWordId } from '@wordado/core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { ReactElement } from 'react'
-import { renderWith, setup, withProviders } from '../test/fixtures'
+import { renderWith, setup, setupTrial, withProviders } from '../test/fixtures'
 import { RESULTS_STEP, Search } from './Search'
 
 afterEach(cleanup)
@@ -118,6 +118,50 @@ describe('Search', () => {
     expect(ctx.client.snapshot.toLearn).toContain(corpusWordId(entry.entryId))
   })
 
+  describe('in a trial (spec 2026-10-12 §4.4)', () => {
+    const rowOf = (headword: string) => rows().find((r) => r.querySelector('.word-head')!.textContent === headword)!
+
+    it('names the unit of another level without linking to it, and offers no Learn this word there', async () => {
+      const ctx = await setupTrial({ declared: 'B1' })
+      const corpus = ctx.client.snapshot.corpus!
+      const unit = corpus.units.find((u) => u.level === 'A1')!
+      const entry = corpus.entries.get(unit.wordIds[0]!.slice(2))!
+      renderWith(<Search q={entry.headword} />, ctx)
+      const row = rowOf(entry.headword)
+      const where = row.querySelector<HTMLElement>('.word-where')!
+      expect(where.querySelector('a[href^="/path"]')).toBeNull()
+      expect(within(where).getByText(unit.title.en).tagName).toBe('SPAN')
+      // The hidden label still says what the name is.
+      expect(where.textContent).toContain(`Unit: ${unit.title.en}`)
+      fireEvent.click(within(row).getByRole('button', { name: `Word actions: ${entry.headword}` }))
+      expect(screen.queryByRole('button', { name: `Learn this word: ${entry.headword}` })).toBeNull()
+    })
+
+    it('links the trial’s own unit and offers Learn this word on its words', async () => {
+      const ctx = await setupTrial({ declared: 'B1' })
+      const corpus = ctx.client.snapshot.corpus!
+      const unit = corpus.units.find((u) => u.level === 'B1')!
+      const entry = corpus.entries.get(unit.wordIds[0]!.slice(2))!
+      renderWith(<Search q={entry.headword} />, ctx)
+      const row = rowOf(entry.headword)
+      expect(row.querySelector(`.word-where a[href="/path?unit=${unit.unitId}"]`)!.textContent).toContain(unit.title.en)
+      fireEvent.click(within(row).getByRole('button', { name: `Word actions: ${entry.headword}` }))
+      expect(screen.getByRole('button', { name: `Learn this word: ${entry.headword}` })).toBeTruthy()
+    })
+
+    it('leaves a course as it was: a later unit’s word links to its unit and can be marked to learn', async () => {
+      const ctx = await setup()
+      const corpus = ctx.client.snapshot.corpus!
+      const unit = corpus.units.at(-1)!
+      const entry = corpus.entries.get(unit.wordIds[0]!.slice(2))!
+      renderWith(<Search q={entry.headword} />, ctx)
+      const row = rowOf(entry.headword)
+      expect(row.querySelector(`.word-where a[href="/path?unit=${unit.unitId}"]`)).toBeTruthy()
+      fireEvent.click(within(row).getByRole('button', { name: `Word actions: ${entry.headword}` }))
+      expect(screen.getByRole('button', { name: `Learn this word: ${entry.headword}` })).toBeTruthy()
+    })
+  })
+
   it('keeps the query in the address, in one history entry', async () => {
     renderWith(<Search q="" />, await setup())
     const before = window.history.length
@@ -166,6 +210,13 @@ describe('Search', () => {
     expect(screen.getByText('The sample has 60 words. Sign in to search the whole course.')).toBeTruthy()
     cleanup()
     renderWith(<Search q="zzzz" />, { ...ctx, account })
+    expect(screen.queryByText(/The sample has/)).toBeNull()
+  })
+
+  it('calls a trial’s corpus the trial, not the sample', async () => {
+    const ctx = await setupTrial()
+    renderWith(<Search q="zzzz" />, ctx)
+    expect(screen.getByText(/^The demo has \d+ words\. Sign in to search the whole course\.$/)).toBeTruthy()
     expect(screen.queryByText(/The sample has/)).toBeNull()
   })
 

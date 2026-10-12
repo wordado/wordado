@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { CefrLevel, Corpus, PackManifest } from '@wordado/core'
+import { canonicalJson, loadCorpus, type CefrLevel, type Corpus, type Pack, type PackDescriptor, type PackManifest } from '@wordado/core'
 import { Client } from '../client'
 import { nodeSqliteDriver } from '../drivers/nodeSqlite'
 import type { PackFetcher } from '../packs'
@@ -37,4 +37,66 @@ export function leveledCorpus(corpus: Corpus, levels: readonly CefrLevel[]): Cor
     ...corpus,
     entries: new Map(entries.map((entry, i) => [entry.entryId, { ...entry, level: levels[Math.floor(i / per)]! }])),
   }
+}
+
+/** Eight made-up probe words per level: a trial pack's test words (spec 2026-10-12 §3.1). */
+export function trialProbes(levels: readonly CefrLevel[]): { entry_id: string; headword: string; pos: 'noun'; sense: string; level: CefrLevel; translation: string }[] {
+  return levels.flatMap((level) =>
+    Array.from({ length: 8 }, (_, i) => ({
+      entry_id: `probe-${level.toLowerCase()}-${i}`,
+      headword: `probe${level}${i}`,
+      pos: 'noun' as const,
+      sense: '',
+      level,
+      translation: `проба ${level} ${i}`,
+    })),
+  )
+}
+
+/**
+ * The sample as a trial: its units relabelled one per level (in order, entries with them), plus probes for
+ * `probeLevels`. The pack is what a client installs; nothing else about it changes.
+ */
+export function trialPack(unitLevels: readonly CefrLevel[], probeLevels: readonly CefrLevel[] = unitLevels): Pack {
+  const pack = JSON.parse(readFileSync(join(SAMPLE_DIR, 'corpus-v0-bg.pack'), 'utf8')) as Pack
+  const levelOf = new Map(pack.units.map((u, i) => [u.unit_id, unitLevels[i]!]))
+  return {
+    ...pack,
+    entries: pack.entries.map((e) => ({ ...e, level: levelOf.get(e.unit_id)! })),
+    units: pack.units.map((u) => ({ ...u, level: levelOf.get(u.unit_id)! })),
+    trial: { probes: trialProbes(probeLevels), course: { A1: { units: 10, words: 200 }, B1: { units: 12, words: 300 } } },
+  }
+}
+
+/**
+ * `pack` cut to its first unit, one version on: the trial pack a device that began on the whole sample installs
+ * over it, which lacks words that device has answered (spec 2026-10-12 §4.6).
+ */
+export function firstUnitOnly(pack: Pack): Pack {
+  const unit = pack.units[0]!
+  const entries = pack.entries.filter((e) => e.unit_id === unit.unit_id)
+  const clips = new Set(entries.flatMap((e) => Object.values(e.audio)))
+  return { ...pack, corpus_version: pack.corpus_version + 1, units: [unit], entries, audio: pack.audio.filter((c) => clips.has(c.clip_id)) }
+}
+
+/** A manifest and fetcher serving `pack`, at its own version, in place of the sample's Bulgarian pack. */
+export async function packServing(pack: Pack, env: TestEnv): Promise<{ manifest: PackManifest; fetch: PackFetcher }> {
+  const bytes = new TextEncoder().encode(canonicalJson(pack))
+  const descriptor: PackDescriptor = { ...sampleManifest.packs[0]!, corpus_version: pack.corpus_version, sha256: await env.sha256(bytes), bytes: bytes.byteLength }
+  return { manifest: { ...sampleManifest, corpus_version: pack.corpus_version, packs: [descriptor] }, fetch: async () => bytes }
+}
+
+/** A client on the sample as a trial. */
+export async function openTrialClient(unitLevels: readonly CefrLevel[], env: TestEnv = testEnv(), declaredLevel?: CefrLevel): Promise<Client> {
+  const client = await Client.open({ driver: nodeSqliteDriver(), env, l1: 'bg' })
+  const served = await packServing(trialPack(unitLevels), env)
+  await client.installPacks(served.manifest, served.fetch)
+  await client.startSession()
+  if (declaredLevel) await client.updateSettings({ declaredLevel })
+  return client
+}
+
+/** `trialPack` as a loaded corpus, for tests that need no client. */
+export function trialCorpus(unitLevels: readonly CefrLevel[], probeLevels: readonly CefrLevel[] = unitLevels): Corpus {
+  return loadCorpus([trialPack(unitLevels, probeLevels)])
 }

@@ -306,6 +306,18 @@ are unique across packs. This costs nothing now and keeps separately
 distributed content possible later (§8.8) without changing the loader or the
 ID scheme.
 
+A release also carries a **trial pack** per L1, `trial-v<n>-<l1>.trial`,
+listed by `trial-manifest.json` beside `manifest.json`; the extension keeps
+anything that handles the course's packs by name from taking one for a course
+pack. A trial pack is a pack with the course's pack ID and fewer units: the
+first unit of every level, whole, with its entries exactly as the course ships
+them. It carries one more field, `trial`, with `probes` (the placement test's
+words, 40 per level by default, drawn uniformly from the level's live entries
+and seeded by the corpus version and the level, so a release is byte-identical
+everywhere) and `course` (the units and live words per level of the whole
+course). Probes are test words only: they are in no unit, theme, search or
+count, and are never studied. The demo (§8.6) installs it.
+
 Each pack contains entry records, unit definitions, theme definitions (§8.9),
 and an audio manifest (URLs
 and checksums; audio files themselves live on the CDN and are fetched
@@ -553,12 +565,15 @@ step as the chosen level, which can still be changed), and it can be taken later
 from settings; it is never a blocking onboarding step (§8.6). It is offered only
 where it can run: enough words of the first two levels at least.
 
-A learner who came through the demo was never asked: its sample has one level.
-When the demo is carried into an account (§8.6), the account's device remembers
-that the question is owed, and the first time the home screen opens on a course with more
-than one level, the level step stands in its place, alone, with the test. Continue
-ends it for good, whatever was chosen; the other screens stay within reach
-meanwhile.
+Where the installed pack has `trial.probes` (§5.1), the test draws its words
+from them alone; its wrong options come from the probes and the units' entries
+together. The demo asks for a level or offers the test, as the setup does for an
+account. When the demo is carried into an account (§8.6), the declared level
+goes with it, and the account's device remembers that the question is owed: the
+first time the home screen opens on a course with more than one level, the level
+step stands in its place, alone, with that level selected and the test on offer.
+Continue ends it for good, whatever was chosen; the other screens stay within
+reach meanwhile.
 
 **Placement consequences.** A learner placed at level *L* has every unit below
 *L* unlocked and marked *assumed known*. Those words are **not** fed into the
@@ -1097,15 +1112,24 @@ Sessions are long-lived and refreshed on use, so a returning learner is not
 asked for a new code; this also keeps sign-in email volume inside the email
 provider's daily free allowance (§17).
 
-A **demo mode** offers a small
-sample session so a prospective user can study before committing. Demo events
+A **demo mode** offers a
+session at the visitor's level so a prospective user can study before
+committing. It studies the trial pack (§5.1), and takes new words only from the
+unit of the declared level. The path shows that unit and a note with the
+course's numbers and the way to sign up; themes are not offered; reviews of
+words already started do not depend on the level. The search finds a word of
+another level's unit without being a way into it, and offers **Learn this
+word** only for words of the demo's unit. When every word of the unit
+is started, the home screen and a session's done screen invite the visitor to
+create an account. Demo events
 are kept on the device in a database of their own, apart from any learner's,
 and are never uploaded unless an account is created; the demo survives a
 reload. If the learner then **creates an account**
 from the demo, those events are attached to the new account — there is nothing
 to merge, because a new account has no prior data. If they instead sign in to
 an existing account, or choose to leave the demo, the demo database is deleted,
-and this is stated plainly.
+and this is stated plainly. The declared level travels with the demo's other
+records.
 
 Every persisted record therefore carries a `user_id` from creation, and no
 anonymous-profile claim or merge path is needed.
@@ -1118,9 +1142,11 @@ Changing the declared level moves the *assumed known* line (§7.2) and deletes
 nothing.
 
 **Onboarding budget (Goal 1).** Demo mode is the first screen's primary action
-and needs no account, no placement test, and no download: a small A1 sample for
-each L1 ships inside the app bundle. The full pack downloads in the background
-during the demo or sign-up. The placement test is offered, not required.
+and needs no account and no placement test; it downloads one small file, the
+trial pack for the learner's L1. A build that names no trial manifest (§9.3)
+uses a small A1 sample for each L1 that ships inside the app bundle. The full
+pack downloads in the background during the demo or sign-up. The placement test
+is offered, not required.
 Sign-up itself asks only for L1, credentials, and the age check (§11). One
 optional, skippable question — "What do you want English for?" — sets the
 learner's first theme (§8.9); it costs a tap and makes the first session feel
@@ -1653,6 +1679,16 @@ the device is online. The learner can pre-download a whole level over Wi-Fi.
 And `client-data` tells `core` which clips are present, so a listening item is
 only ever chosen when it can actually be played (§7.5). The bundled demo sample
 (§8.6) includes its audio.
+
+**The trial manifest.** Without an account the client installs from the trial
+manifest that the build names in `VITE_TRIAL_MANIFEST_URL`, which the deploy
+sets from the environment's `TRIAL_MANIFEST_URL` variable; a build that names
+none uses the bundled A1 sample, and there is no fall-back between the two at
+run time. A trial pack has the course's pack ID, so it takes the sample's place
+like any newer pack, and it follows new releases as any installed pack does.
+Its clips are fetched as a learner's are. The publish check (`corpus
+publishable`) requires a release directory to carry the trial manifest and its
+packs, each with its size and checksum, at the course's corpus version.
 
 ---
 
@@ -2460,6 +2496,23 @@ decision, the phasing, or scope. † in the body marks those still pending.
   Nothing is started by it and a locked unit stays locked. This replaces "a
   unit's practice draws only on its started words" of 2026-10-07 and "a locked
   unit offers neither".
+
+**2026-10-12 — the trial at the visitor's level.** Decided by the product
+owner.
+
+- **Trial pack (§5.1, §9.3):** a release carries `trial-v<n>-<l1>.trial` files
+  and `trial-manifest.json`: the first unit of every level, and the test's
+  probes, 40 per level drawn uniformly from the level. The build names the
+  manifest in `VITE_TRIAL_MANIFEST_URL`; without it the bundled A1 sample is
+  used. The publish check requires the trial files.
+- **Placement test (§7.2):** the demo offers the level step and the test, drawn
+  from the probes. After sign-up the level step shows once, with the declared
+  level selected. This replaces "A learner who came through the demo was never
+  asked".
+- **Demo (§8.6):** it studies one unit of the declared level, shows a note and
+  offers no themes, and invites the visitor to create an account when every
+  word of the unit is started. This replaces the small A1 sample as the
+  demo's content.
 
 ## 17. Technology choices
 
