@@ -422,6 +422,7 @@ export const en = {
   'trial.course': { one: 'The whole course has {count} unit at {level}.', other: 'The whole course has {count} units at {level}.' },
   'trial.finished': 'You have started every word of the demo.',
   'trial.invite': 'Create an account to go on with the whole course.',
+  'trial.themes': 'Themes come with the whole course: pick one and its words come first.',
 
   'flag.known': 'Known',
   'flag.suspended': 'Not now',

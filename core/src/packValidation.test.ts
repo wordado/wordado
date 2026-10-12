@@ -227,6 +227,18 @@ describe('validatePack: trial', () => {
     expect(paths(withTrial(trial({ course: { X1: { units: 1, words: 5 } } as never })))).toEqual(['trial.course.X1'])
   })
 
+  it('takes the course\'s theme sizes, each of a theme the pack defines (#244)', () => {
+    const themeId = fixture().themes[0]!.theme_id
+    const ok = validatePack(withTrial(trial({ themes: { [themeId]: 30 } })))
+    expect(ok.status === 'ok' && ok.pack.trial?.themes).toEqual({ [themeId]: 30 })
+    // A trial pack built before the sizes has none, and says so by leaving the key out.
+    const none = validatePack(withTrial(trial()))
+    expect(none.status === 'ok' && 'themes' in none.pack.trial!).toBe(false)
+    expect(paths(withTrial({ ...trial(), themes: [] }))).toEqual(['trial.themes'])
+    expect(paths(withTrial(trial({ themes: { [themeId]: 0 } })))).toEqual([`trial.themes.${themeId}`])
+    expect(paths(withTrial(trial({ themes: { nowhere: 30 } })))).toEqual(['trial.themes.nowhere'])
+  })
+
   it('accepts a probe that is also an entry only when the shared fields are equal', () => {
     const same = probe({ entry_id: 'hello-1', headword: 'hello', pos: 'intj', level: 'A1', translation: 'hello-1' })
     expect(validatePack(withTrial(trial({ probes: [same] }))).status).toBe('ok')

@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, screen, within } from '@testing-library/react'
 import { corpusWordId, Grade, themeEntries } from '@wordado/core'
 import { afterEach, describe, expect, it } from 'vitest'
-import { answerNew, renderWith, setup, withMoreThemes } from '../test/fixtures'
+import { answerNew, renderWith, setup, setupTrial, withMoreThemes } from '../test/fixtures'
 import { Themes } from './Themes'
 
 afterEach(cleanup)
@@ -393,5 +393,35 @@ describe('Themes: search', () => {
     renderWith(<Themes />, ctx)
     act(() => ctx.client.store.set({ ...snapshot, corpus: { ...snapshot.corpus!, themes: [] } }))
     expect(screen.queryByRole('searchbox')).toBeNull()
+  })
+})
+
+describe('Themes in a trial (#244)', () => {
+  it('shows the themes the whole course offers, each with its size there, and none to open, choose or practise', async () => {
+    const ctx = await setupTrial()
+    renderWith(<Themes />, ctx)
+    expect(screen.getByRole('heading', { level: 1, name: 'Themes' })).toBeTruthy()
+    expect(screen.getByText(/^Themes come with the whole course: pick one and its words come first\./)).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Create an account' }).getAttribute('href')).toBe('/signin')
+    // The pack's order, the names as headings right under the page's title, the sizes in words.
+    const cards = screen.getAllByRole('listitem')
+    expect(cards.map((card) => within(card).getByRole('heading', { level: 2 }).textContent)).toEqual(['Daily life', 'Travel and transport'])
+    expect(within(cards[0]!).getByText('240 words')).toBeTruthy()
+    expect(within(cards[1]!).getByText('1 word')).toBeTruthy()
+    // Nothing to open, choose, practise or search; and not the fault-like line of a course with no theme yet.
+    expect(within(screen.getByRole('list')).queryByRole('link')).toBeNull()
+    expect(screen.queryByRole('button')).toBeNull()
+    expect(screen.queryByRole('search')).toBeNull()
+    expect(screen.queryByText('No themes are big enough yet.')).toBeNull()
+  })
+
+  it('says only that themes come with the course when the trial pack names none', async () => {
+    const ctx = await setupTrial()
+    const sizes = ctx.client.snapshot.corpus!.trial!.themes as Record<string, number>
+    for (const id of Object.keys(sizes)) delete sizes[id]
+    renderWith(<Themes />, ctx)
+    expect(screen.getByText(/^Themes come with the whole course/)).toBeTruthy()
+    expect(screen.queryByRole('list')).toBeNull()
+    expect(screen.queryByText('No themes are big enough yet.')).toBeNull()
   })
 })

@@ -2,6 +2,7 @@ import {
   canonicalJson,
   CEFR_LEVELS,
   levelIndex,
+  MIN_THEME_SIZE,
   seededRng,
   shuffle,
   validatePack,
@@ -68,7 +69,12 @@ export function buildTrial(pack: Pack, probesPerLevel: number): TrialOutput {
 
   // Retired entries of the first units travel too: a learner's old answers may name them.
   const entries = units.flatMap((u) => u.entry_ids.map((id) => entryById.get(id))).filter((e): e is PackEntry => e !== undefined)
-  const themeIds = new Set(entries.flatMap((e) => e.themes))
+  // The themes the course offers, by its own rule, with their sizes: the trial shows them and studies none (#244).
+  const themeWords = new Map<string, number>()
+  for (const e of pack.entries) if (!e.retired) for (const id of e.themes) themeWords.set(id, (themeWords.get(id) ?? 0) + 1)
+  const themes: Record<string, number> = {}
+  for (const t of pack.themes) if ((themeWords.get(t.theme_id) ?? 0) >= MIN_THEME_SIZE) themes[t.theme_id] = themeWords.get(t.theme_id)!
+  const themeIds = new Set([...entries.flatMap((e) => e.themes), ...Object.keys(themes)])
   const clipIds = new Set(entries.flatMap((e) => Object.values(e.audio)))
   const candidate: Pack = {
     ...pack,
@@ -76,7 +82,7 @@ export function buildTrial(pack: Pack, probesPerLevel: number): TrialOutput {
     units: units.sort((a, b) => a.order - b.order),
     themes: pack.themes.filter((t) => themeIds.has(t.theme_id)).sort((a, b) => byString(a.theme_id, b.theme_id)),
     audio: pack.audio.filter((c) => clipIds.has(c.clip_id)).sort((a, b) => byString(a.clip_id, b.clip_id)),
-    trial: { probes, course },
+    trial: { probes, course, themes },
   }
   const result = validatePack(JSON.parse(canonicalJson(candidate)))
   if (result.status !== 'ok') {

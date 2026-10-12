@@ -416,6 +416,7 @@ export const bg: Messages = {
   'trial.course': { one: 'Целият курс има {count} урок на ниво {level}.', other: 'Целият курс има {count} урока на ниво {level}.' },
   'trial.finished': 'Започнахте всяка дума от пробата.',
   'trial.invite': 'Създайте профил, за да продължите с целия курс.',
+  'trial.themes': 'Темите идват с целия курс: изберете тема и думите ѝ идват първи.',
 
   'flag.known': 'Известна',
   'flag.suspended': 'Не сега',
