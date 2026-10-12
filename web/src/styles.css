@@ -266,11 +266,16 @@ p {
     border-top: 1px solid var(--rule);
   }
 
+  /* Each tab is as wide as its label plus an equal share of what is left: equal fifths are too narrow for
+     a long label ("Einstellungen") on a small phone, and it ran into its neighbour. */
   .nav ul {
-    display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    flex-wrap: nowrap;
     gap: 0;
     padding-inline: 0;
+  }
+
+  .nav li {
+    flex: 1 1 auto;
   }
 
   .nav a {
@@ -280,6 +285,7 @@ p {
     gap: var(--space-1);
     padding: var(--space-2) 0;
     font-size: 0.75rem;
+    white-space: nowrap;
     border-bottom: 0;
   }
 
@@ -3195,6 +3201,8 @@ dialog.confirm::backdrop {
 /* A menu of sections and the open section: they take turns on a phone, and sit side by side from 48rem. */
 .app > main > .settings {
   display: grid;
+  /* Not wider than the screen: a row's long note is cut with an ellipsis instead of widening the column. */
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-3);
   align-items: start;
   max-width: none;
