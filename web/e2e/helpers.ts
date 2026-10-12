@@ -105,11 +105,12 @@ export async function studyNew(page: Page, count: number): Promise<void> {
   await expect(page.locator('.done')).toBeVisible()
 }
 
-/** Scans the page for WCAG 2.2 A and AA (spec §11.1); `dark` repeats the scan in the dark theme. */
-export async function expectAccessible(page: Page, options: { readonly dark?: boolean } = {}): Promise<void> {
+/** Scans the page for WCAG 2.2 A and AA (spec §11.1); `dark` repeats the scan in the dark theme, `within` keeps it to what a selector matches. */
+export async function expectAccessible(page: Page, options: { readonly dark?: boolean; readonly within?: string } = {}): Promise<void> {
   for (const colorScheme of options.dark ? (['light', 'dark'] as const) : (['light'] as const)) {
     await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' })
-    const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze()
+    const axe = new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+    const results = await (options.within ? axe.include(options.within) : axe).analyze()
     expect(results.violations.map((v) => `${colorScheme} ${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`)).toEqual([])
   }
   await page.emulateMedia({ colorScheme: 'light', reducedMotion: null })

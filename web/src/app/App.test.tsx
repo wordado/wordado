@@ -33,6 +33,28 @@ describe('the search button', () => {
   })
 })
 
+describe('the language and Help in the top row (#243)', () => {
+  it('shows the language button and no Help during the first-run setup', async () => {
+    renderWith(app({ setup: true }), await setup())
+    expect(screen.getByRole('button', { name: 'Interface language: English (EN)' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Help' })).toBeNull()
+  })
+
+  it('shows Help between the search and the account once the setup is done, and no language button', async () => {
+    renderWith(app(), await setup())
+    const help = screen.getByRole('button', { name: 'Help' })
+    expect(screen.queryByRole('button', { name: /^Interface language/ })).toBeNull()
+    expect(Array.from(help.closest('.masthead-actions')!.children).map((child) => child.className)).toEqual(['search-circle', 'help', 'button account-signin'])
+  })
+
+  it('leads from Help to the guide’s page about the screen shown', async () => {
+    renderWith(app(), await setup())
+    await act(async () => navigate({ name: 'path' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Help' }))
+    expect(screen.getByRole('link', { name: 'About this screen The path and themes' }).getAttribute('href')).toBe('https://wordado.com/en/guide/path-and-themes/')
+  })
+})
+
 describe('focus on the search screen', () => {
   it('goes to the field on arrival, and stays there while the address follows the typing', async () => {
     renderWith(app(), await setup())

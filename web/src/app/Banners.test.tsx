@@ -34,10 +34,10 @@ describe('Banners', () => {
     try {
       const ctx = await setup()
       renderWith(<Banners />, { ...ctx })
-      expect(screen.getByRole('link', { name: 'Feedback' }).getAttribute('href')).toBe('/feedback?from=%2Fpractice%2Fwords')
+      expect(screen.getByRole('link', { name: 'Write to us' }).getAttribute('href')).toBe('/feedback?from=%2Fpractice%2Fwords')
       cleanup()
       renderWith(<Banners />, { ...ctx, account: ana })
-      expect(screen.queryByRole('link', { name: 'Feedback' })).toBeNull()
+      expect(screen.queryByRole('link', { name: 'Write to us' })).toBeNull()
     } finally {
       window.history.replaceState(null, '', '/')
     }

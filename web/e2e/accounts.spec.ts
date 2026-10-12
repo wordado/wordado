@@ -357,7 +357,8 @@ test('tells the server the interface language at sign-in and when it changes, an
   await finishSetup(page)
   // Nothing is asked of the learner: the app says the language it is in.
   await expect.poll(() => languageOf(page)).toBe('en')
-  await page.getByRole('button', { name: 'Interface language: English (EN)' }).click()
+  // After the setup the interface language is in the Help menu (#243).
+  await page.getByRole('button', { name: 'Help', exact: true }).click()
   await page.getByRole('button', { name: 'Български', exact: true }).click()
   await expect(page.locator('html')).toHaveAttribute('lang', 'bg')
   await expect.poll(() => languageOf(page)).toBe('bg')
@@ -380,8 +381,8 @@ test('sends feedback from the account menu; the export names neither it nor a co
   await finishSetup(page)
   await page.goto('/path')
   await page.getByRole('button', { name: /^Account: / }).click()
-  await page.getByRole('link', { name: 'Feedback', exact: true }).click()
-  await expect(heading(page)).toHaveText('Send feedback')
+  await page.getByRole('link', { name: 'Write to us', exact: true }).click()
+  await expect(heading(page)).toHaveText('Write to us')
   await expectAccessible(page, { dark: true })
   // The address is never filled in for the learner.
   await expect(page.getByLabel('Email, if you’d like an answer (optional)')).toHaveValue('')

@@ -22,6 +22,7 @@ import { Setup } from '../setup/Setup'
 import { AccountMenu } from './AccountMenu'
 import { useInterfaceLocales } from './interfaceLanguage'
 import { Banners, NoticeLine } from './Banners'
+import { HelpMenu } from './HelpMenu'
 import { LanguageMenu } from './LanguageMenu'
 import { useUpdateSafety } from './updateSafety'
 
@@ -91,8 +92,8 @@ const WORDMARK = (
 )
 
 /**
- * The shell: the masthead's first row (the icon and wordmark, the search, the
- * language, the account), the navigation (a second row, or the tab bar on a phone),
+ * The shell: the masthead's first row (the icon and wordmark, the search, Help,
+ * the account; in the setup the language instead of the search and Help), the navigation (a second row, or the tab bar on a phone),
  * banners, and the routed screen. While studying, only the screen. While the
  * first-run setup is owed (`setup`, plan 11), the setup instead of the routed
  * screen (except Sign in, which a returning learner needs, and Feedback, for
@@ -178,13 +179,19 @@ export function App(props: {
               </Link>
             )}
             <div className="masthead-actions">
-              {/* Not while the setup is owed, on its Sign in and Feedback pages either: there is no course to search yet. */}
-              {!props.setup && (
-                <Link className="search-circle" to={{ name: 'search', q: '' }} aria-label={t('search.open')} aria-current={route.name === 'search' ? 'page' : undefined}>
-                  <SearchIcon aria-hidden="true" size={20} />
-                </Link>
+              {/* While the setup is owed, on its Sign in and Feedback pages too, only the language: there is no
+                  course to search yet, and the guide is about what comes after. Then the search and Help, which
+                  holds the language (#243). */}
+              {props.setup ? (
+                <LanguageMenu />
+              ) : (
+                <>
+                  <Link className="search-circle" to={{ name: 'search', q: '' }} aria-label={t('search.open')} aria-current={route.name === 'search' ? 'page' : undefined}>
+                    <SearchIcon aria-hidden="true" size={20} />
+                  </Link>
+                  <HelpMenu />
+                </>
               )}
-              <LanguageMenu />
               <AccountMenu />
             </div>
           </div>

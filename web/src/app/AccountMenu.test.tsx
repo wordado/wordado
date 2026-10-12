@@ -24,14 +24,14 @@ describe('AccountMenu', () => {
     const circle = screen.getByRole('button', { name: 'Account: ana@example.com' })
     fireEvent.click(circle)
     const items = screen.getAllByRole('listitem').map((item) => item.firstElementChild?.textContent)
-    expect(items).toEqual(['Account settings', 'Feedback', 'Sign out'])
-    const link = screen.getByRole('link', { name: 'Feedback' })
+    expect(items).toEqual(['Account settings', 'Write to us', 'Sign out'])
+    const link = screen.getByRole('link', { name: 'Write to us' })
     expect(link.getAttribute('href')).toBe('/feedback?from=%2Fprogress')
     fireEvent.click(link)
     expect(window.location.pathname + window.location.search).toBe('/feedback?from=%2Fprogress')
-    expect(screen.queryByRole('link', { name: 'Feedback' })).toBeNull()
+    expect(screen.queryByRole('link', { name: 'Write to us' })).toBeNull()
     fireEvent.click(circle)
-    expect(screen.getByRole('link', { name: 'Feedback' }).getAttribute('href')).toBe('/feedback?from=%2Fprogress')
+    expect(screen.getByRole('link', { name: 'Write to us' }).getAttribute('href')).toBe('/feedback?from=%2Fprogress')
   })
 
   it('shows who is signed in as a circle with the first letter of the email', async () => {

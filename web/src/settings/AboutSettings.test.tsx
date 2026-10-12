@@ -25,7 +25,7 @@ describe('AboutSettings', () => {
   it('links to feedback about the app, opened from About', async () => {
     const ctx = await setup()
     renderWith(<AboutSettings />, { ...ctx, credits: fakeCredits() })
-    expect(screen.getByRole('link', { name: 'Send feedback about the app' }).getAttribute('href')).toBe('/feedback?from=%2Fsettings%2Fabout')
+    expect(screen.getByRole('link', { name: 'Write to us about the app' }).getAttribute('href')).toBe('/feedback?from=%2Fsettings%2Fabout')
   })
 
   it('before it has ever been online, says the sources appear once it has', async () => {
