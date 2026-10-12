@@ -141,7 +141,9 @@ In the trial, study takes new words from **the unit of the declared level only**
   higher ones are not shown.
 - **Practice** of the unit works as everywhere.
 - **Themes** are not offered in the trial: a theme would bring in words of the other levels' units.
-- **Search** covers the trial's words and says so, as it does for the sample today.
+- **Search** covers the trial's words and says so, as it does for the sample today. A word of another level's
+  unit is found, but is not a way into it: its unit is named, not linked.
+- **Learn this word** from the search is offered only for words of the trial's unit.
 - **Changing the level** in Settings, or taking the test again, changes which unit the trial studies. Words
   already started keep their reviews. Nothing blocks this and nothing advertises it.
 - **The end of the unit:** once every word of the unit is started, the done screen and the home screen say so
@@ -163,7 +165,7 @@ Signing in to an existing account, or leaving the trial, deletes the trial's dat
 
 A device that began the demo before this change holds the sample's words. At its next pack check it installs
 the trial pack like any newer pack. Its level is A1 until chosen, and the level step shows once on the home
-screen, as it does after a carry-over.
+screen, as it does after a carry-over. The device remembers that it asked (`wordado.trialLevelAsked`).
 
 Answers on sample words that the trial pack does not hold are kept and not served: a run already skips a word
 its corpus lacks. They go to the account with the rest at sign-up, as they do today.
@@ -189,6 +191,8 @@ and Spanish ones wait for a native reader, tracked on #102.
   it lands are that issue's.
 - A limit on the trial by time or by number of sessions.
 - Trial content inside the app bundle. The repository is public and the course's text is not committed to it.
+- On a device that began on the bundled sample and opens the new build offline, listening waits until the trial
+  pack is installed.
 
 ## 8. Rollout
 

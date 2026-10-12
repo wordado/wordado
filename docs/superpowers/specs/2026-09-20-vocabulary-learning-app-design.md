@@ -1117,7 +1117,9 @@ session at the visitor's level so a prospective user can study before
 committing. It studies the trial pack (§5.1), and takes new words only from the
 unit of the declared level. The path shows that unit and a note with the
 course's numbers and the way to sign up; themes are not offered; reviews of
-words already started do not depend on the level. When every word of the unit
+words already started do not depend on the level. The search finds a word of
+another level's unit without being a way into it, and offers **Learn this
+word** only for words of the demo's unit. When every word of the unit
 is started, the home screen and a session's done screen invite the visitor to
 create an account. Demo events
 are kept on the device in a database of their own, apart from any learner's,
