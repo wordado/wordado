@@ -4,18 +4,33 @@
 // wide every time: this test fails if the listener goes back into an ordinary effect.
 import { afterEach, expect, it, vi } from 'vitest'
 
-vi.hoisted(() => {
+// The late scheduler outlives the test: work React put on it can still be waiting when the file is done, and
+// ran once in a while after the test environment was taken away ("window is not defined", issue #167). So the
+// waiting work is counted, and each test ends only when none is left.
+const late = vi.hoisted(() => {
+  const late = { waiting: 0 }
   // React's scheduler uses setImmediate where there is one (Node, and so these tests).
-  ;(globalThis as unknown as { setImmediate: unknown }).setImmediate = (fn: () => void) => setTimeout(fn, 30)
+  ;(globalThis as unknown as { setImmediate: unknown }).setImmediate = (fn: () => void) => {
+    late.waiting += 1
+    setTimeout(() => {
+      try {
+        fn()
+      } finally {
+        late.waiting -= 1
+      }
+    }, 30)
+  }
+  return late
 })
 
 const { cleanup, fireEvent, render, screen, waitFor } = await import('@testing-library/react')
 const { App } = await import('./App')
 const { api } = await import('./api')
 
-afterEach(() => {
+afterEach(async () => {
   cleanup()
   vi.restoreAllMocks()
+  await vi.waitFor(() => expect(late.waiting).toBe(0))
 })
 
 const base = { queue: 'translation-bg', file: 'f', version: 'v', kind: 'translation' as const, cells: {}, fields: [], otherSenses: [], ai: 'flagged' as const, objections: [], decided: null, stale: false, rowHash: 'h' }
