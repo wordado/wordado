@@ -551,6 +551,40 @@ test('searches the whole course from the top row, and goes from a result to its 
   await expect(row).toHaveCount(1)
 })
 
+test('reports a problem with a word from a list: the search and a unit’s words on the path (spec §8.10)', async ({ page }) => {
+  await page.goto('/')
+  await finishSetup(page)
+  await page.goto('/search?q=key')
+  const found = page.locator('.search-words > li').filter({ hasText: 'ключ' })
+  const menu = found.getByRole('button', { name: 'Word actions: key' })
+  await menu.click()
+  // Last in the menu, after the choices about learning the word.
+  await expect(found.locator('.menu-panel button').last()).toHaveText('Report a problem')
+  await expectAccessible(page, { dark: true })
+  await found.getByRole('button', { name: 'Report a problem: key' }).click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog.getByRole('heading')).toHaveText('Report a problem with “key”')
+  await expectAccessible(page, { dark: true })
+  await dialog.getByRole('radio', { name: 'Wrong level' }).check()
+  await dialog.getByRole('button', { name: 'Send report' }).click()
+  await expect(dialog.getByText('Report saved. Thank you.')).toBeVisible()
+  await dialog.getByRole('button', { name: 'Continue' }).click()
+  // The dialog gives focus back to the word's ⋯ button.
+  await expect(dialog).toHaveCount(0)
+  await expect(menu).toBeFocused()
+
+  await page.goto('/path')
+  const unit = page.locator('li.unit', { has: page.getByRole('heading', { name: 'People and greetings' }) })
+  await unit.getByText('20 words').click()
+  const row = unit.locator('.unit-words li').first()
+  await row.getByRole('button', { name: /^Word actions: / }).click()
+  await row.getByRole('button', { name: /^Report a problem: / }).click()
+  await expect(page.getByRole('dialog')).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await expect(row.getByRole('button', { name: /^Word actions: / })).toBeFocused()
+})
+
 test('marks a found word to learn, follows its theme, and says when the sample has no such word', async ({ page }) => {
   await page.goto('/')
   await finishSetup(page)
