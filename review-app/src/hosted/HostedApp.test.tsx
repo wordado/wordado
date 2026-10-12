@@ -281,41 +281,49 @@ describe('HostedApp', () => {
       vi.spyOn(hostedApi.admin, 'reviewers').mockResolvedValue([])
       vi.spyOn(hostedApi.admin, 'assignments').mockResolvedValue([])
       vi.spyOn(hostedApi.admin, 'submissions').mockResolvedValue([])
+      // The admin page opens on Feedback, which reads these.
+      vi.spyOn(hostedApi.admin, 'feedback').mockResolvedValue({ connected: true, items: [], read: 0, nextBefore: null })
+      vi.spyOn(hostedApi.admin, 'feedbackTopics').mockResolvedValue([])
+      vi.spyOn(hostedApi.admin, 'feedbackWeek').mockResolvedValue({ since: 0, until: 1, read: 0, byCategory: { bug: 0, idea: 0, question: 0, praise: 0, junk: 0 }, blockingBugs: 0, topTopics: [], blocking: [], newTopics: [], paragraph: null })
+      vi.spyOn(hostedApi.admin, 'feedbackAi').mockResolvedValue({ setUp: false, needs: 'FEEDBACK_AI_KEY', on: false, model: 'test/model', callsToday: 0, dailyCalls: 200, reads: ['en', 'bg'], repo: 'wordado/wordado' })
     }
 
-    it('puts the admin tabs into the header, with My work where Admin was as the way back', async () => {
+    it('opens on the admin page, its tabs in the header, with no switch beside them (#232)', async () => {
       mockAdmin()
       render(<HostedApp me={admin} />)
-      fireEvent.click(await screen.findByRole('button', { name: 'Admin' }))
       const header = within(screen.getByRole('banner'))
-      expect((await header.findAllByRole('tab')).length).toBe(7)
-      expect(header.queryByRole('button', { name: 'Admin' })).toBeNull()
-      fireEvent.click(header.getByRole('tab', { name: 'Reviewers' }))
-      expect(window.location.hash).toBe('#reviewers')
-      // the way back is not one of the tabs, nor beside them: it follows them, where Admin was
-      const back = header.getByRole('button', { name: 'My work' })
+      expect((await header.findAllByRole('tab')).map((t) => t.textContent)).toEqual(['Feedback', 'Accounts', 'Mail', 'Review'])
+      expect(window.location.hash).toBe('#feedback')
+      for (const name of ['Admin', 'My work']) expect(header.queryByRole('button', { name })).toBeNull()
       const strip = screen.getByRole('navigation', { name: 'Admin' })
-      expect(strip.contains(back)).toBe(false)
       expect(within(strip).queryAllByRole('button').every((b) => b.getAttribute('role') === 'tab')).toBe(true)
-      expect(strip.compareDocumentPosition(back) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-      fireEvent.click(back)
-      expect(await screen.findByRole('region', { name: 'Your assignments' })).toBeTruthy()
-      expect(screen.queryByRole('tab')).toBeNull()
-      expect(within(screen.getByRole('banner')).getByRole('button', { name: 'Admin' })).toBeTruthy()
-      // the tab has gone from the address with the admin page
-      expect(window.location.hash).toBe('')
     })
 
-    it('opens on the admin tab in the address, so a reload stays put', async () => {
+    it('opens on the admin page in the address, so a reload stays put', async () => {
       mockAdmin()
-      window.location.hash = '#submissions'
+      window.location.hash = '#review/submissions'
       render(<HostedApp me={admin} />)
       expect((await screen.findByRole('tab', { name: 'Submissions' })).getAttribute('aria-selected')).toBe('true')
     })
 
+    it('opens an assignment from My work, and Back goes to My work again', async () => {
+      mockAdmin()
+      vi.spyOn(hostedApi, 'assignments').mockResolvedValue([assignment])
+      vi.spyOn(hostedApi, 'rows').mockResolvedValue({ rows: [row('bank-2')], discarded: [] })
+      window.location.hash = '#review/my-work'
+      render(<HostedApp me={admin} />)
+      await openAssignment()
+      const header = within(screen.getByRole('banner'))
+      // the review has the header to itself
+      expect(screen.queryByRole('tab')).toBeNull()
+      fireEvent.click(header.getByRole('button', { name: 'Back to my assignments' }))
+      expect((await screen.findByRole('tab', { name: 'My work' })).getAttribute('aria-selected')).toBe('true')
+      expect(await screen.findByRole('region', { name: 'Your assignments' })).toBeTruthy()
+    })
+
     it('does not open the admin page for a reviewer, whatever the address says', async () => {
       mockAdmin()
-      window.location.hash = '#submissions'
+      window.location.hash = '#review/submissions'
       render(<HostedApp me={me} />)
       expect(await screen.findByRole('region', { name: 'Your assignments' })).toBeTruthy()
       expect(screen.queryByRole('tab')).toBeNull()
