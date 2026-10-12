@@ -54,6 +54,27 @@ export interface PackTheme {
   readonly description: LocalizedText
 }
 
+/** A placement-test word of a trial pack: only what a question needs (spec 2026-10-12 §3.1). */
+export interface PackProbe {
+  readonly entry_id: string
+  readonly headword: string
+  readonly pos: PartOfSpeech
+  readonly sense: string
+  readonly level: CefrLevel
+  readonly translation: string
+}
+
+/** The whole course's size at one level, for the trial's invitation. */
+export interface PackCourseSize {
+  readonly units: number
+  readonly words: number
+}
+
+export interface PackTrial {
+  readonly probes: readonly PackProbe[]
+  readonly course: Readonly<Partial<Record<CefrLevel, PackCourseSize>>>
+}
+
 /** A corpus pack as shipped: one JSON document per (corpus version, L1) (spec §5.1). */
 export interface Pack {
   readonly schema_version: number
@@ -65,6 +86,8 @@ export interface Pack {
   readonly units: readonly PackUnit[]
   readonly themes: readonly PackTheme[]
   readonly audio: readonly PackAudioClip[]
+  /** Only a trial pack carries it (spec 2026-10-12 §3.1). */
+  readonly trial?: PackTrial
 }
 
 /**
