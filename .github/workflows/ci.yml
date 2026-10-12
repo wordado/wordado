@@ -88,7 +88,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Chromium, for the web suite's storage tests
-        run: pnpm --filter @wordado/web exec playwright install --with-deps chromium
+        run: .github/scripts/install-browser.sh chromium
       # The server's scripts start plan 5's Postgres 18 container with Docker Compose, as they do locally.
       # Here it is started before the suites, not by the server's `test` script beside them: creating
       # its network and container adds interfaces to the runner, and Chromium fails every request it
@@ -148,7 +148,7 @@ jobs:
             webkit|mobile-safari) browser=webkit ;;
             *) echo "::error::no browser for $E2E_PROJECTS"; exit 1 ;;
           esac
-          pnpm --filter @wordado/web exec playwright install --with-deps "$browser"
+          .github/scripts/install-browser.sh "$browser"
       - name: The demo, this half of it
         if: startsWith(matrix.part, 'demo')
         run: pnpm --filter @wordado/web e2e --shard="${PART#demo }"
