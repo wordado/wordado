@@ -263,6 +263,30 @@ describe('SignIn: a code by email (spec §8.6)', () => {
   })
 })
 
+describe('SignIn: a learner who comes back (#273)', () => {
+  it('says on the first step that the same steps reach an account that exists', async () => {
+    await render()
+    expect(screen.getByText(/^New here or coming back, the steps are the same\./)).toBeTruthy()
+  })
+
+  it('says at the email field that the address decides which account it is', async () => {
+    await render()
+    await passGate('BG')
+    const email = screen.getByLabelText('Email')
+    const hint = document.getElementById(email.getAttribute('aria-describedby') ?? '')
+    expect(hint?.textContent).toBe('If you already have an account, use the email it was made with. Another address makes a new account.')
+  })
+
+  it('says neither to a learner whose sign-in expired: this device already knows the account', async () => {
+    const ctx = await setup()
+    renderWith(<SignIn />, { ...ctx, api: fakeApi(), accounts: fakeAccounts(), account: { userId: 'u1', email: 'ana@example.com' } })
+    await act(async () => undefined)
+    expect(screen.queryByText(/^New here or coming back/)).toBeNull()
+    await passGate('BG')
+    expect(screen.getByLabelText('Email').getAttribute('aria-describedby')).toBeNull()
+  })
+})
+
 describe('SignIn: news by email (#186)', () => {
   const NEWS = 'I would like to receive news about Wordado and its new features by email. I can opt out at any time.'
 

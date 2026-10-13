@@ -273,6 +273,7 @@ export const es: Messages = {
 
   'signin.title': 'Crea una cuenta o inicia sesión',
   'signin.againTitle': 'Vuelve a iniciar sesión',
+  'signin.sameSteps': 'Los pasos son los mismos para una cuenta nueva y para una que ya existe. Si ya tienes una cuenta, inicia sesión con su correo y recuperarás tu progreso.',
   'signin.gateIntro': 'La ley fija una edad mínima para tener una cuenta propia, según dónde vivas. Tu país se queda en este dispositivo y no se envía. Si marcas la casilla de novedades, esa elección se guarda con tu cuenta.',
   'signin.country': 'País en el que vives',
   'signin.countryUnknown': 'Prefiero no decirlo',
@@ -287,6 +288,7 @@ export const es: Messages = {
   'signin.backToDemo': 'Volver a la demo',
   'signin.demoNote': 'Si este correo ya tiene una cuenta de Wordado, se borrarán las palabras que estudiaste en la demo. Una cuenta nueva las conserva.',
   'signin.email': 'Correo electrónico',
+  'signin.emailHint': 'Si ya tienes una cuenta, usa el correo con el que la creaste. Otra dirección crea una cuenta nueva.',
   'signin.emailInvalid': 'Escribe una dirección de correo, como nombre@example.com.',
   'signin.sendCode': 'Envíame un código por correo',
   'signin.codeSent': 'Hemos enviado un código de seis dígitos a {email}. Vale durante cinco minutos.',
