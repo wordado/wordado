@@ -234,7 +234,7 @@ export function App(props: {
       )}
       <main id="main" ref={main} tabIndex={-1}>
         {inSetup ? (
-          <Setup onFinish={finishSetup} onFocus={setSetupFocus} />
+          <Setup onFinish={finishSetup} onFocus={setSetupFocus} startWithTest={route.name === 'placement'} />
         ) : asking ? (
           <LevelAsk onDone={() => props.onLevelAsked?.()} onFocus={setSetupFocus} {...(props.levelLead ? { lead: props.levelLead } : {})} />
         ) : (

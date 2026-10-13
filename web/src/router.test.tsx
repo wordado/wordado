@@ -116,6 +116,11 @@ describe('routes', () => {
     expect(routeHref({ name: 'placement' })).toBe('/settings/placement')
   })
 
+  it('opens the placement test by its own short address too, the one the website links to (#213)', () => {
+    expect(parseRoute('/level-test', '')).toEqual({ name: 'placement' })
+    expect(parseRoute('/level-test/', '')).toEqual({ name: 'placement' })
+  })
+
   it('routes changing the native language under settings (plan 11)', () => {
     expect(parseRoute('/settings/native-language', '')).toEqual({ name: 'native-language' })
     expect(routeHref({ name: 'native-language' })).toBe('/settings/native-language')
