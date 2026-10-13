@@ -783,6 +783,14 @@ for (const [locale, l1] of [
         expect(b.height).toBeLessThan(50)
       }
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
+      // On a wider phone too, where the name is shown once there is room for it: "Sign in" keeps a margin (#275).
+      for (const width of [400, 412, 430, 456]) {
+        await page.setViewportSize({ width, height: 720 })
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
+        const signIn = (await page.locator('.account-signin').boundingBox())!
+        expect(signIn.x + signIn.width).toBeLessThanOrEqual(width - 8)
+      }
+      await page.setViewportSize({ width: 360, height: 720 })
       // Help is not the last button: its panel stays on the screen beside the long "Sign in" of this language (#243).
       await page.locator('.help-circle').click()
       const panel = (await page.locator('.help-panel').boundingBox())!

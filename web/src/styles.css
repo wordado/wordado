@@ -395,6 +395,19 @@ p {
   }
 }
 
+/* "Anmelden" and "Iniciar sesión" are longer than "Sign in": the name gives way on wider phones too (#275). */
+@media (max-width: 26.99rem) {
+  html:lang(de) .masthead-top:has(.search-circle):has(.account-signin) .wordmark-name {
+    display: none;
+  }
+}
+
+@media (max-width: 28.49rem) {
+  html:lang(es) .masthead-top:has(.search-circle):has(.account-signin) .wordmark-name {
+    display: none;
+  }
+}
+
 .popover-panel {
   position: absolute;
   top: calc(100% + var(--space-2));
