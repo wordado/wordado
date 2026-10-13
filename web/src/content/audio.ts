@@ -41,6 +41,7 @@ export interface AudioStoreOptions {
   readonly online?: () => boolean
   /** Whether the browser plays a MIME type; `canPlayType` by default. */
   readonly canPlay?: (mime: string) => boolean
+  /** The element a clip plays on. The app gives the same one every time (`sharedPlayer`); a new one for each clip otherwise. */
   readonly player?: () => PlayerLike
 }
 

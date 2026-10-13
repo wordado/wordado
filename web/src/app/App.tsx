@@ -92,6 +92,15 @@ const WORDMARK = (
 )
 
 /**
+ * A new screen takes focus as a page load would, and like a page load it starts at the top: a browser scrolls a
+ * focused element into view, which would put the masthead and the banners (the way to sign in) out of sight (#262).
+ */
+function arriveAtTop(screen: HTMLElement | null): void {
+  screen?.focus({ preventScroll: true })
+  window.scrollTo?.(0, 0)
+}
+
+/**
  * The shell: the masthead's first row (the icon and wordmark, the search, Help,
  * the account; in the setup the language instead of the search and Help), the navigation (a second row, or the tab bar on a phone),
  * banners, and the routed screen. While studying, only the screen. While the
@@ -121,7 +130,7 @@ export function App(props: {
 
   // The setup gave way to today without a navigation: focus the new screen, as a navigation would (spec §11.1).
   useEffect(() => {
-    if (setupBefore.current && !props.setup) main.current?.focus()
+    if (setupBefore.current && !props.setup) arriveAtTop(main.current)
     setupBefore.current = props.setup
   }, [props.setup])
 
@@ -142,14 +151,20 @@ export function App(props: {
     // field. The setup names its step's heading. Otherwise the screen itself.
     const target = (): HTMLElement | null =>
       main.current?.querySelector<HTMLElement>(inSetup || asking ? '.setup h2[tabindex="-1"]' : '[data-route-focus]') ?? main.current
+    // The screen itself takes focus at its top (#262); what a screen names is brought into view by the focus.
+    const arrive = () => {
+      const to = target()
+      if (to === main.current) arriveAtTop(to)
+      else to?.focus()
+    }
     if (first.current) {
       first.current = false
-      if (props.resumed) target()?.focus()
+      if (props.resumed) arrive()
       return
     }
     // The search rewrites its own address as the learner types: that is not an arrival, and the field keeps focus.
     if (from === 'search' && route.name === 'search') return
-    target()?.focus()
+    arrive()
   }, [route])
 
   // The setup is never a study session, whatever the address says: it keeps the masthead.

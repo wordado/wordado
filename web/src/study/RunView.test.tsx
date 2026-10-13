@@ -369,6 +369,25 @@ describe('RunView: listening', () => {
     expect(screen.getByRole('button', { name: 'Play again' })).toBeTruthy()
   })
 
+  it('says to press Play when the browser lets no sound start by itself, and plays then (issue 266)', async () => {
+    let refuse = true
+    let played = 0
+    const audio = fakeAudio({
+      streamable: () => true,
+      play: async () => {
+        if (refuse) throw new DOMException('not from a tap', 'NotAllowedError')
+        played += 1
+      },
+    })
+    await start('listening_select', audio)
+    await screen.findByText('The browser didn’t start the audio by itself. Press “Play again” to hear the word.')
+    expect(screen.queryByText('The audio didn’t play. You can still answer.')).toBeNull()
+    refuse = false
+    fireEvent.click(screen.getByRole('button', { name: 'Play again' }))
+    await waitFor(() => expect(played).toBe(1))
+    expect(screen.queryByText('The browser didn’t start the audio by itself. Press “Play again” to hear the word.')).toBeNull()
+  })
+
   it('still lets the learner answer when the audio fails', async () => {
     const audio = fakeAudio({
       streamable: () => true,
