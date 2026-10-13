@@ -86,6 +86,8 @@ export function parseRoute(pathname: string, search: string): Route {
     case '/settings':
       return { name: 'settings' }
     case '/settings/placement':
+    // The address the website links to (#213). In the app the test stays under Settings.
+    case '/level-test':
       return { name: 'placement' }
     case '/settings/native-language':
       return { name: 'native-language' }
