@@ -267,6 +267,7 @@ export const en = {
 
   'signin.title': 'Create an account or sign in',
   'signin.againTitle': 'Sign in again',
+  'signin.sameSteps': 'New here or coming back, the steps are the same. If you already have an account, sign in with its email and your progress comes back.',
   'signin.gateIntro': 'The law sets an age for an account of your own, depending on where you live. Your country stays on this device and is not sent. If you tick the box for news, that choice is saved with your account.',
   'signin.country': 'Country where you live',
   'signin.countryUnknown': 'I’d rather not say',
@@ -281,6 +282,7 @@ export const en = {
   'signin.backToDemo': 'Back to the demo',
   'signin.demoNote': 'If this email already has a Wordado account, the words you studied in the demo are deleted. A new account keeps them.',
   'signin.email': 'Email',
+  'signin.emailHint': 'If you already have an account, use the email it was made with. Another address makes a new account.',
   'signin.emailInvalid': 'Enter an email address, like name@example.com.',
   'signin.sendCode': 'Email me a code',
   'signin.codeSent': 'We sent a six-digit code to {email}. It works for five minutes.',

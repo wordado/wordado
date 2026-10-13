@@ -67,7 +67,10 @@ const STEP_NUMBER = { gate: 1, method: 2, code: 3 } as const
  * sent with the sign-in (#166), and no birth date is asked. Under it the gate
  * asks, with a box that starts unticked, whether the learner wants news by
  * email (#186): the wording ticked travels with the code, since only the
- * server knows whether the account is new. The native
+ * server knows whether the account is new. For the same reason a learner
+ * who comes back gets the same steps, and the screen says so: the first
+ * step that the steps reach an account that exists, the email field that the
+ * address decides which account it is (#273). The native
  * language is asked by the first-run setup, right after
  * sign-up (plan 11), not here.
  */
@@ -258,6 +261,7 @@ export function SignIn() {
             <h2 ref={heading} tabIndex={-1}>
               {t('signin.stepGate')}
             </h2>
+            {account === null && <p>{t('signin.sameSteps')}</p>}
             <p className="note">{t('signin.gateIntro')}</p>
             <Field label={t('signin.country')} error={null}>
               {({ id }) => (
@@ -309,7 +313,11 @@ export function SignIn() {
             </h2>
             {account === null && demoHasProgress && <p className="note demo-note">{t('signin.demoNote')}</p>}
             <form onSubmit={(e) => void submitEmail(e)} noValidate>
-              <Field label={t('signin.email')} error={fieldError === 'signin.emailInvalid' ? t(fieldError) : null}>
+              <Field
+                label={t('signin.email')}
+                {...(account === null ? { hint: t('signin.emailHint') } : {})}
+                error={fieldError === 'signin.emailInvalid' ? t(fieldError) : null}
+              >
                 {({ id, describedBy, invalid }) => (
                   <input
                     id={id}
