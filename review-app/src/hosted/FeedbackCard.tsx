@@ -1,6 +1,6 @@
 import type { FeedbackKind } from '@wordado/core'
 import { type FormEvent, useId, useRef, useState } from 'react'
-import { type FeedbackCategory, type FeedbackSeverity, type FeedbackState, type FeedbackTopicRef, type FeedbackView, MAX_FEEDBACK_NOTE_LENGTH } from '../../shared/hosted'
+import { type FeedbackCategory, type FeedbackSeverity, type FeedbackState, type FeedbackTopicRef, type FeedbackView, MAX_FEEDBACK_NOTE_LENGTH, MAX_TOPIC_TITLE_LENGTH, MIN_TOPIC_TITLE_LENGTH } from '../../shared/hosted'
 import { hostedApi } from '../hostedApi'
 import { dateOf, messageOf } from './adminUtil'
 
@@ -33,8 +33,19 @@ export function SaveStatus(props: { saving: Saving; what: string }) {
  * the note on Save. Each save sends the other one as it was last saved. A message the AI has read also shows the
  * topic it is in (spec 2026-10-10 §3.2), and `topics`, when given, are offered to move it to: the coordinator's
  * choice, which the AI does not change again. `onMoved` is told where it went. `inTopic`: the card stands under its
- * topic, which has a mark of its own, so the message's mark is folded away and its state shown in the head. */
-export function FeedbackCard(props: { item: FeedbackView; topics?: readonly FeedbackTopicRef[]; onMoved?(id: number, topic: FeedbackTopicRef): void; inTopic?: boolean }) {
+ * topic, which has a mark of its own, so the message's mark is folded away and its state shown in the head.
+ * A message no topic suits is given a new one, with a title typed here (issue 260). `onMarked` is told of a state
+ * that was saved, and the one before it: the list may then take the card away. `draft`, when given, puts Draft an
+ * issue on the card of a message the AI has read: it drafts for the message's topic, so it needs the AI help on and
+ * a message with a topic. A message the AI has not read shows nothing of it, as it shows nothing else of the AI. */
+export function FeedbackCard(props: {
+  item: FeedbackView
+  topics?: readonly FeedbackTopicRef[]
+  onMoved?(id: number, topic: FeedbackTopicRef): void
+  onMarked?(id: number, mark: { readonly state: FeedbackState; readonly note: string }, was: FeedbackState): void
+  draft?: { readonly aiOn: boolean; open(topic: number): void }
+  inTopic?: boolean
+}) {
   const { item } = props
   const id = useId()
   // The mark as the server last confirmed it. Each save sends the whole mark, so the saves of one message go one
@@ -50,6 +61,8 @@ export function FeedbackCard(props: { item: FeedbackView; topics?: readonly Feed
   // Where the coordinator moved the message since the card was shown; until then, where its reading has it.
   const [moved, setMoved] = useState<FeedbackTopicRef | null>(null)
   const [moving, setMoving] = useState<Saving>(IDLE)
+  // The title of a new topic as typed; null while none is being made.
+  const [naming, setNaming] = useState<string | null>(null)
   const topic = moved ?? item.ai?.topic ?? null
   const others = (props.topics ?? []).filter((t) => t.id !== topic?.id)
   const when = new Date(item.receivedAt).toISOString()
@@ -59,9 +72,11 @@ export function FeedbackCard(props: { item: FeedbackView; topics?: readonly Feed
     queue.current = queue.current.then(async () => {
       try {
         const answer = await hostedApi.admin.markFeedback(item.id, { ...saved.current, ...change })
+        const was = saved.current.state
         saved.current = { state: answer.state, note: answer.note }
         setSavedNote(answer.note)
         say({ kind: 'saved' })
+        if ('state' in change) props.onMarked?.(item.id, saved.current, was)
       } catch (err) {
         refused()
         say({ kind: 'failed', message: messageOf(err) })
@@ -81,7 +96,7 @@ export function FeedbackCard(props: { item: FeedbackView; topics?: readonly Feed
     save({ note: draft.trim() }, setNoteSaving, () => undefined)
   }
 
-  const move = async (to: number) => {
+  const move = async (to: number | { readonly title: string }) => {
     setMoving({ kind: 'busy' })
     try {
       const answer = await hostedApi.admin.moveFeedback(item.id, to)
@@ -89,11 +104,28 @@ export function FeedbackCard(props: { item: FeedbackView; topics?: readonly Feed
         setMoved(answer.topic)
         props.onMoved?.(item.id, answer.topic)
       }
+      setNaming(null)
       setMoving({ kind: 'saved' })
     } catch (err) {
       setMoving({ kind: 'failed', message: messageOf(err) })
     }
   }
+
+  const makeTopic = (e: FormEvent) => {
+    e.preventDefault()
+    // Refused: the title stays in the field, to be changed and sent again.
+    void move({ title: (naming ?? '').trim() })
+  }
+
+  const drafter = props.draft && (
+    <span className="feedback-draft">
+      <button type="button" className="button tool" disabled={!props.draft.aiOn || topic === null} onClick={() => topic && props.draft?.open(topic.id)}>
+        Draft an issue
+      </button>
+      {!props.draft.aiOn && <span className="feedback-status">Needs the AI help, which is off or not set up.</span>}
+      {props.draft.aiOn && topic === null && <span className="feedback-status">Give the message a topic first.</span>}
+    </span>
+  )
 
   const mark = (
     <form className="feedback-mark" aria-label="Your mark" onSubmit={saveNote}>
@@ -160,20 +192,39 @@ export function FeedbackCard(props: { item: FeedbackView; topics?: readonly Feed
             <p className="feedback-ai-summary">AI summary: {item.ai.summary}</p>
             <div className="feedback-topic">
               <p className="feedback-topic-name">Topic: {topic ? topic.title : 'none'}</p>
-              {others.length > 0 && (
+              {props.topics !== undefined && naming === null && (
                 <label className="field feedback-move">
                   Move to…
-                  <select value="" disabled={moving.kind === 'busy'} onChange={(e) => e.target.value !== '' && void move(Number(e.target.value))}>
+                  <select value="" disabled={moving.kind === 'busy'} onChange={(e) => (e.target.value === 'new' ? (setNaming(''), setMoving(IDLE)) : e.target.value !== '' && void move(Number(e.target.value)))}>
                     <option value="">Choose a topic</option>
                     {others.map((t) => (
                       <option key={t.id} value={t.id}>
                         {t.title}
                       </option>
                     ))}
+                    <option value="new">New topic…</option>
                   </select>
                 </label>
               )}
+              {naming !== null && (
+                <form className="feedback-new-topic" aria-label="A new topic" onSubmit={makeTopic}>
+                  <label className="field">
+                    New topic’s title
+                    {/* Asked for by the choice just made: the field is where the typing goes on. */}
+                    <input type="text" autoFocus maxLength={MAX_TOPIC_TITLE_LENGTH} value={naming} onChange={(e) => setNaming(e.target.value)} />
+                  </label>
+                  <span className="form-actions">
+                    <button type="submit" className="button tool" disabled={moving.kind === 'busy' || naming.trim().length < MIN_TOPIC_TITLE_LENGTH}>
+                      Make the topic
+                    </button>
+                    <button type="button" className="button tool" onClick={() => setNaming(null)}>
+                      Cancel
+                    </button>
+                  </span>
+                </form>
+              )}
               <SaveStatus saving={moving} what="Topic" />
+              {drafter}
             </div>
           </div>
         )}

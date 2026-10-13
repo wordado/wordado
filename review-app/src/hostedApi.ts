@@ -120,7 +120,7 @@ export const hostedApi = {
     /** Merges a topic into another, and answers that other one. */
     mergeFeedbackTopic: (id: number, into: number) => send<FeedbackTopicView>('POST', `/api/admin/feedback/topics/${id}/merge`, { into }),
     /** Moves a message to a topic: the coordinator's choice, which the AI does not change again. */
-    moveFeedback: (id: number, topic: number) => send<{ id: number; topic: FeedbackTopicRef | null }>('PUT', `/api/admin/feedback/${id}/topic`, { topic }),
+    moveFeedback: (id: number, to: number | { readonly title: string }) => send<{ id: number; topic: FeedbackTopicRef | null }>('PUT', `/api/admin/feedback/${id}/topic`, typeof to === 'number' ? { topic: to } : to),
     /** A topic's match with a known issue: a number confirms it, null removes it. */
     setFeedbackTopicIssue: (id: number, issue: number | null) => send<FeedbackTopicView>('PUT', `/api/admin/feedback/topics/${id}/issue`, { issue }),
     /** Asks the AI to draft an issue for a topic (spec 2026-10-10 §3.5): one call, counted; the draft is for this page alone, and is kept nowhere. */

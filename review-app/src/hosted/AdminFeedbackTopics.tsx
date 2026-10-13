@@ -6,7 +6,8 @@ import { count, dateOf, messageOf } from './adminUtil'
 import { FeedbackDraftDialog } from './FeedbackDraftDialog'
 import { FeedbackCard, IDLE, SaveStatus, type Saving, SEVERITY_CHIP, SEVERITY_LABEL, STATE_CHIP, STATE_LABEL, STATES } from './FeedbackCard'
 
-const SHOWN: Readonly<Record<FeedbackStateFilter, readonly FeedbackState[]>> = { open: ['new', 'seen'], all: ['new', 'seen', 'done', 'declined'], done: ['done'], declined: ['declined'] }
+/** The states each choice of the tab's Show filter lists. */
+export const SHOWN: Readonly<Record<FeedbackStateFilter, readonly FeedbackState[]>> = { open: ['new', 'seen'], all: ['new', 'seen', 'done', 'declined'], done: ['done'], declined: ['declined'] }
 
 /**
  * The Feedback tab by topic (spec 2026-10-10 §3.2, §3.3): one line for each thing the feedback is about, with how

@@ -96,7 +96,7 @@ describe('AdminFeedback', () => {
 
   it('shows each message’s mark, and saves a state as soon as it is chosen, with the note as it was saved', async () => {
     listed()
-    const answer = pending<{ id: number; state: 'done'; note: string; markedAt: string }>()
+    const answer = pending<{ id: number; state: 'new'; note: string; markedAt: string }>()
     const mark = vi.spyOn(hostedApi.admin, 'markFeedback').mockReturnValue(answer.promise)
     render(<AdminFeedback />)
     const [, second] = await cards()
@@ -106,18 +106,68 @@ describe('AdminFeedback', () => {
     expect((within(second!).getByRole('textbox', { name: 'Note' }) as HTMLTextAreaElement).value).toBe('Asked the designer.')
     // A draft of the note is not saved with the state.
     fireEvent.change(within(second!).getByRole('textbox', { name: 'Note' }), { target: { value: 'half a thought' } })
-    fireEvent.change(state, { target: { value: 'done' } })
+    fireEvent.change(state, { target: { value: 'new' } })
     expect(await within(second!).findByText('Saving…')).toBeTruthy()
-    expect(state.value).toBe('done')
+    expect(state.value).toBe('new')
     expect(state.getAttribute('aria-busy')).toBe('true')
-    await waitFor(() => expect(mark).toHaveBeenCalledWith(1, { state: 'done', note: 'Asked the designer.' }))
-    answer.resolve({ id: 1, state: 'done', note: 'Asked the designer.', markedAt: 't' })
+    await waitFor(() => expect(mark).toHaveBeenCalledWith(1, { state: 'new', note: 'Asked the designer.' }))
+    answer.resolve({ id: 1, state: 'new', note: 'Asked the designer.', markedAt: 't' })
     expect(await within(second!).findByText('Saved')).toBeTruthy()
     expect(within(second!).getByText('Saved').getAttribute('role')).toBe('status')
-    expect(state.value).toBe('done')
-    // It stays on the page until the list is read again, so a note can still be written.
+    expect(state.value).toBe('new')
+    // A state the filter shows leaves the message where it is, with what was typed.
     expect((await cards()).length).toBe(2)
     expect((within(second!).getByRole('textbox', { name: 'Note' }) as HTMLTextAreaElement).value).toBe('half a thought')
+    expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull()
+  })
+
+  it('takes a message out of the list when its new state is one the filter does not show, and Undo puts it back where it was (issue 260)', async () => {
+    listed([item(3), bug, idea])
+    const mark = vi.spyOn(hostedApi.admin, 'markFeedback').mockImplementation(async (id, m) => ({ id, ...m, markedAt: 't' }))
+    render(<AdminFeedback />)
+    const [, second] = await cards()
+    fireEvent.change(within(second!).getByRole('combobox', { name: 'State' }), { target: { value: 'done' } })
+    // Only once the save is kept: until then the card stays, saying it is on its way.
+    await waitFor(async () => expect(await cards()).toHaveLength(2))
+    expect(mark).toHaveBeenCalledWith(2, { state: 'done', note: '' })
+    expect(screen.queryByText(/The path does not open/)).toBeNull()
+    expect(screen.getByText('Marked Done: the message left this list.').getAttribute('role')).toBe('status')
+    const undo = screen.getByRole('button', { name: 'Undo' })
+    expect(document.activeElement).toBe(undo)
+    expect(screen.getByText('2 messages of 3 read')).toBeTruthy()
+    fireEvent.click(undo)
+    await waitFor(async () => expect(await cards()).toHaveLength(3))
+    expect(mark).toHaveBeenLastCalledWith(2, { state: 'new', note: '' })
+    const back = (await cards())[1]!
+    expect(within(back).getByText(/The path does not open/)).toBeTruthy()
+    expect((within(back).getByRole('combobox', { name: 'State' }) as HTMLSelectElement).value).toBe('new')
+    expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull()
+  })
+
+  it('says so when the undo fails, and forgets the message that left when the list is read again', async () => {
+    listed()
+    vi.spyOn(hostedApi.admin, 'markFeedback').mockImplementationOnce(async (id, m) => ({ id, ...m, markedAt: 't' })).mockRejectedValue(new Error('no connection'))
+    render(<AdminFeedback />)
+    const [first] = await cards()
+    fireEvent.change(within(first!).getByRole('combobox', { name: 'State' }), { target: { value: 'declined' } })
+    expect(await screen.findByText('Marked Not doing: the message left this list.')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+    expect((await screen.findByText('Not undone: no connection')).getAttribute('role')).toBe('alert')
+    expect(await cards()).toHaveLength(1)
+    fireEvent.change(screen.getByRole('combobox', { name: 'Show' }), { target: { value: 'all' } })
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull())
+  })
+
+  it('leaves every message in the list under All, whatever its new state', async () => {
+    listed()
+    vi.spyOn(hostedApi.admin, 'markFeedback').mockImplementation(async (id, m) => ({ id, ...m, markedAt: 't' }))
+    render(<AdminFeedback />)
+    fireEvent.change(screen.getByRole('combobox', { name: 'Show' }), { target: { value: 'all' } })
+    const [first] = await cards()
+    fireEvent.change(within(first!).getByRole('combobox', { name: 'State' }), { target: { value: 'done' } })
+    expect(await within(first!).findByText('Saved')).toBeTruthy()
+    expect(await cards()).toHaveLength(2)
+    expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull()
   })
 
   it('puts the state back and says so when the save fails', async () => {

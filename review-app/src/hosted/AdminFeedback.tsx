@@ -1,12 +1,13 @@
 import type { FeedbackKind } from '@wordado/core'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { FeedbackAiStatus, FeedbackAiWhy, FeedbackStateFilter, FeedbackTopicRef, FeedbackTopicView, FeedbackView } from '../../shared/hosted'
+import type { FeedbackAiStatus, FeedbackAiWhy, FeedbackState, FeedbackStateFilter, FeedbackTopicRef, FeedbackTopicView, FeedbackView } from '../../shared/hosted'
 import { hostedApi } from '../hostedApi'
 import { AdminFeedbackAi, aiFailureLine } from './AdminFeedbackAi'
-import { AdminFeedbackTopics } from './AdminFeedbackTopics'
+import { AdminFeedbackTopics, SHOWN } from './AdminFeedbackTopics'
 import { AdminFeedbackWeek } from './AdminFeedbackWeek'
 import { count, messageOf } from './adminUtil'
-import { FeedbackCard } from './FeedbackCard'
+import { FeedbackCard, STATE_LABEL } from './FeedbackCard'
+import { FeedbackDraftDialog } from './FeedbackDraftDialog'
 
 /** How the tab lists the feedback: a card a message, or a line a topic (spec 2026-10-10 §3.2). */
 type View = 'messages' | 'topics'
@@ -22,6 +23,10 @@ type Loaded =
   | { readonly kind: 'failed'; readonly message: string }
   | { readonly kind: 'list'; readonly items: readonly FeedbackView[]; readonly nextBefore: number | null; readonly read: number; readonly moreFailed: string }
 
+/** A message that left the list when its state was changed to one the filter does not show (issue 260): as it is
+ * now, where it stood, the state it had, and why an undo failed, if one did. */
+interface Gone { readonly item: FeedbackView; readonly index: number; readonly was: FeedbackState; readonly failed: string }
+
 /** A page the AI has not read to its end: its cursor (none for the newest page) and how many of its messages have no result. */
 interface AiLeft { readonly before: number | undefined; readonly left: number }
 
@@ -31,7 +36,9 @@ interface AiLeft { readonly before: number | undefined; readonly left: number }
  * as advice; without it, or when it fails, the tab is what it is without it and says so in one line.
  * By topic, the same feedback is one line for each thing it is about (AdminFeedbackTopics); the filter by state
  * is then of the topics' own state, and the view stays as it is when the filter changes. Above the filters stands
- * the week (AdminFeedbackWeek, spec 2026-10-10 §3.4): what the AI read of the last seven days, in numbers. */
+ * the week (AdminFeedbackWeek, spec 2026-10-10 §3.4): what the AI read of the last seven days, in numbers.
+ * A message whose new state the Show filter does not list leaves the list, and a line says so, with Undo; a card
+ * also drafts an issue for the topic its message is in (issue 260). */
 export function AdminFeedback() {
   const [view, setView] = useState<View>('messages')
   const [kind, setKind] = useState<FeedbackKind | ''>('')
@@ -58,6 +65,12 @@ export function AdminFeedback() {
   const [weekVersion, setWeekVersion] = useState(0)
   const [weekVisit, setWeekVisit] = useState(0)
   const [focus, setFocus] = useState<{ readonly id: number; readonly n: number } | null>(null)
+  // The message that last left the list by its mark, for the line that says so; and whether its undo is on its way.
+  const [gone, setGone] = useState<Gone | null>(null)
+  const [undoing, setUndoing] = useState(false)
+  const undoButton = useRef<HTMLButtonElement>(null)
+  // The topic an issue is being drafted for, from a message's card.
+  const [drafting, setDrafting] = useState<number | null>(null)
 
   /** Reads the topics, from the review app's own database: nothing is asked of the AI or of the learner app's server.
    * A failure is not the list's: the messages stay as they are, and By topic says so. */
@@ -125,6 +138,7 @@ export function AdminFeedback() {
       setBusy(true)
       if (!older) {
         setLoaded({ kind: 'loading' })
+        setGone(null)
         setAiReading(0)
         setAiWhy(null)
         setAiLeft([])
@@ -165,6 +179,44 @@ export function AdminFeedback() {
     void loadTopics()
   }
 
+  /** A message's state was saved. One the filter does not show takes the message out of the list. */
+  const marked = (id: number, mark: { readonly state: FeedbackState; readonly note: string }, was: FeedbackState) => {
+    if (loaded.kind !== 'list') return
+    const index = loaded.items.findIndex((item) => item.id === id)
+    if (index < 0) return
+    const item = { ...loaded.items[index]!, ...mark }
+    if (SHOWN[state].includes(mark.state)) return setLoaded({ ...loaded, items: loaded.items.map((one) => (one.id === id ? item : one)) })
+    setLoaded({ ...loaded, items: loaded.items.filter((one) => one.id !== id) })
+    setGone({ item, index, was, failed: '' })
+  }
+  // The card that held the focus is gone: the focus goes to the way back.
+  const goneId = gone?.item.id
+  useEffect(() => {
+    if (goneId !== undefined) undoButton.current?.focus()
+  }, [goneId])
+
+  /** The message gets the state it had, and stands in the list where it stood. */
+  const undo = async () => {
+    if (!gone) return
+    setUndoing(true)
+    try {
+      const answer = await hostedApi.admin.markFeedback(gone.item.id, { state: gone.was, note: gone.item.note })
+      const back = { ...gone.item, state: answer.state, note: answer.note }
+      setLoaded((now) => (now.kind === 'list' && !now.items.some((one) => one.id === back.id) ? { ...now, items: [...now.items.slice(0, gone.index), back, ...now.items.slice(gone.index)] } : now))
+      setGone(null)
+    } catch (err) {
+      setGone({ ...gone, failed: messageOf(err) })
+    } finally {
+      setUndoing(false)
+    }
+  }
+
+  /** Draft an issue, from a card: for the topic of its message. A topic made a moment ago is read first. */
+  const draft = (topic: number) => {
+    setDrafting(topic)
+    if (topics === null || topics === 'failed' || !topics.some((t) => t.id === topic)) void readTopics()
+  }
+
   /** The switch was moved. On: the list is read again, and with it the AI reads the page. Off: nothing more is asked. */
   const switched = (status: FeedbackAiStatus) => {
     const was = ai !== null && ai !== 'failed' && ai.on
@@ -203,6 +255,9 @@ export function AdminFeedback() {
   const left = aiLeft.reduce((sum, p) => sum + p.left, 0)
   const known = ai !== null && ai !== 'failed' ? ai : null
   const offered = topics !== null && topics !== 'failed' ? topics : []
+  const aiOn = known !== null && known.setUp && known.on
+  const draftFor = { aiOn, open: draft }
+  const draftTopic = drafting === null ? undefined : offered.find((t) => t.id === drafting)
   return (
     <>
       <h2 className="visually-hidden">Feedback</h2>
@@ -283,6 +338,21 @@ export function AdminFeedback() {
               </button>
             </div>
           )}
+          {gone && (
+            <div className="feedback-ai-left feedback-gone">
+              <p role="status" className="note feedback-ai-note">
+                Marked {STATE_LABEL[gone.item.state]}: the message left this list.
+              </p>
+              <button ref={undoButton} className="button small" disabled={undoing} onClick={() => void undo()}>
+                Undo
+              </button>
+              {gone.failed && (
+                <p role="alert" className="feedback-status failed">
+                  Not undone: {gone.failed}
+                </p>
+              )}
+            </div>
+          )}
           {shown.length === 0 && (
             <p className="note">
               {loaded.read === 0 && kind === '' ? 'No feedback yet.' : loaded.nextBefore === null ? 'Nothing here to show.' : `Nothing to show among the newest ${count(loaded.read, 'message')}.`}
@@ -296,7 +366,7 @@ export function AdminFeedback() {
               </p>
               <ul className="feedback-list" aria-label="Feedback">
                 {shown.map((item) => (
-                  <FeedbackCard key={item.id} item={item} topics={offered} onMoved={moved} />
+                  <FeedbackCard key={item.id} item={item} topics={offered} onMoved={moved} onMarked={marked} draft={draftFor} />
                 ))}
               </ul>
             </>
@@ -308,7 +378,7 @@ export function AdminFeedback() {
               </summary>
               <ul className="feedback-list" aria-label="Messages the AI reads as junk">
                 {junk.map((item) => (
-                  <FeedbackCard key={item.id} item={item} topics={offered} onMoved={moved} />
+                  <FeedbackCard key={item.id} item={item} topics={offered} onMoved={moved} onMarked={marked} draft={draftFor} />
                 ))}
               </ul>
             </details>
@@ -327,6 +397,7 @@ export function AdminFeedback() {
           )}
         </>
       )}
+      {draftTopic && <FeedbackDraftDialog open topic={draftTopic} repo={known?.repo ?? ''} dailyCalls={known?.dailyCalls ?? 0} onClose={() => setDrafting(null)} onFiled={loadTopics} />}
     </>
   )
 }

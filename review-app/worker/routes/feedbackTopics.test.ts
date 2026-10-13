@@ -341,6 +341,31 @@ describe('PUT /api/admin/feedback/:id/topic', () => {
     expect(await topicsOf()).toMatchObject({ 1: [sound, 'ai'] })
   })
 
+  it('moves a message to a new topic with the title typed, which is the coordinator’s and stays when the AI’s results are forgotten', async () => {
+    const res = await move(1, { title: '  Streak is lost at midnight ' })
+    expect(res.status).toBe(200)
+    const { topic } = (await res.json()) as { topic: { id: number; title: string } }
+    expect(topic.title).toBe('Streak is lost at midnight')
+    expect(topic.id).not.toBe(sound)
+    expect(await topicsOf()).toMatchObject({ 1: [topic.id, 'coordinator'] })
+    expect(await env.DB.prepare('SELECT updated_by FROM feedback_topics WHERE id = ?').bind(topic.id).first()).toEqual({ updated_by: ADMIN })
+    // A title a topic already has, whatever its case, is that topic: no second one is made.
+    const again = await move(3, { title: 'number of new words a day' })
+    expect(await again.json()).toEqual({ id: 3, topic: { id: words, title: 'Number of new words a day' } })
+    expect(outbound).toEqual([])
+  })
+
+  it('refuses a new topic’s title that may not be one, a body with both or neither, and makes no topic for a message with no reading', async () => {
+    const count = async () => (await env.DB.prepare('SELECT COUNT(*) AS n FROM feedback_topics').first<{ n: number }>())!.n
+    const before = await count()
+    for (const body of [{ title: 'ab' }, { title: 'x'.repeat(MAX_TOPIC_TITLE_LENGTH + 1) }, { title: 'Two\nlines' }, { title: 'Write to me@example.com' }, { title: 7 }, { topic: sound, title: 'Both at once' }]) {
+      expect((await move(1, body)).status).toBe(400)
+    }
+    expect((await move(77, { title: 'A topic for nothing' })).status).toBe(404)
+    expect(await count()).toBe(before)
+    expect(await topicsOf()).toMatchObject({ 1: [sound, 'ai'] })
+  })
+
   it('leaves the mark of a message as it is: a message called "topic" is not a mark', async () => {
     expect((await admin('PUT', '/api/admin/feedback/1', { state: 'seen', note: 'Mine.' })).status).toBe(200)
     await move(1, { topic: words })
