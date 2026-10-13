@@ -340,6 +340,7 @@ export const en = {
   'study.play': 'Play the word',
   'study.playAgain': 'Play again',
   'study.audioFailed': 'The audio didn’t play. You can still answer.',
+  'study.audioRefused': 'The browser didn’t start the audio by itself. Press “Play again” to hear the word.',
   'study.correct': 'Correct',
   'study.incorrect': 'Not quite. The answer is {answer}.',
   'study.slow': 'Correct, but slow, so it counts as hard.',

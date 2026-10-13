@@ -36,6 +36,33 @@ for (const mode of ['flashcard', 'multiple_choice', 'listening_select']) {
   })
 }
 
+test('listening cards play on one audio element, which the first tap started (issue 266)', async ({ page }) => {
+  // A phone lets a clip start by itself only on an element a tap has started: every play is recorded with its element.
+  await page.addInitScript(() => {
+    const seen: HTMLMediaElement[] = []
+    const plays: { element: number; silence: boolean }[] = []
+    ;(window as unknown as { plays: typeof plays }).plays = plays
+    const play = HTMLMediaElement.prototype.play
+    HTMLMediaElement.prototype.play = function (this: HTMLMediaElement) {
+      if (!seen.includes(this)) seen.push(this)
+      plays.push({ element: seen.indexOf(this), silence: this.src.startsWith('data:audio/wav') })
+      return play.call(this)
+    }
+  })
+  await page.goto('/')
+  await finishSetup(page)
+  const plays = () => page.evaluate(() => (window as unknown as { plays: { element: number; silence: boolean }[] }).plays)
+  // The setup's own taps started the element, on silence, before any clip.
+  expect((await plays())[0]).toEqual({ element: 0, silence: true })
+  // By the app's own link: a new document would start over.
+  await page.getByRole('link', { name: 'Listening' }).click()
+  await expect(page.locator('.card')).toHaveAttribute('data-mode', 'listening_select')
+  await answer(page)
+  await answer(page)
+  await expect.poll(async () => (await plays()).filter((p) => !p.silence).length).toBeGreaterThanOrEqual(2)
+  expect(new Set((await plays()).map((p) => p.element))).toEqual(new Set([0]))
+})
+
 test('a flashcard’s answer: the gloss on its own row under the translation, without brackets', async ({ browser }) => {
   const GLOSS = 'for the test'
   const context = await browser.newContext({ serviceWorkers: 'block' })
