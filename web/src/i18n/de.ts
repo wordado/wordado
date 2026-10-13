@@ -275,6 +275,7 @@ export const de: Messages = {
 
   'signin.title': 'Konto erstellen oder anmelden',
   'signin.againTitle': 'Erneut anmelden',
+  'signin.sameSteps': 'Die Schritte sind für ein neues und für ein bestehendes Konto dieselben. Wenn du schon ein Konto hast, melde dich mit dessen E-Mail-Adresse an, und dein Fortschritt ist wieder da.',
   'signin.gateIntro': 'Das Gesetz legt je nach Land ein Alter für ein eigenes Konto fest. Dein Land bleibt auf diesem Gerät und wird nicht gesendet. Wenn du das Kästchen für Neuigkeiten ankreuzt, wird diese Wahl mit deinem Konto gespeichert.',
   'signin.country': 'Land, in dem du lebst',
   'signin.countryUnknown': 'Das möchte ich nicht angeben',
@@ -289,6 +290,7 @@ export const de: Messages = {
   'signin.backToDemo': 'Zurück zur Demo',
   'signin.demoNote': 'Hat diese E-Mail-Adresse schon ein Wordado-Konto, werden die Wörter aus der Demo gelöscht. Ein neues Konto behält sie.',
   'signin.email': 'E-Mail',
+  'signin.emailHint': 'Wenn du schon ein Konto hast, nimm die E-Mail-Adresse, mit der es erstellt wurde. Eine andere Adresse erstellt ein neues Konto.',
   'signin.emailInvalid': 'Gib eine E-Mail-Adresse ein, zum Beispiel name@example.com.',
   'signin.sendCode': 'Code per E-Mail senden',
   'signin.codeSent': 'Wir haben einen sechsstelligen Code an {email} gesendet. Er ist fünf Minuten gültig.',
