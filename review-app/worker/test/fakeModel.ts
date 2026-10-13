@@ -44,7 +44,8 @@ const GRANT = 'urn:ietf:params:oauth:grant-type:jwt-bearer'
 /**
  * The service the model is reached through, in memory: the key, one answer for each request, and the ways it fails.
  * With a `serviceAccount` it is Google's: any address whose path is `/token` is the token endpoint, which checks the
- * signed JWT as Google does and gives a token for an hour, and the model takes the newest token and nothing else.
+ * signed JWT as Google does and gives a token for an hour, and the model takes any token it gave, as Google takes
+ * every token that has not run out: two requests at once each make their own, and both are good (issue #208).
  * It never asks a model, and never Google.
  */
 export class FakeModel {
@@ -116,9 +117,9 @@ export class FakeModel {
     // A status that carries no body (204, a redirect) is answered without one.
     if (this.failure) return new Response([204, 301, 302, 304].includes(this.failure.status) ? null : (this.failure.body ?? sent), { status: this.failure.status })
     const json = (v: unknown, status = 200) => new Response(JSON.stringify(v), { status, headers: { 'content-type': 'application/json' } })
-    // By key, the key; by service account, the newest token and no earlier one.
-    const accepted = this.serviceAccount ? this.tokens.at(-1) : this.key
-    if ((init.method ?? 'GET') !== 'POST' || accepted === undefined || headers['authorization'] !== `Bearer ${accepted}`) return json({ error: { message: 'No auth credentials found', code: 401 } }, 401)
+    // By key, the key; by service account, any token given.
+    const accepted = this.serviceAccount ? this.tokens : [this.key]
+    if ((init.method ?? 'GET') !== 'POST' || !accepted.some((one) => headers['authorization'] === `Bearer ${one}`)) return json({ error: { message: 'No auth credentials found', code: 401 } }, 401)
     const value = this.answer(body.response_format.json_schema?.name ?? '', this.inputOf(this.requests.length - 1))
     return json({ choices: [{ message: { role: 'assistant', content: JSON.stringify(value) } }] })
   }
