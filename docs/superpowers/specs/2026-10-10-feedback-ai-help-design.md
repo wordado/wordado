@@ -255,3 +255,16 @@ need no translation (default `en,bg`).
    app's secret. A switch in the tab turns the AI help on and off (§4).
 3. **The daily limit** is 200 calls.
 4. **The week's summary is mailed by the review app** to its admins, without any text a learner wrote (§3.4).
+
+## 11. Decided by the owner, 2026-10-13 (issue 260)
+
+1. **Draft an issue is also on a message's card** in the Messages view (§3.5). It drafts for the topic the message
+   is in, in the same dialog, and the number pasted back is that topic's match. It is on the card of a message the
+   AI has read, and waits for the AI help to be on and for the message to have a topic. The draft stays in our
+   words: a learner's words are not put in an issue.
+2. **A message no topic suits gets a new one from its card** (§3.2): "New topic…" in the card's list of topics, with
+   a title the coordinator types, held to what a renamed topic's is. A title a topic already has is that topic. The
+   new topic is the coordinator's: it stays when the AI's results are forgotten.
+3. **A message leaves the list when its new state is one the Show filter does not list.** A line above the list says
+   what it was marked, with Undo, which gives the message the state it had and puts it where it stood. The note is
+   saved apart from the state, so it is written before a state that takes the message out of the list.

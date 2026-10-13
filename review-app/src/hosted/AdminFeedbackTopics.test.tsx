@@ -293,7 +293,7 @@ describe('the Feedback tab by topic (spec 2026-10-10 §3.2)', () => {
     const li = await open('Sound plays twice on phones')
     const cards = () => within(within(li).getByRole('list', { name: 'Messages of the topic' })).getAllByRole('listitem')
     const select = within(cards()[1]!).getByRole('combobox', { name: 'Move to…' }) as HTMLSelectElement
-    expect([...select.options].map((o) => o.textContent)).toEqual(['Choose a topic', 'Number of new words a day', 'A dark theme'])
+    expect([...select.options].map((o) => o.textContent)).toEqual(['Choose a topic', 'Number of new words a day', 'A dark theme', 'New topic…'])
     listTopics.mockResolvedValue([{ ...words, count: 2 }, { ...sound, count: 3 }, theme])
     fireEvent.change(select, { target: { value: '15' } })
     await waitFor(() => expect(cards()).toHaveLength(1))
@@ -384,9 +384,9 @@ describe('a message’s topic on its card, among the messages', () => {
     const [first, second, third] = await cards()
     expect(within(first!).getByText('Topic: Sound plays twice on phones')).toBeTruthy()
     const select = (await within(first!).findByRole('combobox', { name: 'Move to…' })) as HTMLSelectElement
-    expect([...select.options].map((o) => o.textContent)).toEqual(['Choose a topic', 'Number of new words a day', 'A dark theme'])
+    expect([...select.options].map((o) => o.textContent)).toEqual(['Choose a topic', 'Number of new words a day', 'A dark theme', 'New topic…'])
     expect(within(second!).getByText('Topic: none')).toBeTruthy()
-    expect([...(within(second!).getByRole('combobox', { name: 'Move to…' }) as HTMLSelectElement).options]).toHaveLength(4)
+    expect([...(within(second!).getByRole('combobox', { name: 'Move to…' }) as HTMLSelectElement).options]).toHaveLength(5)
     // A message with no reading is in no topic and cannot be moved.
     expect(within(third!).queryByText(/^Topic:/)).toBeNull()
     expect(within(third!).queryByRole('combobox', { name: 'Move to…' })).toBeNull()
@@ -403,7 +403,7 @@ describe('a message’s topic on its card, among the messages', () => {
     expect((await cards())).toHaveLength(2)
     const select = within(first!).getByRole('combobox', { name: 'Move to…' }) as HTMLSelectElement
     expect(select.value).toBe('')
-    expect([...select.options].map((o) => o.textContent)).toEqual(['Choose a topic', 'Sound plays twice on phones', 'A dark theme'])
+    expect([...select.options].map((o) => o.textContent)).toEqual(['Choose a topic', 'Sound plays twice on phones', 'A dark theme', 'New topic…'])
   })
 
   it('says why a message was not moved, and leaves it where it was', async () => {
@@ -416,6 +416,45 @@ describe('a message’s topic on its card, among the messages', () => {
     expect(within(first!).getByText('Topic: Sound plays twice on phones')).toBeTruthy()
   })
 
+  it('gives a message no topic suits a new topic, with the title typed (issue 260)', async () => {
+    vi.spyOn(hostedApi.admin, 'feedback').mockResolvedValue({ connected: true, items: [inSound], read: 1, nextBefore: null })
+    const move = vi.spyOn(hostedApi.admin, 'moveFeedback').mockResolvedValue({ id: 4, topic: { id: 21, title: 'Streak is lost at midnight' } })
+    render(<AdminFeedback />)
+    const [first] = await cards()
+    fireEvent.change(await within(first!).findByRole('combobox', { name: 'Move to…' }), { target: { value: 'new' } })
+    const form = within(first!).getByRole('form', { name: 'A new topic' })
+    const title = within(form).getByRole('textbox', { name: 'New topic’s title' }) as HTMLInputElement
+    expect(document.activeElement).toBe(title)
+    // The list of topics gives way to the field, and nothing is sent for a title too short to be one.
+    expect(within(first!).queryByRole('combobox', { name: 'Move to…' })).toBeNull()
+    const make = within(form).getByRole('button', { name: 'Make the topic' }) as HTMLButtonElement
+    fireEvent.change(title, { target: { value: 'St' } })
+    expect(make.disabled).toBe(true)
+    fireEvent.change(title, { target: { value: ' Streak is lost at midnight ' } })
+    listTopics.mockResolvedValue([topic(21, 'Streak is lost at midnight', { count: 1 }), words, sound, theme])
+    fireEvent.click(make)
+    expect(await within(first!).findByText('Topic: Streak is lost at midnight')).toBeTruthy()
+    expect(move).toHaveBeenCalledWith(4, { title: 'Streak is lost at midnight' })
+    // The field is gone, and the new topic is one of those the tab knows.
+    expect(within(first!).queryByRole('form', { name: 'A new topic' })).toBeNull()
+    await waitFor(() => expect([...(within(first!).getByRole('combobox', { name: 'Move to…' }) as HTMLSelectElement).options].map((o) => o.textContent)).toContain('Sound plays twice on phones'))
+  })
+
+  it('keeps the title typed when the new topic is refused, and Cancel brings the list of topics back', async () => {
+    vi.spyOn(hostedApi.admin, 'feedback').mockResolvedValue({ connected: true, items: [inSound], read: 1, nextBefore: null })
+    vi.spyOn(hostedApi.admin, 'moveFeedback').mockRejectedValue(new Error('title must be one line'))
+    render(<AdminFeedback />)
+    const [first] = await cards()
+    fireEvent.change(await within(first!).findByRole('combobox', { name: 'Move to…' }), { target: { value: 'new' } })
+    fireEvent.change(within(first!).getByRole('textbox', { name: 'New topic’s title' }), { target: { value: 'See example.com' } })
+    fireEvent.click(within(first!).getByRole('button', { name: 'Make the topic' }))
+    expect(await within(first!).findByText('Topic not saved: title must be one line')).toBeTruthy()
+    expect((within(first!).getByRole('textbox', { name: 'New topic’s title' }) as HTMLInputElement).value).toBe('See example.com')
+    expect(within(first!).getByText('Topic: Sound plays twice on phones')).toBeTruthy()
+    fireEvent.click(within(first!).getByRole('button', { name: 'Cancel' }))
+    expect(within(first!).getByRole('combobox', { name: 'Move to…' })).toBeTruthy()
+  })
+
   it('reads the topics again after the AI has read a page, which may have made new ones', async () => {
     vi.spyOn(hostedApi.admin, 'feedback').mockResolvedValue({ connected: true, items: [unread], read: 1, nextBefore: null })
     vi.spyOn(hostedApi.admin, 'readFeedbackAi').mockResolvedValue({ results: { 2: reading({ topic: { id: 20, title: 'A new topic' } }) }, asked: 1, left: 0, why: null })
@@ -424,6 +463,76 @@ describe('a message’s topic on its card, among the messages', () => {
     const [first] = await cards()
     expect(await within(first!).findByText('Topic: A new topic')).toBeTruthy()
     await waitFor(() => expect(listTopics).toHaveBeenCalledTimes(2))
+  })
+})
+
+describe('Draft an issue, on a message’s card (issue 260)', () => {
+  const inSound = message(4, { message: 'The sound plays twice.' })
+  const inNone = message(3, { message: 'Thank you.', ai: reading({ category: 'praise', severity: null, summary: 'Thanks.', topic: null }) })
+  const unread = message(2, { message: 'Not read yet.', ai: null })
+  const cards = async () => within(await screen.findByRole('list', { name: 'Feedback' })).getAllByRole('listitem')
+  const listedAs = (items: FeedbackView[]) => vi.spyOn(hostedApi.admin, 'feedback').mockResolvedValue({ connected: true, items, read: items.length, nextBefore: null })
+
+  it('drafts for the topic the message is in, and the filed issue’s number becomes that topic’s match', async () => {
+    listedAs([inSound])
+    const ask = vi.spyOn(hostedApi.admin, 'draftFeedbackTopic').mockResolvedValue({ ok: true, title: 'Audio is heard twice', body: 'In our words.', messages: 4 })
+    const save = vi.spyOn(hostedApi.admin, 'setFeedbackTopicIssue').mockResolvedValue({ ...sound, issue: 95, issueState: 'confirmed' })
+    render(<AdminFeedback />)
+    const [first] = await cards()
+    const button = within(first!).getByRole('button', { name: 'Draft an issue' }) as HTMLButtonElement
+    await waitFor(() => expect(button.disabled).toBe(false))
+    fireEvent.click(button)
+    const dialog = await screen.findByRole('dialog', { name: 'Draft an issue' })
+    await waitFor(() => expect((within(dialog).getByRole('textbox', { name: 'Title' }) as HTMLInputElement).value).toBe('Audio is heard twice'))
+    expect(ask).toHaveBeenCalledWith(sound.id)
+    const read = listTopics.mock.calls.length
+    fireEvent.change(within(dialog).getByRole('textbox', { name: /paste its number/ }), { target: { value: '#95' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(save).toHaveBeenCalledWith(sound.id, 95)
+    expect(listTopics.mock.calls.length).toBeGreaterThan(read)
+    expect(await cards()).toHaveLength(1)
+  })
+
+  it('drafts for a topic made a moment ago, once the topics are read again', async () => {
+    listedAs([inSound])
+    vi.spyOn(hostedApi.admin, 'moveFeedback').mockResolvedValue({ id: 4, topic: { id: 21, title: 'Streak is lost at midnight' } })
+    const ask = vi.spyOn(hostedApi.admin, 'draftFeedbackTopic').mockResolvedValue({ ok: true, title: 'Streak', body: 'In our words.', messages: 1 })
+    render(<AdminFeedback />)
+    const [first] = await cards()
+    fireEvent.change(await within(first!).findByRole('combobox', { name: 'Move to…' }), { target: { value: 'new' } })
+    fireEvent.change(within(first!).getByRole('textbox', { name: 'New topic’s title' }), { target: { value: 'Streak is lost at midnight' } })
+    listTopics.mockResolvedValue([topic(21, 'Streak is lost at midnight', { count: 1 }), words, sound, theme])
+    fireEvent.click(within(first!).getByRole('button', { name: 'Make the topic' }))
+    await within(first!).findByText('Topic: Streak is lost at midnight')
+    fireEvent.click(within(first!).getByRole('button', { name: 'Draft an issue' }))
+    await screen.findByRole('dialog', { name: 'Draft an issue' })
+    await waitFor(() => expect(ask).toHaveBeenCalledWith(21))
+  })
+
+  it('is not on a message the AI has not read, and waits for a topic on one that is in none', async () => {
+    listedAs([inNone, unread])
+    render(<AdminFeedback />)
+    const [first, second] = await cards()
+    const button = within(first!).getByRole('button', { name: 'Draft an issue' }) as HTMLButtonElement
+    await waitFor(() => expect(within(first!).getByText('Give the message a topic first.')).toBeTruthy())
+    expect(button.disabled).toBe(true)
+    expect(within(second!).queryByRole('button', { name: 'Draft an issue' })).toBeNull()
+  })
+
+  it('cannot be asked for while the AI help is off, and says why', async () => {
+    vi.spyOn(hostedApi.admin, 'feedbackAi').mockResolvedValue(aiStatus({ on: false }))
+    listedAs([inSound])
+    render(<AdminFeedback />)
+    const [first] = await cards()
+    expect((within(first!).getByRole('button', { name: 'Draft an issue' }) as HTMLButtonElement).disabled).toBe(true)
+    expect(within(first!).getByText('Needs the AI help, which is off or not set up.')).toBeTruthy()
+  })
+
+  it('is not repeated on the cards of an opened topic, which has its own', async () => {
+    await byTopic()
+    const li = await open('Number of new words a day')
+    expect(within(li).getAllByRole('button', { name: 'Draft an issue' })).toHaveLength(1)
   })
 })
 

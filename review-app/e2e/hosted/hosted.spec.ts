@@ -442,16 +442,28 @@ async function readsFeedback(browser: Browser, kind: 'Bug' | 'Idea', newest: str
   await expect(items.nth(0).getByText('Mozilla/5.0 (X11; Linux x86_64)')).toBeVisible()
   await expectFits(page, '.admin *')
 
-  // Done saves as it is chosen; the note on Save note.
+  // Done saves as it is chosen, and the message leaves the open ones, with a way back (issue 260); the note on Save note.
   await items.nth(0).getByLabel('State').selectOption({ label: 'Done' })
-  await expect(items.nth(0).getByRole('status').filter({ hasText: 'Saved' })).toBeVisible()
-  const note = items.nth(1).getByLabel('Note')
+  await expect(items).toHaveCount(1)
+  await expect(panel.getByText('Marked Done: the message left this list.')).toBeVisible()
+  const undo = panel.getByRole('button', { name: 'Undo' })
+  await expect(undo).toBeFocused()
+  await expectFits(page, '.admin *')
+  await undo.click()
+  await expect(items).toHaveCount(2)
+  await expect(items.nth(0)).toContainText(newest)
+  await expect(items.nth(0).getByLabel('State')).toHaveValue('new')
+  await expect(undo).toHaveCount(0)
+  await items.nth(0).getByLabel('State').selectOption({ label: 'Done' })
+  await expect(items).toHaveCount(1)
+  await expect(items.first()).toContainText(older)
+  const note = items.first().getByLabel('Note')
   await note.fill('Asked for the browser and the unit.')
-  await items.nth(1).getByRole('button', { name: 'Save note' }).click()
-  await expect(items.nth(1).getByRole('status').filter({ hasText: 'Saved' })).toBeVisible()
-  await expect(items.nth(1).getByRole('button', { name: 'Save note' })).toBeDisabled()
-  await items.nth(1).getByLabel('State').selectOption({ label: 'Looked at' })
-  await expect(items.nth(1).getByRole('status').filter({ hasText: 'Saved' })).toHaveCount(2)
+  await items.first().getByRole('button', { name: 'Save note' }).click()
+  await expect(items.first().getByRole('status').filter({ hasText: 'Saved' })).toBeVisible()
+  await expect(items.first().getByRole('button', { name: 'Save note' })).toBeDisabled()
+  await items.first().getByLabel('State').selectOption({ label: 'Looked at' })
+  await expect(items.first().getByRole('status').filter({ hasText: 'Saved' })).toHaveCount(2)
 
   // The filters read the list again: Done has the one, Open the other, All both.
   const show = panel.getByLabel('Show')
@@ -597,6 +609,10 @@ async function readsTopics(browser: Browser, mine: 'sound' | 'words') {
   const path = items.filter({ hasText: 'The path does not open after I finish a unit.' })
   await expect(path.getByText('Topic: Path stays white after a unit')).toBeVisible()
   await expect(path.getByLabel('Move to…')).toBeVisible()
+  // A card drafts an issue for its message's topic, and offers a topic of its own to a message none suits (issue 260).
+  await expect(path.getByRole('button', { name: 'Draft an issue' })).toBeEnabled()
+  await expect(path.getByLabel('Move to…').getByRole('option', { name: 'New topic…' })).toBeAttached()
+  await expect(items.filter({ hasText: 'Cheap watches' }).getByRole('button', { name: 'Draft an issue' })).toBeDisabled()
   await expect(items.filter({ hasText: 'Cheap watches' }).getByText('Topic: none')).toBeVisible()
 
   const byTopic = async () => {

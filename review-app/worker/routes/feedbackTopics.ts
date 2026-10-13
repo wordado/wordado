@@ -1,7 +1,7 @@
 import type { Context, Hono } from 'hono'
 import { FEEDBACK_STATES, MAX_FEEDBACK_NOTE_LENGTH, MAX_TOPIC_TITLE_LENGTH, MIN_TOPIC_TITLE_LENGTH, type FeedbackState, type FeedbackTopicOpened, type FeedbackView } from '../../shared/hosted'
 import { apiError, jsonBody, type AppEnv, type Deps } from '../app'
-import { dropFeedbackAi, feedbackAiRows, feedbackMarks, getTopic, listTopics, markTopicMessagesDone, mergeTopics, moveFeedbackToTopic, putTopic, setTopicIssue, topicFeedbackIds } from '../db'
+import { dropFeedbackAi, feedbackAiRows, feedbackMarks, getTopic, listTopics, markTopicMessagesDone, mergeTopics, moveFeedbackToTopic, putTopic, setTopicIssue, topicByTitle, topicFeedbackIds } from '../db'
 import { aiView } from '../feedbackAi'
 import { draftIssue } from '../feedbackDraft'
 import { FeedbackUnread, feedbackSource, readFeedback } from '../learnerApp'
@@ -23,7 +23,7 @@ const fresh = (c: Context) => c.header('cache-control', 'no-store')
 
 /**
  * The Feedback tab by topic (spec 2026-10-10 §3.2, §3.3): the list, a topic's messages, and what the coordinator
- * does with a topic: rename it, mark it, merge it into another, move a message to it, and confirm or remove its
+ * does with a topic: rename it, mark it, merge it into another, move a message to it or to a new one, and confirm or remove its
  * match with a known issue. All of it is the coordinator's own doing: none of these routes asks the model, and the
  * only request that leaves the Worker is the read of a topic's messages from the learner app's server. The one
  * exception is the draft of an issue (§3.5), which reads the topic's messages and asks the model once; it changes
@@ -124,15 +124,27 @@ export function feedbackTopicsRoutes(app: Hono<AppEnv>, deps: Deps): void {
     return topic ? c.json(topic) : apiError(c, 404, 'no such topic')
   })
 
-  /** The coordinator moves a message to a topic. No later reading of the AI's moves it again. */
+  /**
+   * The coordinator moves a message to a topic: one there is (`topic`), or one with a title they type (`title`), for
+   * a message no topic suits. The title is held to what a renamed topic's is, and one a topic already has is that
+   * topic. No later reading of the AI's moves the message again.
+   */
   app.put('/api/admin/feedback/:id/topic', async (c) => {
     fresh(c)
     const id = idOf(c.req.param('id'))
     if (id === null) return apiError(c, 400, 'that is not the id of a message')
     const body = await jsonBody<Record<string, unknown>>(c)
-    const { topic } = body
-    const extra = extraKey(body, ['topic'])
+    const extra = extraKey(body, ['topic', 'title'])
     if (extra !== undefined) return apiError(c, 400, `a move names the topic, and no ${extra}`)
+    if ('topic' in body === 'title' in body) return apiError(c, 400, 'a move names the topic by its id (topic), or a new one by its title (title)')
+    let topic = body['topic']
+    if ('title' in body) {
+      const title = topicTitle(body['title'])
+      if (title === null) return apiError(c, 400, `title must be one line of ${MIN_TOPIC_TITLE_LENGTH} to ${MAX_TOPIC_TITLE_LENGTH} characters, with no address, link or phone number in it`)
+      // Asked first, so that a message with no reading leaves no empty topic behind.
+      if (!(await feedbackAiRows(deps.env.DB, [id])).has(id)) return apiError(c, 404, 'The message has no AI result yet.')
+      topic = await topicByTitle(deps.env.DB, title, c.get('me').email, deps.now().toISOString())
+    }
     if (!isId(topic)) return apiError(c, 400, 'topic must be the id of a topic')
     if ((await moveFeedbackToTopic(deps.env.DB, id, topic)) === 'missing') return apiError(c, 404, 'The message has no AI result yet, or there is no such topic.')
     const now = (await feedbackAiRows(deps.env.DB, [id])).get(id)

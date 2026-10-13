@@ -425,6 +425,14 @@ export async function moveFeedbackToTopic(db: D1Database, feedbackId: number, to
   const moved = await db.prepare("UPDATE feedback_ai SET topic_id = ?, topic_by = 'coordinator' WHERE feedback_id = ? AND EXISTS (SELECT 1 FROM feedback_topics WHERE id = ?)").bind(topic, feedbackId, topic).run()
   return moved.meta.changes === 1 ? 'ok' : 'missing'
 }
+/** The topic with a title the coordinator typed, for a message no topic suits: made when no topic has the title, and
+ * theirs from then on, so it stays when the AI's results are forgotten. A title a topic already has is that topic. */
+export async function topicByTitle(db: D1Database, title: string, by: string, at: string): Promise<number | null> {
+  const id = (await insertTopicsIfAbsent(db, [title], at)).get(title)
+  if (id === undefined) return null
+  await db.prepare('UPDATE feedback_topics SET updated_at = ?, updated_by = ? WHERE id = ? AND updated_by IS NULL').bind(at, by, id).run()
+  return id
+}
 /** The coordinator's answer on a topic's match: a number they confirmed or typed, or none and `removed`. False when there is no such topic. */
 export async function setTopicIssue(db: D1Database, id: number, issue: number | null, state: TopicIssueState, by: string | null, at: string): Promise<boolean> {
   return (await db.prepare('UPDATE feedback_topics SET issue = ?, issue_state = ?, updated_at = ?, updated_by = COALESCE(?, updated_by) WHERE id = ?').bind(issue, state, at, by, id).run()).meta.changes === 1
