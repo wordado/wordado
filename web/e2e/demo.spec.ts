@@ -719,6 +719,10 @@ test('opens a theme’s page from Themes, reads its words, finds one and chooses
 })
 
 test('practises a whole theme that is not started, chooses a word to learn, and takes the theme up from the done screen', async ({ page }) => {
+  // The longest test of the suite: three sessions of ten answers and eight accessibility scans. It takes 19 s on a
+  // Mac and came to the 30 s limit on CI's Firefox and WebKit, still answering, with no step stuck (issue #194:
+  // 12 s of it are the waits before each key, 6 s the scans). So it has twice the time, not less to check.
+  test.setTimeout(60_000)
   await page.goto('/')
   await finishSetup(page)
   await page.goto('/themes')
