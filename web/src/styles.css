@@ -3143,6 +3143,8 @@ li:not(:has(> .play-word)) > .word-where {
 .banner-actions {
   display: flex;
   flex-wrap: wrap;
+  /* A link, a button with its own padding and a link with a finger's room: on one line, not each from the top. */
+  align-items: center;
   gap: var(--space-4);
   margin-top: var(--space-1);
 }
