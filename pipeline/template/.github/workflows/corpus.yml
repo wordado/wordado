@@ -129,6 +129,9 @@ jobs:
       # R2 does not take the AWS CLI's default integrity headers.
       AWS_REQUEST_CHECKSUM_CALCULATION: when_required
       AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+      # One refused request must not stop a publish: each file is tried up to ten times.
+      AWS_RETRY_MODE: standard
+      AWS_MAX_ATTEMPTS: 10
     steps:
       # The release gate that a required reviewer would be on a paid plan: nothing runs until it passes.
       - name: Only a release actor who typed "release" can publish
@@ -180,7 +183,9 @@ jobs:
         run: |
           aws s3 sync "$OUT" "$BUCKET" --endpoint-url "$R2" --exclude '*' --include '*.pack' --include '*.trial' \
             --content-type application/json --cache-control 'public, max-age=31536000, immutable'
-          aws s3 sync "$OUT/audio" "$BUCKET/audio" --endpoint-url "$R2" \
+          # A clip's bytes never change (a new take is a new name), so a clip of the same size is already there:
+          # a release uploads the new clips only.
+          aws s3 sync "$OUT/audio" "$BUCKET/audio" --endpoint-url "$R2" --size-only \
             --content-type audio/mp4 --cache-control 'public, max-age=86400'
           aws s3 cp "$OUT/fixes.json" "$BUCKET/fixes.json" --endpoint-url "$R2" \
             --content-type application/json --cache-control no-cache
@@ -231,6 +236,9 @@ jobs:
       AWS_DEFAULT_REGION: auto
       AWS_REQUEST_CHECKSUM_CALCULATION: when_required
       AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+      # One refused request must not stop a publish: each file is tried up to ten times.
+      AWS_RETRY_MODE: standard
+      AWS_MAX_ATTEMPTS: 10
     steps:
       # credits.json is public and says who made the word data: only a release actor publishes it.
       - name: Only a release actor can publish the credits
