@@ -151,6 +151,11 @@ export interface SampleEntry {
   sense: string
 }
 
+/** The entries of the Bulgarian sample the demo is built with, so a test knows the right answer to a question. */
+export function sampleEntries(): readonly SampleEntry[] {
+  return (JSON.parse(readFileSync(join(SAMPLE_DIR, 'corpus-v0-bg.pack'), 'utf8')) as { entries: SampleEntry[] }).entries
+}
+
 /**
  * Serves the Bulgarian sample with a sense gloss on every entry (the bundled one has a single gloss), and returns its
  * entries, so a test knows the right answer to a question. The context must block service workers, as above.
