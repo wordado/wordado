@@ -879,9 +879,68 @@ main:focus,
   border-radius: 1.5rem;
 }
 
+/* The word and its listen button: one under the other, as the card's other rows are. */
+.hw-line {
+  display: contents;
+}
+
+/* On a phone the exercise is one screen (#269): the card takes what the actions under it leave, so they lie at the
+   bottom, and nothing is below the screen to scroll to. What cannot fit (long glosses, enlarged text) still scrolls. */
 @media (max-width: 39.99rem) {
-  .card[data-mode='flashcard'] {
+  .app > main > .study {
+    padding-bottom: calc(var(--space-3) + env(safe-area-inset-bottom));
+  }
+
+  .study-bar {
+    min-height: 3.5rem;
+  }
+
+  .card {
     flex-grow: 1;
+    gap: var(--space-2);
+    padding: 3rem 1.25rem var(--space-4);
+  }
+
+  .card-more {
+    top: var(--space-1);
+    right: var(--space-2);
+  }
+
+  /* The listen button beside the word, not under it. The word stays in the middle of the card: the button has the
+     column after it, and an equal column before it is empty. What the button says when a clip fails has its own row. */
+  .hw-line {
+    display: grid;
+    grid-template-columns: minmax(2.75rem, 1fr) auto minmax(2.75rem, 1fr);
+    align-items: start;
+    gap: var(--space-2);
+    width: 100%;
+  }
+
+  .hw-line > .headword {
+    grid-column: 2;
+  }
+
+  .hw-line > .play-word {
+    grid-column: 3;
+    justify-self: start;
+  }
+
+  .hw-line > .note {
+    grid-column: 1 / -1;
+    margin: 0;
+  }
+
+  .card .hw-word {
+    font-size: clamp(2.25rem, 11vw, 2.75rem);
+  }
+
+  .card .play-word {
+    width: 2.75rem;
+    height: 2.75rem;
+  }
+
+  .card .headword {
+    gap: var(--space-1);
   }
 }
 
@@ -1307,6 +1366,58 @@ main:focus,
 @media (hover: none) {
   .keys-hint {
     display: none;
+  }
+}
+
+/* On a phone (#269): lower answers, and the result and Continue in one row, whose place is kept under the answers
+   before there is a result, so they do not move when it comes. */
+@media (max-width: 39.99rem) {
+  .study-actions {
+    gap: 0.625rem;
+    margin-top: var(--space-3);
+  }
+
+  .options {
+    gap: var(--space-2);
+  }
+
+  .option {
+    min-height: 3.125rem;
+    padding-block: 0.375rem;
+    font-size: 1.125rem;
+  }
+
+  .feedback-sheet {
+    flex-direction: row;
+    align-items: center;
+    min-height: 4rem;
+  }
+
+  .feedback-sheet.is-correct,
+  .feedback-sheet.is-incorrect {
+    padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+    border-radius: 1.125rem;
+  }
+
+  .feedback-sheet > .feedback {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .feedback-sheet p {
+    line-height: 1.3;
+  }
+
+  .study-continue {
+    flex-shrink: 0;
+    width: auto;
+    min-height: 3rem;
+    padding-inline: 1.25rem;
+    border-radius: 0.875rem;
+  }
+
+  .keys-hint {
+    margin-top: var(--space-2);
   }
 }
 

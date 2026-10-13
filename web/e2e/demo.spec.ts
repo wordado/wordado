@@ -1,7 +1,7 @@
 import { expect, test, type Locator } from '@playwright/test'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { answer, expectAccessible, finishSetup, finishSetupAt, forwardConsole, heading, serveGlossedSample, serveTrialSample, serveTwoLevelSample, SETTLE_MS, studyNew, today } from './helpers'
+import { answer, expectAccessible, finishSetup, finishSetupAt, forwardConsole, heading, sampleEntries, serveGlossedSample, serveTrialSample, serveTwoLevelSample, SETTLE_MS, studyNew, today } from './helpers'
 
 test.beforeEach(async ({ context }) => {
   forwardConsole(context)
@@ -35,6 +35,65 @@ for (const mode of ['flashcard', 'multiple_choice', 'listening_select']) {
     expect(await answer(page)).toBe(mode)
   })
 }
+
+// A phone's visible screen with the browser's bars on it (#269): the exercise is one screen, with nothing to scroll to.
+test.describe('an exercise on a phone', () => {
+  test.use({ viewport: { width: 390, height: 664 } })
+  /** How far the page reaches below the screen: 0 when there is nothing to scroll to. */
+  const below = (page: import('@playwright/test').Page) => page.evaluate(() => Math.max(0, document.documentElement.scrollHeight - window.innerHeight))
+
+  test('a multiple-choice question, its result and Continue are on one screen, and the answers keep their place', async ({ page }) => {
+    await page.goto('/')
+    await finishSetup(page)
+    await page.goto('/study?mode=multiple_choice')
+    const prompt = page.locator('.card[data-phase="prompt"]')
+    const options = page.locator('button.option')
+    const sheet = page.locator('.feedback-sheet')
+    const entries = sampleEntries()
+    // A right answer, then a wrong one: which is which is read from the sample, so each is met once.
+    for (const give of ['right', 'wrong'] as const) {
+      await expect(prompt).toBeVisible()
+      await page.waitForTimeout(SETTLE_MS)
+      await expect(options).toHaveCount(4)
+      expect(await below(page)).toBe(0)
+      for (const option of await options.all()) await expect(option).toBeInViewport({ ratio: 1 })
+      // Either direction: the word and its translation are the question and one of the answers.
+      const asked = (await prompt.locator('.hw-word, .prompt-text .translation-word').textContent())!
+      const texts = await options.locator('.option-text').evaluateAll((els) => els.map((el) => (el.querySelector('.translation-word') ?? el).textContent ?? ''))
+      const right = texts.findIndex((text) => entries.some((e) => (e.headword === asked && e.translation === text) || (e.translation === asked && e.headword === text)))
+      expect(right).toBeGreaterThanOrEqual(0)
+      const chosen = options.nth(give === 'right' ? right : (right + 1) % 4)
+      const before = (await options.first().boundingBox())!.y
+      await chosen.click()
+      await expect(sheet).toHaveClass(give === 'right' ? /is-correct/ : /is-incorrect/)
+      // The result is under the answers, where its place was kept: they have not moved.
+      expect(Math.abs((await options.first().boundingBox())!.y - before)).toBeLessThan(1)
+      await expect(sheet).toBeInViewport({ ratio: 1 })
+      expect(await below(page)).toBe(0)
+      if (give === 'wrong') {
+        const next = page.getByRole('button', { name: 'Continue' })
+        await expect(next).toBeInViewport({ ratio: 1 })
+        // Beside the message, not under it.
+        const [message, button] = [(await sheet.locator('.feedback').boundingBox())!, (await next.boundingBox())!]
+        expect(button.x).toBeGreaterThanOrEqual(message.x + message.width - 1)
+        expect(button.height).toBeGreaterThanOrEqual(44)
+      }
+    }
+  })
+
+  test('a flashcard, its answer and the four ratings are on one screen', async ({ page }) => {
+    await page.goto('/')
+    await finishSetup(page)
+    await page.goto('/study?mode=flashcard')
+    await expect(page.locator('.card[data-phase="prompt"]')).toBeVisible()
+    await page.waitForTimeout(SETTLE_MS)
+    expect(await below(page)).toBe(0)
+    await page.getByRole('button', { name: 'Show answer' }).click()
+    await expect(page.locator('.card[data-phase="revealed"]')).toBeVisible()
+    for (const rating of await page.locator('button.rating').all()) await expect(rating).toBeInViewport({ ratio: 1 })
+    expect(await below(page)).toBe(0)
+  })
+})
 
 test('listening cards play on one audio element, which the first tap started (issue 266)', async ({ page }) => {
   // A phone lets a clip start by itself only on an element a tap has started: every play is recorded with its element.
@@ -1237,6 +1296,11 @@ test('the setup’s level step offers the placement test; its result comes back 
     // The whole screen, as from Settings: no top row, and the way back is the setup.
     await expect(page.getByRole('heading', { name: 'Find your level' })).toBeVisible()
     await expect(page.locator('.masthead')).toHaveCount(0)
+    // On a phone the question, its four answers and "I don’t know" are one screen (#269).
+    if ((page.viewportSize()?.width ?? 1280) < 640) {
+      await expect(page.getByRole('button', { name: 'I don’t know' })).toBeInViewport({ ratio: 1 })
+      expect(await page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight)).toBeLessThanOrEqual(0)
+    }
     await page.getByRole('button', { name: 'Back to the setup' }).click()
     await expect(step).toBeFocused()
     await expect(page.getByRole('radio', { name: 'A1 · Beginner' })).toBeChecked()

@@ -262,8 +262,10 @@ function Flashcard(props: { readonly run: StudyRun; readonly snapshot: RunSnapsh
     <>
       {props.frame(
         <>
-          <Headword entry={entry} />
-          <PlayWord entry={entry} />
+          <div className="hw-line">
+            <Headword entry={entry} />
+            <PlayWord entry={entry} />
+          </div>
           {snapshot.phase !== 'prompt' && (
             <div className="revealed" role="region" ref={answer} tabIndex={-1} aria-labelledby={answerId}>
               <p className="prompt-text" id={answerId}>
@@ -391,8 +393,10 @@ function Choice(props: {
           </>
         ) : item.direction === 'en_to_l1' ? (
           <>
-            <Headword entry={item.entry} />
-            <PlayWord entry={item.entry} />
+            <div className="hw-line">
+              <Headword entry={item.entry} />
+              <PlayWord entry={item.entry} />
+            </div>
             <p className="instruction">{t('study.chooseTranslation')}</p>
           </>
         ) : (
