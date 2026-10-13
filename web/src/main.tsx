@@ -24,6 +24,7 @@ import { startSyncLoop } from './app/syncLoop'
 import { startUpdateChecks } from './app/updateChecks'
 import { AudioStore } from './content/audio'
 import { AudioSwitch } from './content/audioSwitch'
+import { allowOnTap, sharedPlayer } from './content/player'
 import { fetchManifest, manifestUrlFor, packFetcher, SAMPLE_MANIFEST_URL } from './content/packs'
 import { fetchSibling } from './content/siblings'
 import { webEnv } from './env'
@@ -36,7 +37,10 @@ import { openWorkerDriver, terminateWorkerDrivers } from './storage/workerDriver
 
 const env = webEnv()
 /** One AudioStore per manifest (a clip's URL is relative to it): a visitor's (the trial manifest when the build names one, the bundled sample otherwise) and a learner's CDN manifest (plan 7). */
-const audio = new AudioSwitch((manifestUrl) => new AudioStore({ manifestUrl, sha256: env.sha256 }), SAMPLE_MANIFEST_URL)
+/** Every clip plays on one element, which the learner's first tap starts: a phone lets no other play by itself (issue 266). */
+const player = sharedPlayer()
+allowOnTap(player)
+const audio = new AudioSwitch((manifestUrl) => new AudioStore({ manifestUrl, sha256: env.sha256, player }), SAMPLE_MANIFEST_URL)
 const accounts = accountStorage()
 /** The recorded learner: sync and reminders name them, so a session that is someone else's is refused (spec §8.6). */
 const expectedUser = () => accounts.read()?.userId ?? null

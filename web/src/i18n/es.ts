@@ -349,6 +349,7 @@ export const es: Messages = {
   'study.play': 'Reproducir la palabra',
   'study.playAgain': 'Volver a reproducir',
   'study.audioFailed': 'No se ha podido reproducir el audio. Aun así, puedes responder.',
+  'study.audioRefused': 'El navegador no ha iniciado el audio por sí solo. Pulsa «Volver a reproducir» para oír la palabra.',
   'study.correct': 'Correcto',
   'study.incorrect': 'Casi. La respuesta es {answer}.',
   'study.slow': 'Correcto, pero lento, así que cuenta como «difícil».',

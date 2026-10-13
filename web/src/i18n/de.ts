@@ -351,6 +351,7 @@ export const de: Messages = {
   'study.play': 'Wort abspielen',
   'study.playAgain': 'Erneut abspielen',
   'study.audioFailed': 'Das Audio wurde nicht abgespielt. Du kannst trotzdem antworten.',
+  'study.audioRefused': 'Der Browser hat das Audio nicht von selbst gestartet. Tippe auf „Erneut abspielen“, um das Wort zu hören.',
   'study.correct': 'Richtig',
   'study.incorrect': 'Nicht ganz. Die Antwort ist {answer}.',
   'study.slow': 'Richtig, aber langsam, daher zählt es als „schwer“.',

@@ -6,6 +6,7 @@ import { useApp } from '../app/context'
 import { TrialInvite } from '../app/TrialInvite'
 import { usePopover } from '../app/usePopover'
 import { ClipSuperseded } from '../content/audio'
+import { refusedByBrowser } from '../content/player'
 import { errorMessageKey } from '../errors'
 import { localized, useT } from '../i18n/i18n'
 import { GRADE_LABEL } from '../labels'
@@ -300,10 +301,11 @@ function Flashcard(props: { readonly run: StudyRun; readonly snapshot: RunSnapsh
   )
 }
 
-function useListening(item: ChoiceItem, run: StudyRun): { replay: () => void; failed: boolean } {
+/** `failed` is why the clip did not play: `'refused'` when the browser lets sound start only from a tap (issue 266). */
+function useListening(item: ChoiceItem, run: StudyRun): { replay: () => void; failed: false | 'failed' | 'refused' } {
   const { audio } = useApp()
   const { corpus } = useClientSnapshot()
-  const [failed, setFailed] = useState(false)
+  const [failed, setFailed] = useState<false | 'failed' | 'refused'>(false)
   const clip = corpus ? entryClips(corpus, item.entry)[0] : undefined
   // Every play() claims a token; a result whose token has moved on is stale and ignored, whichever
   // setup or playback finishes last (a superseding "Play again", or the learner moving to the next
@@ -312,7 +314,7 @@ function useListening(item: ChoiceItem, run: StudyRun): { replay: () => void; fa
   const play = () => {
     const mine = ++token.current
     if (!clip) {
-      setFailed(true)
+      setFailed('failed')
       run.presented()
       return
     }
@@ -325,7 +327,7 @@ function useListening(item: ChoiceItem, run: StudyRun): { replay: () => void; fa
       (err: unknown) => {
         if (token.current !== mine) return
         if (err instanceof ClipSuperseded) return
-        setFailed(true)
+        setFailed(refusedByBrowser(err) ? 'refused' : 'failed')
         run.presented()
       },
     )
@@ -385,7 +387,7 @@ function Choice(props: {
               {t('study.playAgain')}
             </button>
             <p className="instruction">{t('study.listenPrompt')}</p>
-            {failed && <p className="note">{t('study.audioFailed')}</p>}
+            {failed && <p className="note">{t(failed === 'refused' ? 'study.audioRefused' : 'study.audioFailed')}</p>}
           </>
         ) : item.direction === 'en_to_l1' ? (
           <>
