@@ -475,7 +475,7 @@ export const bg: Messages = {
   'progress.tiers': 'Вашите думи',
   'tier.new': 'Нови',
   'tier.learning': 'Учат се',
-  'tier.young': 'Затвърждават се',
+  'tier.young': 'Скорошни',
   'tier.mature': 'Усвоени',
   'progress.levels': 'Нива',
   'progress.retention': 'Запомнени от първия опит',
