@@ -386,6 +386,9 @@ test('chooses Learn this word while practising a skipped unit, and the next sess
   const context = await browser.newContext({ serviceWorkers: 'block' })
   forwardConsole(context)
   await context.addInitScript(() => localStorage.setItem('wordado.locale', 'en'))
+  // The first option may be the right one, and a right answer moves on after a second (#264): too soon to look the
+  // card over here. With the setting off, the answer waits either way.
+  await context.addInitScript(() => localStorage.setItem('wordado.autoContinue', 'off'))
   await serveTwoLevelSample(context)
   try {
     const page = await context.newPage()

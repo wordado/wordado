@@ -852,12 +852,13 @@ the answer. The answers themselves never play anything: a tap there is the
 answer.
 
 **A right answer moves on by itself.** In multiple choice and listening
-(select), a right answer shows its confirmation for a short fixed time (about
-a second; tuning, §15) and the next item comes without a tap; Enter, Space or
-a tap on the confirmation moves on at once. A wrong answer always waits for
+(select), a right answer shows its confirmation for a short fixed time (one
+second; tuning, §15) and the next item comes without a tap; Enter, Space or
+a tap on the confirmation moves on at once. This is so on every word, also one
+that offers "Learn this word" (§7.4). A wrong answer always waits for
 **Continue**, so the learner can read the right one. So does a right answer
-when its card has something to act on: "Learn this word" (§7.4) is offered, or
-the learner has opened the card's menu. **Continue automatically after a right
+once the learner acts on its card: presses "Learn this word" or opens the
+card's menu. **Continue automatically after a right
 answer** in settings switches this off; it is on by default and kept per
 device, in the browser's storage, so no synced document changes. Moving on by
 the timer is the same step as Continue: the answer, its grade and its latency
