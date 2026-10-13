@@ -4,7 +4,7 @@ import { browserStorage, type KeyValue } from '../account/storage'
 export const AUTO_CONTINUE_KEY = 'wordado.autoContinue'
 
 /** How long a right answer stays on screen before the next item comes by itself. Tuning (§15). */
-export const AUTO_CONTINUE_MS = 1_200
+export const AUTO_CONTINUE_MS = 1_000
 
 /** The choice for this visit, where the browser would not keep it. */
 let unkept: boolean | null = null
