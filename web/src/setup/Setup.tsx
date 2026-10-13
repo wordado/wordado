@@ -1,4 +1,4 @@
-import { useClient } from '@wordado/client-data'
+import { placementAvailable, useClient } from '@wordado/client-data'
 import { offeredThemes, type CefrLevel, type Corpus } from '@wordado/core'
 import { useState } from 'react'
 import { Placement } from '../screens/Placement'
@@ -29,9 +29,10 @@ function stepsFor(corpus: Corpus | null): readonly StepName[] {
  * Settings' look: `form-section` shares `settings-section`'s rules); each step's h2 takes focus as it appears.
  *
  * The level step offers the placement test, which takes the whole screen while it runs, as it does from Settings
- * (`onFocus` tells the shell); leaving it or taking its result comes back to the level step.
+ * (`onFocus` tells the shell); leaving it or taking its result comes back to the level step. Reached by the test's
+ * address (`startWithTest`, #213), the test opens by itself after the language, where it can run.
  */
-export function Setup(props: { onFinish(): void; onFocus?(on: boolean): void }) {
+export function Setup(props: { onFinish(): void; onFocus?(on: boolean): void; /** Reached by the test's address (#213): the test starts once the language is installed, where it can run. */ readonly startWithTest?: boolean }) {
   const { t } = useT()
   const client = useClient()
   /** Null until the language is installed: until then nobody knows which steps will show, so there is no counter. */
@@ -75,8 +76,11 @@ export function Setup(props: { onFinish(): void; onFocus?(on: boolean): void }) 
           <LanguageStep
             mode="setup"
             onDone={() => {
-              setSteps(stepsFor(client.snapshot.corpus))
+              const shown = stepsFor(client.snapshot.corpus)
+              setSteps(shown)
               setIndex(1)
+              // Leaving the test, or taking its result, comes back to the level step, which is the next one.
+              if (props.startWithTest && shown.includes('level') && placementAvailable(client.snapshot.corpus)) test(true)
             }}
           />
         )}

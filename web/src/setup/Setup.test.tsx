@@ -221,6 +221,31 @@ describe('Setup, a corpus with two levels (plan 11)', () => {
     expect(ctx.client.snapshot.settings.declaredLevel).toBe('A2')
   })
 
+  it('reached by the test’s own address, starts the test straight after the language and comes back to the level step (#213)', async () => {
+    const ctx = await fresh(twoLevels('A2'))
+    const onFocus = vi.fn()
+    renderWith(<Setup onFinish={() => undefined} onFocus={onFocus} startWithTest />, ctx)
+    // The language still comes first: the test needs its words.
+    expect(screen.getByRole('heading', { level: 1, name: 'Set up Wordado' })).toBeTruthy()
+    await pastLanguage()
+    expect(onFocus).toHaveBeenLastCalledWith(true)
+    expect(screen.getByRole('heading', { level: 1, name: 'Find your level' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Back to the setup' }))
+    expect(onFocus).toHaveBeenLastCalledWith(false)
+    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 2, name: 'Your English level' }))
+    expect(screen.getByText('Step 2 of 4')).toBeTruthy()
+    expect(ctx.client.snapshot.settings.declaredLevel).toBe('A1')
+  })
+
+  it('reached by the test’s own address where the test cannot run, is the setup as ever (#213)', async () => {
+    const ctx = await fresh(twoLevels())
+    const onFocus = vi.fn()
+    renderWith(<Setup onFinish={() => undefined} onFocus={onFocus} startWithTest />, ctx)
+    await pastLanguage()
+    expect(screen.getByRole('heading', { level: 2, name: 'Your English level' })).toBeTruthy()
+    expect(onFocus).not.toHaveBeenCalledWith(true)
+  })
+
   it('does not offer the test where it cannot run: the levels have a gap', async () => {
     const ctx = await fresh(twoLevels())
     renderWith(<Setup onFinish={() => undefined} />, ctx)

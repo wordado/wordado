@@ -1196,6 +1196,46 @@ test('the setup’s level step offers the placement test; its result comes back 
   }
 })
 
+test('the test’s own address leads a new visitor through the language into the test, then to the level step; later it opens the test (#213)', async ({ browser }, testInfo) => {
+  // The app's service worker would serve the bundled all-A1 sample, which has no level to choose and no test.
+  const context = await browser.newContext({ serviceWorkers: 'block', ...(testInfo.project.use.viewport ? { viewport: testInfo.project.use.viewport } : {}) })
+  forwardConsole(context)
+  await context.addInitScript(() => localStorage.setItem('wordado.locale', 'en'))
+  await serveTwoLevelSample(context)
+  try {
+    const page = await context.newPage()
+    await page.goto('/level-test')
+    // The language first: the test needs its words.
+    await expect(page.getByRole('heading', { name: 'Set up Wordado' })).toBeVisible()
+    await page.getByRole('radio', { name: 'Български' }).check()
+    await page.getByRole('button', { name: 'Continue' }).click()
+    // Then the test at once, over the whole screen, without the level choice.
+    await expect(page.getByRole('heading', { name: 'Find your level' })).toBeVisible()
+    await expect(page.locator('.masthead')).toHaveCount(0)
+    const result = page.getByRole('heading', { name: 'Your level: A1' })
+    for (let i = 0; i < 40 && !(await result.isVisible()); i += 1) {
+      const count = await page.locator('.study-count').textContent()
+      // An answer given before the question has settled is not taken.
+      await page.waitForTimeout(SETTLE_MS)
+      await page.getByRole('button', { name: 'I don’t know' }).click()
+      await expect(page.locator('.study-count').or(result).first()).not.toHaveText(count ?? '')
+    }
+    await expect(result).toBeVisible()
+    await page.getByRole('button', { name: /^(Use|Keep) A1$/ }).first().click()
+    await expect(page.getByRole('heading', { name: 'Your English level' })).toBeFocused()
+    await expect(page.getByRole('radio', { name: 'A1 · Beginner' })).toBeChecked()
+    await page.getByRole('button', { name: 'Start studying' }).click()
+    await expect(today(page)).toBeVisible()
+    expect(new URL(page.url()).pathname).toBe('/')
+    // With the setup done, the same address is the test, as from Settings.
+    await page.goto('/level-test')
+    await expect(page.getByRole('heading', { name: 'Find your level' })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Back to settings' })).toBeVisible()
+  } finally {
+    await context.close()
+  }
+})
+
 test('a first visit opens the setup; choosing German ends on Home with German translations', async ({ page }) => {
   await page.goto('/')
   await expect(heading(page)).toHaveText('Set up Wordado')
