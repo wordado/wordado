@@ -604,6 +604,22 @@ test('marks a found word to learn, follows its theme, and says when the sample h
   await expect(page.getByText('The sample has 60 words. Sign in to search the whole course.')).toBeVisible()
 })
 
+test('the demo banner’s three actions sit on one line of text', async ({ page }) => {
+  await page.goto('/')
+  await finishSetup(page)
+  const middles = await page.locator('.banner-actions > *').evaluateAll((actions) =>
+    actions.map((action) => {
+      // The text itself, not the box around it: one of the three has a finger's room around its word.
+      const range = document.createRange()
+      range.selectNodeContents(action)
+      const r = range.getBoundingClientRect()
+      return (r.top + r.bottom) / 2
+    }),
+  )
+  expect(middles).toHaveLength(3)
+  for (const middle of middles) expect(Math.abs(middle - middles[0]!)).toBeLessThanOrEqual(1)
+})
+
 test('fits the top row on a narrow phone while signed out', async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 720 })
   await page.goto('/')
