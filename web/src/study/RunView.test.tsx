@@ -766,7 +766,7 @@ describe('Learn this word (spec §7.4)', () => {
     expect(screen.queryByRole('button', { name: /^Learn this word/ })).toBeNull()
   })
 
-  it('keeps Continue after a right answer too, while the word is offered: there is something to press', async () => {
+  it('moves on after a right answer all the same: the offer alone does not hold the card (#264)', async () => {
     const { run, env } = await practiseSkipped('multiple_choice')
     const item = run.snapshot.item!
     if (item.mode === 'flashcard') throw new Error('expected a choice item')
@@ -774,10 +774,27 @@ describe('Learn this word (spec §7.4)', () => {
     env.advance(ITEM_SETTLE_MS)
     await press(String(item.answerIndex + 1))
     expect(screen.getByRole('button', { name: `Learn this word: ${item.entry.headword}` })).toBeTruthy()
-    expect(document.activeElement?.textContent).toBe('Continue')
+    expect(screen.queryByRole('button', { name: 'Continue' })).toBeNull()
+    env.advance(AUTO_CONTINUE_MS)
+    await act(async () => void vi.advanceTimersByTime(AUTO_CONTINUE_MS))
+    expect(run.snapshot.phase).toBe('prompt')
+    expect(run.snapshot.item?.wordId).not.toBe(item.wordId)
+  })
+
+  it('waits for Continue once the word is pressed, so the learner sees it was taken', async () => {
+    const { run, env, client } = await practiseSkipped('multiple_choice')
+    const item = run.snapshot.item!
+    if (item.mode === 'flashcard') throw new Error('expected a choice item')
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    env.advance(ITEM_SETTLE_MS)
+    await press(String(item.answerIndex + 1))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: `Learn this word: ${item.entry.headword}` })))
     env.advance(10 * AUTO_CONTINUE_MS)
     await act(async () => void vi.advanceTimersByTime(10 * AUTO_CONTINUE_MS))
     expect(run.snapshot.item?.wordId).toBe(item.wordId)
+    expect(screen.getByRole('button', { name: `Will be learned: ${item.entry.headword}` })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeTruthy()
+    expect(client.snapshot.toLearn).toEqual([item.wordId])
   })
 
   it('offers it on a flashcard once the answer is shown, and the done screen says how many words were added', async () => {

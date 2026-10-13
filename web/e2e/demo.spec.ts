@@ -63,6 +63,32 @@ test('listening cards play on one audio element, which the first tap started (is
   expect(new Set((await plays()).map((p) => p.element))).toEqual(new Set([0]))
 })
 
+test('a screen opens at its top, with the way to sign in in view: after the setup and after each tab (#262)', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 740 })
+  await page.goto('/')
+  await finishSetup(page)
+  const signIn = page.getByRole('link', { name: 'Sign in', exact: true })
+  const atTop = async () => {
+    await expect(signIn).toBeInViewport({ ratio: 1 })
+    expect(await page.evaluate(() => window.scrollY)).toBe(0)
+  }
+  await atTop()
+  for (const [tab, title] of [
+    ['Path', 'Your path'],
+    ['Themes', 'Themes'],
+    ['Progress', 'Progress'],
+    ['Settings', 'Settings'],
+  ] as const) {
+    // From further down the screen before, as a learner who has read it.
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight))
+    await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: tab }).click()
+    await expect(heading(page)).toHaveText(title)
+    // The screen still takes focus, as a page load would (spec §11.1).
+    await expect(page.locator('main')).toBeFocused()
+    await atTop()
+  }
+})
+
 test('a flashcard’s answer: the gloss on its own row under the translation, without brackets', async ({ browser }) => {
   const GLOSS = 'for the test'
   const context = await browser.newContext({ serviceWorkers: 'block' })
@@ -413,6 +439,9 @@ test('chooses Learn this word while practising a skipped unit, and the next sess
   const context = await browser.newContext({ serviceWorkers: 'block' })
   forwardConsole(context)
   await context.addInitScript(() => localStorage.setItem('wordado.locale', 'en'))
+  // The first option may be the right one, and a right answer moves on after a second (#264): too soon to look the
+  // card over here. With the setting off, the answer waits either way.
+  await context.addInitScript(() => localStorage.setItem('wordado.autoContinue', 'off'))
   await serveTwoLevelSample(context)
   try {
     const page = await context.newPage()

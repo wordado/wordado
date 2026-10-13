@@ -97,7 +97,17 @@ export function RunView(props: { readonly run: StudyRun; readonly kind: RunKind;
         </div>
       )}
       {children}
-      {canLearn && <LearnToggle headword={item.entry.headword} on={toLearn.includes(item.wordId)} onChange={(on) => void run.setLearn(on)} />}
+      {canLearn && (
+        <LearnToggle
+          headword={item.entry.headword}
+          on={toLearn.includes(item.wordId)}
+          onChange={(on) => {
+            // Pressed while a right answer waits to move on: the card stays, so the learner sees what the button says now.
+            setHeld(item)
+            void run.setLearn(on)
+          }}
+        />
+      )}
       {snapshot.error !== null && <p role="alert">{t('study.error', { message: snapshot.error })}</p>}
     </div>
   )
@@ -123,7 +133,7 @@ export function RunView(props: { readonly run: StudyRun; readonly kind: RunKind;
           {snapshot.answered} / {total}
         </p>
       </div>
-      {item.mode === 'flashcard' ? <Flashcard run={run} snapshot={snapshot} entry={item.entry} frame={frame} /> : <Choice run={run} snapshot={snapshot} item={item} frame={frame} stays={held === item || canLearn} />}
+      {item.mode === 'flashcard' ? <Flashcard run={run} snapshot={snapshot} entry={item.entry} frame={frame} /> : <Choice run={run} snapshot={snapshot} item={item} frame={frame} stays={held === item} />}
       <p className="note keys-hint">{t('study.keysHint')}</p>
       {reporting && <ReportDialog wordId={item.wordId} entry={item.entry} onClose={() => setReporting(false)} />}
     </section>
@@ -338,7 +348,7 @@ function Choice(props: {
   readonly snapshot: RunSnapshot
   readonly item: ChoiceItem
   readonly frame: (children: ReactNode) => ReactNode
-  /** The feedback has something to act on (the ⋯ menu was opened, or "Learn this word" is offered): it waits for Continue. */
+  /** The learner is acting on the card (the ⋯ menu was opened, or "Learn this word" pressed): the feedback waits for Continue. */
   readonly stays: boolean
 }) {
   const { t } = useT()
