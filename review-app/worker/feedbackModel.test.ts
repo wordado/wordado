@@ -162,6 +162,28 @@ describe('askModel, signed in with a Google service account', () => {
     return { model, logged, calls, deps, later: (seconds: number) => void (now = new Date(now.getTime() + seconds * 1000)) }
   }
 
+  it('answers two requests made at once, each with the token it made (issue #208)', async () => {
+    // Neither finds a token kept, so each makes its own; Google takes both, and so does the stand-in. The model is
+    // asked only once both tokens are made: the order in which the first token is no longer the newest.
+    const { model, deps } = googleSetup()
+    model.answer = () => ({ results: [{ id: 1 }] })
+    let made = 0
+    let bothMade = () => {}
+    const waited = new Promise<void>((resolve) => (bothMade = resolve))
+    const inOrder = {
+      ...deps,
+      fetch: async (input: string, init?: RequestInit) => {
+        if (!input.endsWith('/token')) await waited
+        const res = await deps.fetch(input, init)
+        if (input.endsWith('/token') && ++made === 2) bothMade()
+        return res
+      },
+    }
+    const both = await Promise.all([askModel(inOrder, google, req), askModel(inOrder, google, req)])
+    expect(both).toEqual([{ ok: true, value: { results: [{ id: 1 }] } }, { ok: true, value: { results: [{ id: 1 }] } }])
+    expect(model.requests.map((r) => r.headers['authorization']).sort()).toEqual(['Bearer ya29.fake-1', 'Bearer ya29.fake-2'])
+  })
+
   it('gets a token first, then asks the model with it: the same request, and nothing only OpenRouter knows', async () => {
     const { model, deps, calls, logged } = googleSetup()
     model.answer = () => ({ results: [{ id: 1 }] })
