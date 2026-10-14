@@ -1,11 +1,12 @@
 import type { Corpus } from './corpus'
+import { looksAlike } from './lookAlike'
 import { shuffle, type Rng } from './rng'
 import { CEFR_LEVELS, type CefrLevel, type CorpusEntry } from './types'
 import { corpusWordId, type WordId } from './wordId'
 
 /** Words asked per band, and how many must be right for the band to count as known. Tuning (§15). */
 export const PLACEMENT_PROBE_SIZE = 8
-export const PLACEMENT_PASS_MIN = 6
+export const PLACEMENT_PASS_MIN = 7
 
 export interface PlacementAnswer {
   readonly wordId: WordId
@@ -76,11 +77,16 @@ export function nextPlacementWords(
 /** A test over fewer bands than this has nothing to decide (spec §7.2). */
 export const MIN_PLACEMENT_LEVELS = 2
 
-/** Live corpus words by band: what a placement test draws from. Retired entries are never asked. */
-export function placementPool(entries: Iterable<CorpusEntry>): Map<CefrLevel, WordId[]> {
+/**
+ * Live corpus words by band: what a placement test draws from. Retired entries are never asked, and with `l1`,
+ * neither is a word that looks like its translation in that language: it shows that a learner recognises an
+ * international word, not that they know English at its level.
+ */
+export function placementPool(entries: Iterable<CorpusEntry>, l1?: string): Map<CefrLevel, WordId[]> {
   const out = new Map<CefrLevel, WordId[]>()
   for (const entry of entries) {
     if (entry.retired) continue
+    if (l1 !== undefined && looksAlike(entry.headword, entry.translations, l1)) continue
     const list = out.get(entry.level) ?? []
     list.push(corpusWordId(entry.entryId))
     out.set(entry.level, list)
@@ -109,9 +115,9 @@ export function placementLevels(pool: ReadonlyMap<CefrLevel, readonly WordId[]>)
  */
 export function placementCorpus(corpus: Corpus): { readonly corpus: Corpus; readonly pool: Map<CefrLevel, WordId[]> } {
   const trial = corpus.trial
-  if (trial === null) return { corpus, pool: placementPool(corpus.entries.values()) }
+  if (trial === null) return { corpus, pool: placementPool(corpus.entries.values(), corpus.l1) }
   return {
     corpus: { ...corpus, entries: new Map([...trial.probes.map((p): [string, CorpusEntry] => [p.entryId, p]), ...corpus.entries]) },
-    pool: placementPool(trial.probes),
+    pool: placementPool(trial.probes, corpus.l1),
   }
 }

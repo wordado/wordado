@@ -259,7 +259,7 @@ export const de: Messages = {
   'placement.link': 'Finde dein Niveau mit einem kurzen Test',
   'placement.unavailableNote': 'Ein Einstufungstest öffnet sich, sobald Wörter aus mehr als einem Niveau installiert sind.',
   'placement.title': 'Finde dein Niveau',
-  'placement.intro': 'Etwa zwanzig Wörter. Wähl die Übersetzung, oder sag, dass du sie nicht kennst: Ein Rateversuch macht das Ergebnis nur weniger nützlich.',
+  'placement.intro': 'Etwa zwanzig Wörter. Wähl das englische Wort, oder sag, dass du es nicht kennst: Ein Rateversuch macht das Ergebnis nur weniger nützlich.',
   'placement.progress': { one: '{count} Wort beantwortet', other: '{count} Wörter beantwortet' },
   'placement.dontKnow': 'Ich weiß es nicht',
   'placement.keysHint': 'Tasten: 1 bis 4 zum Antworten, 0 für „Ich weiß es nicht“.',

@@ -48,7 +48,7 @@ export function trialProbes(levels: readonly CefrLevel[]): { entry_id: string; h
       pos: 'noun' as const,
       sense: '',
       level,
-      translation: `проба ${level} ${i}`,
+      translation: `изпит ${level} ${i}`,
     })),
   )
 }

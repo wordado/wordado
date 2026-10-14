@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useApp } from '../app/context'
 import { useT } from '../i18n/i18n'
 import { Link } from '../router'
-import { Headword, Translation } from '../study/Headword'
+import { Translation } from '../study/Headword'
 import { useStore } from '../useStore'
 
 /**
@@ -145,8 +145,11 @@ export function Placement(props: { readonly source?: PlacementSource; readonly s
       </div>
       <p className="note placement-intro">{t('placement.intro')}</p>
       <div className="card" ref={card} tabIndex={-1} data-mode="placement">
-        <Headword entry={item.entry} />
-        <p className="instruction">{t('study.chooseTranslation')}</p>
+        {/* The word in the learner's language, to pick the English one (spec §7.2). */}
+        <p className="prompt-text">
+          <Translation entry={item.entry} lang={l1} stacked />
+        </p>
+        <p className="instruction">{t('study.chooseWord')}</p>
       </div>
       <div className="study-actions">
         <ol className="options">
@@ -156,8 +159,8 @@ export function Placement(props: { readonly source?: PlacementSource; readonly s
                 <span className="option-key" aria-hidden="true">
                   {index + 1}
                 </span>{' '}
-                <span className="option-text">
-                  <Translation entry={option} lang={l1} />
+                <span className="option-text" lang="en">
+                  {option.headword}
                 </span>
               </button>
             </li>

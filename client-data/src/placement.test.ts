@@ -43,7 +43,7 @@ describe('PlacementRun (spec §7.2)', () => {
     expect(run.snapshot.levels).toEqual(['A1', 'A2', 'B1'])
     expect(run.snapshot.item?.mode).toBe('multiple_choice')
     expect(run.snapshot.item?.entry.level).toBe('A2')
-    expect(run.snapshot.item?.direction).toBe('en_to_l1')
+    expect(run.snapshot.item?.direction).toBe('l1_to_en')
   })
 
   it('places a learner who knows everything at the highest band, and records nothing until accepted', async () => {

@@ -204,7 +204,7 @@ describe('Setup, a corpus with two levels (plan 11)', () => {
     await pastLanguage()
     await act(async () => fireEvent.click(screen.getByRole('radio', { name: /^A2/ })))
     fireEvent.click(screen.getByRole('button', { name: 'Find your level with a short test' }))
-    for (let i = 0; i < 40 && document.querySelector('.hw-word'); i += 1) {
+    for (let i = 0; i < 40 && document.querySelector('.card .prompt-text'); i += 1) {
       ctx.env.advance(ITEM_SETTLE_MS + 1_000)
       await act(async () => fireEvent.click(screen.getByRole('button', { name: 'I don’t know' })))
     }

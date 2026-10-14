@@ -252,7 +252,7 @@ export const en = {
   'placement.link': 'Find your level with a short test',
   'placement.unavailableNote': 'A placement test opens once words of more than one level are installed.',
   'placement.title': 'Find your level',
-  'placement.intro': 'About twenty words. Pick the translation, or say you don’t know: a guess only makes the result less useful.',
+  'placement.intro': 'About twenty words. Pick the English word, or say you don’t know: a guess only makes the result less useful.',
   'placement.progress': { one: '{count} word answered', other: '{count} words answered' },
   'placement.dontKnow': 'I don’t know',
   'placement.keysHint': 'Keys: 1 to 4 answer, 0 for I don’t know.',
