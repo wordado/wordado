@@ -565,6 +565,15 @@ step as the chosen level, which can still be changed), and it can be taken later
 from settings; it is never a blocking onboarding step (§8.6). It is offered only
 where it can run: enough words of the first two levels at least.
 
+**How the test asks** (owner's decision, 2026-10-14, issue 277). A question shows the word in the learner's
+language and offers four English words; "I don't know" counts as wrong. A level counts as known at 7 right
+answers of 8, and its probe ends at the second wrong answer. The test leaves out international words: a word
+whose beginning looks like its translation's, once both are written in the same plain letters ("information" and
+"información", "telephone" and "телефон"), because recognising one shows nothing about the learner's English. All
+three make the test harder than reading an English word and picking its meaning from four, which placed learners
+above the level a full test gives them: a learner placed too high skips the words they needed, while one placed
+too low only meets words they already know.
+
 Where the installed pack has `trial.probes` (§5.1), the test draws its words
 from them alone; its wrong options come from the probes and the units' entries
 together. The demo asks for a level or offers the test, as the setup does for an

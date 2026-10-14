@@ -33,18 +33,20 @@ describe('placementProgress', () => {
   it('places a learner at the lowest band they fail', () => {
     expect(placementProgress(probe('B2', 3, probe('B1', 8))).result).toBe('B2')
     expect(placementProgress(probe('A2', 7, probe('B1', 2))).result).toBe('B1')
-    expect(placementProgress(probe('A1', 6, probe('A2', 5, probe('B1', 0)))).result).toBe('A2')
+    expect(placementProgress(probe('A1', 7, probe('A2', 5, probe('B1', 0)))).result).toBe('A2')
+    // Six of eight is not enough: a band counts as known at seven (owner's decision, 2026-10-14).
+    expect(placementProgress(probe('A1', 6, probe('A2', 5, probe('B1', 0)))).result).toBe('A1')
     expect(placementProgress(probe('A1', 1, probe('A2', 1, probe('B1', 1)))).result).toBe('A1')
   })
 
   it('decides a probe as soon as it can, so the test stays short', () => {
     const b1 = pool.get('B1')!
-    const sixRight = b1.slice(0, PLACEMENT_PASS_MIN).map((wordId) => ({ wordId, level: 'B1' as const, correct: true }))
-    expect(placementProgress(sixRight).probing).toBe('B2')
-    const threeWrong = b1.slice(0, 3).map((wordId) => ({ wordId, level: 'B1' as const, correct: false }))
-    expect(placementProgress(threeWrong).probing).toBe('A2')
-    expect(placementProgress(threeWrong.slice(0, 2))).toEqual({ probing: 'B1', remainingInProbe: 6, result: null })
-    expect(placementProgress(sixRight.slice(0, 4))).toEqual({ probing: 'B1', remainingInProbe: 4, result: null })
+    const passing = b1.slice(0, PLACEMENT_PASS_MIN).map((wordId) => ({ wordId, level: 'B1' as const, correct: true }))
+    expect(placementProgress(passing).probing).toBe('B2')
+    const twoWrong = b1.slice(0, 2).map((wordId) => ({ wordId, level: 'B1' as const, correct: false }))
+    expect(placementProgress(twoWrong).probing).toBe('A2')
+    expect(placementProgress(twoWrong.slice(0, 1))).toEqual({ probing: 'B1', remainingInProbe: 7, result: null })
+    expect(placementProgress(passing.slice(0, 4))).toEqual({ probing: 'B1', remainingInProbe: 4, result: null })
   })
 
   it('needs at most three probes', () => {
@@ -98,7 +100,7 @@ describe('placement over the bands a corpus ships (spec §7.2)', () => {
 
   it('places at the highest shipped band once the middle passes, and probes A1 when the middle fails', () => {
     expect(placementProgress(probe('A2', 8, [], shipped), shipped)).toEqual({ probing: null, remainingInProbe: 0, result: 'B1' })
-    const failA2 = pool.get('A2')!.slice(0, 3).map((wordId) => ({ wordId, level: 'A2' as const, correct: false }))
+    const failA2 = pool.get('A2')!.slice(0, 2).map((wordId) => ({ wordId, level: 'A2' as const, correct: false }))
     expect(placementProgress(failA2, shipped).probing).toBe('A1')
   })
 
@@ -142,6 +144,13 @@ describe('placementPool and placementLevels', () => {
     expect(got.has('A2')).toBe(false)
   })
 
+  it('leaves out, given the learner’s language, a word that looks like its translation (an international word)', () => {
+    const alike: CorpusEntry = { ...entry('telephone', 'A2'), translations: ['телефон'] }
+    const not: CorpusEntry = { ...entry('house', 'A2'), translations: ['къща'] }
+    expect(placementPool([alike, not], 'bg').get('A2')).toEqual([corpusWordId('house')])
+    expect(placementPool([alike, not]).get('A2')).toEqual([corpusWordId('telephone'), corpusWordId('house')])
+  })
+
   it('offers bands from A1 upward while each has a probe’s worth of words', () => {
     const many = (level: CefrLevel, n: number) => Array.from({ length: n }, (_, i) => entry(`${level}-${i}`, level))
     const full = placementPool([...many('A1', 8), ...many('A2', 8), ...many('B1', 8)])
@@ -169,7 +178,7 @@ describe('placementCorpus', () => {
     const corpus = corpusOf([entry('a', 'A1'), entry('b', 'B1')], null)
     const got = placementCorpus(corpus)
     expect(got.corpus).toBe(corpus)
-    expect(got.pool).toEqual(placementPool(corpus.entries.values()))
+    expect(got.pool).toEqual(placementPool(corpus.entries.values(), 'bg'))
   })
 
   it('draws a trial test from the probes only, by level', () => {
@@ -182,6 +191,12 @@ describe('placementCorpus', () => {
     expect(pool.get('A1')).toEqual([corpusWordId('p1'), corpusWordId('p2')])
     expect(pool.get('C1')).toEqual([corpusWordId('p3')])
     expect(pool.has('B1')).toBe(false)
+  })
+
+  it('leaves international words out, of a trial’s probes and of a course', () => {
+    const words = [{ ...entry('democracy', 'B2'), translations: ['демокрация'] }, { ...entry('house', 'B2'), translations: ['къща'] }]
+    expect(placementCorpus(corpusOf([], { probes: words, course: {}, themes: {} })).pool.get('B2')).toEqual([corpusWordId('house')])
+    expect(placementCorpus(corpusOf(words, null)).pool.get('B2')).toEqual([corpusWordId('house')])
   })
 
   it('lets a question show a probe or a unit entry, and keeps the unit entry where both exist', () => {

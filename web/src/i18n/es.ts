@@ -257,7 +257,7 @@ export const es: Messages = {
   'placement.link': 'Descubre tu nivel con una prueba corta',
   'placement.unavailableNote': 'La prueba de nivel estará disponible cuando haya palabras de más de un nivel instaladas.',
   'placement.title': 'Descubre tu nivel',
-  'placement.intro': 'Unas veinte palabras. Elige la traducción o di que no la sabes: adivinar solo hace que el resultado sea menos útil.',
+  'placement.intro': 'Unas veinte palabras. Elige la palabra en inglés o di que no la sabes: adivinar solo hace que el resultado sea menos útil.',
   'placement.progress': { one: '{count} palabra respondida', other: '{count} palabras respondidas' },
   'placement.dontKnow': 'No lo sé',
   'placement.keysHint': 'Teclas: del 1 al 4 para responder, 0 para «No lo sé».',

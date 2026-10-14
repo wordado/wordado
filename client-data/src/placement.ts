@@ -119,8 +119,9 @@ export class PlacementRun {
         this.unusable.add(wordId)
         continue
       }
-      // A placement question always shows the English word: it asks what the learner can read.
-      const shown: ChoiceItem = item.direction === 'en_to_l1' ? item : { ...item, direction: 'en_to_l1' }
+      // A placement question always shows the word in the learner's language, to pick the English one: picking a meaning
+      // from four is the easiest kind of knowing a word, and placed the learner too high (owner's decision, 2026-10-14).
+      const shown: ChoiceItem = item.direction === 'l1_to_en' ? item : { ...item, direction: 'l1_to_en' }
       this.shownAt = this.env.now()
       this.set({ phase: 'question', item: shown })
       return

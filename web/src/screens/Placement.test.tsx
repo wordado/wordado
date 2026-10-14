@@ -21,10 +21,14 @@ async function withBands() {
   return { ...ctx, corpus }
 }
 
-/** The shown word's primary translation, from the corpus the test was given. */
-function rightAnswer(corpus: Corpus): string {
-  const headword = document.querySelector('.hw-word')!.textContent
-  return [...corpus.entries.values()].find((e) => e.headword === headword)!.translations[0]!
+/** The option that is the shown word in English: the one whose translation, in the corpus the test was given, is shown. */
+function rightAnswer(corpus: Corpus): HTMLElement {
+  const prompt = document.querySelector('.card .prompt-text')!.textContent!
+  const options = [...document.querySelectorAll<HTMLElement>('.study-actions .option')]
+  return options.find((option) => {
+    const headword = option.querySelector('.option-text')!.textContent
+    return [...corpus.entries.values()].some((e) => e.headword === headword && prompt.includes(e.translations[0]!))
+  })!
 }
 
 describe('Placement (spec §7.2)', () => {
@@ -42,17 +46,20 @@ describe('Placement (spec §7.2)', () => {
     await withBands()
     expect(screen.getByRole('link', { name: 'Back to settings' }).getAttribute('href')).toBe('/settings/study')
     expect(document.querySelector('.study-bar')?.textContent).toContain('0 words answered')
-    expect(document.querySelector('.card .hw-word')).not.toBeNull()
+    // The word in the learner's language, and English words to choose from (owner's decision, 2026-10-14).
+    expect(document.querySelector('.card .prompt-text')?.textContent).not.toBe('')
+    expect(document.querySelector('.card .instruction')?.textContent).toBe('Choose the English word')
+    expect(document.querySelector('.study-actions .option-text')?.getAttribute('lang')).toBe('en')
     expect(document.querySelectorAll('.study-actions .option')).toHaveLength(4)
     expect(screen.getByRole('button', { name: 'I don’t know' }).classList.contains('dont-know')).toBe(true)
   })
 
   it('places a learner who knows every word at the highest band, and uses it once accepted', async () => {
     const { env, client, corpus } = await withBands()
-    for (let i = 0; i < 40 && document.querySelector('.hw-word'); i += 1) {
+    for (let i = 0; i < 40 && document.querySelector('.card .prompt-text'); i += 1) {
       env.advance(ITEM_SETTLE_MS + 1_000)
       const answer = rightAnswer(corpus)
-      await act(async () => fireEvent.click(screen.getByRole('button', { name: (name) => name.includes(answer) })))
+      await act(async () => fireEvent.click(answer))
     }
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Your level: B1')
     // The result is a card with the level as a badge, the choice below it.
@@ -66,7 +73,7 @@ describe('Placement (spec §7.2)', () => {
 
   it('answers “I don’t know” with 0 on the keyboard, and places at A1', async () => {
     const { env } = await withBands()
-    for (let i = 0; i < 40 && document.querySelector('.hw-word'); i += 1) {
+    for (let i = 0; i < 40 && document.querySelector('.card .prompt-text'); i += 1) {
       env.advance(ITEM_SETTLE_MS + 1_000)
       await act(async () => fireEvent.keyDown(document.body, { key: '0' }))
     }
@@ -89,7 +96,7 @@ describe('Placement (spec §7.2)', () => {
 
   it('moves focus to the result heading after the last answer', async () => {
     const { env } = await withBands()
-    for (let i = 0; i < 40 && document.querySelector('.hw-word'); i += 1) {
+    for (let i = 0; i < 40 && document.querySelector('.card .prompt-text'); i += 1) {
       env.advance(ITEM_SETTLE_MS + 1_000)
       await act(async () => fireEvent.click(screen.getByRole('button', { name: 'I don’t know' })))
     }
