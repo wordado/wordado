@@ -30,7 +30,7 @@ Shared: the R2 bucket `wordado-content` (Western Europe) at `https://content.wor
 both addresses, with the corpus published by the content repository's **Corpus** workflow (version 6 on 2026-10-08,
 packs for bg, de and es); the rate-limit rule on `/v1/sync/*`; `main` protected.
 Sign-in, since 2026-09-27: Resend sends codes from `codes@wordado.com` (a sending-only key limited to
-wordado.com). Sign-in with Google was removed on 2026-10-10 (#170), together with its secrets and its client.
+wordado.com). Sign-in with Google was removed on 2026-10-10 (#170); the settings it leaves behind are listed in step 6.
 Mail DNS, since 2026-09-27: DMARC is `v=DMARC1; p=none; rua=mailto:<id>@dmarc-reports.cloudflare.net;`, its
 reports read on the dashboard (wordado.com › Email › DMARC Management). Once a week or two of reports show every
 real sender passing, tighten it to `p=quarantine`. Since 2026-10-10 the apex MX records are Cloudflare Email
@@ -144,6 +144,13 @@ private `wordado/wordado-research`, cloned into `docs/research/` and ignored her
      admins (`review-app/README.md`, "Hosted", step 8): a count and a link to the tab, sent on Monday for
      the week before. It needs the review app's `RESEND_API_KEY`, `FEEDBACK_READ_TOKEN` and
      `LEARNER_APP_URL`, and no setting of its own here.
+   - Settings that can be deleted: since #170 (2026-10-10) nothing reads the production secrets
+     `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (sign-in with Google) and `FEEDBACK_EMAIL` (the daily feedback
+     mail), and the deploy no longer passes them to the Worker. Delete them with
+     `gh secret delete <name> --repo wordado/wordado --env production`; `gh secret list --repo wordado/wordado --env production`
+     shows whether any is left. The web client under Google Auth Platform › Clients served only that sign-in and
+     can be deleted too; the service account of the review app's AI help is a different credential and stays.
+     `REVIEW_APP_URL` went with the code, from `server/wrangler.jsonc`, and needs nothing.
    - AI help on the review app's Feedback tab is set up in the review app alone (`review-app/README.md`,
      "Hosted", step 9): its secret `FEEDBACK_AI_KEY`, and its variables `FEEDBACK_AI_AUTH` (how it signs in:
      `key`, the default, or `google-service-account`), `FEEDBACK_AI_URL` (the address of the service the model
