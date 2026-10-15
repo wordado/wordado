@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import type { AssignmentView, RowsResponse } from '../../shared/hosted'
-import { snapshotFileKey, type SnapshotIndex } from '../../shared/snapshot'
+import { snapshotDigestKey, snapshotFileKey, type SnapshotIndex } from '../../shared/snapshot'
 import { createApp } from '../app'
 import type { Env } from '../bindings'
 import { insertAssignment, insertReviewer, listDecisions, upsertDecision } from '../db'
@@ -75,11 +75,15 @@ describe('reviewer reads', () => {
     const id = await insertAssignment(env.DB, { reviewer: 'ivan@example.com', queue: 'translation-bg', files: '*', flaggedOnly: false, createdAt: 't' })
     const first = ((await (await get(`/api/rows?assignment=${id}`)).json()) as RowsResponse).rows[0]!
     await upsertDecision(env.DB, { assignment: id, queue: 'translation-bg', file: first.file, key: first.key, rowHash: first.rowHash, action: 'keep', cells: {}, note: '', decidedAt: 't', submission: null })
-    await (env.SNAPSHOTS as unknown as { delete(key: string): Promise<void> }).delete(snapshotFileKey(index.id, first.file))
+    const remove = (key: string) => (env.SNAPSHOTS as unknown as { delete(key: string): Promise<void> }).delete(key)
+    await remove(snapshotFileKey(index.id, first.file))
     resetSnapshotCache()
     const res = await get(`/api/rows?assignment=${id}`)
     expect(res.status).toBe(503)
     expect(await listDecisions(env.DB, id)).toHaveLength(1)
+    // The list counts from the queue's digest and reads no file; without one, it reads the files and has none.
+    await remove(snapshotDigestKey(index.id, 'translation-bg'))
+    resetSnapshotCache()
     const list = (await (await get('/api/assignments')).json()) as AssignmentView[]
     expect(list[0]!.progress).toBeNull()
   })

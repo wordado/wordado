@@ -1,17 +1,13 @@
 import type { RowView } from '../server/types'
 import type { HostedRow, Progress } from '../shared/hosted'
+import { inFlaggedScope, type DigestRow } from '../shared/snapshot'
 import type { AssignmentRow, DecisionRow, SubmissionRow } from './db'
 import type { Snapshot } from './snapshotStore'
 
 export const rank = (r: RowView) => (r.reports !== '' ? 0 : r.severity === 'major' ? 1 : r.severity === 'minor' ? 2 : r.ai === 'unreviewed' || r.stale ? 3 : 4)
 
-/**
- * What a flagged-only assignment holds: the rows the AI review flags, the rows learners reported, and the stale
- * rows, as the local app lists them (server/model.ts). A stale row's sheet froze a proposal a newer draft has since
- * changed, so no AI verdict can match it again: left out, it would wait in the files unseen, and `corpus status`
- * would count it as flagged while the app showed nothing to decide (level queue, 2026-10-07).
- */
-const inFlaggedScope = (r: RowView) => r.ai === 'flagged' || r.reports !== '' || r.stale
+/** A row as progress counts it. */
+export type RowHash = Pick<RowView, 'key' | 'rowHash'>
 
 export function scopeFiles(snap: Snapshot, a: AssignmentRow): string[] {
   const inSnapshot = (snap.queue(a.queue)?.files ?? []).map((f) => f.file)
@@ -54,6 +50,31 @@ export async function assignmentRows(snap: Snapshot, a: AssignmentRow): Promise<
   return { rows: all.filter(inFlaggedScope).sort((x, y) => rank(x) - rank(y)), keys }
 }
 
+/**
+ * The assignment's rows as assignmentRows gives them, in no particular order and only as progress and a spot
+ * check's result count them. From the queue's digest when the snapshot has one, so that a list of assignments
+ * parses no file (#279); otherwise from the files. Null as assignmentRows is, and when a file in scope is missing
+ * from the digest.
+ */
+export async function assignmentHashes(snap: Snapshot, a: AssignmentRow): Promise<RowHash[] | null> {
+  const digest = await snap.digest(a.queue)
+  if (!digest) return (await assignmentRows(snap, a))?.rows ?? null
+  const byFile = new Map<string, readonly DigestRow[]>()
+  for (const f of scopeFiles(snap, a)) {
+    if (!Object.hasOwn(digest.files, f)) return null
+    byFile.set(f, digest.files[f]!)
+  }
+  const brief = ([key, rowHash]: DigestRow): RowHash => ({ key, rowHash })
+  if (a.spotCheck) {
+    const keyed = new Map([...byFile].map(([f, rows]) => [f, new Map(rows.map((r) => [r[0], r]))]))
+    return a.spotCheck.sample.flatMap((s) => {
+      const r = keyed.get(s.file)?.get(s.key)
+      return r ? [brief(r)] : []
+    })
+  }
+  return [...byFile.values()].flatMap((rows) => (a.flaggedOnly ? rows.filter(([, , flagged]) => flagged) : rows).map(brief))
+}
+
 export function withDecisions(rows: readonly RowView[], decisions: readonly DecisionRow[]): HostedRow[] {
   const byKey = new Map(decisions.map((d) => [d.key, d]))
   return rows.map((r) => {
@@ -68,7 +89,7 @@ export function withDecisions(rows: readonly RowView[], decisions: readonly Deci
   })
 }
 
-export function progress(rows: readonly RowView[], decisions: readonly DecisionRow[], submissions: readonly SubmissionRow[]): Progress {
+export function progress(rows: readonly RowHash[], decisions: readonly DecisionRow[], submissions: readonly SubmissionRow[]): Progress {
   const hash = new Map(rows.map((r) => [r.key, r.rowHash]))
   const open = new Set(submissions.filter((s) => s.status === 'open').map((s) => s.id))
   let decided = 0

@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { RowView } from '../server/types'
-import type { DecisionRow, SubmissionRow } from './db'
-import { assignmentRows, inScope, progress, rank, withDecisions } from './rows'
+import { digestRows, type SnapshotQueue } from '../shared/snapshot'
+import type { AssignmentRow, DecisionRow, SubmissionRow } from './db'
+import { assignmentHashes, assignmentRows, inScope, progress, rank, withDecisions } from './rows'
 import type { Snapshot } from './snapshotStore'
+import { spotCheckResult } from './spotCheck'
 
 const row = (key: string, over: Partial<RowView> = {}): RowView => ({
   queue: 'translation-de', file: 'review/translation-de/a.csv', version: 'v', key, kind: 'translation', cells: {}, fields: [], context: {},
@@ -51,6 +53,7 @@ describe('assignmentRows', () => {
     index: { id: 's', built: 't', commit: 'c', queues: [] },
     queue: () => ({ queue: 'level', language: 'en', columns: [], verdicts: [], files: [{ file, rows: rows.length, flagged: 1, reported: 1 }] }),
     file: async () => ({ file, version: 'v', rows }),
+    digest: async () => null,
   }
   const assignment = { id: 1, reviewer: 'r', queue: 'level', files: '*' as const, spotCheck: null, createdAt: 't', closedAt: null }
 
@@ -93,5 +96,64 @@ describe('assignmentRows', () => {
       expect(inScope(two, { ...assignment, flaggedOnly: false }, file, 'anything')).toBe(true)
       expect(inScope(two, { ...assignment, flaggedOnly: false }, 'review/level/retired.csv', 'old')).toBe(false)
     })
+  })
+})
+
+describe('assignmentHashes', () => {
+  const a = 'review/level/a.csv'
+  const b = 'review/level/b.csv'
+  const retired = 'review/level/retired.csv'
+  const byFile: Record<string, RowView[]> = {
+    [a]: [row('passed', { file: a }), row('stale', { file: a, stale: true }), row('flagged', { file: a, ai: 'flagged', severity: 'major' }), row('reported', { file: a, reports: 'r' })],
+    [b]: [row('second', { file: b }), row('minor', { file: b, ai: 'flagged', severity: 'minor' })],
+  }
+  const queue: SnapshotQueue = { queue: 'level', language: 'en', columns: [], verdicts: [], files: [a, b].map((f) => ({ file: f, rows: byFile[f]!.length, flagged: 0, reported: 0 })) }
+  const fromFiles: Snapshot = {
+    index: { id: 's', built: 't', commit: 'c', queues: [queue] },
+    queue: () => queue,
+    file: async (f) => (byFile[f] ? { file: f, version: 'v', rows: byFile[f] } : null),
+    digest: async () => null,
+  }
+  const digest = { files: Object.fromEntries(Object.entries(byFile).map(([f, rows]) => [f, digestRows(rows)])) }
+  const fromDigest: Snapshot = { ...fromFiles, file: async () => Promise.reject(new Error('a file was read')), digest: async () => digest }
+  const base = { id: 1, reviewer: 'r', queue: 'level', createdAt: 't', closedAt: null }
+  const sample = [{ file: b, key: 'second' }, { file: a, key: 'reported' }, { file: a, key: 'left' }, { file: a, key: 'flagged' }, { file: retired, key: 'old' }]
+  const cases: [string, AssignmentRow][] = [
+    ['a whole-file assignment', { ...base, files: [a, retired], flaggedOnly: false, spotCheck: null }],
+    ['a flagged-only assignment', { ...base, files: '*', flaggedOnly: true, spotCheck: null }],
+    ['a spot check', { ...base, files: [a, b, retired], flaggedOnly: false, spotCheck: { seed: 1, sample } }],
+  ]
+  // Decided as is, decided on a row that changed since, submitted, merged, and on rows that are gone, submitted or not.
+  const decisions = [
+    decision('passed'),
+    decision('flagged', { rowHash: 'old', action: 'edit', severity: 'major' }),
+    decision('reported', { action: 'edit', severity: 'major' }),
+    decision('stale', { submission: 7 }),
+    decision('second', { action: 'drop', severity: 'minor', submission: 8 }),
+    decision('left', { action: 'edit', severity: 'major', submission: 7 }),
+    decision('gone'),
+  ]
+  const subs: SubmissionRow[] = [
+    { id: 7, assignment: 1, branch: 'x', pr: 1, url: null, count: 2, leftOut: 0, status: 'open', createdAt: 't' },
+    { id: 8, assignment: 1, branch: 'y', pr: 2, url: null, count: 1, leftOut: 0, status: 'merged', createdAt: 't' },
+  ]
+  const brief = (rows: readonly { key: string; rowHash: string }[]) => rows.map((r) => `${r.key} ${r.rowHash}`).sort()
+
+  it.each(cases)('gives %s the rows of its files and the same progress and spot-check result, reading no file', async (_, assignment) => {
+    const files = (await assignmentRows(fromFiles, assignment))!
+    const hashes = (await assignmentHashes(fromDigest, assignment))!
+    expect(brief(hashes)).toEqual(brief(files.rows))
+    expect(progress(hashes, decisions, subs)).toEqual(progress(files.rows, decisions, subs))
+    if (assignment.spotCheck) expect(spotCheckResult(assignment.spotCheck.sample, hashes, decisions)).toEqual(spotCheckResult(assignment.spotCheck.sample, files.rows, decisions))
+  })
+
+  it('reads the files when the snapshot has no digest (built before them)', async () => {
+    for (const [, assignment] of cases) expect(brief((await assignmentHashes(fromFiles, assignment))!)).toEqual(brief((await assignmentRows(fromFiles, assignment))!.rows))
+  })
+
+  it('is null when a file in scope is missing from the digest, as when it is missing from R2', async () => {
+    const partial: Snapshot = { ...fromDigest, digest: async () => ({ files: { [a]: digest.files[a]! } }) }
+    expect(await assignmentHashes(partial, cases[1]![1])).toBeNull()
+    expect(await assignmentHashes(partial, cases[0]![1])).not.toBeNull()
   })
 })

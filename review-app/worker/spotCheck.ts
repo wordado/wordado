@@ -1,6 +1,7 @@
 import type { RowView } from '../server/types'
 import type { SampleRef, SpotCheckResult } from '../shared/hosted'
 import type { DecisionRow } from './db'
+import type { RowHash } from './rows'
 
 /**
  * What a spot check may draw (spec §15): a row the AI review passed with no objection at all (a minor one would
@@ -79,7 +80,7 @@ export function drawSample(rows: readonly RowView[], n: number, seed: number, ta
  * decisions, submitted or not. A decision on a row that changed since does not count; nor does an unsubmitted one
  * on a row that is gone. A submitted one on a row that is gone does: a merged row leaves the review files.
  */
-export function spotCheckResult(sample: readonly SampleRef[], rows: readonly RowView[], decisions: readonly DecisionRow[]): SpotCheckResult {
+export function spotCheckResult(sample: readonly SampleRef[], rows: readonly RowHash[], decisions: readonly DecisionRow[]): SpotCheckResult {
   const hash = new Map(rows.map((r) => [r.key, r.rowHash]))
   const byKey = new Map(decisions.map((d) => [d.key, d]))
   let fine = 0
