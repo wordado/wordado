@@ -1,5 +1,5 @@
 import type { D1Database } from './bindings'
-import { MAX_FEEDBACK_NOTE_LENGTH, type FeedbackAi, type FeedbackCategory, type FeedbackSeverity, type FeedbackState, type FeedbackTopicRef, type FeedbackTopicView, type Language, type ReviewerView, type Role, type SampleRef, type Severity, type TopicIssueState } from '../shared/hosted'
+import { MAX_FEEDBACK_NOTE_LENGTH, type FeedbackAi, type FeedbackCategory, type FeedbackSeverity, type FeedbackState, type FeedbackTopicRef, type FeedbackTopicView, type Language, type Progress, type ReviewerView, type Role, type SampleRef, type Severity, type SpotCheckResult, type TopicIssueState } from '../shared/hosted'
 import type { Action } from '../server/types'
 
 export interface ReviewerRow {
@@ -60,13 +60,18 @@ export const toReviewerView = (r: ReviewerRow): ReviewerView => ({ ...r, languag
 
 /** A spot check's sample (spec §15): the seed it was drawn with and its rows, in the order they are shown. */
 export interface SpotCheck { readonly seed: number; readonly sample: readonly SampleRef[] }
-/** `spotCheck` is null for an assignment of files; a spot check's `files` are the files its sample was drawn from. */
-export interface AssignmentRow { readonly id: number; readonly reviewer: string; readonly queue: string; readonly files: readonly string[] | '*'; readonly flaggedOnly: boolean; readonly spotCheck: SpotCheck | null; readonly createdAt: string; readonly closedAt: string | null }
-interface AssignmentRecord { id: number; reviewer: string; queue: string; files: string; flagged_only: number; spot_check: number; seed: number | null; sample: string | null; created_at: string; closed_at: string | null }
+/** A closed assignment's progress and spot-check result (null unless a spot check), as of its closing (#281). */
+export interface FrozenProgress { readonly progress: Progress; readonly spotCheck: SpotCheckResult | null }
+/**
+ * `spotCheck` is null for an assignment of files; a spot check's `files` are the files its sample was drawn from.
+ * `frozen` is null while the assignment is open, and for a closed one whose figures nobody has counted yet.
+ */
+export interface AssignmentRow { readonly id: number; readonly reviewer: string; readonly queue: string; readonly files: readonly string[] | '*'; readonly flaggedOnly: boolean; readonly spotCheck: SpotCheck | null; readonly createdAt: string; readonly closedAt: string | null; readonly frozen: FrozenProgress | null }
+interface AssignmentRecord { id: number; reviewer: string; queue: string; files: string; flagged_only: number; spot_check: number; seed: number | null; sample: string | null; created_at: string; closed_at: string | null; frozen_progress: string | null }
 const assignment = (r: AssignmentRecord): AssignmentRow => ({
   id: r.id, reviewer: r.reviewer, queue: r.queue, files: r.files === '*' ? '*' : (JSON.parse(r.files) as string[]),
   flaggedOnly: r.flagged_only === 1, spotCheck: r.spot_check === 1 ? { seed: r.seed ?? 0, sample: JSON.parse(r.sample ?? '[]') as SampleRef[] } : null,
-  createdAt: r.created_at, closedAt: r.closed_at,
+  createdAt: r.created_at, closedAt: r.closed_at, frozen: r.frozen_progress === null ? null : (JSON.parse(r.frozen_progress) as FrozenProgress),
 })
 export async function getAssignment(db: D1Database, id: number): Promise<AssignmentRow | null> {
   const r = await db.prepare('SELECT * FROM assignments WHERE id = ?').bind(id).first<AssignmentRecord>()
@@ -88,7 +93,7 @@ export async function listAssignments(db: D1Database, filter: { reviewer?: strin
   const sql = `SELECT * FROM assignments${where.length ? ` WHERE ${where.join(' AND ')}` : ''} ORDER BY closed_at IS NOT NULL, id DESC`
   return (await db.prepare(sql).bind(...args).all<AssignmentRecord>()).results.map(assignment)
 }
-export async function insertAssignment(db: D1Database, a: Omit<AssignmentRow, 'id' | 'closedAt' | 'spotCheck'> & { readonly spotCheck?: SpotCheck | null }): Promise<number> {
+export async function insertAssignment(db: D1Database, a: Omit<AssignmentRow, 'id' | 'closedAt' | 'spotCheck' | 'frozen'> & { readonly spotCheck?: SpotCheck | null }): Promise<number> {
   const spot = a.spotCheck ?? null
   const res = await db
     .prepare('INSERT INTO assignments (reviewer, queue, files, flagged_only, spot_check, seed, sample, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
@@ -99,6 +104,25 @@ export async function insertAssignment(db: D1Database, a: Omit<AssignmentRow, 'i
 export async function closeAssignment(db: D1Database, id: number, at: string): Promise<void> {
   await db.prepare('UPDATE assignments SET closed_at = ? WHERE id = ? AND closed_at IS NULL').bind(at, id).run()
 }
+/**
+ * Keeps the figures of closed assignments that have none yet, in one statement however many there are, so that a
+ * list counting fifty of them stays within the statements an invocation may run.
+ */
+export async function freezeProgress(db: D1Database, figures: ReadonlyMap<number, FrozenProgress>): Promise<void> {
+  if (figures.size === 0) return
+  const json = JSON.stringify(Object.fromEntries(figures))
+  await db
+    .prepare(
+      `UPDATE assignments SET frozen_progress = (SELECT value FROM json_each(?) WHERE CAST(key AS INTEGER) = assignments.id)
+       WHERE closed_at IS NOT NULL AND frozen_progress IS NULL AND id IN (SELECT CAST(key AS INTEGER) FROM json_each(?))`,
+    )
+    .bind(json, json)
+    .run()
+}
+/** Lets a closed assignment be counted again: its decisions or submissions changed after it was closed. */
+export async function thawProgress(db: D1Database, id: number): Promise<void> {
+  await db.prepare('UPDATE assignments SET frozen_progress = NULL WHERE id = ?').bind(id).run()
+}
 
 export interface DecisionRow { readonly assignment: number; readonly queue: string; readonly file: string; readonly key: string; readonly rowHash: string; readonly action: Action; readonly cells: Readonly<Record<string, string>>; readonly note: string; readonly severity: Severity | null; readonly decidedAt: string; readonly submission: number | null }
 interface DecisionRecord { assignment: number; queue: string; file: string; key: string; row_hash: string; action: Action; cells: string; note: string; severity: Severity | null; decided_at: string; submission: number | null }
@@ -108,6 +132,11 @@ const decisionRow = (r: DecisionRecord): DecisionRow => ({
 })
 export async function listDecisions(db: D1Database, assignmentId: number): Promise<DecisionRow[]> {
   return (await db.prepare('SELECT * FROM decisions WHERE assignment = ? ORDER BY file, key').bind(assignmentId).all<DecisionRecord>()).results.map(decisionRow)
+}
+/** The decisions of several assignments in one statement. */
+export async function listDecisionsOf(db: D1Database, assignmentIds: readonly number[]): Promise<DecisionRow[]> {
+  const sql = 'SELECT * FROM decisions WHERE assignment IN (SELECT value FROM json_each(?)) ORDER BY assignment, file, key'
+  return (await db.prepare(sql).bind(JSON.stringify(assignmentIds)).all<DecisionRecord>()).results.map(decisionRow)
 }
 /** The rows of a queue that a decision in an open or merged submission already settles, as key → the row hash decided on. */
 export async function settledRows(db: D1Database, queue: string): Promise<Map<string, Set<string>>> {
@@ -204,6 +233,11 @@ export async function listSubmissions(db: D1Database, filter: { assignment?: num
   }
   const sql = `SELECT * FROM submissions${where.length ? ` WHERE ${where.join(' AND ')}` : ''} ORDER BY id DESC`
   return (await db.prepare(sql).bind(...args).all<SubmissionRecord>()).results.map(submissionRow)
+}
+/** The submissions of several assignments in one statement. */
+export async function listSubmissionsOf(db: D1Database, assignmentIds: readonly number[]): Promise<SubmissionRow[]> {
+  const sql = 'SELECT * FROM submissions WHERE assignment IN (SELECT value FROM json_each(?)) ORDER BY id DESC'
+  return (await db.prepare(sql).bind(JSON.stringify(assignmentIds)).all<SubmissionRecord>()).results.map(submissionRow)
 }
 export async function submissionByPr(db: D1Database, pr: number): Promise<SubmissionRow | null> {
   const r = await db.prepare('SELECT * FROM submissions WHERE pr = ?').bind(pr).first<SubmissionRecord>()

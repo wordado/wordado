@@ -1,7 +1,7 @@
 import type { Hono } from 'hono'
 import type { SubmissionView } from '../../shared/hosted'
 import { apiError, jsonBody, type AppEnv, type Deps } from '../app'
-import { getAssignment, listSubmissions, setSubmissionStatus, submissionByPr, unsubmit } from '../db'
+import { getAssignment, listSubmissions, setSubmissionStatus, submissionByPr, thawProgress, unsubmit, type SubmissionRow } from '../db'
 import { githubFor, GitHubError, verifyWebhook } from '../github'
 import { currentSnapshot } from '../snapshotStore'
 import { PrUnconfirmed, settleClaim, submit } from '../submit'
@@ -34,7 +34,7 @@ export function submitRoutes(app: Hono<AppEnv>, deps: Deps): void {
     const event = JSON.parse(body) as { action?: string; pull_request?: { number?: number; merged?: boolean } }
     if (event.action !== 'closed' || typeof event.pull_request?.number !== 'number') return c.body(null, 204)
     const s = await submissionByPr(deps.env.DB, event.pull_request.number)
-    if (s && s.status === 'open') await closeSubmission(deps, s.id, event.pull_request.merged === true)
+    if (s && s.status === 'open') await closeSubmission(deps, s, event.pull_request.merged === true)
     return c.body(null, 204)
   })
 
@@ -47,7 +47,7 @@ export function submitRoutes(app: Hono<AppEnv>, deps: Deps): void {
         const pr = s.pr ?? (await settleClaim(deps, gh, s).then((r) => (r.state === 'completed' ? r.pr : null)))
         if (pr === null) continue
         const state = await gh.prState(pr)
-        if (state !== 'open') await closeSubmission(deps, s.id, state === 'merged')
+        if (state !== 'open') await closeSubmission(deps, s, state === 'merged')
       } catch (err) {
         deps.log(`refresh of submission ${s.id} failed: ${err instanceof Error ? err.message : String(err)}`)
       }
@@ -78,7 +78,9 @@ function failureMessage(err: unknown): string {
   return err.what === 'pull request' ? `GitHub did not accept the pull request (${said}). ${SAVED}` : `GitHub refused the submit (${err.what}, ${said}). ${SAVED}`
 }
 
-async function closeSubmission(deps: Deps, id: number, merged: boolean): Promise<void> {
-  await setSubmissionStatus(deps.env.DB, id, merged ? 'merged' : 'closed')
-  if (!merged) await unsubmit(deps.env.DB, id)
+async function closeSubmission(deps: Deps, s: SubmissionRow, merged: boolean): Promise<void> {
+  await setSubmissionStatus(deps.env.DB, s.id, merged ? 'merged' : 'closed')
+  if (!merged) await unsubmit(deps.env.DB, s.id)
+  // A pull request often outlives its assignment: what was kept at the closing counts it as still open (#281).
+  await thawProgress(deps.env.DB, s.assignment)
 }

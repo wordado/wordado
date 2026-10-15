@@ -4,10 +4,10 @@ import { apiError, jsonBody, type AppEnv, type Deps } from '../app'
 import type { RowView } from '../../server/types'
 import type { SnapshotQueue } from '../../shared/snapshot'
 import { clashes, proposeSplit, SplitError, type Coverage } from '../assign'
-import { closeAssignment, deleteDecisions, getAssignment, getReviewer, insertAssignment, listAssignments, listDecisions, moveDecisions, settledRows, type AssignmentRow, type ReviewerRow, type SpotCheck } from '../db'
+import { closeAssignment, deleteDecisions, getAssignment, getReviewer, insertAssignment, listAssignments, listDecisions, moveDecisions, settledRows, thawProgress, type AssignmentRow, type ReviewerRow, type SpotCheck } from '../db'
 import { currentSnapshot, type Snapshot } from '../snapshotStore'
 import { drawSample } from '../spotCheck'
-import { assignmentView, NO_SNAPSHOT, reviewerNames } from './reviewer'
+import { assignmentView, assignmentViews, NO_SNAPSHOT, reviewerNames } from './reviewer'
 
 type Refused = { status: 400 | 409 | 503; message: string }
 type Created = { id: number } | Refused
@@ -108,7 +108,7 @@ export function adminRoutes(app: Hono<AppEnv>, deps: Deps): void {
     const names = await reviewerNames(deps)
     const all = await listAssignments(deps.env.DB)
     const shown = [...all.filter((a) => a.closedAt === null), ...all.filter((a) => a.closedAt !== null).slice(0, 50)]
-    return c.json(await Promise.all(shown.map((a) => assignmentView(deps, snap, a, names))))
+    return c.json(await assignmentViews(deps, snap, shown, names))
   })
 
   app.post('/api/admin/assignments', async (c) => {
@@ -130,6 +130,7 @@ export function adminRoutes(app: Hono<AppEnv>, deps: Deps): void {
     const a = await getAssignment(deps.env.DB, Number(c.req.param('id')))
     if (!a) return apiError(c, 404, 'no such assignment')
     await closeAssignment(deps.env.DB, a.id, deps.now().toISOString())
+    // The view of a closed assignment counts its figures and keeps them (#281), unless no snapshot is there.
     return c.json(await view(a.id))
   })
 
@@ -145,6 +146,8 @@ export function adminRoutes(app: Hono<AppEnv>, deps: Deps): void {
     if (a.closedAt === null) await closeAssignment(deps.env.DB, a.id, deps.now().toISOString())
     if (body.decisions === 'move') await moveDecisions(deps.env.DB, a.id, made.id)
     else await deleteDecisions(deps.env.DB, a.id, (await listDecisions(deps.env.DB, a.id)).filter((d) => d.submission === null).map((d) => d.key))
+    // Its unsubmitted decisions are no longer its own: figures kept when it was closed would count them twice.
+    await thawProgress(deps.env.DB, a.id)
     return c.json(await view(made.id))
   })
 

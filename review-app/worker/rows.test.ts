@@ -55,7 +55,7 @@ describe('assignmentRows', () => {
     file: async () => ({ file, version: 'v', rows }),
     digest: async () => null,
   }
-  const assignment = { id: 1, reviewer: 'r', queue: 'level', files: '*' as const, spotCheck: null, createdAt: 't', closedAt: null }
+  const assignment = { id: 1, reviewer: 'r', queue: 'level', files: '*' as const, spotCheck: null, createdAt: 't', closedAt: null, frozen: null }
 
   it('gives a flagged-only assignment the flagged, reported and stale rows, worst first', async () => {
     const got = await assignmentRows(snap, { ...assignment, flaggedOnly: true })
@@ -116,7 +116,7 @@ describe('assignmentHashes', () => {
   }
   const digest = { files: Object.fromEntries(Object.entries(byFile).map(([f, rows]) => [f, digestRows(rows)])) }
   const fromDigest: Snapshot = { ...fromFiles, file: async () => Promise.reject(new Error('a file was read')), digest: async () => digest }
-  const base = { id: 1, reviewer: 'r', queue: 'level', createdAt: 't', closedAt: null }
+  const base = { id: 1, reviewer: 'r', queue: 'level', createdAt: 't', closedAt: null, frozen: null }
   const sample = [{ file: b, key: 'second' }, { file: a, key: 'reported' }, { file: a, key: 'left' }, { file: a, key: 'flagged' }, { file: retired, key: 'old' }]
   const cases: [string, AssignmentRow][] = [
     ['a whole-file assignment', { ...base, files: [a, retired], flaggedOnly: false, spotCheck: null }],

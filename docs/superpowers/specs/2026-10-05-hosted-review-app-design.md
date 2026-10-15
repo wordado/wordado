@@ -206,6 +206,15 @@ Per assignment: rows in scope (from the snapshot), decided (unsubmitted), submit
 remaining. Submitted and merged come from `submissions`; once the snapshot drops the merged rows, *remaining*
 falls by itself.
 
+A closed assignment (#281) shows its progress and spot-check result as they were when it was closed, kept in
+`assignments.frozen_progress` (migration `0009_frozen_progress.sql`, JSON `{ progress, spotCheck }`, nullable): the
+lists read no snapshot data, decisions or submissions for it. Closing counts and keeps them in the same request
+(nothing when no snapshot is there). One closed without them (before the column, or with no snapshot) is counted by
+the first list that shows it, all such together with one read of the decisions, one of the submissions and one
+write, so a list of fifty stays within the plan's statements; they are kept from then on. They are counted again
+when the assignment is reassigned (its unsubmitted decisions move or are discarded) and when one of its pull
+requests is merged or closed.
+
 ### 6.2 Request rules
 
 Kept from the local server: POST, PATCH and DELETE need `Content-Type: application/json` (else 415) and a well-formed
