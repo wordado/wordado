@@ -97,6 +97,7 @@ The local app keeps working unchanged; both modes share the UI, the row model an
 ```
 snapshots/<id>/index.json
 snapshots/<id>/<queue>/<file-stem>.json      e.g. translation-de/2026-10-03-01.json
+snapshots/<id>/<queue>/digest.json
 current.json                                  { "id": "<id>", "built": "<iso>", "commit": "<content sha>" }
 ```
 
@@ -109,6 +110,10 @@ current.json                                  { "id": "<id>", "built": "<iso>", 
   the same hash the AI-review store keys on. The snapshot covers the queues the review app can show: `translation-<l1>`,
   `title-<l1>` and `level`, whether or not AI review covers them (rows it does not cover read `ai: 'unreviewed'`).
   `english` and `audio` stay on files (§12).
+- A queue's `digest.json` (#279): `{ "files": { "<path>": [[key, rowHash, flagged], …] } }`, each file's rows in
+  order, `flagged` true for a row a flagged-only assignment holds (flagged, reported or stale). The lists of
+  assignments count progress and spot-check results from it, one read per queue, instead of parsing every file;
+  for a snapshot built before it, the Worker reads the files. No review file is named `digest.csv` (stems are dated).
 - The snapshot holds rows only: never the draft, the decisions log, or the corpus as a whole.
 
 ### 4.2 Building
