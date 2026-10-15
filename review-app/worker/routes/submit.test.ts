@@ -5,7 +5,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import type { RowsResponse, SubmissionView, SubmitResult } from '../../shared/hosted'
 import { createApp, type Deps } from '../app'
 import type { Env } from '../bindings'
-import { insertAssignment, insertReviewer, insertSubmission, listDecisions, listSubmissions, markSubmitted, upsertDecision } from '../db'
+import { closeAssignment, freezeProgress, getAssignment, insertAssignment, insertReviewer, insertSubmission, listDecisions, listSubmissions, markSubmitted, upsertDecision } from '../db'
 import { resetGitHubTokens } from '../github'
 import { resetSnapshotCache } from '../snapshotStore'
 import { branchSlug } from '../submit'
@@ -528,6 +528,15 @@ describe('webhook and submissions', () => {
     const out = (await (await as('ivan@example.com', 'POST', '/api/submit', { assignment: id })).json()) as SubmitResult
     await hook({ action: 'closed', pull_request: { number: out.pr, merged: true } })
     expect((await listSubmissions(env.DB))[0]!.status).toBe('merged')
+  })
+  it('a closed assignment whose pull request is merged or closed after it was closed is counted again (#281)', async () => {
+    await decideFirst(1)
+    const out = (await (await as('ivan@example.com', 'POST', '/api/submit', { assignment: id })).json()) as SubmitResult
+    await closeAssignment(env.DB, id, 't')
+    await freezeProgress(env.DB, new Map([[id, { progress: { inScope: 1, decided: 0, changed: 0, submitted: 1, merged: 0, remaining: 0 }, spotCheck: null }]]))
+    expect((await getAssignment(env.DB, id))!.frozen).not.toBeNull()
+    await hook({ action: 'closed', pull_request: { number: out.pr, merged: true } })
+    expect((await getAssignment(env.DB, id))!.frozen).toBeNull()
   })
   it('refuses a bad signature', async () => {
     expect((await hook({ action: 'closed', pull_request: { number: 1, merged: true } }, 'wrong')).status).toBe(401)

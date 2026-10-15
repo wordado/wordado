@@ -1,17 +1,20 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import type { AssignmentView } from '../shared/hosted'
 import { createApp } from './app'
 import type { Env } from './bindings'
 import { countedDb, D1BudgetSpent, type CountedDb } from './d1Count'
-import { insertReviewer, insertTopicsIfAbsent, putFeedbackAi, putSetting, replaceOpenIssues, type FeedbackAiRow } from './db'
+import { closeAssignment, insertAssignment, insertReviewer, insertTopicsIfAbsent, putFeedbackAi, putSetting, replaceOpenIssues, type FeedbackAiRow } from './db'
 import { AI_BATCH, AI_SWITCH } from './feedbackAi'
 import { resetGitHubTokens } from './github'
 import { ISSUE_PAGES, refreshOpenIssues } from './openIssues'
+import { resetSnapshotCache } from './snapshotStore'
 import { FakeGitHub, testAppKey } from './test/fakeGitHub'
 import { FakeLearnerApp, feedbackItem } from './test/fakeLearnerApp'
 import { FakeModel } from './test/fakeModel'
 import { testKeys } from './test/jwt'
 import { noticeFile } from './test/notices'
 import { fetchBy, resetDb, startPlatform, testDeps } from './test/platform'
+import { putSnapshot } from './test/snapshot'
 import { runWeekly, WEEKLY_AI_CALLS, WEEKLY_PAGES } from './weekly'
 
 /**
@@ -231,6 +234,29 @@ describe('the statements one invocation runs against D1, in the worst case (Free
     console.log(`D1 statements, a translation into three languages: ${counted.statements()}`)
     // The reviewer, the switch, and one count for each language.
     expect(counted.statements()).toBeLessThanOrEqual(5)
+  })
+})
+
+describe('the lists of assignments (#281)', () => {
+  it('Admin → Assignments with fifty closed assignments that keep no figures yet, and My work', async () => {
+    await putSnapshot(base)
+    resetSnapshotCache()
+    await insertReviewer(base.DB, { email: 'ivan@example.com', name: 'Ivan', languages: ['bg', 'en'], role: 'reviewer', invitedAt: 't', inviteSentAt: null, disabledAt: null })
+    for (let i = 0; i < 60; i += 1) await closeAssignment(base.DB, await insertAssignment(base.DB, { reviewer: 'ivan@example.com', queue: i % 2 ? 'level' : 'translation-bg', files: '*', flaggedOnly: false, createdAt: 't' }), 't')
+    for (const queue of ['translation-bg', 'level']) await insertAssignment(base.DB, { reviewer: 'ivan@example.com', queue, files: '*', flaggedOnly: true, createdAt: 't' })
+    const lists: [string, string, string][] = [
+      ['Admin → Assignments, keeping the closed ones’ figures', ADMIN, '/api/admin/assignments'],
+      ['Admin → Assignments once they are kept', ADMIN, '/api/admin/assignments'],
+      ['My work', 'ivan@example.com', '/api/assignments'],
+    ]
+    for (const [what, email, path] of lists) {
+      counted = countedDb(base.DB)
+      const res = await createApp(deps()).request(path, { headers: { 'cf-access-jwt-assertion': await keys.token(email, env, Math.floor(Date.parse(NOW) / 1000) + 3600) } })
+      expect(((await res.json()) as AssignmentView[]).every((a) => a.progress !== null)).toBe(true)
+      console.log(`D1 statements, ${what}: ${counted.statements()}`)
+      expect(counted.statements()).toBeLessThanOrEqual(BUDGET)
+    }
+    expect(await rowsOf('assignments WHERE frozen_progress IS NOT NULL')).toBe(50)
   })
 })
 
