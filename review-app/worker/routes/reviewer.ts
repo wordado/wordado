@@ -2,17 +2,17 @@ import type { Hono } from 'hono'
 import type { AssignmentView, RowsResponse } from '../../shared/hosted'
 import { apiError, type AppEnv, type Deps } from '../app'
 import { deleteDecisions, getAssignment, listAssignments, listDecisions, listReviewers, listSubmissions, type AssignmentRow } from '../db'
-import { assignmentRows, progress, withDecisions } from '../rows'
+import { assignmentHashes, assignmentRows, progress, withDecisions } from '../rows'
 import { currentSnapshot, type Snapshot } from '../snapshotStore'
 import { spotCheckResult } from '../spotCheck'
 
 export const NO_SNAPSHOT = 'The review data is not available yet.'
 
 export async function assignmentView(deps: Deps, snap: Snapshot | null, a: AssignmentRow, names: ReadonlyMap<string, string>): Promise<AssignmentView> {
-  const scoped = snap ? await assignmentRows(snap, a) : null
-  const decisions = scoped ? await listDecisions(deps.env.DB, a.id) : []
-  const p = scoped ? progress(scoped.rows, decisions, await listSubmissions(deps.env.DB, { assignment: a.id })) : null
-  const spotCheck = a.spotCheck ? { sample: a.spotCheck.sample.length, result: scoped ? spotCheckResult(a.spotCheck.sample, scoped.rows, decisions) : null } : null
+  const rows = snap ? await assignmentHashes(snap, a) : null
+  const decisions = rows ? await listDecisions(deps.env.DB, a.id) : []
+  const p = rows ? progress(rows, decisions, await listSubmissions(deps.env.DB, { assignment: a.id })) : null
+  const spotCheck = a.spotCheck ? { sample: a.spotCheck.sample.length, result: rows ? spotCheckResult(a.spotCheck.sample, rows, decisions) : null } : null
   return { id: a.id, reviewer: a.reviewer, reviewerName: names.get(a.reviewer) ?? a.reviewer, queue: a.queue, files: a.files, flaggedOnly: a.flaggedOnly, spotCheck, createdAt: a.createdAt, closedAt: a.closedAt, progress: p }
 }
 
