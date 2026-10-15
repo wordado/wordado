@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { rowContent } from '@wordado/pipeline/aiReview/store'
 import { describe, expect, it } from 'vitest'
-import { CURRENT_KEY, snapshotFileKey, snapshotIndexKey, type SnapshotFile, type SnapshotIndex } from '../shared/snapshot'
+import { CURRENT_KEY, snapshotDigestKey, snapshotFileKey, snapshotIndexKey, type QueueDigest, type SnapshotFile, type SnapshotIndex } from '../shared/snapshot'
 import { reviewFixture } from './fixture'
 import { listRows } from './model'
 import { buildSnapshot } from './snapshot'
@@ -43,5 +43,22 @@ describe('buildSnapshot', () => {
     const sample = rows[0]!
     expect(sample.rowHash).toMatch(/^[0-9a-f]{64}$/)
     expect(sample.rowHash).not.toBe(rowContent('translation-bg', 'something else', ''))
+  })
+
+  it('writes a digest per queue: every row of every file, its hash and whether a flagged-only assignment holds it', async () => {
+    const dir = await reviewFixture()
+    const out = mkdtempSync(join(tmpdir(), 'snap-'))
+    const index = buildSnapshot(dir, out, { commit: 'abcdef1', built: '2026-10-05T00:00:00Z' })
+    const scopes = new Set<boolean>()
+    for (const q of index.queues) {
+      const digest = JSON.parse(readFileSync(join(out, snapshotDigestKey(index.id, q.queue)), 'utf8')) as QueueDigest
+      expect(Object.keys(digest.files)).toEqual(q.files.map((f) => f.file))
+      for (const f of q.files) {
+        const rows = (JSON.parse(readFileSync(join(out, snapshotFileKey(index.id, f.file)), 'utf8')) as SnapshotFile).rows
+        expect(digest.files[f.file]).toEqual(rows.map((r) => [r.key, r.rowHash, r.ai === 'flagged' || r.reports !== '' || r.stale]))
+        for (const [, , flagged] of digest.files[f.file]!) scopes.add(flagged)
+      }
+    }
+    expect([...scopes].sort()).toEqual([false, true])
   })
 })

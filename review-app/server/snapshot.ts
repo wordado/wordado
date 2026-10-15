@@ -4,7 +4,7 @@ import { FIELDS, queueKind } from '@wordado/pipeline/aiReview/prompts'
 import { readConfig } from '@wordado/pipeline/config'
 import { queueSpecs } from '@wordado/pipeline/queues'
 import { languageOf } from '../shared/hosted'
-import { CURRENT_KEY, snapshotFileKey, snapshotIndexKey, type SnapshotFile, type SnapshotIndex, type SnapshotQueue } from '../shared/snapshot'
+import { CURRENT_KEY, digestRows, snapshotDigestKey, snapshotFileKey, snapshotIndexKey, type QueueDigest, type SnapshotFile, type SnapshotIndex, type SnapshotQueue } from '../shared/snapshot'
 import { allRows, fileVersion } from './model'
 import type { RowView } from './types'
 
@@ -23,7 +23,8 @@ function write(out: string, key: string, value: unknown): void {
 
 /**
  * The rows of every open review file the hosted app serves (translation-<l1>, title-<l1>, level), as the local app
- * shows them, under snapshots/<id>/, then current.json pointing at it (spec 2026-10-05 §4).
+ * shows them, under snapshots/<id>/, with a digest of each queue's rows, then current.json pointing at it (spec
+ * 2026-10-05 §4).
  */
 export function buildSnapshot(dir: string, out: string, meta: { commit: string; built: string }): SnapshotIndex {
   const id = snapshotId(meta.commit, meta.built)
@@ -43,6 +44,8 @@ export function buildSnapshot(dir: string, out: string, meta: { commit: string; 
       write(out, snapshotFileKey(id, file), body)
       return { file, rows: rows.length, flagged: rows.filter((r) => r.ai === 'flagged').length, reported: rows.filter((r) => r.reports !== '').length }
     })
+    const digest: QueueDigest = { files: Object.fromEntries(files.map(({ file }) => [file, digestRows(byFile.get(file)!)])) }
+    write(out, snapshotDigestKey(id, queue), digest)
     queues.push({ queue, language, columns: [...spec.columns], verdicts: [...spec.verdicts], files })
   }
   const index: SnapshotIndex = { id, built: meta.built, commit: meta.commit, queues }
