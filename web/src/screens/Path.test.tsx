@@ -589,15 +589,17 @@ describe('Path, opened at a unit', () => {
       expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual([expect.stringContaining('B1')])
       expect(screen.getAllByRole('heading', { level: 3 })).toHaveLength(1)
       expect(unit(units[2]!.title.en!)).toBeTruthy()
-      const note = screen.getByText(/This is the demo: one unit of B1\./)
+      const note = screen.getByRole('region', { name: 'This is the demo: one unit of B1.' })
       expect(note.textContent).toContain('The whole course has 12 units at B1.')
       expect(within(note).getByRole('link', { name: 'Create an account' }).getAttribute('href')).toBe('/signin')
+      // Above the unit, where it is seen first (#289).
+      expect(note.compareDocumentPosition(screen.getByRole('heading', { level: 2 })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     })
 
     it('says only that it is the trial when the course has no size for the level', async () => {
       const ctx = await setupTrial({ declared: 'A2' })
       renderWith(<Path />, ctx)
-      const note = screen.getByText(/This is the demo: one unit of A2\./)
+      const note = screen.getByRole('region', { name: 'This is the demo: one unit of A2.' })
       expect(note.textContent).not.toContain('whole course has')
       expect(within(note).getByRole('link', { name: 'Create an account' })).toBeTruthy()
     })

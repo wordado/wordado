@@ -111,7 +111,7 @@ describe('Root', () => {
   it('opens on today, in the demo', async () => {
     await renderRoot()
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('10 new words')
-    expect(screen.getByText('You are trying Wordado. Your progress stays on this device.')).toBeTruthy()
+    expect(screen.getByText('You are trying Wordado. Your progress stays only on this device: create an account to keep it.')).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Study' }).getAttribute('aria-current')).toBe('page')
   })
 

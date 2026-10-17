@@ -1,6 +1,6 @@
 import { useClient, useClientSnapshot } from '@wordado/client-data'
 import { corpusWordId, levelIndex, offeredThemes, searchIndex, searchThemes, themeEntries, trialThemes, type Corpus, type CorpusEntry, type Theme, type ThemeSearch } from '@wordado/core'
-import { Search } from 'lucide-react'
+import { Lock, Search } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { localized, useT, type MessageKey } from '../i18n/i18n'
 import { Link } from '../router'
@@ -203,6 +203,10 @@ function TrialThemes(props: { readonly corpus: Corpus }) {
                 <h2>{localized(theme.name, locale, corpus.l1)}</h2>
                 <p className="note">{localized(theme.description, locale, corpus.l1)}</p>
                 <p className="note">{t('path.words', { count: words })}</p>
+                <p className="theme-tag">
+                  <Lock aria-hidden="true" size={14} />
+                  {t('trial.themeTag')}
+                </p>
               </div>
             </li>
           ))}
