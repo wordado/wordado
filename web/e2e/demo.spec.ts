@@ -1426,6 +1426,88 @@ test('“I already have an account” leads from the setup to Sign in', async ({
   await expectAccessible(page, { dark: true })
 })
 
+// Sign-in with the email first, and the age step only for a new account (#293). The demo has no server: the
+// sign-in routes answer as the server does, and each test records what the page sent.
+
+/** Answers the sign-in routes: a code is sent; `NEW` is an address with no account, anything else has one. */
+async function serveSignIn(page: import('@playwright/test').Page, createAccount: { status: number; body: unknown } = { status: 400, body: { code: 'INVALID_TICKET' } }) {
+  const sent: { path: string; body: Record<string, unknown> }[] = []
+  const answer = (status: number, body: unknown) => ({ status, contentType: 'application/json', body: JSON.stringify(body) })
+  await page.route('**/api/auth/**', async (route) => {
+    const path = new URL(route.request().url()).pathname
+    const body = (route.request().postDataJSON() ?? {}) as Record<string, unknown>
+    sent.push({ path, body })
+    if (path.endsWith('/email-otp/send-verification-otp')) return route.fulfill(answer(200, { success: true }))
+    if (path.endsWith('/sign-in/email-otp')) {
+      return route.fulfill(body['email'] === NEW ? answer(202, { code: 'NEW_ACCOUNT', message: 'm', ticket: 'tk' }) : answer(200, { token: 't', user: { id: 'u1' } }))
+    }
+    if (path.endsWith('/email-otp/create-account')) return route.fulfill(answer(createAccount.status, createAccount.body))
+    return route.fulfill(answer(404, { error: 'not_found' }))
+  })
+  return sent
+}
+const NEW = 'new-learner@example.com'
+
+async function emailAndCode(page: import('@playwright/test').Page, email: string) {
+  await page.getByLabel('Email').fill(email)
+  await page.getByRole('button', { name: 'Email me a code' }).click()
+  await page.getByLabel('Code').fill('123456')
+  await page.getByRole('button', { name: 'Sign in' }).click()
+}
+
+test('sign-in starts with the email, and an address with an account gets no age step (#293)', async ({ page }) => {
+  const sent = await serveSignIn(page)
+  const me = page.waitForRequest('**/v1/me')
+  await page.goto('/')
+  await page.getByRole('link', { name: 'I already have an account' }).click()
+  await expect(page.getByRole('heading', { level: 2, name: 'How do you want to sign in?' })).toBeVisible()
+  await expect(page.getByText('Step 1 of 2')).toBeVisible()
+  await expect(page.getByLabel('Country where you live')).toHaveCount(0)
+  await expect(page.getByText(/^New here or coming back, start with your email\./)).toBeVisible()
+  await page.getByLabel('Email').fill('back@example.com')
+  await page.getByRole('button', { name: 'Email me a code' }).click()
+  await expect(page.getByText('Step 2 of 2')).toBeVisible()
+  await expectAccessible(page, { dark: true })
+  await page.getByLabel('Code').fill('123456')
+  await page.getByRole('button', { name: 'Sign in' }).click()
+  // Signed in: the app asks who it is, and no age is asked.
+  await me
+  await expect(page.getByRole('heading', { name: 'Create your account' })).toHaveCount(0)
+  await expect(page.getByLabel('Country where you live')).toHaveCount(0)
+  expect(sent.map((s) => s.path)).toEqual(['/api/auth/email-otp/send-verification-otp', '/api/auth/sign-in/email-otp'])
+  expect(sent[1]!.body).toEqual({ email: 'back@example.com', otp: '123456' })
+})
+
+test('a new address gets the age step after the code; below the age, nothing is created and the ticket is dropped (#293)', async ({ page }) => {
+  const sent = await serveSignIn(page)
+  await page.goto('/signin')
+  await emailAndCode(page, NEW)
+  await expect(page.getByRole('heading', { level: 2, name: 'Create your account' })).toBeFocused()
+  await expect(page.getByText('New account')).toBeVisible()
+  await expect(page.getByText(`There is no account with ${NEW} yet.`, { exact: false })).toBeVisible()
+  await expect(page.getByRole('checkbox', { name: /^I would like to receive news about Wordado/ })).not.toBeChecked()
+  await expectAccessible(page, { dark: true })
+  await page.getByLabel('Country where you live').selectOption('DE')
+  await page.getByRole('button', { name: 'I’m younger than 16' }).click()
+  await expect(heading(page)).toHaveText('Sorry, you can’t create an account yet')
+  await expect.poll(() => sent.at(-1)).toEqual({ path: '/api/auth/email-otp/create-account', body: { email: NEW, ticket: 'tk', ageConfirmed: false } })
+})
+
+test('the age step creates the account with the ticket and the news wording, and a lapsed ticket goes back to the email (#293)', async ({ page }) => {
+  const sent = await serveSignIn(page)
+  await page.goto('/signin')
+  await emailAndCode(page, NEW)
+  await page.getByLabel('Country where you live').selectOption('BG')
+  await page.getByRole('checkbox', { name: 'I’m 14 or older' }).check()
+  await page.getByRole('checkbox', { name: /^I would like to receive news about Wordado/ }).check()
+  await page.getByRole('button', { name: 'Create account' }).click()
+  await expect(page.getByRole('alert')).toHaveText('Creating the account took too long. Ask for a new code and try again.')
+  await expect(page.getByLabel('Email')).toHaveValue(NEW)
+  // The country stayed on the device: nothing sent names it.
+  expect(sent.at(-1)).toEqual({ path: '/api/auth/email-otp/create-account', body: { email: NEW, ticket: 'tk', ageConfirmed: true, newsConsent: 'news-1.en' } })
+  expect(JSON.stringify(sent)).not.toContain('BG')
+})
+
 test('the setup’s Language and Theme steps meet WCAG 2.2 A and AA, light and dark (spec §11.1)', async ({ page }) => {
   await page.goto('/')
   await expect(page.getByRole('heading', { name: 'Which language do you speak?' })).toBeFocused()

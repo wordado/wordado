@@ -1,7 +1,7 @@
 import { useClient } from '@wordado/client-data'
 import { newsConsentText } from '@wordado/core'
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
-import { ApiError, OfflineError } from '../account/api'
+import { ApiError, OfflineError, type CodeOutcome } from '../account/api'
 import { consentAge } from '../account/ageGate'
 import { countryOptions } from '../account/countries'
 import { useApp } from '../app/context'
@@ -13,10 +13,11 @@ import { Link, navigate } from '../router'
 import { useOnline } from '../useOnline'
 
 type Step =
-  | { readonly kind: 'gate' }
-  | { readonly kind: 'too-young'; readonly age: number }
   | { readonly kind: 'method' }
   | { readonly kind: 'code'; readonly email: string }
+  /** A right code for an address with no account (#293): the ticket creates it once the age is confirmed. */
+  | { readonly kind: 'gate'; readonly email: string; readonly ticket: string }
+  | { readonly kind: 'too-young'; readonly age: number }
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -56,31 +57,33 @@ function Field(props: {
   )
 }
 
-/** The wizard's steps, as its counter numbers them. */
-const STEP_NUMBER = { gate: 1, method: 2, code: 3 } as const
+/** The steps every learner takes, as the counter numbers them; the age step of a new account is named instead. */
+const STEP_NUMBER = { method: 1, code: 2 } as const
 
 /**
  * Sign-in and sign-up are one flow (spec §8.6), as a wizard in the first-run
- * setup's look: the age gate (spec §11), then an email address, then the
- * code. The server creates the account at the first sign-in, so the gate
- * comes first every time. The gate asks where the learner lives and that they
- * are at least the age it sets; the country stays on this device and is not
- * sent with the sign-in (#166), and no birth date is asked. Under it the gate
- * asks, with a box that starts unticked, whether the learner wants news by
- * email (#186): the wording ticked travels with the code, since only the
- * server knows whether the account is new. For the same reason a learner
- * who comes back gets the same steps, and the screen says so: the first
- * step that the steps reach an account that exists, the email field that the
- * address decides which account it is (#273). The native
- * language is asked by the first-run setup, right after
- * sign-up (plan 11), not here.
+ * setup's look: an email address, then the code, and for an address with no
+ * account the age gate (spec §11, #293). A right code for an account signs in
+ * at once; for an address without one the server creates nothing yet and
+ * answers with a ticket, and the gate comes next: the account is created only
+ * once the age is confirmed, with that ticket and no second code. The gate
+ * asks where the learner lives and that they are at least the age it sets;
+ * the country stays on this device and is not sent (#166), and no birth date
+ * is asked. A learner below the age is turned away and the server drops the
+ * ticket. Under the age the gate asks, with a box that starts unticked,
+ * whether the learner wants news by email (#186): the wording ticked travels
+ * with the request that creates the account, and a returning sign-in sends
+ * none. The first step says that the email decides which account it is, and
+ * the gate names the address it found no account for, so a mistyped one can
+ * be changed before anything is made (#273). The native language is asked by
+ * the first-run setup, right after sign-up (plan 11), not here.
  */
 export function SignIn() {
   const { t, locale } = useT()
   const { api, accounts, account } = useApp()
   const client = useClient()
   const online = useOnline()
-  const [step, setStep] = useState<Step>({ kind: 'gate' })
+  const [step, setStep] = useState<Step>({ kind: 'method' })
   const [country, setCountry] = useState<string | null>(null)
   const [ageConfirmed, setAgeConfirmed] = useState(false)
   // News by email (#186): unticked until the learner ticks it, and nothing about the account waits for it.
@@ -145,11 +148,6 @@ export function SignIn() {
   }
 
   const age = consentAge(country)
-  const submitGate = (event: FormEvent) => {
-    event.preventDefault()
-    reset()
-    if (ageConfirmed) setStep({ kind: 'method' })
-  }
 
   const requestCode = async (address: string): Promise<boolean> => {
     setBusy(true)
@@ -175,6 +173,27 @@ export function SignIn() {
     if (await requestCode(address)) setStep({ kind: 'code', email: address })
   }
 
+  const stopWorking = () => {
+    setBusy(false)
+    setVerifying(false)
+  }
+
+  /** The session is there: bring the account onto this device, and go home. */
+  const finishSignIn = async () => {
+    try {
+      const outcome = await accounts.completeSignIn()
+      if (outcome === 'other-account') {
+        setFormError(t('signin.otherAccount', { email: account?.email ?? '' }))
+        stopWorking()
+        return
+      }
+      navigate({ name: 'home' }, { replace: true })
+    } catch (err) {
+      setFormError(t(failureKey(err, 'signin.failed')))
+      stopWorking()
+    }
+  }
+
   const submitCode = async (event: FormEvent) => {
     event.preventDefault()
     if (step.kind !== 'code') return
@@ -186,8 +205,9 @@ export function SignIn() {
     }
     setBusy(true)
     setVerifying(true)
+    let outcome: CodeOutcome
     try {
-      await api.verifyCode(step.email, digits, newsConsent ? newsConsentText(locale) : null)
+      outcome = await api.verifyCode(step.email, digits)
     } catch (err) {
       // Only 400/401/403 mean the code itself was wrong; anything else (5xx, a
       // malformed response) is a server fault, not the learner's mistake, and
@@ -197,24 +217,48 @@ export function SignIn() {
       } else {
         setFormError(t(failureKey(err, 'signin.failed')))
       }
-      setBusy(false)
-      setVerifying(false)
+      stopWorking()
       return
     }
+    if (outcome.kind === 'new-account') {
+      stopWorking()
+      // The age is confirmed afresh for each new account, with the country as it stands.
+      setAgeConfirmed(false)
+      setStep({ kind: 'gate', email: step.email, ticket: outcome.ticket })
+      return
+    }
+    await finishSignIn()
+  }
+
+  const submitGate = async (event: FormEvent) => {
+    event.preventDefault()
+    if (step.kind !== 'gate' || !ageConfirmed) return
+    reset()
+    setBusy(true)
+    setVerifying(true)
     try {
-      const outcome = await accounts.completeSignIn()
-      if (outcome === 'other-account') {
-        setFormError(t('signin.otherAccount', { email: account?.email ?? '' }))
-        setBusy(false)
-        setVerifying(false)
+      await api.createAccount(step.email, step.ticket, newsConsent ? newsConsentText(locale) : null)
+    } catch (err) {
+      stopWorking()
+      // The ticket is spent or has lapsed (it lives as long as a code): the way on is a new code.
+      if (err instanceof ApiError && err.status === 400) {
+        setCode('')
+        setStep({ kind: 'method' })
+        setFormError(t('signin.ticketExpired'))
         return
       }
-      navigate({ name: 'home' }, { replace: true })
-    } catch (err) {
       setFormError(t(failureKey(err, 'signin.failed')))
-      setBusy(false)
-      setVerifying(false)
+      return
     }
+    await finishSignIn()
+  }
+
+  /** Leaving the age step without an account: the server drops the ticket. */
+  const leaveGate = (next: Step) => {
+    if (step.kind === 'gate') void api.discardSignUp(step.email, step.ticket)
+    reset()
+    setCode('')
+    setStep(next)
   }
 
   const resend = async () => {
@@ -224,6 +268,13 @@ export function SignIn() {
   }
 
   const title = account !== null ? t('signin.againTitle') : t('signin.title')
+  const eyebrow = step.kind === 'method' || step.kind === 'code' ? t('setup.step', { n: STEP_NUMBER[step.kind], count: 2 }) : t('signin.newAccount')
+  const working = verifying && (
+    <>
+      <p role="status">{t('signin.working')}</p>
+      <ProgressBar label={t('signin.working')} />
+    </>
+  )
   const formAlert = formError !== null && (
     <p className="form-error" role="alert">
       {formError}
@@ -253,66 +304,17 @@ export function SignIn() {
     <section className="setup signin" aria-labelledby="signin-title">
       <div className="setup-head">
         <h1 id="signin-title">{title}</h1>
-        <p className="eyebrow">{t('setup.step', { n: STEP_NUMBER[step.kind], count: 3 })}</p>
+        <p className="eyebrow">{eyebrow}</p>
       </div>
       {!online && <p className="note">{t('signin.offline')}</p>}
-      {step.kind === 'gate' && account === null && <AccountGives />}
+      {step.kind === 'method' && account === null && <AccountGives />}
       <div className="panel form-section">
-        {step.kind === 'gate' && (
-          <form onSubmit={submitGate} noValidate>
-            <h2 ref={heading} tabIndex={-1}>
-              {t('signin.stepGate')}
-            </h2>
-            {account === null && <p>{t('signin.sameSteps')}</p>}
-            <p className="note">{t('signin.gateIntro')}</p>
-            <Field label={t('signin.country')} error={null}>
-              {({ id }) => (
-                <select
-                  id={id}
-                  value={country ?? ''}
-                  onChange={(e) => {
-                    countryTouched.current = true
-                    setCountry(e.target.value === '' ? null : e.target.value)
-                    // Another country may set another age: confirm it again.
-                    setAgeConfirmed(false)
-                  }}
-                >
-                  <option value="">{t('signin.countryUnknown')}</option>
-                  {countries.map((c) => (
-                    <option key={c.code} value={c.code}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </Field>
-            <div className="field">
-              <label className="check">
-                <input type="checkbox" checked={ageConfirmed} onChange={(e) => setAgeConfirmed(e.target.checked)} />
-                {t('signin.ageConfirm', { age })}
-              </label>
-            </div>
-            <div className="field">
-              <label className="check">
-                <input type="checkbox" checked={newsConsent} onChange={(e) => setNewsConsent(e.target.checked)} />
-                {t('news.consent')}
-              </label>
-            </div>
-            <div className="actions">
-              <button type="submit" className="button primary" disabled={!ageConfirmed}>
-                {t('signin.continue')}
-              </button>
-              <button type="button" className="link-button" onClick={() => setStep({ kind: 'too-young', age })}>
-                {t('signin.younger', { age })}
-              </button>
-            </div>
-          </form>
-        )}
         {step.kind === 'method' && (
           <>
             <h2 ref={heading} tabIndex={-1}>
               {t('signin.stepMethod')}
             </h2>
+            {account === null && <p>{t('signin.emailFirst')}</p>}
             {account === null && demoHasProgress && <p className="note demo-note">{t('signin.demoNote')}</p>}
             <form onSubmit={(e) => void submitEmail(e)} noValidate>
               <Field
@@ -364,12 +366,7 @@ export function SignIn() {
             </Field>
             {formAlert}
             {info !== null && <p role="status">{t(info)}</p>}
-            {verifying && (
-              <>
-                <p role="status">{t('signin.working')}</p>
-                <ProgressBar label={t('signin.working')} />
-              </>
-            )}
+            {working}
             <div className="actions">
               <button type="submit" className="button primary" disabled={busy}>
                 {t('signin.verify')}
@@ -386,6 +383,61 @@ export function SignIn() {
                   setStep({ kind: 'method' })
                 }}
               >
+                {t('signin.otherEmail')}
+              </button>
+            </div>
+          </form>
+        )}
+        {step.kind === 'gate' && (
+          <form onSubmit={(e) => void submitGate(e)} noValidate>
+            <h2 ref={heading} tabIndex={-1}>
+              {t('signin.stepGate')}
+            </h2>
+            <p>{t('signin.noAccount', { email: step.email })}</p>
+            <p className="note">{t('signin.gateIntro')}</p>
+            <Field label={t('signin.country')} error={null}>
+              {({ id }) => (
+                <select
+                  id={id}
+                  value={country ?? ''}
+                  onChange={(e) => {
+                    countryTouched.current = true
+                    setCountry(e.target.value === '' ? null : e.target.value)
+                    // Another country may set another age: confirm it again.
+                    setAgeConfirmed(false)
+                  }}
+                >
+                  <option value="">{t('signin.countryUnknown')}</option>
+                  {countries.map((c) => (
+                    <option key={c.code} value={c.code}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </Field>
+            <div className="field">
+              <label className="check">
+                <input type="checkbox" checked={ageConfirmed} onChange={(e) => setAgeConfirmed(e.target.checked)} />
+                {t('signin.ageConfirm', { age })}
+              </label>
+            </div>
+            <div className="field">
+              <label className="check">
+                <input type="checkbox" checked={newsConsent} onChange={(e) => setNewsConsent(e.target.checked)} />
+                {t('news.consent')}
+              </label>
+            </div>
+            {formAlert}
+            {working}
+            <div className="actions">
+              <button type="submit" className="button primary" disabled={!ageConfirmed || busy}>
+                {t('signin.create')}
+              </button>
+              <button type="button" className="link-button" disabled={busy} onClick={() => leaveGate({ kind: 'too-young', age })}>
+                {t('signin.younger', { age })}
+              </button>
+              <button type="button" className="link-button" disabled={busy} onClick={() => leaveGate({ kind: 'method' })}>
                 {t('signin.otherEmail')}
               </button>
             </div>

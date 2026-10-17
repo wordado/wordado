@@ -65,7 +65,7 @@ function check(condition: unknown, message: string): asserts condition {
 }
 
 /**
- * One learner's life against a running Worker: sign in by code, push, alias a
+ * One learner's life against a running Worker: sign up by code and the age step, push, alias a
  * word so the queue re-derives, pull, push a full page (the heaviest request a
  * learner makes: spec §4.4 has it exercised on the preview before merge), run
  * the cron where possible, delete the account. Throws on the first failure.
@@ -121,7 +121,10 @@ export async function runSmoke(options: SmokeOptions): Promise<void> {
   let reply = await call('POST', '/api/auth/email-otp/send-verification-otp', { email, type: 'sign-in' })
   check(reply.status === 200, `send code: ${reply.status} ${JSON.stringify(reply.body)}`)
   reply = await call('POST', '/api/auth/sign-in/email-otp', { email, otp: await options.readCode(email) })
-  check(reply.status === 200 && cookie !== '', `sign in: ${reply.status}`)
+  // A new address: the code was right, and the account is made after the age step (#293).
+  check(reply.status === 202 && typeof reply.body?.ticket === 'string', `check code: ${reply.status}`)
+  reply = await call('POST', '/api/auth/email-otp/create-account', { email, ticket: reply.body.ticket, ageConfirmed: true })
+  check(reply.status === 200 && cookie !== '', `create account: ${reply.status}`)
 
   reply = await call('POST', '/v1/sync/push', page(`smoke-${now}-1`, [event(1, 'c:hello-1', now - 120_000), event(2, 'u:smoke-mine', now - 60_000)]))
   check(reply.body?.status === 'ok', `push: ${JSON.stringify(reply.body)}`)

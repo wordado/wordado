@@ -43,7 +43,10 @@ export interface Harness {
   /** What the next push sends answer. */
   pushResult: 'sent' | 'gone' | Error
   request(path: string, init?: RequestInit): Promise<Reply>
-  /** `extra` joins the body sent with the code, as the consent to news does (#186). */
+  /**
+   * Sends a code and signs in with it; a new address goes through the age step, confirmed (#293). `extra` joins the
+   * body of the request that signs in or creates the account, as the consent to news does (#186).
+   */
   signIn(email?: string, extra?: Record<string, unknown>): Promise<Session>
   /** Waits for the work handed to `deps.background`. */
   settle(): Promise<void>
@@ -174,11 +177,20 @@ export function harness(options: HarnessOptions = {}): Harness {
       // Better Auth lower-cases the address before it sends.
       const code = [...codes].reverse().find((c) => c.email === address.toLowerCase())?.code
       if (!code) throw new Error(`no code was sent to ${address}`)
-      const signedIn = await app.request('/api/auth/sign-in/email-otp', {
+      let signedIn = await app.request('/api/auth/sign-in/email-otp', {
         method: 'POST',
         headers,
         body: JSON.stringify({ email: address, otp: code, ...extra }),
       })
+      // A new address: the age step, confirmed, creates the account with the ticket (#293).
+      if (signedIn.status === 202) {
+        const { ticket } = (await signedIn.json()) as { ticket: string }
+        signedIn = await app.request('/api/auth/email-otp/create-account', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ email: address, ticket, ageConfirmed: true, ...extra }),
+        })
+      }
       if (signedIn.status !== 200) throw new Error(`sign in: ${signedIn.status} ${await signedIn.text()}`)
       const cookie = signedIn.headers
         .getSetCookie()

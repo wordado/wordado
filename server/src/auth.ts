@@ -3,6 +3,7 @@ import { emailOTP } from 'better-auth/plugins/email-otp'
 import { recordSignIn } from './account/lastSignIn'
 import type { ServerDeps } from './deps'
 import { hashedRateLimit } from './rateLimitStore'
+import { refuseAccountWithoutAge, signUpAfterAge } from './signUp'
 
 /** Tuning (spec §15). */
 export const SESSION_DAYS = 60
@@ -11,8 +12,8 @@ export const OTP_SENDS_PER_MINUTE = 3
 
 /**
  * Passwordless sign-in (spec §8.6): a six-digit code by email.
- * The first successful sign-in creates the user; there is no separate
- * sign-up. Sessions last 60 days and are refreshed once a day of use, so a
+ * A right code for an address with an account signs in; for one without, the
+ * account is created only after the age step (src/signUp.ts, #293). Sessions last 60 days and are refreshed once a day of use, so a
  * returning learner is not asked for a code again — which also keeps email
  * volume inside the provider's daily allowance (spec §17).
  */
@@ -40,7 +41,13 @@ export function createAuth(deps: ServerDeps) {
     account: { updateAccountOnSignIn: false },
     databaseHooks: {
       user: {
-        create: { before: async (user) => ({ data: withoutProfile(user) }) },
+        // An account is created only by the create-account route, after the age step (#293, src/signUp.ts).
+        create: {
+          before: async (user, ctx) => {
+            await refuseAccountWithoutAge(user, ctx)
+            return { data: withoutProfile(user) }
+          },
+        },
         update: { before: async (user) => ({ data: withoutProfile(user) }) },
       },
       account: {
@@ -77,6 +84,7 @@ export function createAuth(deps: ServerDeps) {
           deps.background(deps.mailer.sendSignInCode(email, otp).catch((error: unknown) => console.error('sign-in code not sent', error)))
         },
       }),
+      signUpAfterAge(),
     ],
   })
 }
