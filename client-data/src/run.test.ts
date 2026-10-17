@@ -406,6 +406,42 @@ describe('StudyRun', () => {
     expect(planned.slice(1)).toEqual(theme.filter((wordId) => wordId !== marked).slice(0, 9))
   })
 
+  it('never queues a word that is never taught, even one started before, in practice over everything or kept to a unit or theme', async () => {
+    const env = testEnv()
+    const client = await openSampleClient(env)
+    const theme = themeEntries(client.snapshot.corpus!, 'daily-life')
+    const only = corpusWordId(theme[0]!.entryId)
+    await client.answer({ wordId: only, mode: 'flashcard', direction: 'en_to_l1', grade: Grade.Good, latencyMs: 2_000, practice: false })
+    env.advance(3_600_000)
+    await client.startSession()
+    // The one started word is known from the start in a later pack (issue #285); its review state stays.
+    const snapshot = client.snapshot
+    const corpus = snapshot.corpus!
+    const entries = new Map(corpus.entries)
+    entries.set(theme[0]!.entryId, { ...theme[0]!, taught: false })
+    vi.spyOn(client, 'snapshot', 'get').mockReturnValue({ ...snapshot, corpus: { ...corpus, entries, notTaught: new Set([only]) } })
+    vi.spyOn(client, 'startSession').mockResolvedValue([])
+    const unit = corpus.units.find((u) => u.wordIds.includes(only))!
+    const everything = await StudyRun.start(client, env, options({ kind: 'practice' }))
+    expect(everything.snapshot).toMatchObject({ phase: 'done', remaining: 0, item: null })
+    const inUnit = await StudyRun.start(client, env, options({ kind: 'practice', mode: 'flashcard', scope: { kind: 'unit', id: unit.unitId } }))
+    expect(inUnit.snapshot.remaining).toBe(PRACTICE_RUN_SIZE)
+    expect(inUnit.snapshot.item!.wordId).not.toBe(only)
+    const seen = new Set<WordId>()
+    for (let round = 0; round < 3; round += 1) {
+      const run = await StudyRun.start(client, env, options({ kind: 'practice', mode: 'flashcard', scope: { kind: 'theme', id: 'daily-life' } }))
+      for (let guard = 0; guard < 20 && run.snapshot.item; guard += 1) {
+        seen.add(run.snapshot.item.wordId)
+        env.advance(ITEM_SETTLE_MS)
+        run.reveal()
+        env.advance(ITEM_SETTLE_MS)
+        await run.rate(Grade.Good)
+      }
+    }
+    expect(seen.size).toBe(theme.length - 1)
+    expect(seen.has(only)).toBe(false)
+  })
+
   it('never queues a retired word, in practice over everything or kept to a unit or theme', async () => {
     const env = testEnv()
     const client = await openSampleClient(env)

@@ -108,6 +108,52 @@ describe('sessionPlan in a trial (spec 2026-10-12 §4.4)', () => {
   })
 })
 
+/** The sample corpus with these words known from the start, as a later pack would mark them (issue #285). */
+function withNotTaught(wordIds: readonly WordId[]): Corpus {
+  const ids = new Set(wordIds)
+  const entries = new Map([...corpus.entries].map(([key, e]) => [key, ids.has(`c:${key}` as WordId) ? { ...e, taught: false } : e]))
+  return { ...corpus, entries, notTaught: ids }
+}
+
+describe('words that are never taught (issue #285)', () => {
+  const firstUnit = () => corpus.units.find((u) => u.unitId === 'a1-01')!.wordIds
+
+  it('never serves one as a new word, from the path, a theme or the words chosen to learn', async () => {
+    const { ctx } = await setup()
+    const quiet = withNotTaught(['c:hello-1', 'c:breakfast-1', 'c:lunch-1'])
+    const settings = { ...DEFAULT_SETTINGS, newWordLimit: 3 }
+    expect(sessionPlan(ctx({ corpus: quiet, settings })).newWords).toEqual(['c:goodbye-1', 'c:please-1', 'c:thank_you-1'])
+    expect(sessionPlan(ctx({ corpus: quiet, settings: { ...settings, activeTheme: 'daily-life' } })).newWords).toEqual(['c:dinner-1', expect.any(String), expect.any(String)])
+    const toLearn = new Map<WordId, number>([['c:lunch-1', 1]])
+    expect(sessionPlan(ctx({ corpus: quiet, settings, toLearn })).newWords).not.toContain('c:lunch-1')
+  })
+
+  it('passes over a unit whose words are all never taught: the path starts at the next one', async () => {
+    const { ctx } = await setup()
+    const quiet = withNotTaught(firstUnit())
+    const next = corpus.units.find((u) => u.unitId === 'a1-02')!.wordIds
+    expect(sessionPlan(ctx({ corpus: quiet })).newWords).toEqual(next.slice(0, 10))
+    expect(newUnlocks(ctx({ corpus: quiet }))).toEqual(['a1-01', 'a1-02'])
+  })
+
+  it('stops bringing up a word the learner started before it was no longer taught, and keeps its history', async () => {
+    const { db, env, learner, ctx } = await setup()
+    await learnUnit(db, env, learner, 'a1-01')
+    env.advance(30 * 86_400_000)
+    const due = sessionPlan(ctx({ now: env.now() }))
+    expect(due.reviews).toContain('c:hello-1')
+    const quiet = withNotTaught(['c:hello-1'])
+    const plan = sessionPlan(ctx({ corpus: quiet, now: env.now() }))
+    expect(plan.reviews).not.toContain('c:hello-1')
+    expect(plan.backlogTotal).toBe(due.backlogTotal - 1)
+    expect(learner.states.has('c:hello-1')).toBe(true)
+    // Counted as known: out of the unit's live words and the tiers, as a word set aside is.
+    const view = progressView(ctx({ corpus: quiet, now: env.now() }), plan)
+    expect(view.units.get('a1-01')).toMatchObject({ live: 19, introduced: 19 })
+    expect(view.levels['A1']).toMatchObject({ live: 59 })
+  })
+})
+
 describe('dayCompleteInput and progressView', () => {
   it('reports the day complete after one answer when nothing is due', async () => {
     const { db, env, learner, ctx } = await setup()
