@@ -13,7 +13,7 @@ import { AudioDownload } from '../settings/AudioDownload'
 import { LanguageSettings } from '../settings/LanguageSettings'
 import { NativeLanguageSettings } from '../settings/NativeLanguageSettings'
 import { ReminderSettings } from '../settings/ReminderSettings'
-import { SetAsideWords } from '../settings/SetAsideWords'
+import { setAsideList, SetAsideWords } from '../settings/SetAsideWords'
 import { StudySettings } from '../settings/StudySettings'
 import { useOnline } from '../useOnline'
 import { useStore } from '../useStore'
@@ -181,12 +181,14 @@ function SectionPage(props: { readonly section: SettingsSection }) {
 function useSummaries(): Readonly<Record<SettingsSection, string | null>> {
   const { t, locale } = useT()
   const client = useClient()
-  const { settings, flags, l1 } = useClientSnapshot()
+  const { settings, flags, l1, corpus } = useClientSnapshot()
   const { account, audio, reminders, lifecycle } = useApp()
   const { installable, autoUpdate } = useStore(lifecycle.store)
   const clips = settings.audio ? client.levelClips(settings.declaredLevel) : []
   const cached = audio.cachedClips()
   const prefs = reminders.prefs()
+  // As many as the section lists.
+  const setAside = setAsideList(flags, corpus).length
   const translations = (settings.l1 ?? l1) as L1
   return {
     study: t('settings.summaryStudy', {
@@ -194,7 +196,7 @@ function useSummaries(): Readonly<Record<SettingsSection, string | null>> {
       count: settings.newWordLimit,
       retention: t(`settings.retention.${settings.retention}` as MessageKey),
     }),
-    words: flags.size === 0 ? t('settings.summaryNone') : t('settings.summaryWords', { count: flags.size }),
+    words: setAside === 0 ? t('settings.summaryNone') : t('settings.summaryWords', { count: setAside }),
     audio: clips.length === 0 ? null : t('settings.audioDownloaded', { done: clips.filter((c) => cached.has(c.clipId)).length, total: clips.length }),
     reminders: account === null ? t('reminders.needAccount') : prefs ? t('settings.summaryRemindersOn', { time: toTime(prefs.minute) }) : t('reminders.off'),
     // The translation language named in itself, as Native language lists it.
