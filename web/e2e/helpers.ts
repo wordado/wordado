@@ -149,6 +149,7 @@ export interface SampleEntry {
   readonly headword: string
   readonly translation: string
   sense: string
+  readonly themes?: readonly string[]
 }
 
 /** The entries of the Bulgarian sample the demo is built with, so a test knows the right answer to a question. */
@@ -197,14 +198,21 @@ export type TrialEntries = Readonly<Record<'A1' | 'A2' | 'B1', readonly SampleEn
  * the routes to doctor. Returns each level's entries, so a test knows what the unit holds. The context must block
  * service workers, as above.
  */
-export async function serveTrialSample(context: BrowserContext): Promise<TrialEntries> {
+export async function serveTrialSample(context: BrowserContext, options: { readonly openTheme?: string; readonly declared?: 'A1' | 'A2' | 'B1' } = {}): Promise<TrialEntries> {
   interface Entry extends SampleEntry {
     entry_id: string
     unit_id: string
     level: string
     pos: string
+    themes: string[]
+    audio: Record<string, string>
   }
-  const pack = JSON.parse(readFileSync(join(SAMPLE_DIR, 'corpus-v0-bg.pack'), 'utf8')) as { units: { unit_id: string; level: string }[]; entries: Entry[]; trial?: unknown }
+  const pack = JSON.parse(readFileSync(join(SAMPLE_DIR, 'corpus-v0-bg.pack'), 'utf8')) as {
+    units: { unit_id: string; level: string }[]
+    entries: Entry[]
+    audio: { clip_id: string }[]
+    trial?: Record<string, unknown>
+  }
   const levels = ['A1', 'A2', 'B1'] as const
   const levelOf = new Map(pack.units.map((unit, i) => [unit.unit_id, levels[i]!]))
   for (const unit of pack.units) unit.level = levelOf.get(unit.unit_id)!
@@ -212,6 +220,20 @@ export async function serveTrialSample(context: BrowserContext): Promise<TrialEn
   // A probe that is also an entry equals it in these fields (validatePack).
   const probes = pack.entries.map(({ entry_id, headword, pos, sense, level, translation }) => ({ entry_id, headword, pos, sense, level, translation }))
   pack.trial = { probes, course: { A1: { units: 10, words: 200 }, A2: { units: 12, words: 240 }, B1: { units: 14, words: 280 } }, themes: { 'daily-life': 240, food: 130 } }
+  const { openTheme } = options
+  if (openTheme !== undefined) {
+    // Cut as client-data's `trialPack` cuts it (#290; the e2e helpers do not import that testing module): the units
+    // kept, their entries, every entry of the theme, and the clips they name. Entries of the theme in a unit that is
+    // not kept name a unit the pack lacks, as in the real trial. The units kept are the declared level's and the
+    // lowest level's, so the units still span more than one level and the setup asks for the level.
+    const declared = options.declared ?? 'B1'
+    pack.units = pack.units.filter((unit) => unit.level === declared || unit.level === 'A1')
+    const kept = new Set(pack.units.map((unit) => unit.unit_id))
+    pack.entries = pack.entries.filter((entry) => kept.has(entry.unit_id) || entry.themes.includes(openTheme))
+    const clips = new Set(pack.entries.flatMap((entry) => Object.values(entry.audio)))
+    pack.audio = pack.audio.filter((clip) => clips.has(clip.clip_id))
+    pack.trial!.open_theme = openTheme
+  }
   const body = Buffer.from(JSON.stringify(pack))
   const manifest = JSON.parse(readFileSync(join(SAMPLE_DIR, 'manifest.json'), 'utf8')) as { packs: { pack_id: string; sha256: string; bytes: number }[] }
   for (const p of manifest.packs) {

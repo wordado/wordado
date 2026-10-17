@@ -63,6 +63,9 @@ A trial pack is a pack (§5.1) with fewer units and one more field:
     it.
   - `themes` (#244): for every theme the whole course offers, its live words there, by theme ID. The pack's
     `themes` define each of them, beside those its own entries name.
+  - `open_theme` (#290, optional): one theme the trial opens whole. The pack then also holds every live, taught
+    entry of that theme, with its own `unit_id` (the unit need not be in the pack). See
+    `2026-10-17-demo-open-theme-design.md`.
 
 The extension differs from `.pack` so that nothing which handles the course's packs by name (the adopt step,
 `last-published/`) takes a trial pack for one.
@@ -143,7 +146,9 @@ In the trial, study takes new words from **the unit of the declared level only**
 - Finishing the unit opens no other. The lower levels' units count as assumed known, as in the course; the
   higher ones are not shown.
 - **Practice** of the unit works as everywhere.
-- **Themes** are not studied in the trial: a theme would bring in words of the other levels' units. The Themes
+- **Themes** are not studied in the trial, except one: a trial pack may open one theme whole (`trial.open_theme`,
+  `2026-10-17-demo-open-theme-design.md`), which works as in an account. For every other theme, a theme would
+  bring in words of the other levels' units. The Themes
   screen shows the themes the whole course offers, each with its name, description and size there
   (`trial.themes`), with no page and no button, and the way to an account (#244). Each card says *With an
   account* beside a lock, so it does not read as broken (#289). A trial pack built before the
@@ -163,6 +168,7 @@ In the trial, study takes new words from **the unit of the declared level only**
 Sign-up from the trial carries the demo over as today (§8.6). What changes:
 
 - The declared level is carried with the rest, so the account starts at the trial's level, not at A1.
+- The chosen theme travels with the settings (#290), so the account goes on with it.
 - The level step still shows once on the home screen (`askLevel`, §7.2), now with that level selected and the
   test on offer. Continue ends it.
 - The account's device installs the course's pack. The trial unit is the same unit there, with its progress.

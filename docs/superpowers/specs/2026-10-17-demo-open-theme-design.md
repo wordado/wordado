@@ -1,6 +1,6 @@
 # One open theme in the demo — design
 
-**Date:** 2026-10-17 · **Status:** draft · **Issue:** #290
+**Date:** 2026-10-17 · **Status:** approved 2026-10-17, built by plan 2026-10-17-demo-open-theme · **Issue:** #290
 **Parent spec:** `2026-10-12-trial-by-level-design.md` (the trial), §3.1 (the trial pack) and §4.4 (one unit).
 **Related:** #244 (the demo's Themes screen), #289 (what an account gives).
 
@@ -71,9 +71,13 @@ other check on such an entry stays. `trial.open_theme` must name a theme in `pac
 field validates as today.
 
 **Schema version** (builder's call, made in review). `schema_version` is not raised. The trial pack keeps the
-course's version, and older apps are protected by the deploy order of §8. An app from before this change would
-refuse a trial pack with unit-less entries. The builder checks what such an app does with a refused pack, for
-example a stale tab, and records it here. It should keep the pack it has and offer its update, not lose the demo.
+course's version, and older apps are protected by the deploy order of §8. Checked in the code: an app from before
+this change refuses the new trial pack in `validatePack` (`unknown unit` on an entry), and `checkFetched` returns
+that reason (`client-data/src/packs.ts:65`), so `installPacks` records it in `rejected` and stages nothing
+(`packs.ts:103-106`). The installed pack stays active and the demo keeps working. The failure is not shown: the
+app acts only on `appUpdateNeeded` (`web/src/app/content.ts:9-11`; callers `web/src/main.tsx:126`, `:196`) and
+ignores `rejected`, so such an app neither offers its update nor says why. A device with no pack yet, on an old
+app, gets no demo until the app is updated (`web/src/app/boot.ts:381`). Hence §8: the app ships first.
 
 **Release check.** `trialProblems` already compares every trial entry with the course's entry of the same ID,
 so the added entries are covered.
