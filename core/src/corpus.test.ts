@@ -198,6 +198,7 @@ describe('trial', () => {
       ],
       course: { A1: { units: 2, words: 40 } },
       themes: {},
+      openTheme: null,
     })
   })
 
@@ -222,6 +223,25 @@ describe('trial', () => {
     })
     expect(offeredThemes(loadCorpus([full])).map((t) => t.themeId)).toEqual(['food'])
     expect(offeredThemes(loadCorpus([{ ...full, trial }]))).toEqual([])
+  })
+
+  describe('open theme (#290)', () => {
+    const themes = [theme('greetings'), theme('food'), theme('daily-life')]
+    const opened = { ...trial, open_theme: 'daily-life', themes: { food: 120, 'daily-life': 80 } }
+
+    it('loads the open theme', () => {
+      expect(loadCorpus([pack({ themes, trial: opened })]).trial?.openTheme).toBe('daily-life')
+    })
+
+    it('offers the open theme alone in a trial', () => {
+      expect(offeredThemes(loadCorpus([pack({ themes, trial: opened })])).map((t) => t.themeId)).toEqual(['daily-life'])
+      expect(offeredThemes(loadCorpus([pack({ themes, trial })]))).toEqual([])
+    })
+
+    it('leaves the open theme out of the closed themes', () => {
+      const corpus = loadCorpus([pack({ themes, trial: opened })])
+      expect(trialThemes(corpus).map(({ theme: t }) => t.themeId)).toEqual(['food'])
+    })
   })
 
   it('rejects two packs that carry a trial', () => {

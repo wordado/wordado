@@ -27,7 +27,7 @@ const corpusOf = (units: readonly Unit[], trial: Corpus['trial']): Corpus => ({
   trial,
 })
 const course = corpusOf(UNITS, null)
-const trial = corpusOf(UNITS, { probes: [], course: {}, themes: {} })
+const trial = corpusOf(UNITS, { probes: [], course: {}, themes: {}, openTheme: null })
 
 function ctx(corpus: Corpus, declaredLevel: CefrLevel, introduced: number[] = []): PathContext {
   return {
@@ -51,7 +51,7 @@ describe('studyUnits', () => {
   })
 
   it('is empty when the trial has no unit at the declared level', () => {
-    expect(studyUnits(corpusOf([UNITS[0]!, UNITS[2]!], { probes: [], course: {}, themes: {} }), 'A2')).toEqual([])
+    expect(studyUnits(corpusOf([UNITS[0]!, UNITS[2]!], { probes: [], course: {}, themes: {}, openTheme: null }), 'A2')).toEqual([])
   })
 })
 

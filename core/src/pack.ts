@@ -84,6 +84,11 @@ export interface PackTrial {
    * `themes`. A trial shows them and studies none (#244). Absent from a trial pack built before them.
    */
   readonly themes?: Readonly<Record<string, number>>
+  /**
+   * The one theme the trial opens (#290), by theme ID; defined in the pack's `themes`. The pack holds all its words,
+   * which need not belong to a unit of it. Absent when the trial opens none.
+   */
+  readonly open_theme?: string
 }
 
 /** A corpus pack as shipped: one JSON document per (corpus version, L1) (spec §5.1). */
