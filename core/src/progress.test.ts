@@ -20,7 +20,7 @@ function state(n: number, passed: boolean, stability?: number): [WordId, ReviewS
   return [w(n), stability === undefined ? s : { ...s, stability }]
 }
 
-const visible = { retired: new Set<WordId>(), flags: new Map<WordId, WordFlag>() }
+const visible = { retired: new Set<WordId>(), notTaught: new Set<WordId>(), flags: new Map<WordId, WordFlag>() }
 
 describe('retentionRate', () => {
   const summary = (day: number, reviews: number, successes: number): DaySummary => ({
@@ -63,12 +63,19 @@ describe('unitProgress', () => {
 
   it('leaves retired, known and suspended words out, so a known word is never mature', () => {
     const states = new Map([state(1, true, 100), state(2, true, 100), state(3, true, 100), state(4, true, 100)])
-    const ctx = { retired: new Set([w(5)]), flags: new Map<WordId, WordFlag>([[w(4), 'known'], [w(3), 'suspended']]) }
+    const ctx = { retired: new Set([w(5)]), notTaught: new Set<WordId>(), flags: new Map<WordId, WordFlag>([[w(4), 'known'], [w(3), 'suspended']]) }
     expect(unitProgress(u, states, ctx)).toEqual({ live: 2, introduced: 2, passed: 2, mature: 2, complete: true, mastered: true })
   })
 
+  it('leaves out a word that is never taught, as a known one, even when the learner had started it', () => {
+    const states = new Map([state(1, true, 100), state(2, true, 100), state(3, true, 100)])
+    const ctx = { retired: new Set<WordId>(), notTaught: new Set([w(3), w(4)]), flags: new Map<WordId, WordFlag>() }
+    expect(unitProgress(u, states, ctx)).toEqual({ live: 3, introduced: 2, passed: 2, mature: 2, complete: false, mastered: false })
+    expect(unitProgress(u, states, { ...ctx, notTaught: new Set(u.wordIds) })).toMatchObject({ live: 0, introduced: 0 })
+  })
+
   it('is neither complete nor mastered with no live word', () => {
-    const ctx = { retired: new Set(u.wordIds), flags: new Map() }
+    const ctx = { retired: new Set(u.wordIds), notTaught: new Set<WordId>(), flags: new Map() }
     expect(unitProgress(u, new Map(), ctx)).toMatchObject({ live: 0, complete: false, mastered: false })
   })
 })
@@ -104,7 +111,7 @@ describe('what of a unit can be practised (spec §7.2, §7.4)', () => {
 
   it('counts every live word of a unit, started or not: the words `practisable` admits when the unit is practised whole', () => {
     const states = new Map([state(1, true), state(2, false), state(3, true)])
-    const ctx = { retired: new Set([w(5)]), flags: new Map<WordId, WordFlag>([[w(3), 'known']]) }
+    const ctx = { retired: new Set([w(5)]), notTaught: new Set<WordId>(), flags: new Map<WordId, WordFlag>([[w(3), 'known']]) }
     const progress = unitProgress(u, states, ctx)
     const admitted = u.wordIds.filter((id) => practisable(id, { ...ctx, states, unstarted: true }))
     expect(unitPractisable(progress)).toBe(admitted.length)

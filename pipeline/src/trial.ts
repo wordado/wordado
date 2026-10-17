@@ -46,8 +46,9 @@ const probeOf = (e: PackEntry): PackProbe => ({
  */
 export function buildTrial(pack: Pack, probesPerLevel: number): TrialOutput {
   const entryById = new Map(pack.entries.map((e) => [e.entry_id, e]))
+  // What a trial teaches and tests: neither a retired word nor one known from the start (issue #285).
   const liveOf = (ids: readonly string[]): PackEntry[] =>
-    ids.map((id) => entryById.get(id)).filter((e): e is PackEntry => e !== undefined && !e.retired)
+    ids.map((id) => entryById.get(id)).filter((e): e is PackEntry => e !== undefined && !e.retired && e.taught !== false)
 
   const units = []
   const probes: PackProbe[] = []

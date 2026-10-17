@@ -29,9 +29,9 @@ function clash(a: CorpusEntry, b: CorpusEntry, listening: boolean): boolean {
   )
 }
 
-/** A distractor must be unambiguously wrong (spec §8.1). */
+/** A distractor must be unambiguously wrong (spec §8.1), and a word that is taught: one known from the start would give the answer away (issue #285). */
 export function isValidDistractor(target: CorpusEntry, candidate: CorpusEntry, listening: boolean): boolean {
-  return candidate.entryId !== target.entryId && !candidate.retired && !clash(target, candidate, listening)
+  return candidate.entryId !== target.entryId && !candidate.retired && candidate.taught && !clash(target, candidate, listening)
 }
 
 function score(target: CorpusEntry, c: CorpusEntry, ctx: DistractorContext, rng: Rng): number {
@@ -90,7 +90,7 @@ export function buildMatchingBoard(
   const order = shown ? unseenFirstOrder(candidates, shown, weight ?? (() => 1), rng) : weight ? weightedOrder(candidates, weight, rng) : shuffle(candidates, rng)
   for (const entry of order) {
     if (board.length >= size) break
-    if (!entry.retired && !board.some((other) => clash(entry, other, false))) board.push(entry)
+    if (!entry.retired && entry.taught && !board.some((other) => clash(entry, other, false))) board.push(entry)
   }
   return board.length === size ? board : null
 }

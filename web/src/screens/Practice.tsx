@@ -29,7 +29,7 @@ export function Practice(props: ScopeParams) {
   const visit = scope && visitProgress(client, scope.scope)
   const params = scope?.params ?? {}
   // Words practice may use, in the scope or over everything: with none, no way to practise is offered.
-  const none = (scope ? scope.words : practisableCount(states.keys(), { states, flags, retired: corpus?.retired ?? new Set() })) === 0
+  const none = (scope ? scope.words : practisableCount(states.keys(), { states, flags, retired: corpus?.retired ?? new Set(), notTaught: corpus?.notTaught ?? new Set() })) === 0
   return (
     <section className="practice" aria-labelledby="practice-title">
       {scope && (

@@ -23,6 +23,7 @@ const corpusOf = (units: readonly Unit[], trial: Corpus['trial']): Corpus => ({
   themes: [],
   clips: new Map(),
   retired: new Set(),
+  notTaught: new Set(),
   trial,
 })
 const course = corpusOf(UNITS, null)
@@ -32,6 +33,7 @@ function ctx(corpus: Corpus, declaredLevel: CefrLevel, introduced: number[] = []
   return {
     units: studyUnits(corpus, declaredLevel),
     retired: new Set(),
+    notTaught: new Set(),
     flags: new Map(),
     introduced: new Set(introduced.map(w)),
     declaredLevel,

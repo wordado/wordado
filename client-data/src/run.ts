@@ -79,7 +79,7 @@ const INITIAL: RunSnapshot = {
 function practiceInput(snapshot: ClientSnapshot, scope: PracticeScope | undefined): Omit<PracticeInput, 'count' | 'rng' | 'shown'> {
   const { states, flags, plan, corpus } = snapshot
   const exclude = new Set<WordId>([...(plan?.reviews ?? []), ...(plan?.newWords ?? [])])
-  return { states, flags, retired: corpus?.retired ?? new Set(), exclude, ...scopePool(corpus, scope) }
+  return { states, flags, retired: corpus?.retired ?? new Set(), notTaught: corpus?.notTaught ?? new Set(), exclude, ...scopePool(corpus, scope) }
 }
 
 /**

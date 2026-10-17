@@ -86,6 +86,8 @@ export interface PracticeContext {
   readonly flags: ReadonlyMap<WordId, WordFlag>
   /** Words a later pack retired (spec §5.1): `Corpus.retired`. */
   readonly retired: ReadonlySet<WordId>
+  /** Words known from the start, never taught (issue #285): `Corpus.notTaught`. */
+  readonly notTaught: ReadonlySet<WordId>
   /**
    * Practice that takes its scope whole (`scopePool`): a theme, or a unit of a level the learner skipped. All the
    * scope's live words may be used, started or not. Absent everywhere else.
@@ -94,7 +96,7 @@ export interface PracticeContext {
 }
 
 /**
- * Whether practice may use a word (spec §7.4): started, and live — neither set aside nor retired. In a scope that
+ * Whether practice may use a word (spec §7.4): started, and live — neither set aside, retired nor never taught. In a scope that
  * is practised whole (`unstarted`) a live word need not be started. The one rule behind every practice pool and
  * every "can this be practised" check; `unitPractisable` counts the same words of a unit.
  */
@@ -194,6 +196,6 @@ export function matchingCandidates(
   return [...corpus.entries.values()].filter((e) => {
     const wordId = corpusWordId(e.entryId)
     if (within && !within.has(wordId)) return false
-    return !e.retired && practisable(wordId, { states, flags, retired: corpus.retired, unstarted: unstarted && within !== undefined })
+    return !e.retired && e.taught && practisable(wordId, { states, flags, retired: corpus.retired, notTaught: corpus.notTaught, unstarted: unstarted && within !== undefined })
   })
 }

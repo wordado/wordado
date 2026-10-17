@@ -80,7 +80,7 @@ export function usePracticeScope(params: ScopeParams): PracticeScopeView | null 
   }, [corpus, progress, states, flags, unitId, themeId])
 }
 
-/** How many of these words practice may use (started unless the scope is practised whole, not set aside, not retired): something can be practised once this is above zero. */
+/** How many of these words practice may use (started unless the scope is practised whole, not set aside, not retired, taught): something can be practised once this is above zero. */
 export function practisableCount(wordIds: Iterable<WordId>, ctx: PracticeContext): number {
   let count = 0
   for (const wordId of wordIds) if (practisable(wordId, ctx)) count += 1
@@ -95,7 +95,7 @@ export function scopeWords(snapshot: Pick<ClientSnapshot, 'corpus' | 'states' | 
   const { corpus, states, flags } = snapshot
   const pool = scopePool(corpus, scope)
   if (!corpus || !pool) return { words: 0, unstarted: 0 }
-  const ctx = { states, flags, retired: corpus.retired }
+  const ctx = { states, flags, retired: corpus.retired, notTaught: corpus.notTaught }
   const words = practisableCount(pool.within, { ...ctx, unstarted: pool.unstarted })
   return { words, unstarted: words - practisableCount(pool.within, ctx) }
 }

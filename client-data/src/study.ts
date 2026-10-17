@@ -61,6 +61,7 @@ export function pathContext(ctx: StudyContext): PathContext {
   return {
     units: studyUnits(ctx.corpus, ctx.settings.declaredLevel),
     retired: ctx.corpus.retired,
+    notTaught: ctx.corpus.notTaught,
     flags: ctx.flags,
     // A word has review state only after a scheduled review, which is what "introduced" means (spec §7.2).
     introduced: new Set(ctx.learner.states.keys()),
@@ -71,21 +72,22 @@ export function pathContext(ctx: StudyContext): PathContext {
 
 /**
  * The words the learner chose to learn that are still to be started, in the order chosen (spec §7.4): the planner's
- * personal source. A word the corpus no longer holds, or retired, is left out; a word set aside stays listed and is
- * simply not served.
+ * personal source. A word the corpus no longer holds, retired or never taught, is left out; a word set aside stays
+ * listed and is simply not served.
  */
 export function toLearnWords(ctx: Pick<StudyContext, 'corpus' | 'learner' | 'toLearn'>): WordId[] {
-  return learnQueue(ctx.toLearn, ctx.learner.states).filter((wordId) => entryOf(ctx.corpus, wordId) !== null && !ctx.corpus.retired.has(wordId))
+  return learnQueue(ctx.toLearn, ctx.learner.states).filter((wordId) => entryOf(ctx.corpus, wordId) !== null && !ctx.corpus.retired.has(wordId) && !ctx.corpus.notTaught.has(wordId))
 }
 
 /**
  * The review states a session can serve: a corpus word the loaded corpus lacks (a device that began on the sample,
  * spec 2026-10-12 §4.6) keeps its state and is never due here, or the home screen would count it for ever and no
- * day could complete. A word of another kind is the run's to skip.
+ * day could complete. So does a word started before the corpus stopped teaching it (issue #285): its history stays,
+ * and it no longer comes up. A word of another kind is the run's to skip.
  */
 function servableStates(ctx: Pick<StudyContext, 'corpus' | 'learner'>): ReadonlyMap<WordId, ReviewState> {
   const { states } = ctx.learner
-  const held = (wordId: WordId) => parseWordId(wordId).kind !== 'corpus' || entryOf(ctx.corpus, wordId) !== null
+  const held = (wordId: WordId) => parseWordId(wordId).kind !== 'corpus' || (entryOf(ctx.corpus, wordId) !== null && !ctx.corpus.notTaught.has(wordId))
   // The usual case keeps the learner's own map.
   return [...states.keys()].every(held) ? states : new Map([...states].filter(([wordId]) => held(wordId)))
 }
@@ -107,7 +109,8 @@ export function sessionPlan(ctx: StudyContext): SessionPlan {
     reviewsDoneToday: counts.reviewsDone,
     newWordsDoneToday: counts.newWordsDone,
     personalNew: toLearnWords(ctx),
-    collectionNew: theme === null ? null : themeEntries(ctx.corpus, theme).map((e) => corpusWordId(e.entryId)),
+    // A theme lists its words that are never taught too (they are found and shown as known), but serves none of them.
+    collectionNew: theme === null ? null : themeEntries(ctx.corpus, theme).filter((e) => e.taught).map((e) => corpusWordId(e.entryId)),
     pathNew: pathNewWords(pathContext(ctx), MAX_NEW_WORD_LIMIT),
   })
 }
@@ -151,7 +154,7 @@ export interface ProgressView {
 
 export function progressView(ctx: StudyContext, plan: SessionPlan): ProgressView {
   const day = today(ctx)
-  const visibility = { retired: ctx.corpus.retired, flags: ctx.flags, declaredLevel: ctx.settings.declaredLevel }
+  const visibility = { retired: ctx.corpus.retired, notTaught: ctx.corpus.notTaught, flags: ctx.flags, declaredLevel: ctx.settings.declaredLevel }
   // A trial shows the one unit it studies, not the other levels' units it cannot (spec 2026-10-12 §4.4).
   const shown = studyUnits(ctx.corpus, ctx.settings.declaredLevel)
   const words = ctx.corpus.trial === null ? [...ctx.corpus.entries.values()].map((entry) => corpusWordId(entry.entryId)) : shown.flatMap((u) => u.wordIds)
@@ -229,7 +232,7 @@ export function upcomingClips(ctx: StudyContext, plan: SessionPlan, horizonDays:
   const retention = RETENTION_TARGETS[ctx.settings.retention]
   const words = new Set<WordId>([...plan.reviews, ...plan.newWords])
   for (const [wordId, state] of ctx.learner.states) {
-    if (!ctx.flags.has(wordId) && dueDay(state, retention) <= day + horizonDays) words.add(wordId)
+    if (!ctx.flags.has(wordId) && !ctx.corpus.notTaught.has(wordId) && dueDay(state, retention) <= day + horizonDays) words.add(wordId)
   }
   const clips = new Map<string, AudioClip>()
   for (const wordId of words) {

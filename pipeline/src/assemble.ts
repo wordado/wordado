@@ -42,7 +42,10 @@ export interface Unreviewed {
  * One L1's pack at the next version (Decision 14). A live entry takes each
  * field's folded value. An entry the previous pack carried and this draft
  * does not make live stays, retired, exactly as published (spec §5.1). Its
- * clips are kept when their files are still here.
+ * clips are kept when their files are still here. An entry the draft marks
+ * not taught ships with `taught: false` (issue #285); its unit stays, even
+ * one left with no word to teach, since a published unit may not go: the app
+ * passes over it.
  */
 export function assemble(input: AssembleInput): Assembled {
   const { l1, draft, decisions, config } = input
@@ -103,6 +106,8 @@ export function assemble(input: AssembleInput): Assembled {
       examples: english.value.examples,
       audio,
       retired: false,
+      // Written only when false, so the bytes of every entry that is taught stay as they were.
+      ...(e.taught === false ? { taught: false } : {}),
     })
   }
 

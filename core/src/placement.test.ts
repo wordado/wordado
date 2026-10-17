@@ -134,6 +134,7 @@ const entry = (entryId: string, level: CefrLevel, retired = false): CorpusEntry 
   examples: [],
   audio: {},
   retired,
+  taught: true,
 })
 
 describe('placementPool and placementLevels', () => {
@@ -142,6 +143,11 @@ describe('placementPool and placementLevels', () => {
     expect(got.get('A1')).toEqual(['c:a'])
     expect(got.get('B1')).toEqual(['c:c'])
     expect(got.has('A2')).toBe(false)
+  })
+
+  it('never asks a word that is never taught', () => {
+    const got = placementPool([entry('a', 'A1'), { ...entry('b', 'A1'), taught: false }])
+    expect(got.get('A1')).toEqual(['c:a'])
   })
 
   it('leaves out, given the learner’s language, a word that looks like its translation (an international word)', () => {
@@ -171,6 +177,7 @@ describe('placementCorpus', () => {
     themes: [],
     clips: new Map(),
     retired: new Set(),
+    notTaught: new Set(),
     trial,
   })
 

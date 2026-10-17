@@ -48,6 +48,8 @@ function parseEntry(r: Report, raw: Raw, path: string): PackEntry {
   const entryId = text(r, raw, 'entry_id', path)
   if (entryId !== '' && !isWordId(`c:${entryId}`)) r.add(at(path, 'entry_id'), 'must be a valid word_id key')
   const retired = bool(r, raw, 'retired', path)
+  // Absent means taught; read only when present, so the entry keeps the shape it was shipped in.
+  const taught = raw['taught'] === undefined ? undefined : bool(r, raw, 'taught', path)
   const examples = texts(r, raw, 'examples', path)
   if (!retired && examples.length === 0) r.add(at(path, 'examples'), 'a live entry needs at least one example sentence')
   const audio: Partial<Record<Accent, string>> = {}
@@ -75,6 +77,7 @@ function parseEntry(r: Report, raw: Raw, path: string): PackEntry {
     examples,
     audio,
     retired,
+    ...(taught === undefined ? {} : { taught }),
   }
 }
 

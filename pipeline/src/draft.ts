@@ -46,6 +46,11 @@ export interface DraftEntry {
   readonly themes: readonly string[]
   readonly english: EnglishFields
   readonly l1: Readonly<Record<string, TranslationFields>>
+  /**
+   * False for an entry not-taught.txt names: known from the start, shipped with `taught: false`, searchable and never
+   * taught (issue #285). Absent means taught.
+   */
+  readonly taught?: false
 }
 
 export interface DraftUnit {
@@ -105,6 +110,7 @@ export async function runDraft(opts: DraftOptions): Promise<Draft> {
   const forms = rankForms(sources.map((s) => parseFrequencyList(s.text, s.record.id)), config.max_forms)
   const lemmaResults = await lemmatise(forms, run('lemmas'))
   const essentials = new Set(readEssentials(dir))
+  const notTaught = new Set(readNotTaught(dir))
   const pinnedHeadwords = [...registry.entries.filter((e) => e.pinned).map((e) => e.headword), ...essentials]
   // A published entry stays live unless a reviewer drops it (Decision 9), so neither a list refresh that pushes
   // its lemma past the cut nor a banded level outside the shipped ones may take it out of the draft.
@@ -174,6 +180,7 @@ export async function runDraft(opts: DraftOptions): Promise<Draft> {
       themes: [],
       english: { ipa: s.ipa, variants: s.variants, examples: s.examples },
       l1: s.l1,
+      ...(notTaught.has(entry_id) ? { taught: false as const } : {}),
     }
   })
 
@@ -226,6 +233,8 @@ export async function runDraft(opts: DraftOptions): Promise<Draft> {
         ? `pinned entry ${e.entry_id} (${e.headword}, ${e.pos}) is not live: it was dropped or its level left the shipped levels`
         : `pinned entry ${e.entry_id} (${e.headword}, ${e.pos}) is not live: the senses stage no longer proposes it`,
     )
+  // A name that matches no entry is a slip that would leave a word taught: it stops the release.
+  for (const id of notTaught) if (!byId.has(id)) problems.push(`not-taught.txt names ${id}, which is no entry of the draft`)
   const draft: Draft = {
     live: liveEntries.map((e) => e.entry_id),
     entries,
@@ -239,6 +248,17 @@ export async function runDraft(opts: DraftOptions): Promise<Draft> {
 
 export function readDraft(dir: string): Draft {
   return readJson<Draft>(contentPaths(dir).draft)
+}
+
+/**
+ * not-taught.txt: one entry ID per line, # for comments (issue #285). The entries every learner knows from the start
+ * (articles, helper verbs): they ship searchable, shown as known, and are never taught. An ID, not a headword, since
+ * only one sense of a headword may be a grammar word.
+ */
+export function readNotTaught(dir: string): string[] {
+  const file = contentPaths(dir).notTaught
+  if (!existsSync(file)) return []
+  return [...new Set(readFileSync(file, 'utf8').split(/\r?\n/).map((l) => l.replace(/#.*/, '').trim()).filter((l) => l !== ''))]
 }
 
 /** essentials.txt: one headword per line, # for comments (Decision 19). */

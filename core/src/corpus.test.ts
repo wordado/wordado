@@ -71,6 +71,16 @@ describe('loadCorpus', () => {
     expect(corpus.clips.get('hello-1-us')).toEqual({ clipId: 'hello-1-us', url: 'audio/hello-1-us.m4a', sha256: 'a'.repeat(64), bytes: 1000, mime: 'audio/mp4' })
   })
 
+  it('reads an entry that is not taught, and lists it apart from the retired ones', () => {
+    const base = pack()
+    const corpus = loadCorpus([{ ...base, entries: base.entries.map((e) => (e.entry_id === 'bread-1' ? { ...e, taught: false } : e)) }])
+    expect(corpus.entries.get('bread-1')!.taught).toBe(false)
+    expect(corpus.entries.get('water-1')!.taught).toBe(true)
+    expect([...corpus.notTaught]).toEqual([corpusWordId('bread-1')])
+    expect([...corpus.retired]).toEqual([corpusWordId('bye-1')])
+    expect(loadCorpus([pack()]).notTaught.size).toBe(0)
+  })
+
   it('merges the packs of a manifest list', () => {
     const extra = pack({
       pack_id: 'extra-bg',
@@ -173,6 +183,7 @@ describe('trial', () => {
           variants: [],
           ipa: '',
           retired: false,
+          taught: true,
         },
       ],
       course: { A1: { units: 2, words: 40 } },

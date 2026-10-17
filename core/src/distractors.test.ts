@@ -22,6 +22,7 @@ function entry(headword: string, translations: string[], over: Partial<CorpusEnt
     examples: [],
     audio: {},
     retired: false,
+    taught: true,
     ...over,
   }
 }
@@ -53,6 +54,11 @@ describe('isValidDistractor', () => {
     expect(isValidDistractor(big, large, false)).toBe(false)
     expect(isValidDistractor(bankMoney, bankRiver, false)).toBe(false)
     expect(isValidDistractor(big, small, false)).toBe(true)
+  })
+
+  it('excludes a word that is never taught: known from the start, it would give the answer away', () => {
+    expect(isValidDistractor(big, { ...small, taught: false }, false)).toBe(false)
+    expect(pickDistractors(big, ctx({ pool: [big, { ...small, taught: false }, bad] }), 3, seededRng(1))).toEqual([bad])
   })
 
   it('compares translations case-insensitively, alternates included', () => {
@@ -120,6 +126,7 @@ describe('distractor invariants (spec §13)', () => {
     ipa: fc.constantFrom('/a/', '/b/', '/c/', '/d/', '/e/', '/f/'),
     translations: fc.uniqueArray(tr, { minLength: 1, maxLength: 3 }),
     retired: fc.boolean(),
+    taught: fc.boolean(),
   })
   const poolArb = fc
     .array(entryArb, { minLength: 1, maxLength: 30 })
@@ -136,6 +143,7 @@ describe('distractor invariants (spec §13)', () => {
         const out = pickDistractors(target, { pool, encountered: new Set<WordId>(), listening }, 3, seededRng(seed))
         const shown = [target, ...out]
         for (const d of out) expect(d.retired).toBe(false)
+        for (const d of out) expect(d.taught).toBe(true)
         for (let i = 0; i < shown.length; i += 1) {
           for (let j = i + 1; j < shown.length; j += 1) {
             const a = shown[i]!
@@ -159,6 +167,7 @@ describe('distractor invariants (spec §13)', () => {
         const all = board.flatMap((e) => e.translations)
         expect(new Set(all).size).toBe(all.length)
         expect(board.some((e) => e.retired)).toBe(false)
+        expect(board.some((e) => !e.taught)).toBe(false)
       }),
     )
   })

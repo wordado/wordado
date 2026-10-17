@@ -41,7 +41,7 @@ export interface UnitProgress {
   readonly mastered: boolean
 }
 
-type Visibility = Pick<PathContext, 'retired' | 'flags'>
+type Visibility = Pick<PathContext, 'retired' | 'notTaught' | 'flags'>
 
 export function unitProgress(unit: Unit, states: ReadonlyMap<WordId, ReviewState>, ctx: Visibility): UnitProgress {
   let live = 0
@@ -51,7 +51,7 @@ export function unitProgress(unit: Unit, states: ReadonlyMap<WordId, ReviewState
   for (const wordId of unit.wordIds) {
     if (!isLive(wordId, ctx)) continue
     live += 1
-    // A known word is known-by-declaration, never mature; flags are excluded by `isLive` above.
+    // A known word is known-by-declaration, never mature; flags and words never taught are excluded by `isLive` above.
     const state = states.get(wordId) ?? null
     if (!state) continue
     introduced += 1
