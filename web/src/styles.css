@@ -1562,6 +1562,32 @@ main:focus,
   color: var(--ink-soft);
 }
 
+/* What an account gives (#289): at the end of the demo and before the sign-in's age gate. */
+.account-gives {
+  margin: var(--space-4) 0;
+}
+
+.account-gives ul {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.account-gives li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.account-gives svg {
+  flex: none;
+  margin-top: 0.125rem;
+  color: var(--rose);
+}
+
 /* The line that takes focus when "Study this theme" has done its work. */
 .done-studying:focus {
   outline: none;
@@ -1656,6 +1682,31 @@ dialog.report input[type='text'] {
 
 .path h1 {
   margin-bottom: var(--space-4);
+}
+
+/* The demo's one unit, said above it (#289): what this is, how much more the course has, the way there. */
+.trial-note {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+  padding: var(--space-4);
+}
+
+.trial-note p {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+.trial-note .trial-note-title {
+  font-size: var(--step-1);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.trial-note .button {
+  margin-top: var(--space-2);
 }
 
 /* A level is one card: a button that folds it, its bar, and (open) its units. */
@@ -2397,6 +2448,17 @@ li:not(:has(> .play-word)) > .word-where {
 /* Not started: quieter than the themes the learner has touched. */
 .theme-card.is-new {
   background: transparent;
+}
+
+/* A demo's theme: why it does not open (#289). */
+.theme-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: var(--space-1) 0 0;
+  font-size: var(--step--1);
+  font-weight: 600;
+  color: var(--ink-soft);
 }
 
 .is-new .theme-icon {

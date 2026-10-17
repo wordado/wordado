@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { ApiError, OfflineError } from '../account/api'
 import { fakeApi } from '../test/fakeApi'
@@ -254,6 +254,8 @@ describe('SignIn: a code by email (spec §8.6)', () => {
     })
     await act(async () => undefined)
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Sign in again')
+    // The account is there already: nothing to sell it with.
+    expect(screen.queryByRole('list', { name: 'With an account' })).toBeNull()
     await passGate('BG')
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'bo@example.com' } })
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Email me a code' })))
@@ -307,6 +309,17 @@ describe('SignIn: news by email (#186)', () => {
     await signInWithCode()
     expect(api.calls).toContain('verifyCode ana@example.com 123456')
     expect(accounts.calls).toEqual(['completeSignIn'])
+  })
+
+  it('says first what an account gives and what the email is for, before the age gate (#289)', async () => {
+    await render()
+    const gives = screen.getByRole('list', { name: 'With an account' })
+    expect(within(gives).getAllByRole('listitem').map((item) => item.textContent)).toEqual([
+      'The whole course: every level, and its themes.',
+      'Your progress kept in your account, on every device you sign in on.',
+      'Your email is used only to send you a sign-in code. News only if you ask for it, and you can delete your account at any time.',
+    ])
+    expect(gives.compareDocumentPosition(screen.getByLabelText('Country where you live')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
   it('says what is kept: the country stays on this device, a ticked box goes with the account', async () => {

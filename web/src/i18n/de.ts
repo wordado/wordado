@@ -39,7 +39,7 @@ export const de: Messages = {
   'tab.elsewhere': 'Wordado ist in einem anderen Tab geöffnet.',
   'tab.elsewhereHint': 'Immer nur ein Tab kann deinen Fortschritt verwalten.',
   'tab.takeOver': 'Wordado hier verwenden',
-  'banner.demo': 'Du probierst Wordado aus. Dein Fortschritt bleibt auf diesem Gerät.',
+  'banner.demo': 'Du probierst Wordado aus. Dein Fortschritt bleibt nur auf diesem Gerät: Erstelle ein Konto, um ihn zu behalten.',
   'banner.memory': 'Dieser Browser kann deinen Fortschritt nicht speichern. Alles, was du hier lernst, geht verloren, wenn du den Tab schließt.',
   'banner.memoryOnline':
     'Dieser Browser kann deinen Fortschritt nicht auf dem Gerät speichern. Jede Antwort wird sofort an dein Konto gesendet, also lern, solange du online bist.',
@@ -440,6 +440,12 @@ export const de: Messages = {
   'trial.finished': 'Du hast jedes Wort der Demo begonnen.',
   'trial.invite': 'Erstelle ein Konto, um mit dem ganzen Kurs weiterzumachen.',
   'trial.themes': 'Themen gehören zum ganzen Kurs: Wähl ein Thema, und seine Wörter kommen zuerst.',
+  'trial.themeTag': 'Mit einem Konto',
+  'gives.title': 'Mit einem Konto',
+  'gives.course': 'Der ganze Kurs: alle Niveaus und ihre Themen.',
+  'gives.courseSize': { one: 'Der ganze Kurs: {count} Einheit allein auf {level}, alle Niveaus und ihre Themen.', other: 'Der ganze Kurs: {count} Einheiten allein auf {level}, alle Niveaus und ihre Themen.' },
+  'gives.progress': 'Dein Fortschritt bleibt in deinem Konto, auf jedem Gerät, auf dem du dich anmeldest.',
+  'gives.email': 'Deine E-Mail-Adresse dient nur dazu, dir einen Anmeldecode zu schicken. Neuigkeiten nur, wenn du sie möchtest, und du kannst dein Konto jederzeit löschen.',
 
   'flag.known': 'Bekannt',
   'flag.suspended': 'Nicht jetzt',

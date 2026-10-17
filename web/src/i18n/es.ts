@@ -39,7 +39,7 @@ export const es: Messages = {
   'tab.elsewhere': 'Wordado está abierto en otra pestaña.',
   'tab.elsewhereHint': 'Tu progreso solo puede estar abierto en una pestaña a la vez.',
   'tab.takeOver': 'Usar Wordado aquí',
-  'banner.demo': 'Estás probando Wordado. Tu progreso se queda en este dispositivo.',
+  'banner.demo': 'Estás probando Wordado. Tu progreso se queda solo en este dispositivo: crea una cuenta para conservarlo.',
   'banner.memory': 'Este navegador no puede guardar tu progreso. Todo lo que estudies aquí se perderá al cerrar la pestaña.',
   'banner.memoryOnline':
     'Este navegador no puede guardar tu progreso en el dispositivo. Cada respuesta se envía a tu cuenta al momento, así que estudia mientras tengas conexión.',
@@ -438,6 +438,12 @@ export const es: Messages = {
   'trial.finished': 'Has empezado todas las palabras de la demo.',
   'trial.invite': 'Crea una cuenta para seguir con el curso completo.',
   'trial.themes': 'Los temas vienen con el curso completo: elige un tema y sus palabras irán primero.',
+  'trial.themeTag': 'Con una cuenta',
+  'gives.title': 'Con una cuenta',
+  'gives.course': 'El curso completo: todos los niveles y sus temas.',
+  'gives.courseSize': { one: 'El curso completo: {count} unidad solo de {level}, todos los niveles y sus temas.', other: 'El curso completo: {count} unidades solo de {level}, todos los niveles y sus temas.' },
+  'gives.progress': 'Tu progreso guardado en tu cuenta, en cada dispositivo donde inicies sesión.',
+  'gives.email': 'Tu correo solo se usa para enviarte un código de acceso. Noticias solo si las pides, y puedes eliminar tu cuenta cuando quieras.',
 
   'flag.known': 'Conocida',
   'flag.suspended': 'Ahora no',

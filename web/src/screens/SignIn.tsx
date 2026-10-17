@@ -5,6 +5,7 @@ import { ApiError, OfflineError } from '../account/api'
 import { consentAge } from '../account/ageGate'
 import { countryOptions } from '../account/countries'
 import { useApp } from '../app/context'
+import { AccountGives } from '../app/AccountGives'
 import { privacyUrl } from '../app/site'
 import { ProgressBar } from '../app/ProgressBar'
 import { useT, type MessageKey } from '../i18n/i18n'
@@ -255,6 +256,7 @@ export function SignIn() {
         <p className="eyebrow">{t('setup.step', { n: STEP_NUMBER[step.kind], count: 3 })}</p>
       </div>
       {!online && <p className="note">{t('signin.offline')}</p>}
+      {step.kind === 'gate' && account === null && <AccountGives />}
       <div className="panel form-section">
         {step.kind === 'gate' && (
           <form onSubmit={submitGate} noValidate>
