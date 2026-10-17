@@ -94,7 +94,10 @@ selection or level changes.
 per L1, a trial pack (`trial-v<version>-<l1>.trial`: the first unit of each level plus a seeded draw of that level's
 words for a placement test) and `trial-manifest.json`, which lists them by checksum like the course's manifest. They
 are built from the course pack, so their entries and clips are the course's own, and a difference fails the release.
-`trial.probes_per_level` in `pipeline.json` sets the draw (default 40, at least 8). Publishing must upload these
+`trial.probes_per_level` in `pipeline.json` sets the draw (default 40, at least 8). `trial.open_theme` names one
+theme (a theme ID) whose whole set of live, taught words travels with the trial pack, so the demo can study it; the
+theme needs at least `MIN_THEME_SIZE` such words, or the release fails. Its units are not added. Deploy the app
+first: an older app refuses a trial pack with entries outside its units. Publishing must upload these
 files with the rest; they are not copied into `last-published/`. The workflow template uploads them (`*.trial` with
 the packs, `trial-manifest.json` before `manifest.json`); a content repository's own copy of this workflow must take
 the same change before a build names the trial manifest.

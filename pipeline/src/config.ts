@@ -68,8 +68,8 @@ export interface PipelineConfig {
    * while that version is the last published one.
    */
   readonly units_rebuilt_after?: number
-  /** The trial pack (spec 2026-10-12 §3). Absent: 40 placement-test words per level. */
-  readonly trial?: { readonly probes_per_level: number }
+  /** The trial pack (spec 2026-10-12 §3). Absent: 40 placement-test words per level, no open theme (spec 2026-10-17). */
+  readonly trial?: { readonly probes_per_level?: number; readonly open_theme?: string }
 }
 
 /** A curated theme (spec §8.9) as the content repository keeps it: named in English and in every L1. */
@@ -199,9 +199,13 @@ export function configProblems(raw: unknown): string[] {
   }
   const trial = raw['trial']
   if (trial !== undefined) {
-    const n = isRecord(trial) ? trial['probes_per_level'] : undefined
     if (!isRecord(trial)) p.push('trial: must be an object')
-    else if (!(typeof n === 'number' && Number.isInteger(n) && n >= 8)) p.push('trial.probes_per_level: must be an integer of 8 or more')
+    else {
+      const n = trial['probes_per_level']
+      if (n !== undefined && !(typeof n === 'number' && Number.isInteger(n) && n >= 8)) p.push('trial.probes_per_level: must be an integer of 8 or more')
+      const theme = trial['open_theme']
+      if (theme !== undefined && !(typeof theme === 'string' && theme !== '')) p.push('trial.open_theme: must be a theme ID')
+    }
   }
   const accept = raw['accept_unreviewed']
   if (accept !== undefined) {

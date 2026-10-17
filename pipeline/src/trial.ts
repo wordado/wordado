@@ -20,6 +20,12 @@ import { sha256Hex } from './checksum'
 export const TRIAL_PROBES_PER_LEVEL = 40
 export const TRIAL_MANIFEST = 'trial-manifest.json'
 
+export interface TrialOptions {
+  readonly probesPerLevel: number
+  /** A theme whose whole live, taught entries travel with the trial, without a unit (`trial.open_theme`); null for none. */
+  readonly openTheme: string | null
+}
+
 export interface TrialOutput {
   readonly pack: Pack
   /** `trial-v<version>-<l1>.trial`: the file the trial manifest points at. */
@@ -42,9 +48,10 @@ const probeOf = (e: PackEntry): PackProbe => ({
 
 /**
  * The trial pack of a built course pack (spec 2026-10-12 §3). Pure: the same pack gives the same bytes. It holds
- * the first unit of every level that has one, and a seeded draw of each level's live words for the test.
+ * the first unit of every level that has one, and a seeded draw of each level's live words for the test. An open
+ * theme adds every live taught word that carries it, with no unit of its own.
  */
-export function buildTrial(pack: Pack, probesPerLevel: number): TrialOutput {
+export function buildTrial(pack: Pack, { probesPerLevel, openTheme }: TrialOptions): TrialOutput {
   const entryById = new Map(pack.entries.map((e) => [e.entry_id, e]))
   // What a trial teaches and tests: neither a retired word nor one known from the start (issue #285).
   const liveOf = (ids: readonly string[]): PackEntry[] =>
@@ -70,6 +77,13 @@ export function buildTrial(pack: Pack, probesPerLevel: number): TrialOutput {
 
   // Retired entries of the first units travel too: a learner's old answers may name them.
   const entries = units.flatMap((u) => u.entry_ids.map((id) => entryById.get(id))).filter((e): e is PackEntry => e !== undefined)
+  if (openTheme !== null) {
+    if (!pack.themes.some((t) => t.theme_id === openTheme)) throw new BuildError([{ path: 'trial.open_theme', message: `unknown theme "${openTheme}"` }])
+    const have = new Set(entries.map((e) => e.entry_id))
+    const open = pack.entries.filter((e) => !e.retired && e.taught !== false && e.themes.includes(openTheme))
+    if (open.length < MIN_THEME_SIZE) throw new BuildError([{ path: 'trial.open_theme', message: `the course does not offer "${openTheme}"` }])
+    entries.push(...open.filter((e) => !have.has(e.entry_id)))
+  }
   // The themes the course offers, by its own rule, with their sizes: the trial shows them and studies none (#244).
   // A size counts the words taught, as the app's does (issue #288).
   const themeWords = new Map<string, number>()
@@ -84,7 +98,7 @@ export function buildTrial(pack: Pack, probesPerLevel: number): TrialOutput {
     units: units.sort((a, b) => a.order - b.order),
     themes: pack.themes.filter((t) => themeIds.has(t.theme_id)).sort((a, b) => byString(a.theme_id, b.theme_id)),
     audio: pack.audio.filter((c) => clipIds.has(c.clip_id)).sort((a, b) => byString(a.clip_id, b.clip_id)),
-    trial: { probes, course, themes },
+    trial: { probes, course, themes, ...(openTheme === null ? {} : { open_theme: openTheme }) },
   }
   const result = validatePack(JSON.parse(canonicalJson(candidate)))
   if (result.status !== 'ok') {
@@ -131,10 +145,10 @@ export function trialProblems(course: Pack, trial: Pack): string[] {
  * A trial that cannot be built is one of those problems, `<path>: <message>`, and gives no trial: left to throw, it
  * would read as a fault of the course pack.
  */
-export function planTrial(pack: Pack, probesPerLevel: number): { trial: TrialOutput | null; problems: string[] } {
+export function planTrial(pack: Pack, options: TrialOptions): { trial: TrialOutput | null; problems: string[] } {
   let trial: TrialOutput
   try {
-    trial = buildTrial(pack, probesPerLevel)
+    trial = buildTrial(pack, options)
   } catch (err) {
     if (!(err instanceof BuildError)) throw err
     return { trial: null, problems: err.errors.map((e) => `${e.path || '(pack)'}: ${e.message}`) }
