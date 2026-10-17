@@ -17,7 +17,7 @@ describe('sign-in (spec §8.6)', () => {
     expect(me.body).toEqual({ userId: session.userId, email: 'ana@example.com', createdAt: expect.any(Number), newsConsent: 'none', interfaceLanguage: null })
   })
 
-  it('creates the user on the first sign-in and finds the same user on the next', async () => {
+  it('creates the user at the first sign-in, after the age step (#293), and finds the same user on the next', async () => {
     const h = harness()
     const first = await h.signIn('ana@example.com')
     const second = await h.signIn('ana@example.com')

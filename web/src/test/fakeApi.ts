@@ -1,4 +1,4 @@
-import type { Api, FeedbackBody, Me } from '../account/api'
+import type { Api, CodeOutcome, FeedbackBody, Me } from '../account/api'
 
 export interface FakeApi extends Api {
   /** Every call, by name. */
@@ -7,6 +7,8 @@ export interface FakeApi extends Api {
   readonly feedback: FeedbackBody[]
   /** Whom the "server" has a session for; null for none. Set it to sign in. */
   session: Me | null
+  /** What a code leads to (#293): an account that exists, by default, or the ticket of a new one. */
+  codeOutcome: CodeOutcome
 }
 
 /** The account endpoints as a test needs them. Override any method to make it fail. */
@@ -17,11 +19,19 @@ export function fakeApi(over: Partial<Api> = {}, session: Me | null = null): Fak
     calls,
     feedback,
     session,
+    codeOutcome: { kind: 'signed-in' },
     sendCode: async (email) => {
       calls.push(`sendCode ${email}`)
     },
-    verifyCode: async (email, code, newsConsent = null) => {
-      calls.push(`verifyCode ${email} ${code}${newsConsent === null ? '' : ` ${newsConsent}`}`)
+    verifyCode: async (email, code) => {
+      calls.push(`verifyCode ${email} ${code}`)
+      return api.codeOutcome
+    },
+    createAccount: async (email, ticket, newsConsent) => {
+      calls.push(`createAccount ${email} ${ticket}${newsConsent === null ? '' : ` ${newsConsent}`}`)
+    },
+    discardSignUp: async (email, ticket) => {
+      calls.push(`discardSignUp ${email} ${ticket}`)
     },
     me: async () => {
       calls.push('me')

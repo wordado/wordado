@@ -39,12 +39,34 @@ describe('httpApi (plan 5 contract)', () => {
     expect(err).toMatchObject({ status: 400, code: 'INVALID_OTP' })
   })
 
-  it('sends the wording of a ticked news box with the code, and nothing of it when the box was left alone (#186)', async () => {
+  it('signs in with the code, and sends nothing of the news box with it (#186, #293)', async () => {
     const { fetchFn, calls } = fakeFetch({ 'POST /api/auth/sign-in/email-otp': [200, { token: 't' }] })
-    await httpApi(fetchFn).verifyCode('ana@example.com', '123456')
-    await httpApi(fetchFn).verifyCode('ana@example.com', '123456', 'news-1.bg')
+    expect(await httpApi(fetchFn).verifyCode('ana@example.com', '123456')).toEqual({ kind: 'signed-in' })
     expect(bodyOf(calls[0]!)).toEqual({ email: 'ana@example.com', otp: '123456' })
-    expect(bodyOf(calls[1]!)).toEqual({ email: 'ana@example.com', otp: '123456', newsConsent: 'news-1.bg' })
+  })
+
+  it('reads a right code for an address with no account as the ticket for the age step (#293)', async () => {
+    const { fetchFn } = fakeFetch({ 'POST /api/auth/sign-in/email-otp': [202, { code: 'NEW_ACCOUNT', message: 'm', ticket: 'tk' }] })
+    expect(await httpApi(fetchFn).verifyCode('bo@example.com', '123456')).toEqual({ kind: 'new-account', ticket: 'tk' })
+    const odd = fakeFetch({ 'POST /api/auth/sign-in/email-otp': [202, { code: 'SOMETHING_ELSE' }] })
+    await expect(httpApi(odd.fetchFn).verifyCode('bo@example.com', '123456')).rejects.toMatchObject({ status: 202, code: 'SOMETHING_ELSE' })
+  })
+
+  it('creates the account with the ticket and the age confirmed, and the wording of a ticked news box (#186, #293)', async () => {
+    const { fetchFn, calls } = fakeFetch({ 'POST /api/auth/email-otp/create-account': [200, { token: 't' }] })
+    await httpApi(fetchFn).createAccount('bo@example.com', 'tk', null)
+    await httpApi(fetchFn).createAccount('bo@example.com', 'tk', 'news-1.bg')
+    expect(bodyOf(calls[0]!)).toEqual({ email: 'bo@example.com', ticket: 'tk', ageConfirmed: true })
+    expect(bodyOf(calls[1]!)).toEqual({ email: 'bo@example.com', ticket: 'tk', ageConfirmed: true, newsConsent: 'news-1.bg' })
+    const spent = fakeFetch({ 'POST /api/auth/email-otp/create-account': [400, { code: 'INVALID_TICKET' }] })
+    await expect(httpApi(spent.fetchFn).createAccount('bo@example.com', 'tk', null)).rejects.toMatchObject({ status: 400, code: 'INVALID_TICKET' })
+  })
+
+  it('drops the ticket when the age is not confirmed, and takes the refusal, or no answer, quietly (#293)', async () => {
+    const { fetchFn, calls } = fakeFetch({ 'POST /api/auth/email-otp/create-account': [403, { code: 'AGE_NOT_CONFIRMED' }] })
+    await httpApi(fetchFn).discardSignUp('bo@example.com', 'tk')
+    expect(bodyOf(calls[0]!)).toEqual({ email: 'bo@example.com', ticket: 'tk', ageConfirmed: false })
+    await httpApi(fakeFetch({}).fetchFn).discardSignUp('bo@example.com', 'tk')
   })
 
   it('gives and withdraws the consent to news for the recorded learner, and reads back what the server holds (#186)', async () => {

@@ -56,11 +56,24 @@ export interface FeedbackBody extends FeedbackInput {
   readonly website: string
 }
 
+/**
+ * What a right code leads to (#293): an address with an account is signed in; one without gets a ticket, the
+ * server's proof that the code was right, with which the age step creates the account without a second code.
+ */
+export type CodeOutcome = { readonly kind: 'signed-in' } | { readonly kind: 'new-account'; readonly ticket: string }
+
 /** Everything the app asks of the server beside sync (spec §8.6, §8.11, §8.12, §11). */
 export interface Api {
   sendCode(email: string): Promise<void>
-  /** `newsConsent` is the wording of the news box when the learner ticked it (#186); the server records it unless consent is already given. */
-  verifyCode(email: string, code: string, newsConsent?: string | null): Promise<void>
+  /** Checks the code: signs in to the address's account, or says it has none yet (#293). A returning sign-in sends no consent to news (#186). */
+  verifyCode(email: string, code: string): Promise<CodeOutcome>
+  /**
+   * After the age step, confirmed (spec §11): creates the account with the ticket and signs in. `newsConsent` is the
+   * wording of the news box when the learner ticked it (#186), recorded with the account.
+   */
+  createAccount(email: string, ticket: string, newsConsent: string | null): Promise<void>
+  /** The age step not confirmed, or another address chosen: the server drops the ticket and creates nothing. Never fails. */
+  discardSignUp(email: string, ticket: string): Promise<void>
   /** The signed-in learner, or null without a valid session. */
   me(): Promise<Me | null>
   /** The request's country as the host reads it, to pre-fill the age gate; null when unknown. */
@@ -138,8 +151,22 @@ export function httpApi(fetchFn: Fetch = (input, init) => fetch(input, init), ex
     sendCode: async (email) => {
       await call('POST', '/api/auth/email-otp/send-verification-otp', { email, type: 'sign-in' })
     },
-    verifyCode: async (email, code, newsConsent = null) => {
-      await call('POST', '/api/auth/sign-in/email-otp', { email, otp: code, ...(newsConsent === null ? {} : { newsConsent }) })
+    verifyCode: async (email, code) => {
+      const { response, parsed } = await request('POST', '/api/auth/sign-in/email-otp', { email, otp: code })
+      const { code: answer, ticket } = (parsed ?? {}) as { code?: unknown; ticket?: unknown }
+      if (response.status === 202 && answer === 'NEW_ACCOUNT' && typeof ticket === 'string') return { kind: 'new-account', ticket }
+      if (response.status !== 200) throw new ApiError(response.status, codeOf(parsed))
+      return { kind: 'signed-in' }
+    },
+    createAccount: async (email, ticket, newsConsent) => {
+      await call('POST', '/api/auth/email-otp/create-account', { email, ticket, ageConfirmed: true, ...(newsConsent === null ? {} : { newsConsent }) })
+    },
+    discardSignUp: async (email, ticket) => {
+      try {
+        await call('POST', '/api/auth/email-otp/create-account', { email, ticket, ageConfirmed: false })
+      } catch {
+        // The answer is a refusal by design (403), and a ticket left behind lapses within minutes on its own.
+      }
     },
     me: () => unauthorizedAsNull(call('GET', '/v1/me') as Promise<Me>),
     requestCountry: async () => {

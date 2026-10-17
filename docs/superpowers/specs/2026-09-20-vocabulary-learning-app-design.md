@@ -1143,6 +1143,22 @@ question for the iOS app, and the App Store requires it only beside another
 third-party sign-in; on the web it would cost a paid Apple developer membership
 for no gain, so the MVP omits it.
 
+**Email first, the age step only for a new account** (#293, decided
+2026-10-17). Sign-in and sign-up are one flow: the learner enters an email
+address, then the six-digit code sent to it (it lives five minutes and allows
+three tries). A right code for an address that has an account signs in at
+once. For an address without one the server creates nothing yet: it answers
+with a ticket, and the age step (§11) follows, naming the address so a
+mistyped one can be changed. Only once the age is confirmed does the
+create-account request make the account and sign in, with that ticket and no
+second code. The ticket is the server's proof that the code was right: 32
+random bytes held by the client, of which the server keeps only the hash,
+beside the address, for no longer than a code lives; its first use spends it,
+whatever the answer. Nothing tells whether an address has an account before
+its code is right: a code is sent either way, and up to the code check the
+requests and answers are the same. An account is created by the
+create-account request and nowhere else.
+
 Sessions are long-lived and refreshed on use, so a returning learner is not
 asked for a new code; this also keeps sign-in email volume inside the email
 provider's daily free allowance (§17).
@@ -1800,17 +1816,23 @@ on their next pull. That failure is far worse than the cheating it prevents.
   self-declared at sign-up, pre-filled from the request's country as reported
   by the hosting platform; it decides the threshold on the device and is not
   sent to the server (decided 2026-10-10; until then the country was kept).
+  The age step comes after the emailed code, and only for an address with no
+  account (§8.6, #293, decided 2026-10-17): a returning learner is not asked
+  again. The server creates the account only with the age confirmed.
   There is no
   parental-consent flow at launch; learners below the threshold are turned
-  away.
+  away: no account is made, and the server drops the proof that their code
+  was right.
 - **News by email needs consent** (#186, decided 2026-10-11). Mail about new
   features is direct marketing, so it goes only to learners who asked for it.
   The age gate carries a checkbox under the age confirmation, unticked, and
-  the account is created with or without it. Sign-in and sign-up are one
-  request, so the wording that was ticked travels with the code. A ticked box
+  the account is created with or without it. The wording that was ticked
+  travels with the request that creates the account; a returning learner
+  signs in without the age step and sends none (#293). A ticked box
   is consent given at that moment: the server records it where the account
   has no decision (a new account, or one from before the question existed)
-  and where an earlier consent was withdrawn. A consent already given keeps
+  and where an earlier consent was withdrawn; the sign-in by code still takes
+  it for the apps that sent it there before. A consent already given keeps
   its first time and wording. A box left unticked changes nothing, whatever
   is recorded: a sign-in never withdraws. The switch in *Settings › Account*
   gives and withdraws it, with the same wording as the checkbox, and the gate

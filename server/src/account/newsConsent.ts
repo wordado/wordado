@@ -4,7 +4,7 @@ import type { Db } from '../db/db'
 import type { ServerDeps } from '../deps'
 import type { AppEnv } from '../http'
 
-/** The body of Better Auth's sign-in: the address as Better Auth stores it, and the wording of a ticked box. */
+/** The body of the sign-in or the create-account request: the address as Better Auth stores it, and the wording of a ticked box. */
 async function signInOf(request: Request): Promise<{ readonly email: string; readonly text: string } | null> {
   try {
     const body: unknown = await request.clone().json()
@@ -17,9 +17,10 @@ async function signInOf(request: Request): Promise<{ readonly email: string; rea
 }
 
 /**
- * Around Better Auth's sign-in (#186). Sign-in and sign-up are one request, and the first creates the account, so
- * the sign-up checkbox travels with the code as `newsConsent`: the wording the learner ticked, absent when they did
- * not. It is recorded only once the code was right. A ticked box is consent given now, so it counts where none is
+ * Around the request that creates the account after the age step, where the sign-up checkbox travels as
+ * `newsConsent` (#186, #293): the wording the learner ticked, absent when they did not; and around Better Auth's
+ * sign-in by code, where apps sent it before the age step came after the code, and a returning sign-in now sends
+ * none. It is recorded only once the request succeeded (200): an account made, or a right code for one. A ticked box is consent given now, so it counts where none is
  * recorded (a new account, or one from before the question was asked) and after a withdrawal alike; a consent
  * already given keeps its first time and wording. A box left alone changes nothing, whatever is recorded: a sign-in
  * never withdraws. A failure to record must not undo a sign-in that happened, so it is logged; the account is asked
