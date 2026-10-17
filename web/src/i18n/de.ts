@@ -439,6 +439,7 @@ export const de: Messages = {
   'trial.course': { one: 'Der ganze Kurs hat {count} Einheit auf {level}.', other: 'Der ganze Kurs hat {count} Einheiten auf {level}.' },
   'trial.finished': 'Du hast jedes Wort der Demo begonnen.',
   'trial.invite': 'Erstelle ein Konto, um mit dem ganzen Kurs weiterzumachen.',
+  'trial.openTheme': 'Probier auch ein Thema aus: {name} ist in der Demo offen.',
   'trial.themes': 'Themen gehören zum ganzen Kurs: Wähl ein Thema, und seine Wörter kommen zuerst.',
   'trial.themeTag': 'Mit einem Konto',
   'gives.title': 'Mit einem Konto',

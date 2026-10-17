@@ -877,9 +877,9 @@ describe('Learn this word (spec §7.4)', () => {
 
 describe('RunView: the end of a trial', () => {
   /** A trial with one word left to start; the run is a session over it, or a practice run. */
-  async function lastWord(kind: 'session' | 'practice') {
+  async function lastWord(kind: 'session' | 'practice', openTheme?: string) {
     const audio = fakeAudio()
-    const ctx = await setupTrial({ audio })
+    const ctx = await setupTrial({ audio, ...(openTheme !== undefined && { openTheme }) })
     const unit = ctx.client.snapshot.corpus!.units.find((u) => u.level === 'B1')!
     const answer = (wordId: (typeof unit.wordIds)[number]) =>
       ctx.client.answer({ wordId, mode: 'flashcard', direction: 'en_to_l1', grade: Grade.Good, latencyMs: 2_000, practice: false })
@@ -911,6 +911,12 @@ describe('RunView: the end of a trial', () => {
     expect(screen.getByText(/Create an account to go on with the whole course\./)).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Create an account' }).getAttribute('href')).toBe('/signin')
     expect(screen.queryByText(/New unit open/)).toBeNull()
+  })
+
+  it('points to the open theme on the done screen of the session that ends the demo', async () => {
+    await lastWord('session', 'daily-life')
+    expect(screen.getByText(/is open in the demo\./).textContent).toBe('Try a theme too: Daily life is open in the demo.')
+    expect(screen.getByRole('link', { name: 'Daily life' }).getAttribute('href')).toBe('/themes/daily-life')
   })
 
   it('does not say it after practice', async () => {
