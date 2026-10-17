@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, screen, within } from '@testing-library/react'
 import { corpusWordId, Grade, themeEntries } from '@wordado/core'
 import { afterEach, describe, expect, it } from 'vitest'
-import { answerNew, renderWith, setup, setupTrial } from '../test/fixtures'
+import { answerNew, renderWith, setup, setupTrial, withMoreThemes } from '../test/fixtures'
 import { ThemeWords } from './Theme'
 
 afterEach(cleanup)
@@ -79,6 +79,25 @@ describe('ThemeWords', () => {
     expect(screen.getByRole('progressbar', { name: 'Daily life: 2 of 25 words started' })).toBeTruthy()
     expect(level('A1').textContent).toBe('A12 of 20 words started')
     expect(level('B1').textContent).toBe('B10 of 5 words started')
+  })
+
+  it('counts only the words that are taught, and lists the others as known (issue #288)', async () => {
+    const ctx = await setup()
+    await answerNew(ctx.client, ctx.env, 1)
+    const snapshot = ctx.client.snapshot
+    const corpus = snapshot.corpus!
+    const quiet = corpus.units.flatMap((unit) => unit.wordIds).slice(0, 2)
+    const entries = new Map([...corpus.entries].map(([id, e]) => [id, quiet.includes(corpusWordId(id)) ? { ...e, taught: false } : e]))
+    ctx.client.store.set({ ...snapshot, corpus: { ...corpus, entries, notTaught: new Set(quiet) } })
+    withMoreThemes(ctx.client)
+    renderWith(<ThemeWords themeId="first-words" query="" />, ctx)
+    expect(screen.getByRole('progressbar', { name: 'First words: 0 of 28 words started' })).toBeTruthy()
+    expect(level('A1').textContent).toBe('A10 of 28 words started')
+    expect(words()).toHaveLength(30)
+    for (const wordId of quiet) {
+      const row = screen.getByText(entries.get(wordId.slice(2))!.headword, { selector: '.word-head' }).closest('li')!
+      expect(row.querySelector('.word-status')!.getAttribute('data-status')).toBe('known')
+    }
   })
 
   it('chooses the theme and gives it back, says so, and moves focus to the title', async () => {

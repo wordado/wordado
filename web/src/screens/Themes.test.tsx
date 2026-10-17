@@ -36,6 +36,23 @@ describe('Themes', () => {
     expect(bar.getAttribute('aria-valuemax')).toBe('25')
   })
 
+  it('counts in a theme’s size only the words that are taught, even one started before it was no longer taught (issue #288)', async () => {
+    const ctx = await setup()
+    await answerNew(ctx.client, ctx.env, 1)
+    const snapshot = ctx.client.snapshot
+    const corpus = snapshot.corpus!
+    const quiet = corpus.units.flatMap((unit) => unit.wordIds).slice(0, 2)
+    expect(snapshot.states.has(quiet[0]!)).toBe(true)
+    const entries = new Map([...corpus.entries].map(([id, e]) => [id, quiet.includes(corpusWordId(id)) ? { ...e, taught: false } : e]))
+    ctx.client.store.set({ ...snapshot, corpus: { ...corpus, entries, notTaught: new Set(quiet) } })
+    withMoreThemes(ctx.client)
+    renderWith(<Themes />, ctx)
+    const bar = within(card('First words')).getByRole('progressbar', { name: 'First words: 0 of 28 words started' })
+    expect(bar.getAttribute('aria-valuemax')).toBe('28')
+    // Its one started word is no longer taught: the theme reads as not started.
+    expect(themesIn('Not started')).toContain('First words')
+  })
+
   it('makes a theme’s words come first, and clears it again', async () => {
     const ctx = await setup()
     renderWith(<Themes />, ctx)
