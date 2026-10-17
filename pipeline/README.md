@@ -164,7 +164,8 @@ On a workstation, not in Actions:
    grammar words every learner knows (articles, helper verbs). They ship with `taught: false`: the app finds them
    in the search and shows them as known, and never teaches, practises or tests them. An ID, not a headword, since
    only one sense of a headword may be such a word. An ID that matches no entry stops the release. The entry keeps
-   its ID and its unit; a unit left with no word to teach stays too, and the app passes over it (issue #285).
+   its ID and its unit; a unit left with no word to teach stays too, and the app passes over it and leaves it off
+   the path screen (issues #285, #288). A theme's size, and so whether it is offered, counts only the words taught.
 
 ## Running a version
 
