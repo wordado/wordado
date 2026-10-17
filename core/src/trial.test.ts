@@ -2,10 +2,11 @@ import { describe, expect, it } from 'vitest'
 import type { Corpus } from './corpus'
 import { computeUnlocks, currentUnit, earnedUnlocks, pathNewWords, type PathContext } from './path'
 import { openThemeLeft, pathUnits, studyUnits, trialFinished } from './trial'
-import type { CefrLevel, CorpusEntry, Unit } from './types'
-import { corpusWordId } from './wordId'
+import type { CefrLevel, CorpusEntry, Unit, WordFlag } from './types'
+import { corpusWordId, type WordId } from './wordId'
 
 const w = (n: number) => corpusWordId(`en-${String(n).padStart(6, '0')}`)
+const NO_FLAGS = new Map<WordId, WordFlag>()
 const unit = (unitId: string, level: CefrLevel, order: number, ids: number[]): Unit => ({
   unitId,
   level,
@@ -101,45 +102,58 @@ const open = (entries: CorpusEntry[]): Corpus => ({
 
 describe('trialFinished', () => {
   it('is never true for a course', () => {
-    expect(trialFinished(course, null, null, new Set())).toBe(false)
-    expect(trialFinished(course, 'a1-u1', null, new Set())).toBe(false)
+    expect(trialFinished(course, null, null, new Set(), NO_FLAGS)).toBe(false)
+    expect(trialFinished(course, 'a1-u1', null, new Set(), NO_FLAGS)).toBe(false)
   })
 
   it('is true for a trial with no current unit, false with one', () => {
-    expect(trialFinished(trial, null, null, new Set())).toBe(true)
-    expect(trialFinished(trial, 'b1-u1', null, new Set())).toBe(false)
+    expect(trialFinished(trial, null, null, new Set(), NO_FLAGS)).toBe(true)
+    expect(trialFinished(trial, 'b1-u1', null, new Set(), NO_FLAGS)).toBe(false)
   })
 
   it('a chosen open theme with words left holds the end back', () => {
     const corpus = open([themed(1), themed(2)])
-    expect(trialFinished(corpus, null, 'food', new Set([w(1)]))).toBe(false)
+    expect(trialFinished(corpus, null, 'food', new Set([w(1)]), NO_FLAGS)).toBe(false)
   })
 
   it('an unchosen open theme does not hold the end back', () => {
     const corpus = open([themed(1), themed(2)])
-    expect(trialFinished(corpus, null, null, new Set())).toBe(true)
-    expect(trialFinished(corpus, null, 'travel', new Set())).toBe(true)
+    expect(trialFinished(corpus, null, null, new Set(), NO_FLAGS)).toBe(true)
+    expect(trialFinished(corpus, null, 'travel', new Set(), NO_FLAGS)).toBe(true)
   })
 
   it('a chosen open theme with every word started lets the demo end', () => {
     const corpus = open([themed(1), themed(2), themed(3, false)])
-    expect(trialFinished(corpus, null, 'food', new Map([[w(1), 1], [w(2), 1]]))).toBe(true)
+    expect(trialFinished(corpus, null, 'food', new Map([[w(1), 1], [w(2), 1]]), NO_FLAGS)).toBe(true)
+  })
+
+  it('words the learner set aside do not hold the end back', () => {
+    const corpus = open([themed(1), themed(2), themed(3)])
+    const flags = new Map<WordId, WordFlag>([[w(2), 'known'], [w(3), 'suspended']])
+    expect(trialFinished(corpus, null, 'food', new Set([w(1)]), flags)).toBe(true)
+    expect(trialFinished(corpus, null, 'food', new Set([w(1)]), new Map([[w(2), 'known']]))).toBe(false)
   })
 
   it('a course is never finished', () => {
-    expect(trialFinished(course, null, 'food', new Set())).toBe(false)
+    expect(trialFinished(course, null, 'food', new Set(), NO_FLAGS)).toBe(false)
   })
 })
 
 describe('openThemeLeft', () => {
   it('is false without an open theme', () => {
-    expect(openThemeLeft(course, new Set())).toBe(false)
-    expect(openThemeLeft(trial, new Set())).toBe(false)
+    expect(openThemeLeft(course, new Set(), NO_FLAGS)).toBe(false)
+    expect(openThemeLeft(trial, new Set(), NO_FLAGS)).toBe(false)
   })
 
   it('counts only taught words not yet started', () => {
     const corpus = open([themed(1), themed(2, false)])
-    expect(openThemeLeft(corpus, new Set())).toBe(true)
-    expect(openThemeLeft(corpus, new Set([w(1)]))).toBe(false)
+    expect(openThemeLeft(corpus, new Set(), NO_FLAGS)).toBe(true)
+    expect(openThemeLeft(corpus, new Set([w(1)]), NO_FLAGS)).toBe(false)
+  })
+
+  it('skips words the learner set aside', () => {
+    const corpus = open([themed(1), themed(2)])
+    expect(openThemeLeft(corpus, new Set(), new Map([[w(1), 'known'], [w(2), 'suspended']]))).toBe(false)
+    expect(openThemeLeft(corpus, new Set(), new Map([[w(1), 'known']]))).toBe(true)
   })
 })

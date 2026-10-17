@@ -90,9 +90,12 @@ so the added entries are covered.
   is none, instead of always nothing. `trialThemes` (the closed cards) leaves the open theme out.
 - **Themes screen.** The open theme's card comes first and is a course card (`ThemeCard`), with the course's
   buttons for its group (*Study this next*, *Practise*, *Back to the path*). Below it, the closed cards as now,
-  under their line and link (#244, #289).
+  under their line and link (#244, #289), and under a heading of their own, *With an account*. Each card's
+  *With an account* tag stays visible but is hidden from assistive technology there, as the heading says it once.
+  A trial without an open theme has no such heading, and its tags are read out.
 - **Theme page.** It opens for the open theme as it does in a course. *Learn this word* is offered on its
-  words.
+  words. Words marked *Learn this word* from an unchosen open theme are the learner's own queue; they do not
+  hold back the end of the demo.
 - **Study.** `sessionPlan` uses `activeTheme` in a trial only when it equals the open theme. Any other value
   is ignored, as it is today. The settings may name another theme left over from a setup on the built-in
   sample. If the leftover names the open theme itself, it counts as chosen: the learner chose it, and
@@ -104,11 +107,14 @@ so the added entries are covered.
   explicit check.
 - **End of the demo** (owner's choice, 2026-10-17). `trialFinished` holds when the declared level's unit has no
   word left to start, and, **only while the open theme is chosen**, the theme has none left either. A chosen
-  theme with words left keeps the demo going: those words are what the next session serves. An unchosen theme
-  does not hold the end back, since its words are not served.
+  theme with words left keeps the demo going: those words are what the next session serves. Words the learner
+  set aside (*Known*, *Not now*) are not left: they count as used up, as in the path's unit checks and in
+  `composeSession`. An unchosen theme does not hold the end back, since its words are not served.
   - When the demo ends with the open theme **not** chosen, and it still has words to start, the invitation
-    adds one line before the account list: *Try a theme too: Daily life is open in the demo.* The theme's name
-    is a link to its page. This is the one new text (§7).
+    says *Try a theme too: Daily life is open in the demo.* in place of the first line (*You have started every
+    word of the demo*, which would not be true), before the account list. The theme's name is a link to its
+    page. This is the one new text (§7). The anti-goal in §3 stands: the demo never says every word is started
+    while theme words are not.
   - `trialFinished` therefore reads the settings' `activeTheme` as well as the path.
 - **Progress screen.** In a trial, the tiers count the words of the declared level's unit plus the open
   theme's words. The level and unit counts keep to the unit, as now.

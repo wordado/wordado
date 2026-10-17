@@ -159,6 +159,28 @@ describe('sessionPlan in a trial (spec 2026-10-12 §4.4)', () => {
       expect(pathView(ctx({ corpus: trial, settings: settings('food') }))).toMatchObject({ trialFinished: true, trialOpenTheme: 'daily-life' })
       expect(pathView(ctx({ corpus: trial, settings: settings('daily-life') }))).toMatchObject({ trialFinished: false, trialOpenTheme: null })
     })
+
+    it('ends when the chosen theme has every word started and the unit is finished', async () => {
+      const { db, env, learner, ctx, trial, unit, themeWords, settings } = await open()
+      for (const wordId of new Set([...unit.wordIds, ...themeWords])) {
+        await appendAnswer(db, env, learner, answer(wordId))
+        env.advance(5_000)
+      }
+      expect(pathView(ctx({ corpus: trial, settings: settings('daily-life') }))).toMatchObject({ trialFinished: true, trialOpenTheme: null })
+    })
+
+    it('ends when the words of the chosen theme that are left are set aside', async () => {
+      const { db, env, learner, ctx, trial, unit, themeWords, settings } = await open()
+      for (const wordId of unit.wordIds) {
+        await appendAnswer(db, env, learner, answer(wordId))
+        env.advance(5_000)
+      }
+      const left = themeWords.filter((id) => !learner.states.has(id))
+      expect(left.length).toBeGreaterThan(0)
+      const flags = new Map<WordId, WordFlag>(left.map((id, i) => [id, i % 2 === 0 ? 'known' : 'suspended']))
+      expect(pathView(ctx({ corpus: trial, settings: settings('daily-life'), flags }))).toMatchObject({ trialFinished: true, trialOpenTheme: null })
+      expect(pathView(ctx({ corpus: trial, settings: settings(null), flags }))).toMatchObject({ trialFinished: true, trialOpenTheme: null })
+    })
   })
 })
 

@@ -159,6 +159,8 @@ describe('Home: listening follows the connection and the audio setting (spec §9
       renderWith(<Home />, ctx)
       const line = screen.getByText(/is open in the demo\./)
       expect(line.textContent).toBe('Try a theme too: Daily life is open in the demo.')
+      // It stands in place of the first line, not under it.
+      expect(screen.queryByText('You have started every word of the demo.')).toBeNull()
       const link = within(line).getByRole('link', { name: 'Daily life' })
       expect(link.getAttribute('href')).toBe('/themes/daily-life')
       expect(line.compareDocumentPosition(screen.getByRole('list', { name: 'With an account' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()

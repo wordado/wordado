@@ -426,7 +426,7 @@ describe('Themes in a trial (#244)', () => {
     expect(within(cards[0]!).getByText('240 words')).toBeTruthy()
     expect(within(cards[1]!).getByText('1 word')).toBeTruthy()
     // Each card says why it does not open (#289).
-    for (const card of cards) expect(within(card).getByText('With an account')).toBeTruthy()
+    for (const card of cards) expect(within(card).getByText('With an account').closest('.theme-tag')?.getAttribute('aria-hidden')).toBeNull()
     // Nothing to open, choose, practise or search; and not the fault-like line of a course with no theme yet.
     expect(within(screen.getByRole('list')).queryByRole('link')).toBeNull()
     expect(screen.queryByRole('button')).toBeNull()
@@ -456,13 +456,15 @@ describe('Themes in a trial with an open theme (#290)', () => {
     expect(closed.length).toBeGreaterThan(0)
     for (const card of closed) {
       expect(within(card).queryByRole('button')).toBeNull()
-      expect(within(card).getByText('With an account')).toBeTruthy()
+      // The heading above says it once; the tag stays to be seen but is not read out per card.
+      expect(within(card).getByText('With an account').closest('.theme-tag')?.getAttribute('aria-hidden')).toBe('true')
       expect(within(card).queryByRole('heading', { name: 'Daily life' })).toBeNull()
     }
     expect(screen.getByRole('link', { name: 'Create an account' }).getAttribute('href')).toBe('/signin')
     expect(screen.queryByRole('search')).toBeNull()
     // The closed cards stand under a heading of their own, not as part of "Not started".
     expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual(['Studying now', 'Not started', 'With an account'])
+    expect(screen.getByRole('heading', { level: 2, name: 'With an account' }).closest('section')?.contains(closed[0]!)).toBe(true)
   })
 
   it('chooses the open theme', async () => {

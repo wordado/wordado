@@ -73,7 +73,7 @@ export function Search(props: { readonly q: string }) {
   // Of those, the units the path screen lists, which a link can open: not one with no word the course teaches (#288).
   const listed = useMemo(() => new Set(corpus ? pathUnits(corpus, settings.declaredLevel).map((unit) => unit.unitId) : []), [corpus, settings.declaredLevel])
   if (!corpus || !index || !places) return null
-  const onPath = (entry: CorpusEntry) => corpus.trial === null || studied.has(entry.unitId) || entry.themes.includes(corpus.trial.openTheme ?? '')
+  const onPath = (entry: CorpusEntry) => corpus.trial === null || studied.has(entry.unitId) || (corpus.trial.openTheme !== null && entry.themes.includes(corpus.trial.openTheme))
 
   const search = (next: string) => {
     setQuery(next)

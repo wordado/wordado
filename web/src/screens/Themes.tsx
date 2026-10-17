@@ -219,7 +219,8 @@ function TrialClosedThemes(props: { readonly corpus: Corpus; /** Under the open 
             <Name>{localized(theme.name, locale, corpus.l1)}</Name>
             <p className="note">{localized(theme.description, locale, corpus.l1)}</p>
             <p className="note">{t('path.words', { count: words })}</p>
-            <p className="theme-tag">
+            {/* Under the "With an account" heading the tag would be read out once per card; it stays to be seen. */}
+            <p className="theme-tag" aria-hidden={props.titled ? 'true' : undefined}>
               <Lock aria-hidden="true" size={14} />
               {t('trial.themeTag')}
             </p>

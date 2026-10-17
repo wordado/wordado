@@ -915,7 +915,11 @@ describe('RunView: the end of a trial', () => {
 
   it('points to the open theme on the done screen of the session that ends the demo', async () => {
     await lastWord('session', 'daily-life')
-    expect(screen.getByText(/is open in the demo\./).textContent).toBe('Try a theme too: Daily life is open in the demo.')
+    const line = screen.getByText(/is open in the demo\./)
+    expect(line.textContent).toBe('Try a theme too: Daily life is open in the demo.')
+    // It stands in place of the first line, not under it, and above what an account gives.
+    expect(screen.queryByText('You have started every word of the demo.')).toBeNull()
+    expect(line.compareDocumentPosition(screen.getByRole('list', { name: 'With an account' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Daily life' }).getAttribute('href')).toBe('/themes/daily-life')
   })
 

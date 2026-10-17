@@ -164,8 +164,9 @@ In the trial, study takes new words from **the unit of the declared level only**
   and invite: *You have started every word of the demo. Create an account to go on with the whole course.*
   Between the two lines, what an account gives (§4.7).
   Reviews of the started words keep coming on later days, as now. With an open theme that was chosen, the demo
-  ends only once the theme's words are started too. If it was not chosen and has words left, the invitation
-  adds the line *Try a theme too: Daily life is open in the demo.* (the name links to the theme's page).
+  ends only once the theme's words are started or set aside too. If it was not chosen and has words left, the
+  invitation says *Try a theme too: Daily life is open in the demo.* (the name links to the theme's page) in
+  place of its first line, since the demo has not been all started.
 
 ### 4.5 Into an account
 

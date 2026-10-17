@@ -222,13 +222,13 @@ export interface PathView {
 export function pathView(ctx: StudyContext): PathView {
   const path = pathContext(ctx)
   const currentUnitId = currentUnit(path)?.unitId ?? null
-  const finished = trialFinished(ctx.corpus, currentUnitId, ctx.settings.activeTheme, ctx.learner.states)
+  const finished = trialFinished(ctx.corpus, currentUnitId, ctx.settings.activeTheme, ctx.learner.states, ctx.flags)
   const openTheme = ctx.corpus.trial?.openTheme ?? null
   return {
     unlocked: new Set([...ctx.unlocked, ...computeUnlocks(path)]),
     currentUnitId,
     trialFinished: finished,
-    trialOpenTheme: finished && ctx.settings.activeTheme !== openTheme && openThemeLeft(ctx.corpus, ctx.learner.states) ? openTheme : null,
+    trialOpenTheme: finished && ctx.settings.activeTheme !== openTheme && openThemeLeft(ctx.corpus, ctx.learner.states, ctx.flags) ? openTheme : null,
   }
 }
 
