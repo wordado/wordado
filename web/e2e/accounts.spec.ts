@@ -50,16 +50,16 @@ async function codeFor(email: string): Promise<string> {
   }
 }
 
-/** What the page saw around the age gate's Continue click; kept on `window` between evaluations. */
+/** What the page saw around the age gate's Create account click; kept on `window` between evaluations. */
 interface GateTrace {
   readonly events: string[]
   readonly form: HTMLFormElement | null
 }
 
 /**
- * Clicks Continue on the age gate, recording what reached the page. In Firefox on CI the click
- * has twice done nothing: no step change, no error. When that happens
- * the test now fails at once with the events the page saw, instead of timing out without a clue.
+ * Clicks Create account on the age gate, recording what reached the page. In Firefox on CI a click on the
+ * gate's button (then Continue, when the gate came first) has twice done nothing: no step change, no error.
+ * When that happens the test now fails at once with the events the page saw, instead of timing out without a clue.
  * The gate's submit handler calls preventDefault, so a submit reaching the window already
  * prevented means the handler ran. Test-only: the app is unchanged.
  */
@@ -76,9 +76,10 @@ async function continuePastGate(page: Page): Promise<void> {
     window.addEventListener('submit', (event) => note(`submit reached the window${event.defaultPrevented ? ', prevented: the handler ran' : ', not prevented: no handler ran'}`))
     ;(window as unknown as { __gateTrace: GateTrace }).__gateTrace = trace
   })
-  await page.getByRole('button', { name: 'Continue' }).click()
+  await page.getByRole('button', { name: 'Create account' }).click()
   try {
-    await expect(page.getByLabel('Email')).toBeVisible({ timeout: 10_000 })
+    // Disabled while the account is created, then gone with the gate: either way the click was taken.
+    await expect(page.getByRole('button', { name: 'Create account', disabled: false })).toHaveCount(0, { timeout: 10_000 })
   } catch (err) {
     const seen = await page.evaluate(() => {
       const trace = (window as unknown as { __gateTrace: GateTrace }).__gateTrace
@@ -94,7 +95,7 @@ async function continuePastGate(page: Page): Promise<void> {
       }
     })
     const report = JSON.stringify(seen, null, 2)
-    console.log(`Continue on the age gate did nothing:\n${report}`)
+    console.log(`Create account on the age gate did nothing:\n${report}`)
     await test.info().attach('age-gate-continue', { body: report, contentType: 'application/json' })
     throw err
   }
@@ -103,19 +104,38 @@ async function continuePastGate(page: Page): Promise<void> {
 /** The consent to news by email: the box at sign-up and the switch in the account settings carry the same wording (#186). */
 const newsBox = (page: Page) => page.getByRole('checkbox', { name: /^I would like to receive news about Wordado/ })
 
-/** Through the age gate and an emailed code, as a learner would (spec §8.6, §11). */
-async function signIn(page: Page, email: string, gate: { country?: string; news?: boolean } = {}): Promise<void> {
+/** The age step, which follows the code for an address with no account (#293). */
+const gateHeading = (page: Page) => page.getByRole('heading', { name: 'Create your account' })
+
+/** The email and the code from the Worker's log, up to the age step or the sign-in. */
+async function emailAndCode(page: Page, email: string): Promise<void> {
   await page.goto('/signin')
+  await page.getByLabel('Email').fill(email)
+  await page.getByRole('button', { name: 'Email me a code' }).click()
+  await page.getByLabel('Code').fill(await codeFor(email))
+  await page.getByRole('button', { name: 'Sign in' }).click()
+}
+
+/**
+ * An emailed code, as a learner would (spec §8.6), then for a new address the age gate (spec §11, #293). A
+ * `returning` learner's address has an account: the code signs in, with no age step and no news box.
+ */
+async function signIn(page: Page, email: string, gate: { country?: string; news?: boolean; returning?: boolean } = {}): Promise<void> {
+  await emailAndCode(page, email)
+  if (gate.returning) {
+    await expect(page).toHaveURL('/')
+    await expect(gateHeading(page)).toHaveCount(0)
+    await expect(newsBox(page)).toHaveCount(0)
+    return
+  }
+  await expect(gateHeading(page)).toBeVisible()
+  await expect(page.getByText(`There is no account with ${email} yet.`, { exact: false })).toBeVisible()
   await page.getByLabel('Country where you live').selectOption(gate.country ?? 'BG')
   await page.getByRole('checkbox', { name: /^I’m \d+ or older$/ }).check()
   // News by email is never ticked for the learner (#186).
   await expect(newsBox(page)).not.toBeChecked()
   if (gate.news) await newsBox(page).check()
   await continuePastGate(page)
-  await page.getByLabel('Email').fill(email)
-  await page.getByRole('button', { name: 'Email me a code' }).click()
-  await page.getByLabel('Code').fill(await codeFor(email))
-  await page.getByRole('button', { name: 'Sign in' }).click()
   await expect(page).toHaveURL('/')
 }
 
@@ -207,14 +227,19 @@ test('studies offline, then syncs on reconnecting (spec §13)', async ({ browser
   await ctx.close()
 })
 
-test('turns away a learner below their country’s age, before any code is sent (spec §11)', async ({ browser }) => {
+test('turns away a learner below their country’s age, and no account is made (spec §11, #293)', async ({ browser }) => {
   const ctx = await context(browser)
   const page = await ctx.newPage()
-  await page.goto('/signin')
+  const email = address('young')
+  await emailAndCode(page, email)
+  await expect(gateHeading(page)).toBeVisible()
   await page.getByLabel('Country where you live').selectOption('DE')
   await page.getByRole('button', { name: 'I’m younger than 16' }).click()
   await expect(heading(page)).toHaveText('Sorry, you can’t create an account yet')
-  await expect(page.getByLabel('Email')).toHaveCount(0)
+  expect((await page.request.get('/v1/me')).status()).toBe(401)
+  // Nothing was made: the next code for the address leads to the age step again.
+  await emailAndCode(page, email)
+  await expect(gateHeading(page)).toBeVisible()
   await ctx.close()
 })
 
@@ -234,10 +259,8 @@ test('deletes the demo when signing in to an account that has progress, and merg
   await finishSetup(b)
   await studyNew(b, 3)
   await b.goto('/signin')
-  await b.getByRole('checkbox', { name: /^I’m \d+ or older$/ }).check()
-  await b.getByRole('button', { name: 'Continue' }).click()
   await expect(b.getByText(/the words you studied in the demo are deleted/)).toBeVisible()
-  await signIn(b, email)
+  await signIn(b, email, { returning: true })
   await expect(b.getByText(/This email already had an account, so the demo was deleted/)).toBeVisible()
   await synced(b)
   expect((await exported(b)).reviewEvents).toHaveLength(1)
@@ -267,7 +290,7 @@ test('settings follow the learner to another device (spec §9.2)', async ({ brow
 
   const second = await context(browser)
   const b = await second.newPage()
-  await signIn(b, email)
+  await signIn(b, email, { returning: true })
   await synced(b)
   await expect(heading(b)).toHaveText('5 new words')
   await b.goto('/settings/study')
@@ -292,7 +315,7 @@ test('signs out leaving nothing behind, then deletes the account (spec §11)', a
   // What is left is a new demo, which opens in the setup (plan 11), under the notice.
   await expect(heading(page)).toHaveText('Set up Wordado')
 
-  await signIn(page, email)
+  await signIn(page, email, { returning: true })
   await page.goto('/settings/account')
   await page.getByRole('button', { name: 'Delete your account' }).click()
   await page.getByRole('checkbox', { name: 'I understand that my progress is deleted for good' }).check()
@@ -335,17 +358,12 @@ test('asks about news by email at sign-up, the account settings change the answe
   expect(await newsOf(b)).toEqual({ state: 'given', at: expect.any(Number), text: 'news-1.en' })
   await second.close()
 
-  // Signing in again with the box left alone changes nothing; ticking it after a withdrawal is consent given anew.
+  // Signing in again asks nothing about news and changes nothing (#293): the switch is where it changes.
   const again = await context(browser)
   const c = await again.newPage()
-  await signIn(c, withNews)
+  await signIn(c, withNews, { returning: true })
   expect((await newsOf(c)).state).toBe('withdrawn')
   await again.close()
-  const anew = await context(browser)
-  const d = await anew.newPage()
-  await signIn(d, withNews, { news: true })
-  expect(await newsOf(d)).toEqual({ state: 'given', at: expect.any(Number), text: 'news-1.en' })
-  await anew.close()
 })
 
 test('tells the server the interface language at sign-in and when it changes, and the export shows it (#199)', async ({ browser }) => {
@@ -368,7 +386,7 @@ test('tells the server the interface language at sign-in and when it changes, an
   // Another browser, in English, signs in to the same account: the language is the one of the last to say it.
   const other = await context(browser)
   const b = await other.newPage()
-  await signIn(b, email)
+  await signIn(b, email, { returning: true })
   await expect.poll(() => languageOf(b)).toBe('en')
   await other.close()
 })
@@ -403,15 +421,16 @@ test('meets WCAG 2.2 A and AA on the account screens, light and dark (spec §11.
   const email = address('a11y')
   await page.goto('/signin')
   await expectAccessible(page, { dark: true })
-  await page.getByRole('checkbox', { name: /^I’m \d+ or older$/ }).check()
-  await page.getByRole('button', { name: 'Continue' }).click()
-  await expectAccessible(page, { dark: true })
   await page.getByLabel('Email').fill(email)
   await page.getByRole('button', { name: 'Email me a code' }).click()
   await expect(page.getByLabel('Code')).toBeVisible()
   await expectAccessible(page, { dark: true })
   await page.getByLabel('Code').fill(await codeFor(email))
   await page.getByRole('button', { name: 'Sign in' }).click()
+  await expect(gateHeading(page)).toBeVisible()
+  await expectAccessible(page, { dark: true })
+  await page.getByRole('checkbox', { name: /^I’m \d+ or older$/ }).check()
+  await page.getByRole('button', { name: 'Create account' }).click()
   await expect(page).toHaveURL('/')
   // A new account opens in the setup.
   await expect(page.getByRole('heading', { name: 'Which language do you speak?' })).toBeVisible()
@@ -449,7 +468,7 @@ test('brings a learner’s progress back after the browser’s storage was clear
   await again.goto('/')
   // A browser with nothing kept is a new demo: it opens in the setup, and its Sign in link is the way back.
   await expect(heading(again)).toHaveText('Set up Wordado')
-  await signIn(again, email)
+  await signIn(again, email, { returning: true })
   await expect(again.getByRole('heading', { name: 'Set up Wordado' })).toHaveCount(0)
   await expect(heading(again)).toHaveText('7 new words', { timeout: 15_000 })
   await again.goto('/path')
@@ -534,7 +553,7 @@ test('a returning account signing in on a fresh browser lands on Home, without t
 
   const fresh = await context(browser)
   const b = await fresh.newPage()
-  await signIn(b, email)
+  await signIn(b, email, { returning: true })
   await expect(today(b)).toHaveText('10 new words', { timeout: 15_000 })
   await expect(b.getByRole('heading', { name: 'Set up Wordado' })).toHaveCount(0)
   // The account's native language came with it.
