@@ -40,6 +40,8 @@ export interface Corpus {
   readonly clips: ReadonlyMap<string, AudioClip>
   /** For `PathContext.retired`. */
   readonly retired: ReadonlySet<WordId>
+  /** Entries known from the start, never taught (issue #285): for `PathContext.notTaught`. */
+  readonly notTaught: ReadonlySet<WordId>
   /** Set only when a loaded pack is a trial pack (spec 2026-10-12 §3.1). */
   readonly trial: CorpusTrial | null
 }
@@ -58,6 +60,7 @@ export function loadCorpus(packs: readonly Pack[]): Corpus {
   const themes = new Map<string, Theme>()
   const clips = new Map<string, AudioClip>()
   const retired = new Set<WordId>()
+  const notTaught = new Set<WordId>()
   const senses = new Map<string, string>()
   let trial: CorpusTrial | null = null
   for (const pack of packs) {
@@ -82,8 +85,10 @@ export function loadCorpus(packs: readonly Pack[]): Corpus {
         examples: e.examples,
         audio: e.audio,
         retired: e.retired,
+        taught: e.taught !== false,
       })
       if (e.retired) retired.add(corpusWordId(e.entry_id))
+      if (e.taught === false) notTaught.add(corpusWordId(e.entry_id))
     }
     if (pack.trial) {
       if (trial) throw new Error('More than one pack carries a trial')
@@ -102,6 +107,7 @@ export function loadCorpus(packs: readonly Pack[]): Corpus {
           examples: [],
           audio: {},
           retired: false,
+          taught: true,
         })),
         course: pack.trial.course,
         themes: pack.trial.themes ?? {},
@@ -126,7 +132,7 @@ export function loadCorpus(packs: readonly Pack[]): Corpus {
     }
   }
   units.sort((a, b) => a.order - b.order)
-  return { l1: first.l1, entries, units, themes: [...themes.values()], clips, retired, trial }
+  return { l1: first.l1, entries, units, themes: [...themes.values()], clips, retired, notTaught, trial }
 }
 
 /** Each word's position along the path, for stable ordering inside a level. */

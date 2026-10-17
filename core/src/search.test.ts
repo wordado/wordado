@@ -130,6 +130,10 @@ describe('searchThemes', () => {
     expect(found([...bank, entry({ entry_id: 'banknote-1', themes: ['money'], retired: true })], 'bankn')).toEqual([])
   })
 
+  it('keeps a word that is never taught, under its theme', () => {
+    expect(found([...bank, entry({ entry_id: 'banknote-1', themes: ['money'], taught: false })], 'bankn')).toEqual([['money', ['banknote-1']]])
+  })
+
   it('lists apart the matching words of no theme, and of a theme too small to offer', () => {
     const themes = [theme('money', 'Money', 'Пари'), theme('small', 'Small', 'Малка')]
     const entries = [bank[0]!, entry({ entry_id: 'bank-2', sense: 'b' }), entry({ entry_id: 'bank-3', sense: 'c', themes: ['small'], level: 'B1' }), entry({ entry_id: 'banker-1', themes: ['small'] })]
@@ -216,6 +220,10 @@ describe('searchWordIndex', () => {
 
   it('does not find a retired word', () => {
     expect(find([entry({ entry_id: 'old-1', retired: true }), entry({ entry_id: 'older-1' })], 'old')).toEqual(['older-1'])
+  })
+
+  it('finds a word that is never taught, as any other', () => {
+    expect(find([entry({ entry_id: 'old-1', taught: false }), entry({ entry_id: 'older-1' })], 'old')).toEqual(['old-1', 'older-1'])
   })
 
   it('takes punctuation in a query as a space, and never throws on it', () => {

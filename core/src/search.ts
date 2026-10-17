@@ -123,7 +123,10 @@ interface IndexedWord {
   readonly otherTokens: readonly string[]
 }
 
-/** Every word of a corpus that is not retired, folded once: what the search for the whole course looks through. */
+/**
+ * Every word of a corpus that is not retired, folded once: what the search for the whole course looks through. A word
+ * that is never taught is found like any other (issue #285).
+ */
 export interface WordIndex {
   readonly words: readonly IndexedWord[]
 }

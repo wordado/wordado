@@ -6,6 +6,8 @@ export interface PathContext {
   /** Every unit in the loaded packs, in any order. */
   readonly units: readonly Unit[]
   readonly retired: ReadonlySet<WordId>
+  /** Entries known from the start, never taught (issue #285): `Corpus.notTaught`. */
+  readonly notTaught: ReadonlySet<WordId>
   readonly flags: ReadonlyMap<WordId, WordFlag>
   /** Words with at least one non-practice review, wherever they came from. */
   readonly introduced: ReadonlySet<WordId>
@@ -18,9 +20,12 @@ export interface PathContext {
   readonly unlocked: ReadonlySet<string>
 }
 
-/** Retired, known and suspended words are invisible to every progress rule. */
-export function isLive(wordId: WordId, ctx: Pick<PathContext, 'retired' | 'flags'>): boolean {
-  return !ctx.retired.has(wordId) && !ctx.flags.has(wordId)
+/**
+ * Retired, known and suspended words are invisible to every progress rule, and so are the words that are never
+ * taught (issue #285): a unit does not wait for them, and they count as known.
+ */
+export function isLive(wordId: WordId, ctx: Pick<PathContext, 'retired' | 'notTaught' | 'flags'>): boolean {
+  return !ctx.retired.has(wordId) && !ctx.notTaught.has(wordId) && !ctx.flags.has(wordId)
 }
 
 function inPathOrder(units: readonly Unit[]): Unit[] {

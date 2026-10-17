@@ -36,6 +36,12 @@ export interface PackEntry {
   /** Clip IDs into the pack's audio manifest, by accent. */
   readonly audio: Readonly<Partial<Record<Accent, string>>>
   readonly retired: boolean
+  /**
+   * False for an entry every learner knows from the start (a grammar word, issue #285): it is found by the search
+   * and shown as known, and never taught, practised, asked or offered as a wrong answer. Absent means taught; the
+   * pipeline writes it only as false, so the packs of entries that are taught keep their bytes.
+   */
+  readonly taught?: boolean
 }
 
 export interface PackUnit {

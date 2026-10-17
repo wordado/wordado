@@ -78,14 +78,15 @@ export function nextPlacementWords(
 export const MIN_PLACEMENT_LEVELS = 2
 
 /**
- * Live corpus words by band: what a placement test draws from. Retired entries are never asked, and with `l1`,
+ * Live corpus words by band: what a placement test draws from. Retired entries are never asked, nor the words every
+ * learner knows from the start (issue #285), and with `l1`,
  * neither is a word that looks like its translation in that language: it shows that a learner recognises an
  * international word, not that they know English at its level.
  */
 export function placementPool(entries: Iterable<CorpusEntry>, l1?: string): Map<CefrLevel, WordId[]> {
   const out = new Map<CefrLevel, WordId[]>()
   for (const entry of entries) {
-    if (entry.retired) continue
+    if (entry.retired || !entry.taught) continue
     if (l1 !== undefined && looksAlike(entry.headword, entry.translations, l1)) continue
     const list = out.get(entry.level) ?? []
     list.push(corpusWordId(entry.entryId))

@@ -24,6 +24,7 @@ function ctx(over: Partial<PathContext> = {}): PathContext {
   return {
     units: UNITS,
     retired: new Set(),
+    notTaught: new Set(),
     flags: new Map(),
     introduced: new Set(),
     declaredLevel: 'A1',
@@ -74,6 +75,22 @@ describe('computeUnlocks', () => {
       flags: new Map<WordId, WordFlag>([[w(3), 'suspended']]),
     })
     expect(computeUnlocks(c)).toEqual(['a1-u2'])
+  })
+
+  it('does not wait for a word that is never taught', () => {
+    const c = ctx({ unlocked: new Set(['a1-u1']), introduced: new Set([w(1), w(2)]), notTaught: new Set([w(3)]) })
+    expect(computeUnlocks(c)).toEqual(['a1-u2'])
+  })
+
+  it('passes over a unit whose words are all never taught, as one already done', () => {
+    const c = ctx({ unlocked: new Set(['a1-u1']), introduced: new Set([w(1), w(2), w(3)]), notTaught: new Set([w(4), w(5), w(6)]) })
+    expect(computeUnlocks(c)).toEqual(['a1-u2', 'a2-u1'])
+    expect(currentUnit(c)?.unitId).toBe('a2-u1')
+    expect(pathNewWords(c, 2)).toEqual([w(7), w(8)])
+    // First on the path, it does not hold up a new learner either.
+    const first = ctx({ notTaught: new Set([w(1), w(2), w(3)]) })
+    expect(currentUnit(first)?.unitId).toBe('a1-u2')
+    expect(pathNewWords(first, 1)).toEqual([w(4)])
   })
 
   it('chains through a unit with no live words left', () => {
@@ -155,6 +172,18 @@ describe('currentUnit and pathNewWords', () => {
     const c = ctx({ unlocked: new Set(['a1-u1']), retired: new Set([w(2)]) })
     expect(pathNewWords(c, 2)).toEqual([w(1), w(3)])
     expect(pathNewWords(c, 0)).toEqual([])
+  })
+
+  it('never offers a word that is never taught, nor assumes it of a skipped level', () => {
+    const c = ctx({ unlocked: new Set(['a1-u1']), notTaught: new Set([w(2), w(5)]) })
+    expect(pathNewWords(c, 4)).toEqual([w(1), w(3), w(4), w(6)])
+    expect(assumedKnownWords(ctx({ declaredLevel: 'A2', notTaught: new Set([w(2)]) }))).toEqual(new Set([w(1), w(3), w(4), w(5), w(6)]))
+  })
+
+  it('stops offering a word once it is no longer taught, even one a learner already started', () => {
+    const c = ctx({ unlocked: new Set(['a1-u1']), introduced: new Set([w(1)]), notTaught: new Set([w(1), w(2)]) })
+    expect(pathNewWords(c, 2)).toEqual([w(3), w(4)])
+    expect(computeUnlocks({ ...c, introduced: new Set([w(1), w(3)]) })).toEqual(['a1-u2'])
   })
 
   it('is empty when the path is finished', () => {

@@ -106,6 +106,16 @@ describe('validatePack', () => {
     expect(paths(withEntry(2, { examples: [], ipa: '', retired: true }))).toEqual([])
   })
 
+  it('reads an entry that is known from the start: taught false, still with its example and IPA', () => {
+    const result = validatePack(withEntry(2, { taught: false }))
+    expect(result.status).toBe('ok')
+    if (result.status === 'ok') expect(result.pack.entries.map((e) => e.taught)).toEqual([undefined, undefined, false])
+    expect(paths(withEntry(2, { taught: true }))).toEqual([])
+    expect(paths(withEntry(2, { taught: 'no' as never }))).toEqual(['entries[2].taught'])
+    expect(paths(withEntry(2, { taught: false, examples: [] }))).toEqual(['entries[2].examples'])
+    expect(paths(withEntry(2, { taught: false, ipa: '' }))).toEqual(['entries[2].ipa'])
+  })
+
   it('rejects duplicate IDs and duplicate senses, case-insensitively', () => {
     const base = fixture()
     const dupId = { ...base, entries: [...base.entries, entry({ entry_id: 'bread-1', unit_id: 'a1-02' })] }

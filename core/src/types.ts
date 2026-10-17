@@ -66,6 +66,8 @@ export interface CorpusEntry {
   /** Clip IDs into the corpus's audio manifest, by accent (spec §9.3). */
   readonly audio: Readonly<Partial<Record<Accent, string>>>
   readonly retired: boolean
+  /** False for an entry known from the start (`PackEntry.taught`): searchable, shown as known, never taught. */
+  readonly taught: boolean
 }
 
 /** A unit of the level path (spec §7.2). */
