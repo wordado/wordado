@@ -444,3 +444,29 @@ describe('Themes in a trial (#244)', () => {
     expect(screen.queryByText('No themes are big enough yet.')).toBeNull()
   })
 })
+
+describe('Themes in a trial with an open theme (#290)', () => {
+  it('shows the open theme as a course card first, then the closed cards', async () => {
+    const ctx = await setupTrial({ openTheme: 'daily-life' })
+    renderWith(<Themes />, ctx)
+    const cards = screen.getAllByRole('listitem')
+    expect(within(cards[0]!).getByRole('heading', { name: 'Daily life' })).toBeTruthy()
+    expect(within(cards[0]!).getByRole('button', { name: /Study this next/ })).toBeTruthy()
+    const closed = cards.slice(1)
+    expect(closed.length).toBeGreaterThan(0)
+    for (const card of closed) {
+      expect(within(card).queryByRole('button')).toBeNull()
+      expect(within(card).getByText('With an account')).toBeTruthy()
+      expect(within(card).queryByRole('heading', { name: 'Daily life' })).toBeNull()
+    }
+    expect(screen.getByRole('link', { name: 'Create an account' }).getAttribute('href')).toBe('/signin')
+    expect(screen.queryByRole('search')).toBeNull()
+  })
+
+  it('chooses the open theme', async () => {
+    const ctx = await setupTrial({ openTheme: 'daily-life' })
+    renderWith(<Themes />, ctx)
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: /Study this next/ })))
+    expect(ctx.client.snapshot.settings.activeTheme).toBe('daily-life')
+  })
+})

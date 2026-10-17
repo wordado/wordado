@@ -16,7 +16,7 @@ import { Themes } from './Themes'
  * marked "Learn this word" here, whatever its level: choosing the theme would bring it forward all the same.
  *
  * An address that names no offered theme shows the themes, as a practice address falls back to practice: a theme too
- * small yet, and any theme in a trial, which offers none (spec 2026-10-12 §4.4).
+ * small yet, and any theme in a trial but the one it opens (spec 2026-10-12 §4.4, #290).
  */
 export function ThemeWords(props: { readonly themeId: string; /** What the word search starts with: a Themes search carried over. */ readonly query: string }) {
   const { t, locale } = useT()

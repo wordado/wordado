@@ -37,7 +37,7 @@ export function Themes() {
   const [query, setQuery] = useState('')
   const index = useMemo(() => (corpus ? searchIndex(corpus) : null), [corpus])
   if (!corpus || !index) return null
-  if (corpus.trial !== null) return <TrialThemes corpus={corpus} />
+  const trial = corpus.trial !== null
   const offered = offeredThemes(corpus)
   const active = settings.activeTheme
   const choose = (theme: Theme | null, movedId: string | null) =>
@@ -91,8 +91,17 @@ export function Themes() {
     <section className="themes-page" aria-labelledby="themes-title">
       <div className="themes-head">
         <h1 id="themes-title">{t('themes.title')}</h1>
-        <p className="lede">{t('themes.intro')}</p>
-        {offered.length > 0 && (
+        {/* A trial says what the account adds; it has no search, its one theme and the closed cards being few (#244, #290). */}
+        <p className="lede">
+          {trial ? (
+            <>
+              {t('trial.themes')} <Link to={{ name: 'signin' }}>{t('banner.demoCreate')}</Link>
+            </>
+          ) : (
+            t('themes.intro')
+          )}
+        </p>
+        {!trial && offered.length > 0 && (
           <form role="search" className="themes-search" onSubmit={(e) => e.preventDefault()}>
             <label className="visually-hidden" htmlFor="themes-search">
               {t('themes.search')}
@@ -123,7 +132,18 @@ export function Themes() {
         </button>
       )}
       {offered.length === 0 ? (
-        <p className="panel">{t('themes.none')}</p>
+        trial ? (
+          <TrialClosedThemes corpus={corpus} />
+        ) : (
+          <p className="panel">{t('themes.none')}</p>
+        )
+      ) : trial ? (
+        <>
+          {section('now')}
+          {section('studied')}
+          {section('new')}
+          <TrialClosedThemes corpus={corpus} />
+        </>
       ) : result ? (
         <section className="theme-group theme-results" aria-labelledby="themes-found">
           <h2 id="themes-found">{foundText(result, query)}</h2>
@@ -176,43 +196,34 @@ export function Themes() {
 }
 
 /**
- * The Themes screen of a trial (#244): the themes the whole course offers, each with its size there, to look at.
- * A trial studies no theme (spec 2026-10-12 §4.4), so a card has no page and no button; the way on is an account.
- * A trial pack built before the sizes names none: the line stands alone.
+ * The themes a trial only shows (#244): the rest of the course's, each with its size there, to look at. They have no
+ * page and no button; the way on is an account. A trial pack built before the sizes names none: nothing is listed.
+ * The theme a trial opens is not here: it stands as a course card above (#290).
  */
-function TrialThemes(props: { readonly corpus: Corpus }) {
+function TrialClosedThemes(props: { readonly corpus: Corpus }) {
   const { t, locale } = useT()
   const { corpus } = props
   const themes = trialThemes(corpus)
+  if (themes.length === 0) return null
   return (
-    <section className="themes-page" aria-labelledby="themes-title">
-      <div className="themes-head">
-        <h1 id="themes-title">{t('themes.title')}</h1>
-        <p className="lede">
-          {t('trial.themes')} <Link to={{ name: 'signin' }}>{t('banner.demoCreate')}</Link>
-        </p>
-      </div>
-      {themes.length > 0 && (
-        <ul className="theme-grid">
-          {themes.map(({ theme, words }) => (
-            <li key={theme.themeId} className="panel theme-card is-new">
-              <span className="theme-icon" aria-hidden="true">
-                <ThemeIcon themeId={theme.themeId} size={24} />
-              </span>
-              <div className="theme-text">
-                <h2>{localized(theme.name, locale, corpus.l1)}</h2>
-                <p className="note">{localized(theme.description, locale, corpus.l1)}</p>
-                <p className="note">{t('path.words', { count: words })}</p>
-                <p className="theme-tag">
-                  <Lock aria-hidden="true" size={14} />
-                  {t('trial.themeTag')}
-                </p>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
+    <ul className="theme-grid">
+      {themes.map(({ theme, words }) => (
+        <li key={theme.themeId} className="panel theme-card is-new">
+          <span className="theme-icon" aria-hidden="true">
+            <ThemeIcon themeId={theme.themeId} size={24} />
+          </span>
+          <div className="theme-text">
+            <h2>{localized(theme.name, locale, corpus.l1)}</h2>
+            <p className="note">{localized(theme.description, locale, corpus.l1)}</p>
+            <p className="note">{t('path.words', { count: words })}</p>
+            <p className="theme-tag">
+              <Lock aria-hidden="true" size={14} />
+              {t('trial.themeTag')}
+            </p>
+          </div>
+        </li>
+      ))}
+    </ul>
   )
 }
 

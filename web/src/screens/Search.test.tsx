@@ -178,6 +178,21 @@ describe('Search', () => {
       expect(screen.getByRole('button', { name: `Learn this word: ${entry.headword}` })).toBeTruthy()
     })
 
+    it('shows a word of the open theme with its theme, no unit, and Learn this word (#290)', async () => {
+      const ctx = await setupTrial({ declared: 'B1', openTheme: 'daily-life' })
+      const corpus = ctx.client.snapshot.corpus!
+      const loaded = new Set(corpus.units.map((u) => u.unitId))
+      const entry = [...corpus.entries.values()].find((e) => e.themes.includes('daily-life') && !loaded.has(e.unitId))!
+      renderWith(<Search q={entry.headword} />, ctx)
+      const row = rowOf(entry.headword)
+      const where = row.querySelector<HTMLElement>('.word-where')!
+      expect(where.querySelector('a[href="/themes/daily-life"]')).toBeTruthy()
+      expect(where.querySelector('a[href^="/path"]')).toBeNull()
+      expect(where.textContent).not.toContain('Unit:')
+      fireEvent.click(within(row).getByRole('button', { name: `Word actions: ${entry.headword}` }))
+      expect(screen.getByRole('button', { name: `Learn this word: ${entry.headword}` })).toBeTruthy()
+    })
+
     it('leaves a course as it was: a later unit’s word links to its unit and can be marked to learn', async () => {
       const ctx = await setup()
       const corpus = ctx.client.snapshot.corpus!
