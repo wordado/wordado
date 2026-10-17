@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, screen, within } from '@testing-library/react'
-import { corpusWordId } from '@wordado/core'
+import { corpusWordId, Grade } from '@wordado/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactElement } from 'react'
 import { renderWith, setup, setupTrial, withProviders } from '../test/fixtures'
@@ -233,6 +233,24 @@ describe('Search', () => {
     renderWith(<Search q="zzzz" />, ctx)
     expect(screen.getByText(/^The demo has \d+ words\. Sign in to search the whole course\.$/)).toBeTruthy()
     expect(screen.queryByText(/The sample has/)).toBeNull()
+  })
+
+  it('finds a word that is never taught, and shows it as known, with nothing to change but a report (issue #285)', async () => {
+    const ctx = await setup()
+    // Started before a later pack stopped teaching it: it shows as known all the same.
+    await act(() => ctx.client.answer({ wordId: 'c:teacher-1', mode: 'flashcard', direction: 'en_to_l1', grade: Grade.Good, latencyMs: 2_000, practice: false }))
+    const snapshot = ctx.client.snapshot
+    const entries = new Map([...snapshot.corpus!.entries].map(([id, e]) => [id, e.headword === 'teacher' ? { ...e, taught: false } : e]))
+    act(() => ctx.client.store.set({ ...snapshot, corpus: { ...snapshot.corpus!, entries, notTaught: new Set([corpusWordId('teacher-1')]) } }))
+    renderWith(<Search q="teacher" />, ctx)
+    expect(words()).toEqual(['teacher'])
+    const row = rows()[0]!
+    const mark = row.querySelector('.word-status')!
+    expect(mark.getAttribute('data-status')).toBe('known')
+    expect(mark.querySelector('.visually-hidden')!.textContent).toBe('Known')
+    fireEvent.click(within(row).getByRole('button', { name: 'Word actions: teacher' }))
+    expect(row.querySelector('.menu-standing')!.textContent).toBe('Known')
+    expect(within(row).getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual(['Word actions: teacher', 'Report this word: teacher'])
   })
 
   it('does not find a retired word', async () => {

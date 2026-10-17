@@ -23,6 +23,10 @@ import { TIER_LABEL } from '../labels'
  *
  * A word marked with "Learn this word" (spec §7.4) can have the mark taken
  * back here; with `learn`, a word that is not started can be marked here too.
+ *
+ * A word the course never teaches (`taught` false, issue #285) is known from
+ * the start: it shows as known, and nothing here changes that; only a report
+ * can be made.
  */
 export function FlagControls(props: {
   readonly wordId: WordId
@@ -30,6 +34,8 @@ export function FlagControls(props: {
   readonly menu?: boolean
   /** Offer "Learn this word" on a word that was never started: the path's list of a skipped level's unit. */
   readonly learn?: boolean
+  /** False for a word the course never teaches: known from the start, with no choice to make. */
+  readonly taught?: boolean
   onChange?(next: 'known' | 'suspended' | null): void
   /** Behind the menu only: the word's row opens the report dialog. */
   onReport?(): void
@@ -40,9 +46,11 @@ export function FlagControls(props: {
   const [error, setError] = useState<string | null>(null)
   const actions = useRef<HTMLSpanElement>(null)
   const changed = useRef(false)
-  const flag = flags.get(props.wordId)
+  const settled = props.taught === false
+  // A word never taught is known, whatever the learner set or started before the course stopped teaching it.
+  const flag = settled ? 'known' : flags.get(props.wordId)
   const state = states.get(props.wordId)
-  const tier = state ? masteryTier(state) : null
+  const tier = state && !settled ? masteryTier(state) : null
   // Chosen with "Learn this word" and not yet started (spec §7.4): the daily session will bring it.
   const chosen = !flag && !tier && toLearn.includes(props.wordId)
   const status = flag === 'known' ? t('flag.known') : flag === 'suspended' ? t('flag.suspended') : tier ? t(TIER_LABEL[tier]) : chosen ? t('path.wordToLearn') : t('path.wordNew')
@@ -115,7 +123,8 @@ export function FlagControls(props: {
       {error}
     </p>
   )
-  if (props.menu) return <FlagMenu headword={props.headword} status={statusTag} standingLabel={kind === 'new' ? null : status} error={errorLine} flagged={flag !== undefined} standing={`${flag ?? ''}:${chosen}`} learn={learnButton} button={button} {...(props.onReport ? { onReport: props.onReport } : {})} />
+  if (props.menu) return <FlagMenu headword={props.headword} status={statusTag} standingLabel={kind === 'new' ? null : status} error={errorLine} flagged={flag !== undefined} settled={settled} standing={`${flag ?? ''}:${chosen}`} learn={learnButton} button={button} {...(props.onReport ? { onReport: props.onReport } : {})} />
+  if (settled) return statusTag
   return (
     <>
       {statusTag}
@@ -159,6 +168,8 @@ function FlagMenu(props: {
   readonly standingLabel: string | null
   readonly error: ReactNode
   readonly flagged: boolean
+  /** A word never taught: known from the start, so there is nothing to set aside or bring back. */
+  readonly settled: boolean
   /** The word's flag and mark, as one value: when it changes, a choice was made. */
   readonly standing: string
   /** "Learn this word" or its taking back, when either applies. */
@@ -184,7 +195,7 @@ function FlagMenu(props: {
         {open && (
           <div className="popover-panel menu-panel" id={panelId}>
             {props.standingLabel !== null && <p className="menu-standing">{props.standingLabel}</p>}
-            {props.flagged ? (
+            {props.settled ? null : props.flagged ? (
               props.button(t('flag.bringBack'), null, <Undo2 aria-hidden="true" size={18} />)
             ) : (
               <>
