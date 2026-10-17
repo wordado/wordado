@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Corpus } from './corpus'
 import { computeUnlocks, currentUnit, earnedUnlocks, pathNewWords, type PathContext } from './path'
-import { studyUnits, trialFinished } from './trial'
+import { pathUnits, studyUnits, trialFinished } from './trial'
 import type { CefrLevel, Unit } from './types'
 import { corpusWordId } from './wordId'
 
@@ -52,6 +52,15 @@ describe('studyUnits', () => {
 
   it('is empty when the trial has no unit at the declared level', () => {
     expect(studyUnits(corpusOf([UNITS[0]!, UNITS[2]!], { probes: [], course: {}, themes: {} }), 'A2')).toEqual([])
+  })
+})
+
+describe('pathUnits', () => {
+  it('is the units study keeps to, but one with no word the course teaches (issue #288)', () => {
+    const quiet = { ...course, retired: new Set([w(3)]), notTaught: new Set([w(4), w(5)]) }
+    expect(pathUnits(quiet, 'A1').map((u) => u.unitId)).toEqual(['a1-u1', 'b1-u1', 'c1-u1'])
+    expect(pathUnits(course, 'A1')).toEqual(UNITS)
+    expect(pathUnits({ ...trial, notTaught: new Set([w(5), w(6)]) }, 'B1')).toEqual([])
   })
 })
 
