@@ -315,7 +315,7 @@ them. It carries one more field, `trial`, with `probes` (the placement test's
 words, 40 per level by default, drawn uniformly from the level's live entries
 and seeded by the corpus version and the level, so a release is byte-identical
 everywhere) and `course` (the units and live words per level of the whole
-course). Probes are test words only: they are in no unit, theme, search or
+course, counting only the words taught and the units that have one). Probes are test words only: they are in no unit, theme, search or
 count, and are never studied. The demo (§8.6) installs it.
 
 Each pack contains entry records, unit definitions, theme definitions (§8.9),
@@ -336,12 +336,24 @@ spaced-repetition state points at corpus entries by stable ID for years.
 - A **retired** entry stays in the pack flagged `retired`. It is never
   introduced as a new word and never used as a distractor, but learners who
   already have review state for it keep reviewing it.
+- An entry **known from the start** ships with `taught: false` (issues #285,
+  #288): a grammar word every learner already knows, such as the articles and
+  helper verbs. The pipeline marks it from a list of entry IDs; the field is
+  absent on every other entry, so their bytes do not change. The search
+  (§8.13) finds it, and wherever words are listed it shows as *Known*, with
+  only "Report this word" in its menu. It is never introduced, reviewed,
+  practised, asked in the placement test, or used as a distractor or a
+  matching tile. A learner who started it before it was marked keeps its
+  review state; it no longer comes up. It keeps its ID and its unit, like any
+  live entry, and is not listed among the learner's words set aside (§7.4).
 - An entry that **moves** to another unit or level carries its review state
   with it. Unit unlocks are never revoked by a corpus update; completion
   percentages are simply recomputed.
-- **Retired entries are invisible to every progress rule** — unit unlocking,
-  unit and level completion, theme size. A rule that waited for a retired word
-  to be introduced would wait forever (§7.2).
+- **Retired entries, and entries known from the start, are invisible to
+  every progress rule** — unit unlocking, unit and level completion, theme
+  size. A rule that waited for such a word to be introduced would wait forever
+  (§7.2). A unit whose entries are all retired or known from the start counts
+  as done, and the path does not show it (§7.2).
 
 **Versions and compatibility.** The corpus version number is global; the
 manifest lists which L1 packs exist at each version, since L1s are released at
@@ -380,6 +392,7 @@ Each corpus entry carries:
   collections (§8.9).
 - Exam tags (Phase 3; see §8.9)
 - `retired` flag
+- `taught` flag, present only as `false`: an entry known from the start (§5.1)
 
 ### 5.3 Corpus scale
 
@@ -601,11 +614,20 @@ queue.
 Words are grouped into **units** of approximately 20 thematically related words.
 
 **Unit unlock rule.** The next unit unlocks as soon as every live word of the
-current unit has been introduced. *Live* excludes retired entries (§5.1) and
-words the learner has flagged known or suspended (§7.4). The *current unit* is
+current unit has been introduced. *Live* excludes retired entries, entries
+known from the start (§5.1) and words the learner has flagged known or
+suspended (§7.4). The *current unit* is
 the earliest unlocked unit in path order that still has a live, never-introduced
 word; words pulled forward by a collection or a personal-word link count as
 introduced in whichever unit holds them.
+
+**A unit with nothing to teach.** A unit whose entries are all retired or
+known from the start has no live word: it never holds up the path, and the
+path screen leaves it out, as "0 of 0 started" would tell the learner nothing
+(issue #288). The units shown, and the count in "Show all", are the units
+left; a link from the search to such a unit names it without a link. Words
+the learner set aside do not count here: a unit whose words are all set aside
+stays on the path, where they can be brought back.
 
 The gate is about *introduction* only, so that the new-word queue never runs
 dry. An earlier draft also required a successful later-day review of 80% of the
@@ -714,8 +736,8 @@ seen. `core` composes each session as follows.
    Practice over everything uses only started words.
 
    *Which words practice picks.* Started words — or, where the scope is
-   practised whole, all its words — that are neither set aside nor
-   retired. A practice run leaves out the words today's session serves —
+   practised whole, all its words — that are neither set aside, retired,
+   nor known from the start (§5.1). A practice run leaves out the words today's session serves —
    practising them would only repeat the session. Those words come back only
    when the scope would otherwise have nothing at all: practice never touches
    the schedule, and a repeat is better than a run with nothing in it. They
@@ -758,7 +780,10 @@ seen. `core` composes each session as follows.
 need this") or *suspended* ("not now"). Either removes it from the new-word
 queue and from review; neither deletes its review state, and both can be
 undone. A known word is shown as known-by-declaration and never counted as
-mature. Flags are versioned documents (§9.2).
+mature. Flags are versioned documents (§9.2). Settings lists the words set
+aside, each with *Bring back*; a word known from the start (§5.1) is left out
+of that list and its count, even one the learner flagged before it was marked,
+since it is never taught either way.
 
 **Words chosen to learn.** While practising a word that was never started (a
 theme, or a unit of a skipped level, above), the learner can choose **Learn
@@ -1274,7 +1299,10 @@ new is that the tags become learner-facing, which has three consequences.
   reasonably want them.
 - *A minimum size.* A theme is offered only if it has at least about 25
   entries in the levels shipped so far; the pipeline enforces this, so a theme
-  can appear as the corpus grows.
+  can appear as the corpus grows. A theme's size counts its words that are
+  taught: an entry known from the start (§5.1) stays in the theme's word list
+  and its search, marked *Known*, and counts neither toward the size nor in
+  "N of M words started".
 
 Themes are part of studying and fall under the free-tier principle (§8.8).
 
@@ -1431,7 +1459,8 @@ list. Every word not yet started offers "Learn this word" (§7.4).
 screen that has one, and the screen `/search?q=`. The query stays in the
 address while the learner types, without a history entry for each letter. It
 finds the words of the whole course, not only those of the offered themes,
-and never a retired word. Best match first, in three groups: the word itself,
+and never a retired word; a word known from the start (§5.1) is found and
+marked *Known*. Best match first, in three groups: the word itself,
 then the words whose headword holds every word of the query, then the words
 found by a variant, a translation or the sense note. Inside a group the order
 is the level (A1 first), then the headword, then the word's ID, so it is the
@@ -2541,6 +2570,19 @@ owner (#244).
   themes the whole course offers, each with its name, its description and
   its size there, to look at; none can be opened, chosen or practised, and
   the way on is an account. The trial pack carries the sizes (`trial.themes`).
+
+**2026-10-17 — words known from the start.** Decided by the product owner
+(#285, #288).
+
+- **Corpus packs (§5.1, §5.2):** an entry may ship with `taught: false`, for
+  a grammar word every learner knows. It is found and shown as *Known*, and
+  never taught, practised, tested or offered as a wrong answer.
+- **Level path (§7.2):** a unit with no word taught (all retired or known
+  from the start) counts as done and is left off the path screen.
+- **Themes (§8.9):** a theme's size counts only the words taught; the others
+  stay listed, marked *Known*. The trial's theme sizes count the same way.
+- **Words set aside (§7.4):** the list in Settings leaves out a word known
+  from the start.
 
 ## 17. Technology choices
 
