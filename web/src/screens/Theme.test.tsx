@@ -189,6 +189,16 @@ describe('ThemeWords', () => {
     expect(screen.queryByRole('button', { name: 'Study this next' })).toBeNull()
   })
 
+  it('opens the open theme’s page in a trial, and falls back to the Themes for a closed one (#290)', async () => {
+    const ctx = await setupTrial({ openTheme: 'daily-life' })
+    renderWith(<ThemeWords themeId="daily-life" query="" />, ctx)
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Daily life')
+    expect(screen.getAllByRole('button', { name: /Word actions/ }).length).toBeGreaterThan(0)
+    cleanup()
+    renderWith(<ThemeWords themeId="food" query="" />, ctx)
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Themes')
+  })
+
   it('reads in Bulgarian', async () => {
     const ctx = await setup()
     renderWith(<ThemeWords themeId="daily-life" query="клю" />, { ...ctx, locale: 'bg' })

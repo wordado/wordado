@@ -92,6 +92,16 @@ describe('configProblems', () => {
   })
 })
 
+describe('trial.open_theme', () => {
+  it('trial may name only an open theme', () => {
+    expect(configProblems({ ...validConfig, trial: { open_theme: 'home' } })).toEqual([])
+  })
+
+  it('refuses an empty open theme', () => {
+    for (const bad of ['', 3]) expect(configProblems({ ...validConfig, trial: { open_theme: bad } })).toEqual(['trial.open_theme: must be a theme ID'])
+  })
+})
+
 describe('trial.probes_per_level', () => {
   it('accepts 8 or more and refuses anything else', () => {
     expect(configProblems({ ...validConfig, trial: { probes_per_level: 40 } })).toEqual([])

@@ -6,7 +6,7 @@ import { testEnv } from '@wordado/client-data/src/testing/testEnv'
 import type { PackManifest } from '@wordado/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AccountRecord } from '../account/storage'
-import { fakeAudio, fakeReminders, renderWith, type RenderContext } from '../test/fixtures'
+import { fakeAudio, fakeReminders, renderWith, setupTrial, type RenderContext } from '../test/fixtures'
 import { packsFrom, twoLevels } from '../test/twoLevels'
 import { Setup } from './Setup'
 
@@ -140,6 +140,16 @@ describe('Setup, the demo (plan 11)', () => {
     expect(screen.getByRole('textbox', { name: 'Answers a day' })).toBeTruthy()
     expect(screen.queryByRole('heading', { name: 'Reminders' })).toBeNull()
     expect(screen.queryByRole('checkbox', { name: 'Remind me to study' })).toBeNull()
+  })
+})
+
+describe('Setup, a trial with an open theme (#290)', () => {
+  it('has no Theme step: language, then the goal', async () => {
+    const ctx = { ...(await setupTrial({ openTheme: 'daily-life' })), packs: packsFrom(sampleManifest, sampleFetcher) }
+    renderWith(<Setup onFinish={() => undefined} />, ctx)
+    await pastLanguage()
+    expect(screen.queryByRole('heading', { name: 'What do you want English for?' })).toBeNull()
+    expect(screen.getByText('Step 2 of 2')).toBeTruthy()
   })
 })
 

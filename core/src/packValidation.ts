@@ -141,12 +141,13 @@ function parseTrial(r: Report, raw: unknown, path: string): PackTrial {
       else course[level as CefrLevel] = { units: integer(r, size, 'units', sizePath, 1), words: integer(r, size, 'words', sizePath, 1) }
     }
   }
+  const open = raw['open_theme'] === undefined ? undefined : text(r, raw, 'open_theme', path)
   const rawThemes = raw['themes']
-  if (rawThemes === undefined) return { probes, course }
+  if (rawThemes === undefined) return { probes, course, ...(open ? { open_theme: open } : {}) }
   const themes: Record<string, number> = {}
   if (!isRecord(rawThemes)) r.add(at(path, 'themes'), 'must be an object of word counts by theme')
   else for (const themeId of Object.keys(rawThemes)) themes[themeId] = integer(r, rawThemes, themeId, at(path, 'themes'), 1)
-  return { probes, course, themes }
+  return { probes, course, themes, ...(open ? { open_theme: open } : {}) }
 }
 
 /** Referential integrity and the stability rules that hold inside one pack (spec §5.1, §13). */
@@ -168,11 +169,16 @@ function crossCheck(r: Report, pack: Pack): void {
   const themes = new Set(pack.themes.map((t) => t.theme_id))
   const clips = new Set(pack.audio.map((c) => c.clip_id))
   const referencedBy = new Map<string, string>()
+  const openTheme = pack.trial?.open_theme
 
   pack.entries.forEach((e, i) => {
     const path = `entries[${i}]`
     const unit = units.get(e.unit_id)
-    if (!unit) r.add(`${path}.unit_id`, `unknown unit ${JSON.stringify(e.unit_id)}`)
+    // A trial's open theme brings its words whole, with no unit of the pack to hold them (#290).
+    const ofOpenTheme = openTheme !== undefined && e.themes.includes(openTheme)
+    if (!unit) {
+      if (!ofOpenTheme) r.add(`${path}.unit_id`, `unknown unit ${JSON.stringify(e.unit_id)}`)
+    }
     else {
       if (unit.level !== e.level) r.add(`${path}.level`, `differs from the level of unit ${e.unit_id}`)
       if (!unit.entry_ids.includes(e.entry_id)) r.add(`${path}.unit_id`, `unit ${e.unit_id} does not list this entry`)
@@ -194,6 +200,7 @@ function crossCheck(r: Report, pack: Pack): void {
   for (const themeId of Object.keys(pack.trial?.themes ?? {})) {
     if (!themes.has(themeId)) r.add(`trial.themes.${themeId}`, `unknown theme ${JSON.stringify(themeId)}`)
   }
+  if (openTheme !== undefined && !themes.has(openTheme)) r.add('trial.open_theme', `unknown theme ${JSON.stringify(openTheme)}`)
   // A probe may be a unit entry (the trial draws from the first unit too), but then it is the same word.
   pack.trial?.probes.forEach((p, i) => {
     const e = entries.get(p.entry_id)

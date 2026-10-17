@@ -47,9 +47,9 @@ export async function setup(options: { readonly env?: TestEnv; readonly audio?: 
 }
 
 /** A visitor's client over the sample as a trial: one unit per level, studying the declared level's. */
-export async function setupTrial(options: { readonly levels?: readonly CefrLevel[]; readonly declared?: CefrLevel; readonly audio?: AudioPort } = {}) {
+export async function setupTrial(options: { readonly levels?: readonly CefrLevel[]; readonly declared?: CefrLevel; readonly audio?: AudioPort; /** A theme the trial opens whole (#290). */ readonly openTheme?: string } = {}) {
   const env = testEnv()
-  const client = await openTrialClient(options.levels ?? ['A1', 'A2', 'B1'], env, options.declared ?? 'B1')
+  const client = await openTrialClient(options.levels ?? ['A1', 'A2', 'B1'], env, options.declared ?? 'B1', options.openTheme === undefined ? {} : { openTheme: options.openTheme })
   return { env, client, audio: options.audio ?? fakeAudio() }
 }
 

@@ -193,6 +193,7 @@ describe('placementCorpus', () => {
       probes: [entry('p1', 'A1'), entry('p2', 'A1'), entry('p3', 'C1'), entry('p4', 'C1', true)],
       course: {},
       themes: {},
+      openTheme: null,
     })
     const { pool } = placementCorpus(corpus)
     expect(pool.get('A1')).toEqual([corpusWordId('p1'), corpusWordId('p2')])
@@ -202,13 +203,13 @@ describe('placementCorpus', () => {
 
   it('leaves international words out, of a trial’s probes and of a course', () => {
     const words = [{ ...entry('democracy', 'B2'), translations: ['демокрация'] }, { ...entry('house', 'B2'), translations: ['къща'] }]
-    expect(placementCorpus(corpusOf([], { probes: words, course: {}, themes: {} })).pool.get('B2')).toEqual([corpusWordId('house')])
+    expect(placementCorpus(corpusOf([], { probes: words, course: {}, themes: {}, openTheme: null })).pool.get('B2')).toEqual([corpusWordId('house')])
     expect(placementCorpus(corpusOf(words, null)).pool.get('B2')).toEqual([corpusWordId('house')])
   })
 
   it('lets a question show a probe or a unit entry, and keeps the unit entry where both exist', () => {
     const full = withExamples(entry('both', 'B1'))
-    const corpus = corpusOf([full, entry('unit-only', 'B1')], { probes: [entry('both', 'B1'), entry('p', 'A1')], course: {}, themes: {} })
+    const corpus = corpusOf([full, entry('unit-only', 'B1')], { probes: [entry('both', 'B1'), entry('p', 'A1')], course: {}, themes: {}, openTheme: null })
     const { corpus: merged } = placementCorpus(corpus)
     expect([...merged.entries.keys()].sort()).toEqual(['both', 'p', 'unit-only'])
     expect(merged.entries.get('both')).toBe(full)
