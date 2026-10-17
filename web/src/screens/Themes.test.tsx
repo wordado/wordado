@@ -408,6 +408,8 @@ describe('Themes in a trial (#244)', () => {
     expect(cards.map((card) => within(card).getByRole('heading', { level: 2 }).textContent)).toEqual(['Daily life', 'Travel and transport'])
     expect(within(cards[0]!).getByText('240 words')).toBeTruthy()
     expect(within(cards[1]!).getByText('1 word')).toBeTruthy()
+    // Each card says why it does not open (#289).
+    for (const card of cards) expect(within(card).getByText('With an account')).toBeTruthy()
     // Nothing to open, choose, practise or search; and not the fault-like line of a course with no theme yet.
     expect(within(screen.getByRole('list')).queryByRole('link')).toBeNull()
     expect(screen.queryByRole('button')).toBeNull()

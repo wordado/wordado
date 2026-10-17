@@ -1421,6 +1421,9 @@ test('“I already have an account” leads from the setup to Sign in', async ({
   await page.getByRole('link', { name: 'I already have an account' }).click()
   await expect(page).toHaveURL('/signin')
   await expect(heading(page)).toHaveText('Create an account or sign in')
+  // What an account gives, and what the email is for, before the age gate (#289).
+  await expect(page.getByRole('list', { name: 'With an account' })).toContainText('Your email is used only to send you a sign-in code.')
+  await expectAccessible(page, { dark: true })
 })
 
 test('the setup’s Language and Theme steps meet WCAG 2.2 A and AA, light and dark (spec §11.1)', async ({ page }) => {
@@ -1537,12 +1540,18 @@ test.describe('the trial at the visitor’s level', () => {
       await expect(page.locator('li.unit')).toHaveCount(1)
       await expect(page.getByText('This is the demo: one unit of B1.')).toBeVisible()
       await expect(page.locator('#main').getByRole('link', { name: 'Create an account' })).toBeVisible()
+      // Said above the unit, where it is seen first (#289).
+      const note = await page.getByRole('region', { name: 'This is the demo: one unit of B1.' }).boundingBox()
+      const unit = await page.locator('li.unit').boundingBox()
+      expect(note!.y).toBeLessThan(unit!.y)
+      await expectAccessible(page, { dark: true })
       // The Themes screen shows what the whole course offers, to look at: a trial studies no theme (#244).
       await page.goto('/themes')
       await expect(page.getByText('Themes come with the whole course: pick one and its words come first.')).toBeVisible()
       const cards = page.locator('.theme-grid > li')
       await expect(cards).toHaveCount(2)
       await expect(cards.filter({ hasText: 'Daily life' })).toContainText('240 words')
+      await expect(cards.getByText('With an account')).toHaveCount(2)
       await expect(cards.getByRole('link')).toHaveCount(0)
       await expect(page.locator('#main').getByRole('button')).toHaveCount(0)
       await expectAccessible(page, { dark: true })
@@ -1606,6 +1615,7 @@ test.describe('the trial at the visitor’s level', () => {
       await expect(page.locator('.done')).toBeVisible()
       await expect(page.getByText('You have started every word of the demo.')).toBeVisible()
       await expect(page.getByText('Create an account to go on with the whole course.')).toBeVisible()
+      await expect(page.getByRole('list', { name: 'With an account' })).toContainText('every device you sign in on')
       await page.goto('/')
       await expect(page.getByText('You have started every word of the demo.')).toBeVisible()
       await expect(page.locator('#main').getByRole('link', { name: 'Create an account' })).toBeVisible()

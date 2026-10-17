@@ -1,7 +1,7 @@
 import { useClient, useClientSnapshot, type PathView } from '@wordado/client-data'
 import { studyUnits, unitPractisable, type CefrLevel, type Unit, type UnitProgress } from '@wordado/core'
 import { Check, ChevronDown, CircleDashed, Lock, Play, Star, type LucideIcon } from 'lucide-react'
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useId, useState, type ReactNode } from 'react'
 import { localized, useT, type MessageKey } from '../i18n/i18n'
 import { Link } from '../router'
 import { WordRow } from '../study/WordRow'
@@ -100,6 +100,7 @@ export function Path(props: { readonly unit?: string | undefined }) {
   return (
     <section className="path" aria-labelledby="path-title">
       <h1 id="path-title">{t('path.title')}</h1>
+      {corpus.trial !== null && <TrialNote level={settings.declaredLevel} units={corpus.trial.course[settings.declaredLevel]?.units} />}
       {levels.map(({ level, units, statuses, skipped }) => {
         const levelCompletion = progress.levels[level]
         const completion = levelCompletion?.kind === 'skipped' ? undefined : levelCompletion
@@ -185,19 +186,24 @@ export function Path(props: { readonly unit?: string | undefined }) {
           </section>
         )
       })}
-      {corpus.trial !== null && <TrialNote level={settings.declaredLevel} units={corpus.trial.course[settings.declaredLevel]?.units} />}
     </section>
   )
 }
 
-/** What the trial is, and how much more the course holds at this level; the way to the course is a link. */
+/** What the trial is, and how much more the course holds at this level, above the unit where it is seen first (#289); the way to the course is a button. */
 function TrialNote(props: { readonly level: CefrLevel; readonly units: number | undefined }) {
   const { t } = useT()
+  const id = useId()
   return (
-    <p className="note">
-      {t('trial.path', { level: props.level })}
-      {props.units !== undefined && ` ${t('trial.course', { count: props.units, level: props.level })}`} <Link to={{ name: 'signin' }}>{t('banner.demoCreate')}</Link>
-    </p>
+    <section className="panel trial-note" aria-labelledby={id}>
+      <p className="trial-note-title" id={id}>
+        {t('trial.path', { level: props.level })}
+      </p>
+      {props.units !== undefined && <p>{t('trial.course', { count: props.units, level: props.level })}</p>}
+      <Link className="button primary" to={{ name: 'signin' }}>
+        {t('banner.demoCreate')}
+      </Link>
+    </section>
   )
 }
 

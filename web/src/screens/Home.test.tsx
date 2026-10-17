@@ -132,6 +132,13 @@ describe('Home: listening follows the connection and the audio setting (spec §9
       expect(screen.getByText('You have started every word of the demo.')).toBeTruthy()
       expect(screen.getByText(/Create an account to go on with the whole course\./)).toBeTruthy()
       expect(screen.getByRole('link', { name: 'Create an account' }).getAttribute('href')).toBe('/signin')
+      // What an account gives (#289), with the size of the declared level's course.
+      const gives = screen.getByRole('list', { name: 'With an account' })
+      expect(within(gives).getAllByRole('listitem').map((item) => item.textContent)).toEqual([
+        'The whole course: 12 units at B1 alone, every level, and its themes.',
+        'Your progress kept in your account, on every device you sign in on.',
+        'Your email is used only to send you a sign-in code. News only if you ask for it, and you can delete your account at any time.',
+      ])
       expect(screen.getByRole('link', { name: 'Practise words you know' })).toBeTruthy()
       const invite = screen.getByRole('link', { name: 'Create an account' })
       const practise = screen.getByRole('link', { name: 'Practise words you know' })

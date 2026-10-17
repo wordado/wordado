@@ -137,14 +137,16 @@ are never studied.
 
 In the trial, study takes new words from **the unit of the declared level only**.
 
-- **Path:** shows that one unit, and under it a line: *This is the demo: one unit of B1. The whole course has
-  38 units at B1. Create an account to study all of it.* (numbers from `trial.course`), with the way to sign-up.
+- **Path:** shows that one unit, and above it a panel: *This is the demo: one unit of B1. The whole course has
+  38 units at B1.* (numbers from `trial.course`), with a button to sign-up. Above the unit, not under it, so it is
+  seen first (#289).
 - Finishing the unit opens no other. The lower levels' units count as assumed known, as in the course; the
   higher ones are not shown.
 - **Practice** of the unit works as everywhere.
 - **Themes** are not studied in the trial: a theme would bring in words of the other levels' units. The Themes
   screen shows the themes the whole course offers, each with its name, description and size there
-  (`trial.themes`), with no page and no button, and the way to an account (#244). A trial pack built before the
+  (`trial.themes`), with no page and no button, and the way to an account (#244). Each card says *With an
+  account* beside a lock, so it does not read as broken (#289). A trial pack built before the
   sizes names none, and the screen then says only that themes come with the whole course.
 - **Search** covers the trial's words and says so, as it does for the sample today. A word of another level's
   unit is found, but is not a way into it: its unit is named, not linked.
@@ -153,6 +155,7 @@ In the trial, study takes new words from **the unit of the declared level only**
   already started keep their reviews. Nothing blocks this and nothing advertises it.
 - **The end of the unit:** once every word of the unit is started, the done screen and the home screen say so
   and invite: *You have started every word of the demo. Create an account to go on with the whole course.*
+  Between the two lines, what an account gives (§4.7).
   Reviews of the started words keep coming on later days, as now.
 
 ### 4.5 Into an account
@@ -175,6 +178,20 @@ finished on the bundled sample does not count as asking.
 
 Answers on sample words that the trial pack does not hold are kept and not served: a run already skips a word
 its corpus lacks. They go to the account with the rest at sign-up, as they do today.
+
+### 4.7 What an account gives (#289)
+
+Wherever the demo decides on an account, the same three points, in this order, under *With an account*:
+
+1. The whole course: *38 units at B1 alone, every level, and its themes* (the size of the declared level from
+   `trial.course`; without it, only *every level, and its themes*).
+2. Progress kept in the account, on every device the learner signs in on.
+3. What the email is for: only to send the sign-in code; news only if asked for; the account can be deleted at
+   any time.
+
+They stand at the end of the demo (§4.4) and at the top of the sign-in screen, before the age gate, for a
+learner with no account on the device; *Sign in again* does not show them. The demo's banner gives the reason
+beside its button: *Your progress stays only on this device: create an account to keep it.*
 
 ## 5. Texts
 
