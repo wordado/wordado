@@ -81,6 +81,15 @@ describe('buildTrial', () => {
     expect(pack.units.map((u) => u.unit_id)).toEqual(['a1-2', 'a2-1', 'b1-1'])
   })
 
+  it('takes the second unit of a level whose first is all known from the start, and never asks or counts such a word', () => {
+    const quiet = { ...course, entries: course.entries.map((e) => (e.unit_id === 'a1-1' ? { ...e, taught: false } : e)) }
+    const { pack } = buildTrial(quiet, 40)
+    expect(pack.units.map((u) => u.unit_id)).toEqual(['a1-2', 'a2-1', 'b1-1'])
+    const first = new Set(course.entries.filter((e) => e.unit_id === 'a1-1').map((e) => e.entry_id))
+    expect(pack.trial!.probes.some((p) => first.has(p.entry_id))).toBe(false)
+    expect(pack.trial!.course['A1']).toEqual({ units: 2, words: 60 })
+  })
+
   it('draws 40 live probes of the right level, or all there are', () => {
     const { pack } = buildTrial(coursePack(shape, 7, ['a1-1']), 40)
     const by = (l: string) => pack.trial!.probes.filter((p) => p.level === l)

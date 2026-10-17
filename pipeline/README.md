@@ -160,6 +160,11 @@ On a workstation, not in Actions:
    too low (greetings, family, feelings, food, the home, the days of the week). Reviewers add to it; anything on
    it is described whatever its frequency. Its first sense, the everyday one, is live and goes to banding review;
    its other senses (the *bed* of a garden) compete by frequency like any word's.
+5. **Words known from the start.** `not-taught.txt`, optional, lists entry IDs, one per line (`#` for comments):
+   grammar words every learner knows (articles, helper verbs). They ship with `taught: false`: the app finds them
+   in the search and shows them as known, and never teaches, practises or tests them. An ID, not a headword, since
+   only one sense of a headword may be such a word. An ID that matches no entry stops the release. The entry keeps
+   its ID and its unit; a unit left with no word to teach stays too, and the app passes over it (issue #285).
 
 ## Running a version
 

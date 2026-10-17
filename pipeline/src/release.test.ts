@@ -111,6 +111,30 @@ describe('planRelease and writeRelease', () => {
     expect(v2.units.filter((u) => u.entry_ids.includes('go-1')).map((u) => u.unit_id)).toEqual([old.unit_id])
   })
 
+  it('ships the entries not-taught.txt names with taught false, keeps their ids and their unit, even one left with no word to teach, and leaves every other entry as it was (issue #285)', async () => {
+    const dir = await reviewed()
+    const o1 = out()
+    writeRelease(dir, o1, planRelease(dir, { draft: false, now: NOW }))
+    adoptRelease(dir, o1)
+    const v1 = packOf(join(dir, 'last-published'), 'corpus-v1-bg.pack')
+    // the and go are the whole of their unit.
+    writeFileSync(join(dir, 'not-taught.txt'), 'the-1\ngo-1\n')
+    await runDraft({ dir, llm: sampleLlm(), offline: true })
+    const plan = planRelease(dir, { draft: false, now: NOW })
+    expect([plan.problems, plan.pending, plan.retired]).toEqual([[], [], []])
+    const o2 = out()
+    writeRelease(dir, o2, plan)
+    expect(publishProblems(reader(o2))).toEqual([])
+    const v2 = packOf(o2, 'corpus-v2-bg.pack')
+    expect(checkPackSuccession(v1, v2)).toEqual([])
+    const quiet = new Set(['the-1', 'go-1'])
+    for (const id of quiet) expect(v2.entries.find((e) => e.entry_id === id)).toEqual({ ...v1.entries.find((e) => e.entry_id === id)!, taught: false })
+    expect(v2.entries.filter((e) => !quiet.has(e.entry_id))).toEqual(v1.entries.filter((e) => !quiet.has(e.entry_id)))
+    expect(v2.units.map((u) => [u.unit_id, u.entry_ids])).toEqual(v1.units.map((u) => [u.unit_id, u.entry_ids]))
+    expect(v2.units.find((u) => u.unit_id === 'a1-04')!.entry_ids.every((id) => quiet.has(id))).toBe(true)
+    expect([...loadCorpus([v2]).notTaught].sort()).toEqual(['c:go-1', 'c:the-1'])
+  })
+
   it('releases a fully reviewed corpus as version 1, a valid successor of the sample', async () => {
     const dir = await reviewed()
     const plan = planRelease(dir, { draft: false, now: NOW })

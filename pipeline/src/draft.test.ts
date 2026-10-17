@@ -179,6 +179,19 @@ describe('runDraft', () => {
     expect(draft.problems).toEqual([])
   })
 
+  it('marks the entries not-taught.txt names as not taught, and names an ID that is no entry as a problem (issue #285)', async () => {
+    const dir = makeContent()
+    writeFileSync(join(dir, 'not-taught.txt'), '# grammar words\nthe-1\n\n')
+    const draft = await runDraft({ dir, llm: sampleLlm(), offline: false })
+    expect(draft.entries.find((e) => e.entry_id === 'the-1')).toMatchObject({ taught: false })
+    expect(draft.entries.filter((e) => 'taught' in e).map((e) => e.entry_id)).toEqual(['the-1'])
+    // Still live, in its unit: a word known from the start is still in the course.
+    expect(draft.live).toContain('the-1')
+    expect(draft.problems).toEqual([])
+    writeFileSync(join(dir, 'not-taught.txt'), 'the-1\nnothing-9 # a slip\n')
+    expect((await runDraft({ dir, llm: sampleLlm(), offline: true })).problems).toEqual(['not-taught.txt names nothing-9, which is no entry of the draft'])
+  })
+
   it('guarantees only an essential word’s first sense; its other senses compete like any word', async () => {
     const dir = makeContent()
     writeFileSync(join(dir, 'essentials.txt'), 'bank\n')
