@@ -126,7 +126,8 @@ export function Themes() {
       <p className="visually-hidden" role="status">
         {announcement}
       </p>
-      {active !== null && !offered.some((theme) => theme.themeId === active) && (
+      {/* A trial has no path to go back to a theme from: a stale choice is not offered a way out (#290). */}
+      {!trial && active !== null && !offered.some((theme) => theme.themeId === active) && (
         <button type="button" className="button" onClick={() => choose(null, null)}>
           {t('themes.clear')}
         </button>
@@ -142,7 +143,7 @@ export function Themes() {
           {section('now')}
           {section('studied')}
           {section('new')}
-          <TrialClosedThemes corpus={corpus} />
+          <TrialClosedThemes corpus={corpus} titled />
         </>
       ) : result ? (
         <section className="theme-group theme-results" aria-labelledby="themes-found">
@@ -200,12 +201,14 @@ export function Themes() {
  * page and no button; the way on is an account. A trial pack built before the sizes names none: nothing is listed.
  * The theme a trial opens is not here: it stands as a course card above (#290).
  */
-function TrialClosedThemes(props: { readonly corpus: Corpus }) {
+function TrialClosedThemes(props: { readonly corpus: Corpus; /** Under the open theme's group: the list says what it is, not to read as part of that group. */ readonly titled?: boolean }) {
   const { t, locale } = useT()
   const { corpus } = props
   const themes = trialThemes(corpus)
   if (themes.length === 0) return null
-  return (
+  // Under a title of its own the names are one level lower.
+  const Name = props.titled ? 'h3' : 'h2'
+  const list = (
     <ul className="theme-grid">
       {themes.map(({ theme, words }) => (
         <li key={theme.themeId} className="panel theme-card is-new">
@@ -213,7 +216,7 @@ function TrialClosedThemes(props: { readonly corpus: Corpus }) {
             <ThemeIcon themeId={theme.themeId} size={24} />
           </span>
           <div className="theme-text">
-            <h2>{localized(theme.name, locale, corpus.l1)}</h2>
+            <Name>{localized(theme.name, locale, corpus.l1)}</Name>
             <p className="note">{localized(theme.description, locale, corpus.l1)}</p>
             <p className="note">{t('path.words', { count: words })}</p>
             <p className="theme-tag">
@@ -224,6 +227,13 @@ function TrialClosedThemes(props: { readonly corpus: Corpus }) {
         </li>
       ))}
     </ul>
+  )
+  if (!props.titled) return list
+  return (
+    <section className="theme-group" aria-labelledby="themes-closed">
+      <h2 id="themes-closed">{t('gives.title')}</h2>
+      {list}
+    </section>
   )
 }
 
