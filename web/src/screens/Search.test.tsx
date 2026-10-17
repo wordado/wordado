@@ -133,6 +133,20 @@ describe('Search', () => {
     expect(screen.getByText('Report saved. Thank you.')).toBeTruthy()
   })
 
+  it('names without linking it a unit the path leaves off, as none of its words is taught (issue #288)', async () => {
+    const ctx = await setup()
+    const snapshot = ctx.client.snapshot
+    const corpus = snapshot.corpus!
+    const teacher = [...corpus.entries.values()].find((e) => e.headword === 'teacher')!
+    const unit = corpus.units.find((u) => u.unitId === teacher.unitId)!
+    const entries = new Map([...corpus.entries].map(([id, e]) => [id, e.unitId === unit.unitId ? { ...e, taught: false } : e]))
+    act(() => ctx.client.store.set({ ...snapshot, corpus: { ...corpus, entries, notTaught: new Set(unit.wordIds) } }))
+    renderWith(<Search q="teacher" />, ctx)
+    const where = rows()[0]!.querySelector<HTMLElement>('.word-where')!
+    expect(where.querySelector('a[href^="/path"]')).toBeNull()
+    expect(within(where).getByText(unit.title.en).tagName).toBe('SPAN')
+  })
+
   describe('in a trial (spec 2026-10-12 §4.4)', () => {
     const rowOf = (headword: string) => rows().find((r) => r.querySelector('.word-head')!.textContent === headword)!
 
