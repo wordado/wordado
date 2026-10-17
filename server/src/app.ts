@@ -37,6 +37,7 @@ export function createApp(deps: ServerDeps): Hono<AppEnv> {
   app.use('/api/auth/*', bodyLimit({ maxSize: AUTH_MAX_BODY_BYTES, onError: tooLarge }))
   app.post('/api/auth/email-otp/send-verification-otp', signInEmailLimit(deps))
   app.post('/api/auth/sign-in/email-otp', newsConsentAtSignIn(deps))
+  app.post('/api/auth/email-otp/create-account', newsConsentAtSignIn(deps))
   app.on(['GET', 'POST'], '/api/auth/*', (c) => auth.handler(c.req.raw))
 
   // Before the /v1 guard, which is made for browsers: the review app's server calls this one route, with a token
