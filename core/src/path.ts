@@ -28,6 +28,16 @@ export function isLive(wordId: WordId, ctx: Pick<PathContext, 'retired' | 'notTa
   return !ctx.retired.has(wordId) && !ctx.notTaught.has(wordId) && !ctx.flags.has(wordId)
 }
 
+/**
+ * Whether the course teaches any word of a unit: one neither retired nor known from the start (issue #288). What the
+ * learner set aside does not count here, as it is the learner's to bring back. A unit without one is done for the
+ * unlock rules (`isLive` leaves it nothing to wait for) and is left off the path screen, where "0 of 0" would say
+ * nothing.
+ */
+export function hasTaughtWord(unit: Unit, ctx: Pick<PathContext, 'retired' | 'notTaught'>): boolean {
+  return unit.wordIds.some((id) => !ctx.retired.has(id) && !ctx.notTaught.has(id))
+}
+
 function inPathOrder(units: readonly Unit[]): Unit[] {
   return [...units].sort((a, b) => a.order - b.order)
 }

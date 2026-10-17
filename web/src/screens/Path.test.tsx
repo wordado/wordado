@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, screen, within } from '@testing-library/react'
-import { DAY_MS, entryClips, Grade } from '@wordado/core'
+import { corpusWordId, DAY_MS, entryClips, Grade, type WordId } from '@wordado/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { answerNew, fakeAudio, renderWith, setup, setupTrial, withProviders } from '../test/fixtures'
 import { translate, type Locale } from '../i18n/i18n'
@@ -124,6 +124,35 @@ describe('Path', () => {
     expect(within(unit('People and greetings')).getByText('20 of 20 started')).toBeTruthy()
     expect(within(unit('Food and drink')).getByText('Current')).toBeTruthy()
     expect(within(unit('Home and every day')).getByText('Locked')).toBeTruthy()
+  })
+
+  it('leaves off a unit with no word the course teaches, all known from the start or retired, and keeps one the learner set aside (issue #288)', async () => {
+    const ctx = await setup()
+    const snapshot = ctx.client.snapshot
+    const corpus = snapshot.corpus!
+    const second = corpus.units[1]!
+    const quiet = (notTaught: readonly WordId[], retired: readonly WordId[]) => {
+      cleanup()
+      ctx.client.store.set({ ...snapshot, corpus: { ...corpus, notTaught: new Set(notTaught), retired: new Set(retired) } })
+      renderWith(<Path />, ctx)
+    }
+    quiet(second.wordIds, [])
+    expect(screen.queryByRole('heading', { name: 'Food and drink' })).toBeNull()
+    expect(screen.queryByText(/of 0 started/)).toBeNull()
+    expect(screen.getByRole('heading', { name: 'People and greetings' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Home and every day' })).toBeTruthy()
+    quiet([], second.wordIds)
+    expect(screen.queryByRole('heading', { name: 'Food and drink' })).toBeNull()
+    quiet(second.wordIds.slice(0, 5), second.wordIds.slice(5))
+    expect(screen.queryByRole('heading', { name: 'Food and drink' })).toBeNull()
+    // One word still taught keeps the unit.
+    quiet(second.wordIds.slice(1), [])
+    expect(screen.getByRole('heading', { name: 'Food and drink' })).toBeTruthy()
+    // Every word set aside by the learner: still the course's to teach, and still listed.
+    cleanup()
+    ctx.client.store.set({ ...snapshot, flags: new Map(second.wordIds.map((id) => [id, 'known' as const])) })
+    renderWith(<Path />, ctx)
+    expect(screen.getByRole('heading', { name: 'Food and drink' })).toBeTruthy()
   })
 
   it('folds the finished units into one line that opens them', async () => {
@@ -495,7 +524,8 @@ describe('Path, opened at a unit', () => {
       const snapshot = ctx.client.snapshot
       const corpus = snapshot.corpus!
       const [first, second] = corpus.units
-      const more = (id: string, level: 'A1' | 'A2', order: number) => ({ unitId: id, level, order, title: { en: `Extra ${id}`, l1: `Extra ${id}` }, wordIds: [] })
+      // Each with a word the sample does not hold: a unit with no word at all would be left off the path.
+      const more = (id: string, level: 'A1' | 'A2', order: number) => ({ unitId: id, level, order, title: { en: `Extra ${id}`, l1: `Extra ${id}` }, wordIds: [corpusWordId(`extra-${id}-1`)] })
       const units = [...corpus.units, more('x4', 'A1', 4), more('x5', 'A1', 5), more('x6', 'A1', 6), more('b1', 'A2', 7)]
       const progress = { ...snapshot.progress!, units: new Map(snapshot.progress!.units).set(first!.unitId, { ...snapshot.progress!.units.get(first!.unitId)!, complete: true }) }
       const path = { unlocked: new Set([first!.unitId, second!.unitId]), currentUnitId: second!.unitId, trialFinished: false }
@@ -521,6 +551,16 @@ describe('Path, opened at a unit', () => {
       renderWith(<Path unit="x6" />, ctx)
       for (const id of ['x4', 'x5', 'x6']) expect(screen.getByRole('heading', { name: `Extra ${id}` })).toBeTruthy()
       expect(screen.getByRole('heading', { name: 'Extra x6' }).hasAttribute('data-route-focus')).toBe(true)
+    })
+
+    it('counts in Show all only the units it lists, leaving off one with no word taught (issue #288)', async () => {
+      const { ctx } = await tall()
+      const snapshot = ctx.client.snapshot
+      ctx.client.store.set({ ...snapshot, corpus: { ...snapshot.corpus!, notTaught: new Set([corpusWordId('extra-x4-1')]) } })
+      renderWith(<Path />, ctx)
+      fireEvent.click(screen.getByRole('button', { name: 'Show all 5 units' }))
+      expect(screen.queryByRole('heading', { name: 'Extra x4' })).toBeNull()
+      for (const id of ['x5', 'x6']) expect(screen.getByRole('heading', { name: `Extra ${id}` })).toBeTruthy()
     })
 
     it('opens the finished units when the unit is one of them', async () => {

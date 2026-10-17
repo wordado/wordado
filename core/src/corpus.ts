@@ -155,11 +155,19 @@ export function themeEntries(corpus: Corpus, themeId: string): CorpusEntry[] {
     .sort((a, b) => levelIndex(a.level) - levelIndex(b.level) || position(a) - position(b))
 }
 
-/** The themes big enough to offer (spec §8.9). A theme appears as the corpus grows; nothing is stored. */
+/**
+ * A theme's size: its words that are taught, neither retired nor known from the start (issue #288). Its other live
+ * words stay listed with it (`themeEntries`), shown as known, and are not counted.
+ */
+export function themeSize(corpus: Corpus, themeId: string): number {
+  return themeEntries(corpus, themeId).filter((e) => e.taught).length
+}
+
+/** The themes big enough to offer (spec §8.9), by `themeSize`. A theme appears as the corpus grows; nothing is stored. */
 export function offeredThemes(corpus: Corpus): Theme[] {
   // A trial pack holds one unit per level, so a theme's size there says nothing about the course (spec 2026-10-12 §4.4).
   if (corpus.trial !== null) return []
-  return corpus.themes.filter((t) => themeEntries(corpus, t.themeId).length >= MIN_THEME_SIZE)
+  return corpus.themes.filter((t) => themeSize(corpus, t.themeId) >= MIN_THEME_SIZE)
 }
 
 /**

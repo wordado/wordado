@@ -1,5 +1,5 @@
 import { useClient, useClientSnapshot, type PathView } from '@wordado/client-data'
-import { studyUnits, unitPractisable, type CefrLevel, type Unit, type UnitProgress } from '@wordado/core'
+import { pathUnits, unitPractisable, type CefrLevel, type Unit, type UnitProgress } from '@wordado/core'
 import { Check, ChevronDown, CircleDashed, Lock, Play, Star, type LucideIcon } from 'lucide-react'
 import { useEffect, useId, useState, type ReactNode } from 'react'
 import { localized, useT, type MessageKey } from '../i18n/i18n'
@@ -70,8 +70,9 @@ export function Path(props: { readonly unit?: string | undefined }) {
   }, [arrived])
   if (!corpus || !progress || !path) return null
 
-  // A trial studies the declared level's unit only; a course, every unit.
-  const shownUnits = studyUnits(corpus, settings.declaredLevel)
+  // A trial studies the declared level's unit only; a course, every unit. A unit with no word the course teaches
+  // (all retired or known from the start) is left off: it is done, and "0 of 0 started" would say nothing (#288).
+  const shownUnits = pathUnits(corpus, settings.declaredLevel)
   const levels = [...new Set(shownUnits.map((u) => u.level))].map((level) => {
     const units = shownUnits.filter((unit) => unit.level === level)
     const statuses = units.map((unit) => statusOf(unit, progress.units.get(unit.unitId), path))

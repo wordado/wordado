@@ -1,5 +1,5 @@
 import { useClientSnapshot } from '@wordado/client-data'
-import { offeredThemes, searchWordIndex, studyUnits, type CorpusEntry } from '@wordado/core'
+import { offeredThemes, pathUnits, searchWordIndex, studyUnits, type CorpusEntry } from '@wordado/core'
 import { Lock, Search as SearchIcon, X } from 'lucide-react'
 import { Fragment, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { useApp } from '../app/context'
@@ -68,8 +68,10 @@ export function Search(props: { readonly q: string }) {
       offered: new Set(offeredThemes(corpus).map((theme) => theme.themeId)),
     }
   }, [corpus])
-  // The units the path lists: every unit of a course, a trial's one.
+  // The units study keeps to: every unit of a course, a trial's one.
   const studied = useMemo(() => new Set(corpus ? studyUnits(corpus, settings.declaredLevel).map((unit) => unit.unitId) : []), [corpus, settings.declaredLevel])
+  // Of those, the units the path screen lists, which a link can open: not one with no word the course teaches (#288).
+  const listed = useMemo(() => new Set(corpus ? pathUnits(corpus, settings.declaredLevel).map((unit) => unit.unitId) : []), [corpus, settings.declaredLevel])
   if (!corpus || !index || !places) return null
   const onPath = (entry: CorpusEntry) => corpus.trial === null || studied.has(entry.unitId)
 
@@ -86,6 +88,7 @@ export function Search(props: { readonly q: string }) {
     const unit = places.units.get(entry.unitId)
     const title = unit && localized(unit.title, locale, corpus.l1)
     const locked = unit !== undefined && path !== null && !path.unlocked.has(unit.unitId)
+    const linked = unit !== undefined && listed.has(unit.unitId)
     const themes = entry.themes.flatMap((themeId) => {
       const theme = places.themes.get(themeId)
       return theme ? [{ themeId, name: localized(theme.name, locale, corpus.l1) }] : []
@@ -98,8 +101,8 @@ export function Search(props: { readonly q: string }) {
           {entry.level}
         </span>
         {unit && <span className="visually-hidden">{t('search.whereUnit')} </span>}
-        {unit && !onPath(entry) && <span>{title}</span>}
-        {unit && onPath(entry) && (
+        {unit && !linked && <span>{title}</span>}
+        {unit && linked && (
           <Link to={{ name: 'path', unit: unit.unitId }} {...(locked ? { className: 'is-locked', 'aria-label': t('search.unitLocked', { title: title! }) } : {})}>
             {locked && <Lock aria-hidden="true" size={14} />}
             {title}

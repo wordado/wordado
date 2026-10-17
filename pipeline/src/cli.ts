@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { checkPackSuccession, loadCorpus, offeredThemes, themeEntries, validatePack, type CreditsFile, type Pack, type PackError } from '@wordado/core'
+import { checkPackSuccession, loadCorpus, offeredThemes, themeSize, validatePack, type CreditsFile, type Pack, type PackError } from '@wordado/core'
 import { aiReviewConfig, runAiReview } from './aiReview/run'
 import { reviewerLlm } from './aiReview/reviewers'
 import { audioQueueItems, clipsNeeded, generateClips, readAudioRecords } from './audio'
@@ -123,7 +123,8 @@ function build(dir: string): void {
     const offered = new Set(offeredThemes(corpus).map((t) => t.themeId))
     console.log(`wrote ${out.packFile}: ${out.pack.entries.length} entries, ${out.pack.units.length} units, ${clips.length} clips, ${out.packBytes.byteLength} bytes`)
     for (const t of corpus.themes) {
-      const size = themeEntries(corpus, t.themeId).length
+      // The size the app offers a theme by: its words that are taught (issue #288).
+      const size = themeSize(corpus, t.themeId)
       console.log(`  ${t.themeId}: ${size} entries${offered.has(t.themeId) ? '' : ' (below the minimum, not offered)'}`)
     }
   }

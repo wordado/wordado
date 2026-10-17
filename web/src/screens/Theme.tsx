@@ -42,10 +42,13 @@ export function ThemeWords(props: { readonly themeId: string; /** What the word 
   if (!theme) return <Themes />
 
   const name = localized(theme.name, locale, corpus.l1)
+  // The theme's size counts the words it teaches: one known from the start is listed, marked Known, and not counted (#288).
+  const taught = (list: readonly CorpusEntry[]) => list.filter((e) => e.taught)
   const isStarted = (e: CorpusEntry) => states.has(corpusWordId(e.entryId))
-  const started = entries.filter(isStarted).length
-  const startedText = t('themes.started', { started, count: entries.length })
-  const aboveLevel = entries.some((e) => levelIndex(e.level) > levelIndex(settings.declaredLevel))
+  const size = taught(entries).length
+  const started = taught(entries).filter(isStarted).length
+  const startedText = t('themes.started', { started, count: size })
+  const aboveLevel = taught(entries).some((e) => levelIndex(e.level) > levelIndex(settings.declaredLevel))
   const canPractise = scopeWords({ corpus, states, flags }, { kind: 'theme', id: theme.themeId }).words > 0
   const choose = (on: boolean) => {
     chosen.current = true
@@ -91,8 +94,8 @@ export function ThemeWords(props: { readonly themeId: string; /** What the word 
           {aboveLevel && <p className="note">{t('themes.aboveLevel')}</p>}
         </div>
         <div className="theme-progress">
-          <div className="bar" role="progressbar" aria-label={`${name}: ${startedText}`} aria-valuemin={0} aria-valuemax={entries.length} aria-valuenow={started}>
-            <span style={{ width: `${(100 * started) / entries.length}%` }} />
+          <div className="bar" role="progressbar" aria-label={`${name}: ${startedText}`} aria-valuemin={0} aria-valuemax={size} aria-valuenow={started}>
+            <span style={{ width: `${size > 0 ? (100 * started) / size : 0}%` }} />
           </div>
           <p className="note">{startedText}</p>
         </div>
@@ -161,7 +164,7 @@ export function ThemeWords(props: { readonly themeId: string; /** What the word 
                 >
                   <span className="level-code">{level}</span>
                   <span className="level-summary">
-                    <span className="note">{t('themes.started', { started: words.filter(isStarted).length, count: words.length })}</span>
+                    <span className="note">{t('themes.started', { started: taught(words).filter(isStarted).length, count: taught(words).length })}</span>
                   </span>
                   <ChevronDown aria-hidden="true" size={20} className="level-chevron" />
                 </button>

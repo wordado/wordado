@@ -478,6 +478,24 @@ describe('Settings: words set aside (spec §7.4)', () => {
     // The row went with the button pressed: focus moves to the section's heading (spec §11.1).
     expect(document.activeElement).toBe(within(list).getByRole('heading', { name: 'Words set aside' }))
   })
+
+  it('does not list a word the course no longer teaches, though the learner set it aside before (issue #288)', async () => {
+    const ctx = await setup()
+    await ctx.client.setFlag('c:hello-1' as WordId, 'suspended')
+    await ctx.client.setFlag('c:goodbye-1' as WordId, 'known')
+    const snapshot = ctx.client.snapshot
+    const corpus = snapshot.corpus!
+    const entries = new Map([...corpus.entries].map(([id, e]) => [id, id === 'hello-1' ? { ...e, taught: false } : e]))
+    act(() => ctx.client.store.set({ ...snapshot, corpus: { ...corpus, entries, notTaught: new Set(['c:hello-1' as WordId]) } }))
+    renderWith(<Settings section={null} />, ctx)
+    expect(screen.getByRole('link', { name: /^Words set aside/ }).textContent).toContain('1 word')
+    cleanup()
+    renderWith(<Settings section="words" />, ctx)
+    const list = screen.getByRole('region', { name: 'Words set aside' })
+    expect(within(list).queryByText('hello')).toBeNull()
+    expect(within(list).queryByRole('button', { name: 'Bring back: hello' })).toBeNull()
+    expect(within(list).getByText('goodbye')).toBeTruthy()
+  })
 })
 
 describe('Settings: reminders (spec §8.11)', () => {

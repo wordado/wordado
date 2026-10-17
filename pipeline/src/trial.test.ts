@@ -137,6 +137,9 @@ describe('buildTrial', () => {
     expect(small.themes.map((t) => t.theme_id)).toEqual(['food'])
     // Retired words do not count.
     expect(buildTrial(coursePack(shape, 7, ['a1-2']), 40).pack.trial!.themes).toEqual({ food: 65, home: 60 })
+    // Nor do the words known from the start: a theme's size is what it teaches (issue #288).
+    const quiet = { ...course, entries: course.entries.map((e) => (e.unit_id === 'a1-2' ? { ...e, taught: false as const } : e)) }
+    expect(buildTrial(quiet, 40).pack.trial!.themes).toEqual({ food: 65, home: 60 })
   })
 
   it('counts the course per level', () => {

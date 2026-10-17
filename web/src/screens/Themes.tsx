@@ -45,8 +45,8 @@ export function Themes() {
       setAnnouncement(theme ? t('themes.nowStudying', { name: localized(theme.name, locale, corpus.l1) }) : t('themes.noneChosen'))
       setMoved(movedId)
     })
-  // The same count as each card's bar: every started word, set aside or not.
-  const started = (theme: Theme) => themeEntries(corpus, theme.themeId).some((e) => states.has(corpusWordId(e.entryId)))
+  // The same count as each card's bar: every started word that is taught, set aside or not.
+  const started = (theme: Theme) => themeEntries(corpus, theme.themeId).some((e) => e.taught && states.has(corpusWordId(e.entryId)))
   const groupOf = (theme: Theme): ThemeGroup => (theme.themeId === active ? 'now' : started(theme) ? 'studied' : 'new')
   const result = searchThemes(index, query)
   const foundText = (found: ThemeSearch, typed: string) =>
@@ -250,7 +250,8 @@ function ThemeCard(props: {
     title.current?.focus()
     onFocused()
   }, [focus, onFocused])
-  const entries = themeEntries(corpus!, theme.themeId)
+  // A theme's size counts the words it teaches; one known from the start is listed on its page, not counted (#288).
+  const entries = themeEntries(corpus!, theme.themeId).filter((e) => e.taught)
   const started = entries.filter((e) => states.has(corpusWordId(e.entryId))).length
   const aboveLevel = entries.some((e) => levelIndex(e.level) > levelIndex(settings.declaredLevel))
   const name = localized(theme.name, locale, corpus!.l1)
