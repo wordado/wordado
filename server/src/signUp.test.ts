@@ -179,7 +179,7 @@ describe('email first, the age step only for a new account (#293)', () => {
   it('creates no account anywhere else: not through Better Auth’s own calls', async () => {
     const h = harness()
     const ctx = await createAuth(h.deps).$context
-    await expect(ctx.internalAdapter.createUser({ email: 'mallory@example.com', emailVerified: true, name: '' })).rejects.toMatchObject({ body: { code: 'SIGN_UP_REFUSED' } })
+    await expect(ctx.internalAdapter.createUser({ email: 'mallory@example.com', emailVerified: true, name: '' }, { method: 'email-otp' })).rejects.toMatchObject({ body: { code: 'SIGN_UP_REFUSED' } })
     expect(await users(h, 'mallory@example.com')).toEqual([])
   })
 
