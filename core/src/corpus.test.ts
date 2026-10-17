@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { entryClips, loadCorpus, MIN_THEME_SIZE, offeredThemes, themeEntries, trialThemes } from './corpus'
+import { entryClips, loadCorpus, MIN_THEME_SIZE, offeredThemes, themeEntries, themeSize, trialThemes } from './corpus'
 import type { Pack, PackEntry, PackTrial, PackUnit } from './pack'
 import { corpusWordId } from './wordId'
 
@@ -143,6 +143,16 @@ describe('offeredThemes', () => {
   it('does not count retired entries', () => {
     expect(offeredThemes(loadCorpus([withFoodEntries(MIN_THEME_SIZE, 1)]))).toEqual([])
     expect(offeredThemes(loadCorpus([withFoodEntries(MIN_THEME_SIZE + 1, 1)])).map((t) => t.themeId)).toEqual(['food'])
+  })
+
+  it('does not count entries that are never taught, though they stay among its words (issue #288)', () => {
+    const base = withFoodEntries(MIN_THEME_SIZE, 0)
+    const quiet = { ...base, entries: base.entries.map((e, i) => (i === 0 ? { ...e, taught: false } : e)) }
+    const corpus = loadCorpus([quiet])
+    expect(themeEntries(corpus, 'food')).toHaveLength(MIN_THEME_SIZE)
+    expect(themeSize(corpus, 'food')).toBe(MIN_THEME_SIZE - 1)
+    expect(offeredThemes(corpus)).toEqual([])
+    expect(themeSize(loadCorpus([base]), 'food')).toBe(MIN_THEME_SIZE)
   })
 })
 

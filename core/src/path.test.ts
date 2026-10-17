@@ -1,6 +1,6 @@
 import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
-import { assumedKnownWords, computeUnlocks, currentUnit, earnedUnlocks, pathNewWords, type PathContext } from './path'
+import { assumedKnownWords, computeUnlocks, currentUnit, earnedUnlocks, hasTaughtWord, pathNewWords, type PathContext } from './path'
 import type { CefrLevel, Unit, WordFlag } from './types'
 import { corpusWordId, type WordId } from './wordId'
 
@@ -32,6 +32,19 @@ function ctx(over: Partial<PathContext> = {}): PathContext {
     ...over,
   }
 }
+
+describe('hasTaughtWord', () => {
+  it('is false for a unit whose words are all retired or never taught, whatever the learner set aside (issue #288)', () => {
+    const u = UNITS[0]!
+    expect(hasTaughtWord(u, ctx())).toBe(true)
+    expect(hasTaughtWord(u, ctx({ retired: new Set([w(1)]), notTaught: new Set([w(2)]) }))).toBe(true)
+    expect(hasTaughtWord(u, ctx({ retired: new Set([w(1)]), notTaught: new Set([w(2), w(3)]) }))).toBe(false)
+    expect(hasTaughtWord(u, ctx({ notTaught: new Set([w(1), w(2), w(3)]) }))).toBe(false)
+    expect(hasTaughtWord(u, ctx({ retired: new Set([w(1), w(2), w(3)]) }))).toBe(false)
+    // Set aside by the learner, a word is still one the course teaches.
+    expect(hasTaughtWord(u, ctx({ flags: new Map<WordId, WordFlag>([[w(1), 'known'], [w(2), 'known'], [w(3), 'suspended']]) }))).toBe(true)
+  })
+})
 
 describe('earnedUnlocks', () => {
   it('counts no unit as earned where the path only starts', () => {
