@@ -1,6 +1,6 @@
 # Passkeys beside the emailed code — design
 
-**Date:** 2026-10-18 · **Status:** draft · **Issue:** #287
+**Date:** 2026-10-18 · **Status:** approved 2026-10-18 · **Issue:** #287
 **Parent spec:** `2026-09-20-vocabulary-learning-app-design.md`, §8.6 (accounts and sign-in), §11 (export and
 erasure).
 
