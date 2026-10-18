@@ -1,5 +1,16 @@
-import { describe, expect, it } from 'vitest'
-import { ApiError, httpApi, OfflineError } from './api'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { ApiError, httpApi, OfflineError, PasskeyCancelled } from './api'
+
+const browser = vi.hoisted(() => ({
+  startRegistration: vi.fn(),
+  startAuthentication: vi.fn(),
+  cancelCeremony: vi.fn(),
+}))
+vi.mock('@simplewebauthn/browser', () => ({
+  startRegistration: browser.startRegistration,
+  startAuthentication: browser.startAuthentication,
+  WebAuthnAbortService: { cancelCeremony: browser.cancelCeremony },
+}))
 
 interface Call {
   readonly url: string
@@ -185,5 +196,117 @@ describe('httpApi (plan 5 contract)', () => {
     const refused = fakeFetch({ 'GET /v1/export': [409, { error: 'wrong_user' }] })
     await expect(httpApi(refused.fetchFn, () => 'u1').exportData()).rejects.toMatchObject({ status: 409, code: 'wrong_user' })
     await expect(httpApi(fakeFetch({}).fetchFn).exportData()).rejects.toBeInstanceOf(OfflineError)
+  })
+})
+
+
+describe('httpApi passkeys (#287)', () => {
+  afterEach(() => {
+    vi.clearAllMocks()
+    vi.unstubAllGlobals()
+  })
+  const options = { challenge: 'c', rpId: 'wordado.com', userVerification: 'preferred' }
+
+  it('registers: options, the device, then the answer', async () => {
+    browser.startRegistration.mockResolvedValue({ id: 'cred' })
+    const { fetchFn, calls } = fakeFetch({
+      'GET /api/auth/passkey/generate-register-options': [200, options],
+      'POST /api/auth/passkey/verify-registration': [200, { id: 'p1' }],
+    })
+    await httpApi(fetchFn).passkeyRegister()
+    expect(browser.startRegistration).toHaveBeenCalledWith({ optionsJSON: options })
+    expect(calls.map((c) => c.url)).toEqual(['/api/auth/passkey/generate-register-options', '/api/auth/passkey/verify-registration'])
+    expect(calls[0]!.init?.credentials).toBe('include')
+    expect(bodyOf(calls[1]!)).toEqual({ response: { id: 'cred' } })
+  })
+
+  it('says sign in again first when the session is not fresh, and takes a cancelled prompt as such', async () => {
+    const stale = fakeFetch({ 'GET /api/auth/passkey/generate-register-options': [403, { code: 'SESSION_NOT_FRESH' }] })
+    await expect(httpApi(stale.fetchFn).passkeyRegister()).rejects.toMatchObject({ status: 403, code: 'SESSION_NOT_FRESH' })
+    browser.startRegistration.mockRejectedValue(Object.assign(new Error('x'), { name: 'WebAuthnError', cause: { name: 'NotAllowedError' } }))
+    const ok = fakeFetch({ 'GET /api/auth/passkey/generate-register-options': [200, options] })
+    await expect(httpApi(ok.fetchFn).passkeyRegister()).rejects.toBeInstanceOf(PasskeyCancelled)
+    expect(ok.calls).toHaveLength(1)
+  })
+
+  it('signs in asking for the device unlock, whatever the options say', async () => {
+    browser.startAuthentication.mockResolvedValue({ id: 'cred' })
+    const { fetchFn, calls } = fakeFetch({
+      'GET /api/auth/passkey/generate-authenticate-options': [200, options],
+      'POST /api/auth/passkey/verify-authentication': [200, { session: {} }],
+    })
+    await httpApi(fetchFn).passkeySignIn({ conditional: true })
+    expect(browser.startAuthentication).toHaveBeenCalledWith({ optionsJSON: { ...options, userVerification: 'required' }, useBrowserAutofill: true })
+    expect(bodyOf(calls[1]!)).toEqual({ response: { id: 'cred' } })
+  })
+
+  it('reads a cancelled or aborted prompt as PasskeyCancelled, and a removed passkey as its code', async () => {
+    const get = { 'GET /api/auth/passkey/generate-authenticate-options': [200, options] } as const
+    for (const err of [
+      Object.assign(new Error('x'), { name: 'NotAllowedError' }),
+      Object.assign(new Error('x'), { name: 'WebAuthnError', cause: { name: 'AbortError' } }),
+      Object.assign(new Error('x'), { name: 'WebAuthnError', code: 'ERROR_CEREMONY_ABORTED' }),
+    ]) {
+      browser.startAuthentication.mockRejectedValueOnce(err)
+      await expect(httpApi(fakeFetch(get).fetchFn).passkeySignIn({ conditional: false })).rejects.toBeInstanceOf(PasskeyCancelled)
+    }
+    browser.startAuthentication.mockResolvedValue({ id: 'cred' })
+    const gone = fakeFetch({ ...get, 'POST /api/auth/passkey/verify-authentication': [401, { code: 'PASSKEY_NOT_FOUND' }] })
+    const err = await httpApi(gone.fetchFn).passkeySignIn({ conditional: false }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(ApiError)
+    expect(err).toMatchObject({ status: 401, code: 'PASSKEY_NOT_FOUND' })
+  })
+
+  it('cancels a pending autofill request when the signal aborts', async () => {
+    let reject: (e: unknown) => void = () => {}
+    browser.startAuthentication.mockReturnValue(new Promise((_, r) => (reject = r)))
+    browser.cancelCeremony.mockImplementation(() => reject(Object.assign(new Error('x'), { name: 'WebAuthnError', code: 'ERROR_CEREMONY_ABORTED' })))
+    const controller = new AbortController()
+    const { fetchFn } = fakeFetch({ 'GET /api/auth/passkey/generate-authenticate-options': [200, options] })
+    const pending = httpApi(fetchFn).passkeySignIn({ conditional: true, signal: controller.signal })
+    await vi.waitFor(() => expect(browser.startAuthentication).toHaveBeenCalled())
+    controller.abort()
+    await expect(pending).rejects.toBeInstanceOf(PasskeyCancelled)
+    expect(browser.cancelCeremony).toHaveBeenCalledOnce()
+  })
+
+  it('lists passkeys oldest first, keeping only id, credential id and time', async () => {
+    const { fetchFn } = fakeFetch({
+      'GET /api/auth/passkey/list-user-passkeys': [
+        200,
+        [
+          { id: 'b', credentialID: 'cb', publicKey: 'k', counter: 1, createdAt: '2026-10-02T00:00:00.000Z', name: null },
+          { id: 'a', credentialID: 'ca', publicKey: 'k', counter: 0, createdAt: '2026-10-01T00:00:00.000Z', name: null },
+        ],
+      ],
+    })
+    expect(await httpApi(fetchFn).listPasskeys()).toEqual([
+      { id: 'a', credentialId: 'ca', createdAt: Date.parse('2026-10-01T00:00:00.000Z') },
+      { id: 'b', credentialId: 'cb', createdAt: Date.parse('2026-10-02T00:00:00.000Z') },
+    ])
+  })
+
+  it('deletes a passkey by id', async () => {
+    const { fetchFn, calls } = fakeFetch({ 'POST /api/auth/passkey/delete-passkey': [200, { status: true }] })
+    await httpApi(fetchFn).deletePasskey('a')
+    expect(bodyOf(calls[0]!)).toEqual({ id: 'a' })
+  })
+
+  it('tells the browser a passkey is gone with the RP ID from the options, and never throws', async () => {
+    const signal = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('PublicKeyCredential', { signalUnknownCredential: signal })
+    const { fetchFn } = fakeFetch({ 'GET /api/auth/passkey/generate-authenticate-options': [200, options] })
+    await httpApi(fetchFn).signalGone('cred')
+    expect(signal).toHaveBeenCalledWith({ rpId: 'wordado.com', credentialId: 'cred' })
+    signal.mockRejectedValue(new Error('x'))
+    await httpApi(fetchFn).signalGone('cred')
+    await httpApi(fakeFetch({}).fetchFn).signalGone('cred')
+  })
+
+  it('does not even ask the server where the browser cannot signal', async () => {
+    vi.stubGlobal('PublicKeyCredential', {})
+    const { fetchFn, calls } = fakeFetch({})
+    await httpApi(fetchFn).signalGone('cred')
+    expect(calls).toHaveLength(0)
   })
 })

@@ -1,4 +1,5 @@
 import type { FeedbackInput, InterfaceLanguage, NewsConsent } from '@wordado/core'
+import type { PublicKeyCredentialCreationOptionsJSON, PublicKeyCredentialRequestOptionsJSON } from '@simplewebauthn/browser'
 import type { Fetch } from '../content/packs'
 import type { Locale } from '../i18n/i18n'
 import { expectedUserHeader } from './transport'
@@ -20,6 +21,22 @@ export class OfflineError extends Error {
     super(cause instanceof Error ? cause.message : String(cause))
     this.name = 'OfflineError'
   }
+}
+
+/** The learner cancelled the device prompt, or the browser abandoned the request (`NotAllowedError`, `AbortError`). Not a failure to report. */
+export class PasskeyCancelled extends Error {
+  constructor() {
+    super('The passkey prompt was cancelled')
+    this.name = 'PasskeyCancelled'
+  }
+}
+
+/** A passkey of the account as the settings list it (#287): nothing but whose it is and when it was made. */
+export interface PasskeyInfo {
+  readonly id: string
+  /** The credential ID (base64url, not secret): what the browser is told when the passkey is gone from the server. */
+  readonly credentialId: string
+  readonly createdAt: number
 }
 
 /** `GET /v1/me` (plan 5). */
@@ -92,12 +109,46 @@ export interface Api {
   deleteSubscription(endpoint: string): Promise<void>
   /** Feedback about the app, signed in or not: with a session the server attaches the account. */
   sendFeedback(body: FeedbackBody): Promise<void>
+  /**
+   * Adds a passkey to the signed-in account (#287): the device asks for its unlock. Throws `PasskeyCancelled` when
+   * the learner declines, `ApiError` with status 403 when the session is older than a day (sign in again first).
+   */
+  passkeyRegister(): Promise<void>
+  /**
+   * Signs in with a passkey, no email needed (#287). `conditional` waits in the email field's autofill list until the
+   * learner picks one; `signal` aborts it. Throws `PasskeyCancelled`, or `ApiError` (code `PASSKEY_NOT_FOUND`: removed).
+   */
+  passkeySignIn(options: { conditional: boolean; signal?: AbortSignal }): Promise<void>
+  /** The account's passkeys, oldest first. */
+  listPasskeys(): Promise<readonly PasskeyInfo[]>
+  deletePasskey(id: string): Promise<void>
+  /**
+   * Tells the browser a passkey is gone from the server, so it stops offering it (#287). Only where the browser can
+   * (`signalUnknownCredential`); never throws.
+   */
+  signalGone(credentialId: string): Promise<void>
 }
 
 const codeOf = (body: unknown): string | null => {
   if (typeof body !== 'object' || body === null) return null
   const { error, code } = body as { error?: unknown; code?: unknown }
   return typeof error === 'string' ? error : typeof code === 'string' ? code : null
+}
+
+const isCancel = (err: unknown): boolean => {
+  if (typeof err !== 'object' || err === null) return false
+  const { name, code, cause } = err as { name?: unknown; code?: unknown; cause?: unknown }
+  const causeName = typeof cause === 'object' && cause !== null ? (cause as { name?: unknown }).name : undefined
+  return [name, causeName].some((n) => n === 'NotAllowedError' || n === 'AbortError') || code === 'ERROR_CEREMONY_ABORTED'
+}
+
+/** Runs a browser ceremony, turning the learner's cancellation into `PasskeyCancelled`. */
+const ceremony = async <T>(work: () => Promise<T>): Promise<T> => {
+  try {
+    return await work()
+  } catch (err) {
+    throw isCancel(err) ? new PasskeyCancelled() : err
+  }
 }
 
 /**
@@ -207,6 +258,48 @@ export function httpApi(fetchFn: Fetch = (input, init) => fetch(input, init), ex
     },
     sendFeedback: async (body) => {
       await call('POST', '/v1/feedback', body, expectedUserHeader(expectedUser()))
+    },
+    passkeyRegister: async () => {
+      const optionsJSON = (await call('GET', '/api/auth/passkey/generate-register-options')) as PublicKeyCredentialCreationOptionsJSON
+      const { startRegistration } = await import('@simplewebauthn/browser')
+      const response = await ceremony(() => startRegistration({ optionsJSON }))
+      await call('POST', '/api/auth/passkey/verify-registration', { response })
+    },
+    passkeySignIn: async ({ conditional, signal }) => {
+      const options = (await call('GET', '/api/auth/passkey/generate-authenticate-options')) as PublicKeyCredentialRequestOptionsJSON
+      // The plugin only asks for 'preferred'; the server refuses a response without the device unlock.
+      const optionsJSON = { ...options, userVerification: 'required' as const }
+      const { startAuthentication, WebAuthnAbortService } = await import('@simplewebauthn/browser')
+      const onAbort = () => WebAuthnAbortService.cancelCeremony()
+      if (signal?.aborted) throw new PasskeyCancelled()
+      signal?.addEventListener('abort', onAbort, { once: true })
+      try {
+        const response = await ceremony(() => startAuthentication({ optionsJSON, useBrowserAutofill: conditional }))
+        await call('POST', '/api/auth/passkey/verify-authentication', { response })
+      } finally {
+        signal?.removeEventListener('abort', onAbort)
+      }
+    },
+    listPasskeys: async () => {
+      const rows = (await call('GET', '/api/auth/passkey/list-user-passkeys')) as readonly { id: string; credentialID: string; createdAt: string | number }[] | null
+      return (rows ?? [])
+        .map((row) => ({ id: row.id, credentialId: row.credentialID, createdAt: new Date(row.createdAt).getTime() }))
+        .sort((a, b) => a.createdAt - b.createdAt)
+    },
+    deletePasskey: async (id) => {
+      await call('POST', '/api/auth/passkey/delete-passkey', { id })
+    },
+    signalGone: async (credentialId) => {
+      try {
+        const signal = (globalThis.PublicKeyCredential as unknown as { signalUnknownCredential?: (o: { rpId: string; credentialId: string }) => Promise<void> } | undefined)
+          ?.signalUnknownCredential
+        if (typeof signal !== 'function') return
+        const { rpId } = (await call('GET', '/api/auth/passkey/generate-authenticate-options')) as { rpId?: unknown }
+        if (typeof rpId !== 'string') return
+        await signal.call(globalThis.PublicKeyCredential, { rpId, credentialId })
+      } catch {
+        // A hint to the browser, nothing more.
+      }
     },
   }
 }

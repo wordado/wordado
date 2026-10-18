@@ -345,6 +345,9 @@ importers:
       '@journeyapps/wa-sqlite':
         specifier: 2.0.5
         version: 2.0.5
+      '@simplewebauthn/browser':
+        specifier: ^13.3.0
+        version: 13.3.0
       '@wordado/client-data':
         specifier: workspace:*
         version: link:../client-data

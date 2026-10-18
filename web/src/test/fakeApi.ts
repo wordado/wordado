@@ -73,6 +73,22 @@ export function fakeApi(over: Partial<Api> = {}, session: Me | null = null): Fak
       calls.push('sendFeedback')
       feedback.push(body)
     },
+    passkeyRegister: async () => {
+      calls.push('passkeyRegister')
+    },
+    passkeySignIn: async ({ conditional }) => {
+      calls.push(`passkeySignIn ${conditional ? 'conditional' : 'button'}`)
+    },
+    listPasskeys: async () => {
+      calls.push('listPasskeys')
+      return []
+    },
+    deletePasskey: async (id) => {
+      calls.push(`deletePasskey ${id}`)
+    },
+    signalGone: async (credentialId) => {
+      calls.push(`signalGone ${credentialId}`)
+    },
   }
   return Object.assign(api, over)
 }
