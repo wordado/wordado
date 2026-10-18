@@ -80,6 +80,23 @@ describe('Settings: passkeys (#287)', () => {
     expect(api.calls).toContain('signalGone cred-1')
     expect(screen.getAllByRole('listitem')).toHaveLength(1)
     expect(screen.getByText(/stays in your device’s password manager/)).toBeTruthy()
+    expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Passkeys' }))
+  })
+
+  it('keeps the success message when the list cannot be fetched after an add', async () => {
+    browser()
+    let calls = 0
+    await show(
+      fakeApi({
+        listPasskeys: async () => {
+          if (++calls > 1) throw new Error('offline')
+          return two
+        },
+      }),
+    )
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Add a passkey on this device' })))
+    expect(screen.getByText('Passkey added. Next time, sign in with it.')).toBeTruthy()
+    expect(screen.queryByRole('alert')).toBeNull()
   })
 
   it('keeps the passkey when the learner cancels the confirmation', async () => {

@@ -25,6 +25,8 @@ export function Passkeys() {
   const [adding, setAdding] = useState(false)
   const [added, setAdded] = useState(false)
   const [notFresh, setNotFresh] = useState(false)
+  /** Set once a passkey is removed: focus goes to the heading when the dialog has closed (its opener is gone). */
+  const [focusHeading, setFocusHeading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const date = (at: number) => new Intl.DateTimeFormat(locale, { dateStyle: 'long' }).format(new Date(at))
@@ -59,6 +61,13 @@ export function Passkeys() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [api, online])
 
+  useEffect(() => {
+    if (focusHeading && removing === null) {
+      heading.current?.focus()
+      setFocusHeading(false)
+    }
+  }, [focusHeading, removing])
+
   const add = async () => {
     setError(null)
     setAdded(false)
@@ -68,13 +77,18 @@ export function Passkeys() {
     try {
       await api.passkeyRegister()
       setAdded(true)
-      await refresh()
     } catch (err) {
       if (err instanceof PasskeyCancelled) return
       if (err instanceof ApiError && err.status === 403 && err.code === 'SESSION_NOT_FRESH') setNotFresh(true)
       else setError(t('passkey.addFailed'))
     } finally {
       setAdding(false)
+    }
+    // The passkey is added whatever the list says next; a list that cannot be fetched keeps the success message.
+    try {
+      await refresh()
+    } catch {
+      // The list is out of date until the next visit; nothing more to say.
     }
   }
 
@@ -89,8 +103,7 @@ export function Passkeys() {
     } catch {
       setPasskeys((list) => list?.filter((p) => p.id !== passkey.id) ?? null)
     }
-    // The button that opened the dialog is gone: focus goes to the part's heading.
-    heading.current?.focus()
+    setFocusHeading(true)
   }
 
   return (
