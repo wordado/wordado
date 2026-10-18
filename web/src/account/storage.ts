@@ -104,12 +104,15 @@ export interface TrialLevelMark {
  * Whether a visitor on this device has been through the level step: in the first-run setup, or on the home screen
  * when the trial pack came to a device that had finished its setup on the bundled sample (`LevelAsk`). It is never
  * cleared: leaving the demo, signing out and deleting an account all start a new demo, which opens in the setup.
+ * Without `storage`, the browser's own, reached at each call: where the browser refuses it, the mark reads as set
+ * rather than falling back to a memory that each load would forget (#234).
  */
-export function trialLevelMark(storage: KeyValue = browserStorage('localStorage')): TrialLevelMark {
+export function trialLevelMark(storage?: KeyValue): TrialLevelMark {
+  const store = (): KeyValue => storage ?? window.localStorage
   return {
     read(): boolean {
       try {
-        return storage.getItem(TRIAL_LEVEL_ASKED_KEY) === '1'
+        return store().getItem(TRIAL_LEVEL_ASKED_KEY) === '1'
       } catch {
         // A private window may refuse storage: asked, or the question would come back on every load.
         return true
@@ -117,7 +120,7 @@ export function trialLevelMark(storage: KeyValue = browserStorage('localStorage'
     },
     set(): void {
       try {
-        storage.setItem(TRIAL_LEVEL_ASKED_KEY, '1')
+        store().setItem(TRIAL_LEVEL_ASKED_KEY, '1')
       } catch {
         // Refused: `read` answers as if it were set.
       }
