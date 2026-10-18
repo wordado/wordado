@@ -3,7 +3,7 @@ import { ITEM_SETTLE_MS, MatchingRun, StudyRun, type Client } from '@wordado/cli
 import { corpusWordId, Grade, themeEntries, type PracticeScope } from '@wordado/core'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { TestEnv } from '@wordado/client-data/src/testing/testEnv'
-import { answerNew, renderWith, setup } from '../test/fixtures'
+import { answerNew, renderWith, setup, setupTrial } from '../test/fixtures'
 import { Practice } from './Practice'
 
 afterEach(cleanup)
@@ -304,5 +304,19 @@ describe('Practice', () => {
       expect(screen.getByRole('link', { name: 'Practise words you know' })).toBeTruthy()
       expect(screen.queryByText(/words seen$/)).toBeNull()
     })
+  })
+})
+
+describe('Practice in a trial', () => {
+  it('practises by its address a unit of another level whose words the visitor started before changing level (#234)', async () => {
+    const ctx = await setupTrial({ declared: 'A1' })
+    const a1 = ctx.client.snapshot.corpus!.units.find((u) => u.level === 'A1')!
+    await answerNew(ctx.client, ctx.env, 2)
+    expect([...ctx.client.snapshot.states.keys()].every((id) => a1.wordIds.includes(id))).toBe(true)
+    await ctx.client.updateSettings({ declaredLevel: 'B1' })
+    renderWith(<Practice unit={a1.unitId} />, ctx)
+    expect(screen.getByText(/^Unit:/)).toBeTruthy()
+    expect(screen.queryByText('Nothing to practise yet. Study a few new words first.')).toBeNull()
+    expect(screen.getByRole('link', { name: 'Practise this unit' }).getAttribute('href')).toBe(`/practice/words?unit=${a1.unitId}`)
   })
 })
