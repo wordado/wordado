@@ -307,7 +307,6 @@ export function SignIn() {
         <p className="eyebrow">{eyebrow}</p>
       </div>
       {!online && <p className="note">{t('signin.offline')}</p>}
-      {step.kind === 'method' && account === null && <AccountGives />}
       <div className="panel form-section">
         {step.kind === 'method' && (
           <>
@@ -444,6 +443,8 @@ export function SignIn() {
           </form>
         )}
       </div>
+      {/* Below the form, so on a phone the email field is in view without scrolling (#296). */}
+      {step.kind === 'method' && account === null && <AccountGives />}
     </section>
   )
 }

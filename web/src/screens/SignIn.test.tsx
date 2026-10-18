@@ -386,7 +386,7 @@ describe('SignIn: news by email (#186)', () => {
     expect(api.calls).toContain('verifyCode ana@example.com 123456')
   })
 
-  it('says first what an account gives and what the email is for, before the email (#289)', async () => {
+  it('says what an account gives and what the email is for, right under the email form (#289, #296)', async () => {
     await render()
     const gives = screen.getByRole('list', { name: 'With an account' })
     expect(within(gives).getAllByRole('listitem').map((item) => item.textContent)).toEqual([
@@ -394,7 +394,7 @@ describe('SignIn: news by email (#186)', () => {
       'Your progress kept in your account, on every device you sign in on.',
       'Your email is used only to send you a sign-in code. News only if you ask for it, and you can delete your account at any time.',
     ])
-    expect(gives.compareDocumentPosition(screen.getByLabelText('Email')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(gives.compareDocumentPosition(screen.getByLabelText('Email')) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy()
   })
 
   it('says what is kept: the country stays on this device, a ticked box goes with the account', async () => {
