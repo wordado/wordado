@@ -24,6 +24,25 @@ const packOf = (dir: string, file: string): Pack => {
   return r.pack
 }
 
+/**
+ * What the `release` job of a corpus workflow uploads from the release directory (`$OUT`): the files it copies, in
+ * their order; the directories it syncs; and the extensions (`*.pack`) its sync of the directory itself includes.
+ */
+function releaseUploads(workflow: string): { files: string[]; dirs: string[]; globs: string[] } {
+  const job = /\n {2}release:\n([\s\S]*?)(?=\n {2}[a-z-]+:\n|$)/.exec(workflow)?.[1]
+  if (job === undefined) throw new Error('no release job')
+  const uploads = { files: [] as string[], dirs: [] as string[], globs: [] as string[] }
+  for (const command of job.replace(/\\\n\s*/g, ' ').split('\n').filter((line) => line.includes('aws s3 '))) {
+    const source = /aws s3 (cp|sync) "\$OUT(?:\/([^"]+))?"/.exec(command)
+    if (!source) continue
+    const [, verb, path] = source
+    if (verb === 'cp' && path !== undefined) uploads.files.push(path)
+    else if (path !== undefined) uploads.dirs.push(path)
+    else uploads.globs.push(...[...command.matchAll(/--include '\*([^']+)'/g)].map((m) => m[1]!))
+  }
+  return uploads
+}
+
 async function reviewed(): Promise<string> {
   const dir = makeContent()
   await runDraft({ dir, llm: sampleLlm(), offline: false })
@@ -153,6 +172,17 @@ describe('planRelease and writeRelease', () => {
     expect(v1.units.map((u) => [u.unit_id, u.order])).toEqual([['a1-01', 1], ['a1-02', 2], ['a1-03', 3], ['a1-04', 4], ['a2-01', 5]])
     expect(loadCorpus([v1]).entries.size).toBe(64)
     expect(JSON.parse(readFileSync(join(o, 'release.json'), 'utf8'))).toEqual({ corpus_version: 1, draft: false, built_at: NOW, l1s: ['bg'], attributions: [] })
+  })
+
+  it('is uploaded whole by the template’s publish workflow, release.json aside, and the manifest last (#234)', async () => {
+    const dir = await reviewed()
+    const written = writeRelease(dir, out(), planRelease(dir, { draft: false, now: NOW }))
+    const uploads = releaseUploads(readFileSync(new URL('../template/.github/workflows/corpus.yml', import.meta.url), 'utf8'))
+    const uploaded = (file: string) =>
+      uploads.files.includes(file) || uploads.dirs.some((d) => file.startsWith(`${d}/`)) || (!file.includes('/') && uploads.globs.some((ext) => file.endsWith(ext)))
+    expect(written.filter((file) => !uploaded(file))).toEqual(['release.json'])
+    // The app reads the manifest first: every file it reaches is up before it.
+    expect(uploads.files.at(-1)).toBe('manifest.json')
   })
 
   it('refuses while anything awaits review, naming it; a draft builds anyway and cannot be published', async () => {
