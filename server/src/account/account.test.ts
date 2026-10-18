@@ -56,6 +56,20 @@ async function mentions(h: Harness, needle: string): Promise<Record<string, numb
   return out
 }
 
+/** Two passkeys for the learner, the later one inserted first; returns their creation times. */
+async function addPasskeys(h: Harness, s: Session): Promise<number[]> {
+  const t1 = Date.UTC(2026, 9, 1, 8, 0, 0)
+  const t2 = Date.UTC(2026, 9, 5, 9, 30, 0)
+  for (const [n, t] of [[2, t2], [1, t1]] as const) {
+    await h.deps.db.query(
+      `insert into passkey (id, name, "publicKey", "userId", "credentialID", counter, "deviceType", "backedUp", transports, "createdAt", aaguid)
+       values ($1, '', $2, $3, $4, 0, 'multiDevice', true, 'internal', $5, 'ad3c0000-0000-0000-0000-000000000000')`,
+      [`pk-id-${n}`, `PUBLIC-KEY-${n}`, s.userId, `CRED-ID-${n}`, new Date(t)],
+    )
+  }
+  return [t1, t2]
+}
+
 describe('account deletion (spec §11)', () => {
   it('leaves no row that names the learner, and keeps their reports and feedback without them', async () => {
     const h = harness()
@@ -74,6 +88,15 @@ describe('account deletion (spec §11)', () => {
     expect(await h.deps.db.query('select signed_in, message, contact_email from feedback')).toEqual([
       { signed_in: true, message: 'A dark theme, please.', contact_email: '' },
     ])
+  })
+
+  it('deleting the account removes its passkeys', async () => {
+    const h = harness()
+    const s = await h.signIn()
+    await addPasskeys(h, s)
+    expect(await h.deps.db.query('select count(*) as n from passkey')).toEqual([{ n: 2 }])
+    expect((await s.del('/v1/account', { confirm: true })).status).toBe(200)
+    expect(await h.deps.db.query('select count(*) as n from passkey')).toEqual([{ n: 0 }])
   })
 
   it('ends the session everywhere: an old cookie can neither read nor write', async () => {
@@ -122,7 +145,7 @@ describe('data export (spec §11)', () => {
     expect(reply.headers.get('content-disposition')).toMatch(/^attachment; filename="wordado-export-\d{4}-\d{2}-\d{2}\.json"$/)
     const exported = reply.body
     expect(exported.format).toBe(EXPORT_FORMAT)
-    expect(exported.account).toEqual({ userId: s.userId, email: s.email, createdAt: expect.any(Number), newsConsent: { state: 'none', at: null, text: null }, interfaceLanguage: null })
+    expect(exported.account).toEqual({ userId: s.userId, email: s.email, createdAt: expect.any(Number), newsConsent: { state: 'none', at: null, text: null }, interfaceLanguage: null, passkeys: [] })
     expect(exported).not.toHaveProperty('feedback')
     const stored = (await loadEvents(h.deps.db, s.userId)).map(toStampedEvent)
     expect(exported.reviewEvents).toHaveLength(stored.length)
@@ -136,6 +159,19 @@ describe('data export (spec §11)', () => {
     expect(exported.dayComplete).toHaveLength(1)
   })
 
+
+  it('lists passkeys by creation date, with no key material', async () => {
+    const h = harness()
+    const s = await h.signIn()
+    const [t1, t2] = await addPasskeys(h, s)
+    const reply = await s.get('/v1/export')
+    expect(reply.body.account.passkeys).toEqual([{ createdAt: t1 }, { createdAt: t2 }])
+    const text = JSON.stringify(reply.body)
+    expect(text).not.toContain('PUBLIC-KEY')
+    expect(text).not.toContain('CRED-ID')
+    expect(text).not.toContain('publicKey')
+    expect(text).not.toContain('credentialID')
+  })
 
   it('answers 401 without a session', async () => {
     expect((await harness().request('/v1/export')).status).toBe(401)

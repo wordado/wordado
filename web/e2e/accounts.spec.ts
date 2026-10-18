@@ -380,7 +380,7 @@ test('tells the server the interface language at sign-in and when it changes, an
   await page.getByRole('button', { name: 'Български', exact: true }).click()
   await expect(page.locator('html')).toHaveAttribute('lang', 'bg')
   await expect.poll(() => languageOf(page)).toBe('bg')
-  expect(((await exported(page)) as unknown as { format: string; account: { interfaceLanguage: string | null } })).toMatchObject({ format: 'wordado-export-4', account: { interfaceLanguage: 'bg' } })
+  expect(((await exported(page)) as unknown as { format: string; account: { interfaceLanguage: string | null } })).toMatchObject({ format: 'wordado-export-5', account: { interfaceLanguage: 'bg' } })
   await ctx.close()
 
   // Another browser, in English, signs in to the same account: the language is the one of the last to say it.

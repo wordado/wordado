@@ -3,7 +3,7 @@ import type { Db } from '../db/db'
 import { EVENT_COLUMNS, toStampedEvent, toStoredEvent, type EventRow } from '../sync/events'
 import { DOCUMENT_COLUMNS, toWire, type DocumentRow } from '../sync/documents'
 
-export const EXPORT_FORMAT = 'wordado-export-4'
+export const EXPORT_FORMAT = 'wordado-export-5'
 
 /** The learner's portable copy (spec §11). Words join it in Phase 2. */
 export interface AccountExport {
@@ -17,6 +17,8 @@ export interface AccountExport {
     readonly newsConsent: { readonly state: NewsConsent; readonly at: number | null; readonly text: string | null }
     /** The language the app's interface was in when it last said so (#199); null while it has not. */
     readonly interfaceLanguage: InterfaceLanguage | null
+    /** The passkeys registered, by when each was created; nothing of the keys themselves. */
+    readonly passkeys: readonly { readonly createdAt: number }[]
   }
   /** Settings, flags, unlocks, reports and the entitlement, as the pull sends them. */
   readonly documents: readonly WireDocument[]
@@ -46,6 +48,7 @@ export async function buildExport(db: Db, userId: string, now: number): Promise<
       `select ${EVENT_COLUMNS} from review_event where user_id = $1 order by effective_ts, device_id, device_seq, review_id`,
       [userId],
     )
+    const passkeys = await tx.query<{ created_at: Date }>('select "createdAt" as created_at from passkey where "userId" = $1 order by "createdAt", id', [userId])
     return {
       format: EXPORT_FORMAT,
       exportedAt: now,
@@ -55,6 +58,7 @@ export async function buildExport(db: Db, userId: string, now: number): Promise<
         createdAt: user.created_at.getTime(),
         newsConsent: { state: user.news_consent, at: user.news_consent_at?.getTime() ?? null, text: user.news_consent_text },
         interfaceLanguage: user.interface_language,
+        passkeys: passkeys.map((p) => ({ createdAt: p.created_at.getTime() })),
       },
       documents: documents.map((row) => toWire(row, null)),
       dayComplete: days.map((d) => d.local_date),

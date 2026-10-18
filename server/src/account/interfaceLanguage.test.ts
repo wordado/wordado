@@ -95,7 +95,7 @@ describe('the interface language as the learner reads it back (#199)', () => {
     const h = harness()
     const s = await h.signIn()
     const before = await s.get('/v1/export')
-    expect(before.body.format).toBe('wordado-export-4')
+    expect(before.body.format).toBe('wordado-export-5')
     expect(before.body.account.interfaceLanguage).toBeNull()
     await s.put('/v1/account/interface-language', { language: 'de' })
     expect((await s.get('/v1/export')).body.account.interfaceLanguage).toBe('de')
