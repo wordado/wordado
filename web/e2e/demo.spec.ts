@@ -1437,7 +1437,7 @@ test('“I already have an account” leads from the setup to Sign in', async ({
   await expect(page).toHaveURL('/signin')
   await expect(heading(page)).toHaveText('Create an account or sign in')
   // What an account gives, and what the email is for, before the age gate (#289).
-  await expect(page.getByRole('list', { name: 'With an account' })).toContainText('Your email is used only to send you a sign-in code.')
+  await expect(page.getByRole('list', { name: 'With an account' })).toContainText('Your email is used to send you a sign-in code and to tell you about important changes to the service.')
   await expectAccessible(page, { dark: true })
 })
 

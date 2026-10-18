@@ -197,8 +197,8 @@ Wherever the demo decides on an account, the same three points, in this order, u
 1. The whole course: *38 units at B1 alone, every level, and its themes* (the size of the declared level from
    `trial.course`; without it, only *every level, and its themes*).
 2. Progress kept in the account, on every device the learner signs in on.
-3. What the email is for: only to send the sign-in code; news only if asked for; the account can be deleted at
-   any time.
+3. What the email is for: to send the sign-in code and to tell of important changes to the service, as the
+   privacy policy says (#298); news only if asked for; the account can be deleted at any time.
 
 They stand at the end of the demo (§4.4) and on the sign-in screen, right under the email form, for a
 learner with no account on the device (under the form, not above it, so a phone shows the email field without
