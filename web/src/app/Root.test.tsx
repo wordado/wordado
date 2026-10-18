@@ -10,7 +10,7 @@ import { chosenL1 } from '../test/disk'
 import { fakeApi } from '../test/fakeApi'
 import type { Backend } from '../storage/protocol'
 import type { AccountActions, AccountState } from '../account/controller'
-import { memoryStorage, trialLevelMark, type KeyValue } from '../account/storage'
+import { memoryStorage, setupStepMark, trialLevelMark, type KeyValue } from '../account/storage'
 import { Boot, type LockPort } from './boot'
 import type { LifecyclePort } from './lifecycle'
 import { PackSwitcher } from './packSwitch'
@@ -46,7 +46,7 @@ async function renderRoot(
   const packs = options.packs ?? (options.fresh ? new PackSwitcher({ fetchManifest: async () => served.manifest, fetcher: () => served.fetch }) : fakePacks())
   render(
     <I18nProvider storage={{ getItem: () => 'en', setItem: () => undefined }}>
-      <Root boot={boot} trialLevel={trialLevelMark(options.storage ?? memoryStorage())} services={{ env, audio: fakeAudio(), afterRun: () => undefined, api: fakeApi(), accounts: options.accounts ?? fakeAccounts(), reminders: fakeReminders(), lifecycle: options.lifecycle ?? fakeLifecycle(), credits: fakeCredits(), fixNotices: fakeFixNotices(), legalNotice: fakeLegalNotice(), packs }} />
+      <Root boot={boot} trialLevel={trialLevelMark(options.storage ?? memoryStorage())} setupStep={setupStepMark(options.storage ?? memoryStorage())} services={{ env, audio: fakeAudio(), afterRun: () => undefined, api: fakeApi(), accounts: options.accounts ?? fakeAccounts(), reminders: fakeReminders(), lifecycle: options.lifecycle ?? fakeLifecycle(), credits: fakeCredits(), fixNotices: fakeFixNotices(), legalNotice: fakeLegalNotice(), packs }} />
     </I18nProvider>,
   )
   await act(() => boot.start())
@@ -349,6 +349,44 @@ describe('the level, asked once of a visitor whose device got the trial after it
     expect(asking()).toBeNull()
     expect(screen.getByRole('navigation', { name: 'Main' })).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Start studying' })).toBeTruthy()
+  })
+
+  it('goes on with the setup where a visitor left it when the page is reloaded after the language step, not with the level question (#234)', async () => {
+    const storage = memoryStorage()
+    await renderRoot({ trial: true, fresh: true, storage })
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue' })))
+    expect(screen.getByRole('heading', { level: 2, name: 'Your English level' })).toBeTruthy()
+    await act(async () => fireEvent.click(screen.getByRole('radio', { name: /^B1/ })))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue' })))
+    expect(screen.getByRole('heading', { level: 2, name: 'A daily goal' })).toBeTruthy()
+    // The reload: the language's words are installed, so the app opens without the setup it owes.
+    cleanup()
+    await renderRoot({ trial: true, storage })
+    expect(asking()).toBeNull()
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Set up Wordado')
+    expect(screen.getByText('Step 3 of 3')).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 2, name: 'A daily goal' })).toBeTruthy()
+    expect(screen.queryByRole('navigation', { name: 'Main' })).toBeNull()
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Start studying' })))
+    expect(screen.getByRole('navigation', { name: 'Main' })).toBeTruthy()
+    expect(storage.getItem('wordado.trialLevelAsked')).toBe('1')
+    // Finished: the next load opens on today.
+    cleanup()
+    await renderRoot({ trial: true, storage })
+    expect(asking()).toBeNull()
+    expect(screen.queryByRole('heading', { name: 'Set up Wordado' })).toBeNull()
+    expect(screen.getByRole('navigation', { name: 'Main' })).toBeTruthy()
+  })
+
+  it('goes on at the level step when the page is reloaded before the level was answered (#234)', async () => {
+    const storage = memoryStorage()
+    await renderRoot({ trial: true, fresh: true, storage })
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue' })))
+    cleanup()
+    await renderRoot({ trial: true, storage })
+    expect(asking()).toBeNull()
+    expect(screen.getByText('Step 2 of 3')).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 2, name: 'Your English level' })).toBeTruthy()
   })
 
   it('leaves the mark unset when a setup on the sample finishes: it had no level to ask about, so a trial pack that comes later still asks', async () => {

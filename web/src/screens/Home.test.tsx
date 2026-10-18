@@ -1,5 +1,5 @@
 import { act, cleanup, screen, within } from '@testing-library/react'
-import { DAY_MS } from '@wordado/core'
+import { DAY_MS, Grade } from '@wordado/core'
 import { afterEach, describe, expect, it } from 'vitest'
 import { answerNew, fakeAudio, finishTrial, renderWith, setup, setupTrial } from '../test/fixtures'
 import { Home } from './Home'
@@ -143,6 +143,22 @@ describe('Home: listening follows the connection and the audio setting (spec §9
       const invite = screen.getByRole('link', { name: 'Create an account' })
       const practise = screen.getByRole('link', { name: 'Practise words you know' })
       expect(invite.compareDocumentPosition(practise) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    })
+
+    it('does not say every word is started when the unit’s last words were set aside instead (#234)', async () => {
+      const ctx = await setupTrial()
+      const unit = ctx.client.snapshot.corpus!.units.find((u) => u.level === 'B1')!
+      const [known, later, ...started] = unit.wordIds
+      for (const wordId of started) {
+        await ctx.client.answer({ wordId, mode: 'flashcard', direction: 'en_to_l1', grade: Grade.Good, latencyMs: 2_000, practice: false })
+        ctx.env.advance(3_000)
+      }
+      await ctx.client.setFlag(known!, 'known')
+      await ctx.client.setFlag(later!, 'suspended')
+      renderWith(<Home />, ctx)
+      expect(screen.queryByText('You have started every word of the demo.')).toBeNull()
+      expect(screen.getByText('You have started or set aside every word of the demo.')).toBeTruthy()
+      expect(screen.getByRole('link', { name: 'Create an account' }).getAttribute('href')).toBe('/signin')
     })
 
     it('says nothing of it while the trial has words to start, or in a course', async () => {

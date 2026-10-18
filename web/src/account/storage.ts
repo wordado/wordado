@@ -104,12 +104,15 @@ export interface TrialLevelMark {
  * Whether a visitor on this device has been through the level step: in the first-run setup, or on the home screen
  * when the trial pack came to a device that had finished its setup on the bundled sample (`LevelAsk`). It is never
  * cleared: leaving the demo, signing out and deleting an account all start a new demo, which opens in the setup.
+ * Without `storage`, the browser's own, reached at each call: where the browser refuses it, the mark reads as set
+ * rather than falling back to a memory that each load would forget (#234).
  */
-export function trialLevelMark(storage: KeyValue = browserStorage('localStorage')): TrialLevelMark {
+export function trialLevelMark(storage?: KeyValue): TrialLevelMark {
+  const store = (): KeyValue => storage ?? window.localStorage
   return {
     read(): boolean {
       try {
-        return storage.getItem(TRIAL_LEVEL_ASKED_KEY) === '1'
+        return store().getItem(TRIAL_LEVEL_ASKED_KEY) === '1'
       } catch {
         // A private window may refuse storage: asked, or the question would come back on every load.
         return true
@@ -117,9 +120,51 @@ export function trialLevelMark(storage: KeyValue = browserStorage('localStorage'
     },
     set(): void {
       try {
-        storage.setItem(TRIAL_LEVEL_ASKED_KEY, '1')
+        store().setItem(TRIAL_LEVEL_ASKED_KEY, '1')
       } catch {
         // Refused: `read` answers as if it were set.
+      }
+    },
+  }
+}
+
+/** The step a visitor's first-run setup has reached, once its words are installed (#234). */
+export const SETUP_STEP_KEY = 'wordado.setupStep'
+
+export interface SetupStepMark {
+  read(): string | null
+  set(step: string): void
+  clear(): void
+}
+
+/**
+ * Where a visitor's first-run setup stands while it is not over: the step shown, set from the step after the language
+ * on and cleared when the setup ends. The language's words are installed by then, so a reload opens the app without
+ * the setup (`Boot`); this says that it is owed, and where. Without `storage`, the browser's own: where the browser
+ * refuses it, nothing is remembered and a reload opens the app as before.
+ */
+export function setupStepMark(storage?: KeyValue): SetupStepMark {
+  const store = (): KeyValue => storage ?? window.localStorage
+  return {
+    read(): string | null {
+      try {
+        return store().getItem(SETUP_STEP_KEY)
+      } catch {
+        return null
+      }
+    },
+    set(step: string): void {
+      try {
+        store().setItem(SETUP_STEP_KEY, step)
+      } catch {
+        // Refused: a reload opens the app, as before.
+      }
+    },
+    clear(): void {
+      try {
+        store().removeItem(SETUP_STEP_KEY)
+      } catch {
+        // Nothing was stored.
       }
     },
   }

@@ -47,13 +47,14 @@ export function usePracticeScope(params: ScopeParams): PracticeScopeView | null 
       if (!unit) return null
       const skipped = progress?.levels[unit.level]?.kind === 'skipped'
       const unitProgress = progress?.units.get(unitId)
+      const scope: PracticeScope = { kind: 'unit', id: unitId }
       return {
-        scope: { kind: 'unit', id: unitId },
+        scope,
         params: { unit: unitId },
         title: unit.title,
-        // The path's own count, by the same rule as `practisable`.
-        words: unitProgress ? unitPractisable(unitProgress) : 0,
-        unstarted: unitProgress ? unitProgress.live - unitProgress.introduced : 0,
+        // The path's own count, by the same rule as `practisable`. A trial's path holds only its level's unit: another
+        // level's, reached by its address, is counted as a theme is (#234).
+        ...(unitProgress ? { words: unitPractisable(unitProgress), unstarted: unitProgress.live - unitProgress.introduced } : scopeWords({ corpus, states, flags }, scope)),
         skipped,
         label: 'practice.unit',
         start: 'path.practiseUnit',

@@ -76,6 +76,9 @@ private `wordado/wordado-research`, cloned into `docs/research/` and ignored her
    Postgres 18 (or 17 if 18 is not offered; the schema uses nothing 18-only). Keep the default branch
    for production. Create a branch `preview` from it. Copy each branch's **direct** connection
    string (not `-pooler`), one per branch: Hyperdrive pools, and migrations need a session.
+   Mark the `preview` branch as the preview, once, in its SQL editor:
+   `create schema wordado_env; create table wordado_env.environment (name text not null); insert into wordado_env.environment values ('preview');`
+   Every preview deploy empties that database (#205) and refuses one without this mark. Never run it on production.
 3. **Hyperdrive.** From `server/`:
    `pnpm exec wrangler hyperdrive create wordado --connection-string "<neon production direct URL>"`
    and `pnpm exec wrangler hyperdrive create wordado-preview --connection-string "<neon preview direct URL>"`.
@@ -205,7 +208,8 @@ private `wordado/wordado-research`, cloned into `docs/research/` and ignored her
      a run that failed leaves nothing behind: the next merge deploys its changes as well.
   2. Try it on `https://wordado-preview.danchom.workers.dev`. Sign-in codes appear in
      `pnpm --filter @wordado/server exec wrangler tail --env preview`, since the preview has no mailer. The
-     preview is shared, so with several pull requests open it shows the one deployed last.
+     preview is shared, so with several pull requests open it shows the one deployed last. Each deploy starts
+     its database empty (#205), so accounts made there last only until the next one.
   3. Merge. `main`'s CI runs, and its **Production deployment** job waits for review.
   4. Open that run under Actions: **Review deployments** › tick `production` › **Approve and deploy**.
      CI migrates `DATABASE_URL`, then deploys the Worker with the web build. A run left unapproved
@@ -254,8 +258,10 @@ private `wordado/wordado-research`, cloned into `docs/research/` and ignored her
   Never roll production back to a version from before the move (2026-10): a rollback restores a version's
   plain-text variables but not its route, so `app.wordado.com` would get `BASE_URL` `https://wordado.com` and
   sign-in would break. Redeploy a fix instead.
-- **The preview's database** gets every pull request's migrations. After closing a pull request whose
-  migration never merged, reset the Neon `preview` branch from its parent.
+- **The preview's database** is emptied by every preview deploy before the migrations run (#205): every table in
+  `public` is dropped, the migration record too, and the pull request's own migrations run from the start. So
+  another pull request's migration, or one edited during review, never stops a deploy. It refuses a database
+  without the mark from step 2; if a deploy says so, the preview's `DATABASE_URL` points at the wrong branch.
 - **CPU** (spec §4.4, §17.2): `smoke:remote` prints how long a 500-event page and a 101-word pull took.
   Workers › wordado-preview › Metrics shows CPU time per request. The free plan's 10 ms is the first
   ceiling. When it binds, move to Workers Paid ($5 a month).

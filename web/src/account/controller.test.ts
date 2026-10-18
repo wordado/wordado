@@ -144,6 +144,16 @@ describe('signing in from the demo (spec §8.6)', () => {
     expect(a.accounts.read()).toEqual({ userId: 'u1', email: 'ana@example.com', carryOver: false, askLevel: true })
   })
 
+  it('carries the level of a visitor who chose one and answered nothing (#234): the choice alone is the demo’s progress', async () => {
+    const a = await app()
+    await a.client().updateSettings({ declaredLevel: 'B1' })
+    expect(await a.controller.completeSignIn()).toBe('carried-over')
+    expect(a.server.events.size).toBe(0)
+    expect(a.server.documents.get('settings/')?.fields).toMatchObject({ declaredLevel: 'B1' })
+    expect(a.accounts.read()).toEqual({ userId: 'u1', email: 'ana@example.com', carryOver: false, askLevel: true })
+    expect(a.client().snapshot.settings.declaredLevel).toBe('B1')
+  })
+
   it('pushes a demo already attached to the signing-in learner, even though the account already has other progress', async () => {
     const env = testEnv()
     const server = new FakeServer({ now: env.now })
