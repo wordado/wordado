@@ -538,6 +538,59 @@ describe('SignIn: a passkey (#287)', () => {
   })
 })
 
+describe('SignIn: the conditional request comes back after a failure (#287)', () => {
+  /** Counts the conditional requests; each waits until aborted. */
+  function countingApi(apiOver: Parameters<typeof fakeApi>[0] = {}) {
+    const conditional: AbortSignal[] = []
+    const api = fakeApi({
+      passkeySignIn: ({ conditional: c, signal }) => {
+        if (!c) return Promise.resolve()
+        if (signal) conditional.push(signal)
+        return new Promise<void>((_, reject) => signal?.addEventListener('abort', () => reject(new PasskeyCancelled())))
+      },
+      ...apiOver,
+    })
+    return { api, conditional }
+  }
+
+  it('waits in the field again after a code could not be sent', async () => {
+    passkeyBrowser({ conditional: true })
+    const ctx = await setup()
+    const { api, conditional } = countingApi({ sendCode: async () => Promise.reject(new ApiError(500, null)) })
+    renderWith(<SignIn deviceStore={device} />, { ...ctx, api, accounts: fakeAccounts() })
+    await act(async () => undefined)
+    expect(conditional).toHaveLength(1)
+    await enterEmail()
+    expect(conditional[0]!.aborted).toBe(true)
+    expect(conditional).toHaveLength(2)
+    expect(conditional[1]!.aborted).toBe(false)
+    expect(screen.getByLabelText('Email')).toBeTruthy()
+  })
+
+  it('waits in the field again after a passkey from it was refused for another account’s progress', async () => {
+    passkeyBrowser({ conditional: true })
+    const ctx = await setup()
+    let first = true
+    const conditional: AbortSignal[] = []
+    const api = fakeApi({
+      passkeySignIn: ({ signal }) => {
+        if (signal) conditional.push(signal)
+        if (first) {
+          first = false
+          return Promise.resolve()
+        }
+        return new Promise<void>((_, reject) => signal?.addEventListener('abort', () => reject(new PasskeyCancelled())))
+      },
+    })
+    const accounts = fakeAccounts({ completeSignIn: async () => 'other-account' })
+    renderWith(<SignIn deviceStore={device} />, { ...ctx, api, accounts, account: ANA })
+    await act(async () => undefined)
+    expect(screen.getByRole('alert').textContent).toContain('This device holds the progress of ana@example.com')
+    expect(conditional).toHaveLength(2)
+    expect(conditional[1]!.aborted).toBe(false)
+  })
+})
+
 describe('SignIn: passkeys in the email field’s autofill (#287)', () => {
   /** A passkey request that waits until it is aborted, as a conditional one does; logs whether it was aborted when the next call came. */
   function waitingApi() {
@@ -735,6 +788,21 @@ describe('SignIn: the offer of a passkey after a code (#287)', () => {
     await enterCode()
     expect(offerPending.get()).toBe(false)
     expect(window.location.pathname).toBe('/')
+  })
+
+  it('starts completing the sign-in without waiting for the platform check', async () => {
+    let release: (v: boolean) => void = () => {}
+    vi.stubGlobal('PublicKeyCredential', {
+      isUserVerifyingPlatformAuthenticatorAvailable: () => new Promise<boolean>((r) => (release = r)),
+      isConditionalMediationAvailable: async () => false,
+    })
+    const { accounts } = await render()
+    await enterEmail()
+    await enterCode()
+    expect(accounts.calls).toEqual(['completeSignIn'])
+    expect(offerPending.get()).toBe(false)
+    await act(async () => release(true))
+    expect(offerPending.get()).toBe(true)
   })
 
   it('offers nothing on a device without its own unlock', async () => {

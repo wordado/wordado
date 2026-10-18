@@ -236,6 +236,7 @@ export function SignIn(props: { readonly deviceStore?: KeyValue }) {
     }
     stopWaiting()
     if (await requestCode(address)) setStep({ kind: 'code', email: address })
+    else setAutofillRun((n) => n + 1)
   }
 
   const stopWorking = () => {
@@ -251,14 +252,17 @@ export function SignIn(props: { readonly deviceStore?: KeyValue }) {
   const finishSignIn = async (method: 'code' | 'passkey') => {
     offerPending.set(false)
     try {
-      const offerOwed = method === 'code' && passkeysSupported() && !offerAnswered(deviceStore) && (await platformAuthenticator())
+      // The check runs beside completeSignIn, which it must not delay.
+      const owed = method === 'code' && passkeysSupported() && !offerAnswered(deviceStore) ? platformAuthenticator() : Promise.resolve(false)
+      owed.catch(() => {})
       const outcome = await accounts.completeSignIn()
       if (outcome === 'other-account') {
         setFormError(t('signin.otherAccount', { email: account?.email ?? '' }))
         stopWorking()
+        if (method === 'passkey') setAutofillRun((n) => n + 1)
         return
       }
-      if (offerOwed) {
+      if (await owed) {
         // This screen may be gone by now (the switch remounts the app): whichever one is mounted shows the offer.
         setOffer('ask')
         offerPending.set(true)
@@ -269,6 +273,7 @@ export function SignIn(props: { readonly deviceStore?: KeyValue }) {
     } catch (err) {
       setFormError(t(failureKey(err, 'signin.failed')))
       stopWorking()
+      if (method === 'passkey') setAutofillRun((n) => n + 1)
     }
   }
 

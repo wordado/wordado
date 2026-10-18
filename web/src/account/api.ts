@@ -163,6 +163,7 @@ export function httpApi(fetchFn: Fetch = (input, init) => fetch(input, init), ex
     path: string,
     body?: unknown,
     extra: Record<string, string> = {},
+    signal?: AbortSignal,
   ): Promise<{ readonly response: Response; readonly text: string; readonly parsed: unknown }> {
     let response: Response
     try {
@@ -171,8 +172,10 @@ export function httpApi(fetchFn: Fetch = (input, init) => fetch(input, init), ex
         credentials: 'include',
         headers: { ...(body === undefined ? {} : { 'content-type': 'application/json' }), ...extra },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+        ...(signal === undefined ? {} : { signal }),
       })
     } catch (err) {
+      if (signal?.aborted) throw new PasskeyCancelled()
       throw new OfflineError(err)
     }
     const text = await response.text()
@@ -186,8 +189,8 @@ export function httpApi(fetchFn: Fetch = (input, init) => fetch(input, init), ex
     return { response, text, parsed }
   }
 
-  const call = async (method: string, path: string, body?: unknown, extra: Record<string, string> = {}): Promise<unknown> =>
-    (await request(method, path, body, extra)).parsed
+  const call = async (method: string, path: string, body?: unknown, extra: Record<string, string> = {}, signal?: AbortSignal): Promise<unknown> =>
+    (await request(method, path, body, extra, signal)).parsed
 
   const unauthorizedAsNull = async <T>(work: Promise<T>): Promise<T | null> => {
     try {
@@ -266,7 +269,8 @@ export function httpApi(fetchFn: Fetch = (input, init) => fetch(input, init), ex
       await call('POST', '/api/auth/passkey/verify-registration', { response })
     },
     passkeySignIn: async ({ conditional, signal }) => {
-      const options = (await call('GET', '/api/auth/passkey/generate-authenticate-options')) as PublicKeyCredentialRequestOptionsJSON
+      // The signal covers the options request too: one that lands late would replace the challenge cookie of a newer request.
+      const options = (await call('GET', '/api/auth/passkey/generate-authenticate-options', undefined, {}, signal)) as PublicKeyCredentialRequestOptionsJSON
       // The plugin only asks for 'preferred'; the server refuses a response without the device unlock.
       const optionsJSON = { ...options, userVerification: 'required' as const }
       const { startAuthentication, WebAuthnAbortService } = await import('@simplewebauthn/browser')

@@ -270,6 +270,24 @@ describe('httpApi passkeys (#287)', () => {
     expect(browser.cancelCeremony).toHaveBeenCalledOnce()
   })
 
+  it('reads an abort before the options arrive as PasskeyCancelled, and verifies nothing', async () => {
+    browser.startAuthentication.mockClear()
+    const controller = new AbortController()
+    const urls: string[] = []
+    const fetchFn = (url: string, init?: RequestInit) => {
+      urls.push(`${init?.method ?? 'GET'} ${url}`)
+      return new Promise<Response>((_, reject) =>
+        init?.signal?.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' }))),
+      )
+    }
+    const pending = httpApi(fetchFn).passkeySignIn({ conditional: true, signal: controller.signal })
+    await vi.waitFor(() => expect(urls).toHaveLength(1))
+    controller.abort()
+    await expect(pending).rejects.toBeInstanceOf(PasskeyCancelled)
+    expect(urls).toEqual(['GET /api/auth/passkey/generate-authenticate-options'])
+    expect(browser.startAuthentication).not.toHaveBeenCalled()
+  })
+
   it('lists passkeys oldest first, keeping only id, credential id and time', async () => {
     const { fetchFn } = fakeFetch({
       'GET /api/auth/passkey/list-user-passkeys': [
