@@ -162,7 +162,8 @@ In the trial, study takes new words from **the unit of the declared level only**
   already started keep their reviews. Nothing blocks this and nothing advertises it.
 - **The end of the unit:** once every word of the unit is started, the done screen and the home screen say so
   and invite: *You have started every word of the demo. Create an account to go on with the whole course.*
-  Between the two lines, what an account gives (§4.7).
+  Between the two lines, what an account gives (§4.7). Where some of the demo's words were set aside (Known, Not
+  now) rather than started, the first line says *You have started or set aside every word of the demo.* (#234)
   Reviews of the started words keep coming on later days, as now. With an open theme that was chosen, the demo
   ends only once the theme's words are started or set aside too. If it was not chosen and has words left, the
   invitation says *Try a theme too: Daily life is open in the demo.* (the name links to the theme's page) in
