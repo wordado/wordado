@@ -240,7 +240,8 @@ for egress, which is what makes lazy audio fetching (§9.3) cheap.
   Nothing merges red.
 - *Deploy on merge to `main`:* database migrations (forward-only), then the
   Worker and the web app's static assets, through Cloudflare's Wrangler action.
-  Pull requests get a preview deployment.
+  Pull requests get a preview deployment. Its database is emptied before each
+  one, so a pull request's own migrations always run from the start (#205).
 - *The corpus pipeline is a manually started workflow.* It builds the packs,
   runs the corpus pipeline tests (§13), uploads packs and audio to R2, and
   only then publishes the new version manifest — so a client can never see a

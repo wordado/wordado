@@ -82,6 +82,13 @@ jobs:
         if: inputs.environment == 'production'
         working-directory: server
         run: pnpm exec tsx scripts/check-route-host.ts wrangler.jsonc "$APP_ORIGIN"
+      - name: Empty the preview's database (#205)
+        # Shared by every pull request: the branch's own migrations then run from the start. Refuses a
+        # database without the preview marker (docs/deploy.md, step 2). Never production.
+        if: inputs.environment == 'preview'
+        run: pnpm --filter @wordado/server empty-preview
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
       - name: Migrate the database (forward-only, before the Worker)
         run: pnpm --filter @wordado/server migrate
         env:
