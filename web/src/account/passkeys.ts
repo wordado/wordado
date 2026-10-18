@@ -1,3 +1,4 @@
+import { createStore, type Store } from '@wordado/client-data'
 import type { KeyValue } from './storage'
 
 /** The device's answer to the offer after a code sign-in (#287): kept on the device only, never synced. */
@@ -42,3 +43,10 @@ export function markOfferAnswered(store: KeyValue): void {
     // A browser that refuses storage asks again next time; harmless.
   }
 }
+
+/**
+ * The offer is owed: a code sign-in has just finished on a device that can hold a passkey and has not answered (#287).
+ * Kept outside the sign-in screen because finishing the sign-in switches the database, which remounts the whole app:
+ * whichever sign-in screen is mounted then shows the offer, and answering it clears this.
+ */
+export const offerPending: Store<boolean> = createStore<boolean>(false)

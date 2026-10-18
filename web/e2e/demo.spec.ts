@@ -1451,7 +1451,9 @@ async function serveSignIn(page: import('@playwright/test').Page, createAccount:
   await page.route('**/api/auth/**', async (route) => {
     const path = new URL(route.request().url()).pathname
     const body = (route.request().postDataJSON() ?? {}) as Record<string, unknown>
-    sent.push({ path, body })
+    // The browser's passkey autofill asks for its options as the screen opens (#287): not part of the code's way, and
+    // the 404 it gets must say nothing to the learner.
+    if (!path.includes('/passkey/')) sent.push({ path, body })
     if (path.endsWith('/email-otp/send-verification-otp')) return route.fulfill(answer(200, { success: true }))
     if (path.endsWith('/sign-in/email-otp')) {
       return route.fulfill(body['email'] === NEW ? answer(202, { code: 'NEW_ACCOUNT', message: 'm', ticket: 'tk' }) : answer(200, { token: 't', user: { id: 'u1' } }))
