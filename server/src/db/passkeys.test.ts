@@ -34,4 +34,13 @@ describe('migration 0013 (#287)', () => {
       expect(await db.query('select id from passkey')).toEqual([])
     })
   })
+
+  it('refuses an explicit null createdAt', async () => {
+    await withScratchDatabase(async (db) => {
+      await migrate(db, before)
+      await db.query(`insert into "user" (id, name, email, "emailVerified", "updatedAt") values ('u1', '', 'ana@example.com', true, now())`)
+      await migrate(db, through)
+      await expect(db.query(insert.replace('now(), \'ad3c', 'null, \'ad3c'), ['p1', 'cred-1'])).rejects.toThrow()
+    })
+  })
 })

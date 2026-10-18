@@ -13,7 +13,7 @@ create table "passkey" (
   "deviceType" text not null,
   "backedUp" boolean not null,
   "transports" text,
-  "createdAt" timestamptz default CURRENT_TIMESTAMP,
+  "createdAt" timestamptz not null default CURRENT_TIMESTAMP,
   "aaguid" text
 );
 create index "passkey_userId_idx" on "passkey" ("userId");
