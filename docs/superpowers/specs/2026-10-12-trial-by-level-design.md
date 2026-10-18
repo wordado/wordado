@@ -200,8 +200,9 @@ Wherever the demo decides on an account, the same three points, in this order, u
 3. What the email is for: only to send the sign-in code; news only if asked for; the account can be deleted at
    any time.
 
-They stand at the end of the demo (§4.4) and at the top of the sign-in screen, before the age gate, for a
-learner with no account on the device; *Sign in again* does not show them. The demo's banner gives the reason
+They stand at the end of the demo (§4.4) and on the sign-in screen, right under the email form, for a
+learner with no account on the device (under the form, not above it, so a phone shows the email field without
+scrolling; owner, 2026-10-18, #296); *Sign in again* does not show them. The demo's banner gives the reason
 beside its button: *Your progress stays only on this device: create an account to keep it.*
 
 ## 5. Texts

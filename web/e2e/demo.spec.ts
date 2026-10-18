@@ -754,6 +754,21 @@ test('fits the top row on a narrow phone while signed out', async ({ page }) => 
   await expectAccessible(page)
 })
 
+test('on a phone, "I already have an account" opens the sign-in with the email field and its button in view (#296)', async ({ page }) => {
+  for (const l1 of ['English', 'Español']) {
+    await page.setViewportSize({ width: 360, height: 720 })
+    await page.goto('/')
+    if (l1 !== 'English') {
+      await page.getByRole('button', { name: /^Interface language/ }).click()
+      await page.getByRole('button', { name: l1, exact: true }).click()
+    }
+    await page.locator('a[href$="/signin"]').first().click()
+    await expect(page.locator('input[type="email"]')).toBeInViewport({ ratio: 1 })
+    await expect(page.locator('form button[type="submit"]').first()).toBeInViewport({ ratio: 1 })
+    await page.evaluate(() => localStorage.clear())
+  }
+})
+
 test('does not scroll sideways in the first-run setup in Spanish on a narrow phone', async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 720 })
   await page.goto('/')
