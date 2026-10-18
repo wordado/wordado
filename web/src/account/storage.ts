@@ -128,6 +128,48 @@ export function trialLevelMark(storage?: KeyValue): TrialLevelMark {
   }
 }
 
+/** The step a visitor's first-run setup has reached, once its words are installed (#234). */
+export const SETUP_STEP_KEY = 'wordado.setupStep'
+
+export interface SetupStepMark {
+  read(): string | null
+  set(step: string): void
+  clear(): void
+}
+
+/**
+ * Where a visitor's first-run setup stands while it is not over: the step shown, set from the step after the language
+ * on and cleared when the setup ends. The language's words are installed by then, so a reload opens the app without
+ * the setup (`Boot`); this says that it is owed, and where. Without `storage`, the browser's own: where the browser
+ * refuses it, nothing is remembered and a reload opens the app as before.
+ */
+export function setupStepMark(storage?: KeyValue): SetupStepMark {
+  const store = (): KeyValue => storage ?? window.localStorage
+  return {
+    read(): string | null {
+      try {
+        return store().getItem(SETUP_STEP_KEY)
+      } catch {
+        return null
+      }
+    },
+    set(step: string): void {
+      try {
+        store().setItem(SETUP_STEP_KEY, step)
+      } catch {
+        // Refused: a reload opens the app, as before.
+      }
+    },
+    clear(): void {
+      try {
+        store().removeItem(SETUP_STEP_KEY)
+      } catch {
+        // Nothing was stored.
+      }
+    },
+  }
+}
+
 /** A learner's own database file: a name safe for OPFS and IndexedDB whatever the server's id looks like. */
 export function learnerFile(userId: string): string {
   return `user-${userId.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 64)}`

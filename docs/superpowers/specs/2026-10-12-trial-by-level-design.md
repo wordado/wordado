@@ -128,6 +128,10 @@ Language → **Level** → Theme (when one is offered) → Goal. The level step 
 new screen. In a trial there is no Theme step: its one open theme (§4.4) is found on the Themes screen
 (`2026-10-17-demo-open-theme-design.md`).
 
+A visitor who reloads the page after the language step goes on with the setup at the step they were on, not
+with the home screen's level question (#234). The device keeps that step (`wordado.setupStep`) until the setup
+ends; a browser that refuses its storage opens the app instead, as before.
+
 ### 4.3 The test
 
 When the installed pack has `trial.probes`, the test draws its words from them alone, never from the units'
