@@ -75,6 +75,18 @@ describe('emptyPreview', () => {
     })
   })
 
+  it('drops the functions a migration created', async () => {
+    await withScratchDatabase(async (db) => {
+      await mark(db, 'preview')
+      await migrate(db, [
+        { name: '0001_fn.sql', sql: 'create table a (n int); create function a_guard() returns trigger language plpgsql as $$ begin return new; end $$; create trigger a_t before insert on a for each row execute function a_guard();' },
+      ])
+      expect(await emptyPreview(db)).toEqual(['a', 'schema_migration', 'a_guard'])
+      const left = await db.query(`select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'a_guard'`)
+      expect(left).toEqual([])
+    })
+  })
+
   it('is a no-op on an empty marked database', async () => {
     await withScratchDatabase(async (db) => {
       await mark(db, 'preview')

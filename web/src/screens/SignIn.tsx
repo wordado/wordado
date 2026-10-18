@@ -1,9 +1,11 @@
 import { useClient } from '@wordado/client-data'
 import { newsConsentText } from '@wordado/core'
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
-import { ApiError, OfflineError, type CodeOutcome } from '../account/api'
+import { ApiError, OfflineError, PasskeyCancelled, type CodeOutcome } from '../account/api'
 import { consentAge } from '../account/ageGate'
 import { countryOptions } from '../account/countries'
+import { conditionalSignIn, markOfferAnswered, offerAnswered, offerPending, passkeysSupported, platformAuthenticator } from '../account/passkeys'
+import { browserStorage, type KeyValue } from '../account/storage'
 import { useApp } from '../app/context'
 import { AccountGives } from '../app/AccountGives'
 import { privacyUrl } from '../app/site'
@@ -11,6 +13,7 @@ import { ProgressBar } from '../app/ProgressBar'
 import { useT, type MessageKey } from '../i18n/i18n'
 import { Link, navigate } from '../router'
 import { useOnline } from '../useOnline'
+import { useStore } from '../useStore'
 
 type Step =
   | { readonly kind: 'method' }
@@ -18,6 +21,14 @@ type Step =
   /** A right code for an address with no account (#293): the ticket creates it once the age is confirmed. */
   | { readonly kind: 'gate'; readonly email: string; readonly ticket: string }
   | { readonly kind: 'too-young'; readonly age: number }
+  /**
+   * After a code sign-in, once (#287). Not set by a step change: it shows while `offerPending` holds, since finishing the
+   * sign-in remounts the screen.
+   */
+  | { readonly kind: 'passkey-offer' }
+
+/** How the offer stands: asked, the device prompt open, or answered with a line to read before going on. */
+type OfferState = 'ask' | 'busy' | 'added' | 'failed'
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -26,6 +37,25 @@ function failureKey(err: unknown, fallback: MessageKey): MessageKey {
   if (err instanceof OfflineError) return 'signin.offline'
   if (err instanceof ApiError && err.status === 429) return err.code === 'sign_in_email_limit' ? 'signin.limit' : 'signin.tooMany'
   return fallback
+}
+
+/** A failed passkey sign-in, as the learner reads it (spec 2026-10-18 §5.2): a cancelled prompt says nothing. */
+function passkeyFailureKey(err: unknown): MessageKey | null {
+  if (err instanceof PasskeyCancelled) return null
+  if (err instanceof ApiError && err.code === 'PASSKEY_NOT_FOUND') return 'signin.passkeyGone'
+  return failureKey(err, 'signin.failed')
+}
+
+/** Refusals of a passkey the learner picked: only the server's check of it answers these. */
+const PICKED_PASSKEY_REFUSED: ReadonlySet<unknown> = new Set(['PASSKEY_NOT_FOUND', 'AUTHENTICATION_FAILED', 'USER_NOT_VERIFIED'])
+
+/**
+ * The request waiting in the email field fails on its own too, before the learner picks anything (no connection, a
+ * server that cannot give its options): that says nothing, since the learner asked for nothing yet. Only a passkey the
+ * learner picked and the server refused is answered; the button reports everything.
+ */
+function autofillFailureKey(err: unknown): MessageKey | null {
+  return err instanceof ApiError && PICKED_PASSKEY_REFUSED.has(err.code) ? passkeyFailureKey(err) : null
 }
 
 /** One labelled field with its hint and its error tied to it (spec §11.1). */
@@ -77,13 +107,28 @@ const STEP_NUMBER = { method: 1, code: 2 } as const
  * the gate names the address it found no account for, so a mistyped one can
  * be changed before anything is made (#273). The native language is asked by
  * the first-run setup, right after sign-up (plan 11), not here.
+ *
+ * Passkeys (#287), where the browser can do them: a button on the first step and, where the browser lists passkeys
+ * in the email field's autofill, a request that waits there from the start and is aborted before anything else asks.
+ * A passkey signs in to an account that exists, with the same rules as a code for the demo and for another account's
+ * progress. After a code sign-in, a device with its own unlock that has not answered before is offered a passkey,
+ * once; the answer is kept in `deviceStore`.
  */
-export function SignIn() {
+export function SignIn(props: { readonly deviceStore?: KeyValue }) {
   const { t, locale } = useT()
   const { api, accounts, account } = useApp()
   const client = useClient()
   const online = useOnline()
+  const [deviceStore] = useState(() => props.deviceStore ?? browserStorage('localStorage'))
   const [step, setStep] = useState<Step>({ kind: 'method' })
+  const pending = useStore(offerPending)
+  const [offer, setOffer] = useState<OfferState>('ask')
+  // Where the browser lists passkeys in the email field (conditional mediation), and the request waiting there.
+  const [autofill, setAutofill] = useState(false)
+  const waiting = useRef<AbortController | null>(null)
+  // Bumped to start the waiting request again after a passkey attempt that did not sign in.
+  const [autofillRun, setAutofillRun] = useState(0)
+  const continueButton = useRef<HTMLButtonElement>(null)
   const [country, setCountry] = useState<string | null>(null)
   const [ageConfirmed, setAgeConfirmed] = useState(false)
   // News by email (#186): unticked until the learner ticks it, and nothing about the account waits for it.
@@ -131,15 +176,34 @@ export function SignIn() {
     }
   }, [api])
 
-  // Each step's heading takes focus, as a new page would (spec §11.1).
+  // The offer shows wherever it is owed and there is an account: the screen mounted after the sign-in's switch included.
+  const view: Step['kind'] = pending && account !== null ? 'passkey-offer' : step.kind
+
+  // Each step's heading takes focus, as a new page would (spec §11.1); the first step is where the page starts.
   const first = useRef(true)
   useEffect(() => {
     if (first.current) {
       first.current = false
-      return
+      if (view === 'method') return
     }
     heading.current?.focus()
-  }, [step.kind])
+  }, [view])
+
+  useEffect(() => {
+    let live = true
+    void conditionalSignIn().then((available) => {
+      if (live) setAutofill(available)
+    })
+    return () => {
+      live = false
+    }
+  }, [])
+
+  /** Aborts the request waiting in the email field, before anything else asks the browser or the server. */
+  const stopWaiting = () => {
+    waiting.current?.abort()
+    waiting.current = null
+  }
 
   const reset = () => {
     setFieldError(null)
@@ -170,7 +234,9 @@ export function SignIn() {
       setFieldError('signin.emailInvalid')
       return
     }
+    stopWaiting()
     if (await requestCode(address)) setStep({ kind: 'code', email: address })
+    else setAutofillRun((n) => n + 1)
   }
 
   const stopWorking = () => {
@@ -178,12 +244,28 @@ export function SignIn() {
     setVerifying(false)
   }
 
-  /** The session is there: bring the account onto this device, and go home. */
-  const finishSignIn = async () => {
+  /**
+   * The session is there: bring the account onto this device, and go home. After a code, a device that can hold a
+   * passkey and has not answered is offered one first: once the sign-in is complete, so the demo's carry-over or
+   * discard has run, and never for a sign-in refused for another account's progress.
+   */
+  const finishSignIn = async (method: 'code' | 'passkey') => {
+    offerPending.set(false)
     try {
+      // The check runs beside completeSignIn, which it must not delay.
+      const owed = method === 'code' && passkeysSupported() && !offerAnswered(deviceStore) ? platformAuthenticator() : Promise.resolve(false)
+      owed.catch(() => {})
       const outcome = await accounts.completeSignIn()
       if (outcome === 'other-account') {
         setFormError(t('signin.otherAccount', { email: account?.email ?? '' }))
+        stopWorking()
+        if (method === 'passkey') setAutofillRun((n) => n + 1)
+        return
+      }
+      if (await owed) {
+        // This screen may be gone by now (the switch remounts the app): whichever one is mounted shows the offer.
+        setOffer('ask')
+        offerPending.set(true)
         stopWorking()
         return
       }
@@ -191,6 +273,7 @@ export function SignIn() {
     } catch (err) {
       setFormError(t(failureKey(err, 'signin.failed')))
       stopWorking()
+      if (method === 'passkey') setAutofillRun((n) => n + 1)
     }
   }
 
@@ -227,7 +310,7 @@ export function SignIn() {
       setStep({ kind: 'gate', email: step.email, ticket: outcome.ticket })
       return
     }
-    await finishSignIn()
+    await finishSignIn('code')
   }
 
   const submitGate = async (event: FormEvent) => {
@@ -250,7 +333,74 @@ export function SignIn() {
       setFormError(t(failureKey(err, 'signin.failed')))
       return
     }
-    await finishSignIn()
+    await finishSignIn('code')
+  }
+
+  const signedInWithPasskey = async () => {
+    setBusy(true)
+    setVerifying(true)
+    await finishSignIn('passkey')
+  }
+
+  const passkeyFailed = (err: unknown, picked: (err: unknown) => MessageKey | null = passkeyFailureKey) => {
+    const key = picked(err)
+    if (key !== null) setFormError(t(key))
+  }
+
+  // On the first step, a passkey picked from the email field's suggestions signs in; leaving the step aborts the wait.
+  // signedInWithPasskey and passkeyFailed only set state and finish the sign-in, so the first render's copies do.
+  useEffect(() => {
+    if (view !== 'method' || !autofill) return
+    const controller = new AbortController()
+    waiting.current = controller
+    api.passkeySignIn({ conditional: true, signal: controller.signal }).then(
+      () => {
+        if (!controller.signal.aborted) void signedInWithPasskey()
+      },
+      (err: unknown) => {
+        if (!controller.signal.aborted) passkeyFailed(err, autofillFailureKey)
+      },
+    )
+    return () => controller.abort()
+  }, [view, autofill, api, autofillRun])
+
+  const pressPasskey = async () => {
+    stopWaiting()
+    reset()
+    setBusy(true)
+    try {
+      await api.passkeySignIn({ conditional: false })
+    } catch (err) {
+      setBusy(false)
+      passkeyFailed(err)
+      // The field's suggestions list passkeys again.
+      setAutofillRun((n) => n + 1)
+      return
+    }
+    await signedInWithPasskey()
+  }
+
+  /** Either answer is this device's for good (spec 2026-10-18 §5.1). */
+  const addPasskey = async () => {
+    markOfferAnswered(deviceStore)
+    setOffer('busy')
+    try {
+      await api.passkeyRegister()
+      setOffer('added')
+    } catch {
+      // A cancelled prompt and a failure read the same: not added, and settings is the way back.
+      setOffer('failed')
+    }
+  }
+
+  useEffect(() => {
+    if (offer === 'added' || offer === 'failed') continueButton.current?.focus()
+  }, [offer])
+
+  const leaveOffer = () => {
+    markOfferAnswered(deviceStore)
+    offerPending.set(false)
+    navigate({ name: 'home' }, { replace: true })
   }
 
   /** Leaving the age step without an account: the server drops the ticket. */
@@ -281,6 +431,38 @@ export function SignIn() {
     </p>
   )
 
+  if (view === 'passkey-offer') {
+    return (
+      <section className="setup signin" aria-labelledby="signin-title">
+        <div className="setup-head">
+          {/* Named for the shell too: the shell the sign-in's switch mounts arrives after this screen's own focus (#287). */}
+          <h1 id="signin-title" ref={heading} tabIndex={-1} data-route-focus>
+            {t('passkey.offerTitle')}
+          </h1>
+        </div>
+        <div className="panel form-section">
+          <p>{t('passkey.offerText')}</p>
+          <p role="status">{offer === 'added' ? t('passkey.added') : offer === 'failed' ? t('passkey.failed') : null}</p>
+          <div className="actions">
+            {offer === 'added' || offer === 'failed' ? (
+              <button type="button" className="button primary" ref={continueButton} onClick={leaveOffer}>
+                {t('passkey.continue')}
+              </button>
+            ) : (
+              <>
+                <button type="button" className="button primary" disabled={offer === 'busy'} onClick={() => void addPasskey()}>
+                  {t('passkey.offerUse')}
+                </button>
+                <button type="button" className="link-button" disabled={offer === 'busy'} onClick={leaveOffer}>
+                  {t('passkey.offerLater')}
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      </section>
+    )
+  }
   if (step.kind === 'too-young') {
     return (
       <section className="setup signin" aria-labelledby="signin-title">
@@ -325,7 +507,7 @@ export function SignIn() {
                   <input
                     id={id}
                     type="email"
-                    autoComplete="email"
+                    autoComplete={autofill ? 'email webauthn' : 'email'}
                     value={email}
                     aria-describedby={describedBy}
                     aria-invalid={invalid || undefined}
@@ -338,6 +520,12 @@ export function SignIn() {
                 {t('signin.sendCode')}
               </button>
             </form>
+            {passkeysSupported() && (
+              <button type="button" className="button signin-wide" disabled={busy || !online} onClick={() => void pressPasskey()}>
+                {t('signin.passkey')}
+              </button>
+            )}
+            {working}
             <p className="privacy-link">
               <a href={privacyUrl(locale)}>{t('privacy.link')}</a>
             </p>

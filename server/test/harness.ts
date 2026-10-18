@@ -89,6 +89,7 @@ export function harness(options: HarnessOptions = {}): Harness {
     config: {
       baseUrl: BASE_URL,
       trustedOrigins: [],
+      passkeyRpId: 'localhost',
       authSecret: 'b4f1c9e07a2d4e6f8a3b5c7d9e1f2a4b6c8d0e2f4a6b8c0d',
       minProtocolVersion: 1,
       vapid: null,

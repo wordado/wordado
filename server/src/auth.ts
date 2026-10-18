@@ -1,7 +1,9 @@
+import { passkey } from '@better-auth/passkey'
 import { betterAuth } from 'better-auth'
+import { APIError } from 'better-auth/api'
 import { emailOTP } from 'better-auth/plugins/email-otp'
 import { recordSignIn } from './account/lastSignIn'
-import type { ServerDeps } from './deps'
+import type { ServerConfig, ServerDeps } from './deps'
 import { hashedRateLimit } from './rateLimitStore'
 import { refuseAccountWithoutAge, signUpAfterAge } from './signUp'
 
@@ -9,6 +11,14 @@ import { refuseAccountWithoutAge, signUpAfterAge } from './signUp'
 export const SESSION_DAYS = 60
 export const OTP_SECONDS = 300
 export const OTP_SENDS_PER_MINUTE = 3
+/**
+ * The options for a passkey sign-in are asked for each time the sign-in screen opens, by the email field's autofill,
+ * so learners behind one address (a classroom) need room; they are only a challenge. The attempts themselves are the
+ * verifications, kept tight.
+ */
+export const PASSKEY_OPTIONS_PER_MINUTE = 60
+export const PASSKEY_SIGN_INS_PER_MINUTE = 10
+export const PASSKEY_REGISTRATIONS_PER_MINUTE = 5
 
 /**
  * Passwordless sign-in (spec §8.6): a six-digit code by email.
@@ -29,6 +39,35 @@ export const withoutTokens = <T extends object>(account: T): T => ({
 })
 export const withoutDevice = <T extends object>(session: T): T => ({ ...session, ipAddress: null, userAgent: null })
 
+/**
+ * The origins a passkey response may come from: the app's own and the trusted ones (the Vite dev server, locally),
+ * never the request's header. Each once: in production the trusted origin is the app's.
+ */
+export const passkeyOrigins = (config: ServerConfig): string[] => [...new Set([config.baseUrl, ...config.trustedOrigins].map((url) => new URL(url).origin))]
+
+/**
+ * A passkey always asks for the device unlock (spec §4). The plugin verifies with `requireUserVerification: false`
+ * whatever `authenticatorSelection` says, so these refuse a response without the user-verified flag. The plugin runs
+ * them after the signature checks and before it stores a passkey, moves the counter or makes a session.
+ */
+export const USER_NOT_VERIFIED = 'USER_NOT_VERIFIED'
+const unverified = (status: 'BAD_REQUEST' | 'UNAUTHORIZED') =>
+  new APIError(status, { code: USER_NOT_VERIFIED, message: 'The device did not verify the learner' })
+export const requireUserVerification = {
+  registration: ({ verification }: { verification: { registrationInfo?: { userVerified: boolean } | undefined } }): void => {
+    if (verification.registrationInfo?.userVerified !== true) throw unverified('BAD_REQUEST')
+  },
+  authentication: ({ verification }: { verification: { authenticationInfo: { userVerified: boolean } } }): void => {
+    if (!verification.authenticationInfo.userVerified) throw unverified('UNAUTHORIZED')
+  },
+}
+
+/**
+ * A passkey (#287) is a second way to sign in, added while signed in and used instead of the emailed code. The
+ * server keeps the credential's id, public key and counter; never a name for it nor the authenticator's model,
+ * which a trigger blanks (migrations/0013_passkeys.sql). Renaming is off, as there is no name. Every registration and
+ * sign-in must carry the device unlock (`requireUserVerification`).
+ */
 export function createAuth(deps: ServerDeps) {
   const { config } = deps
   return betterAuth({
@@ -37,6 +76,7 @@ export function createAuth(deps: ServerDeps) {
     baseURL: config.baseUrl,
     basePath: '/api/auth',
     trustedOrigins: [...config.trustedOrigins],
+    disabledPaths: ['/passkey/update-passkey'],
     session: { expiresIn: SESSION_DAYS * 86_400, updateAge: 86_400 },
     account: { updateAccountOnSignIn: false },
     databaseHooks: {
@@ -64,7 +104,13 @@ export function createAuth(deps: ServerDeps) {
       enabled: true,
       // Per-isolate memory would not limit anything on Workers; the database, with the keys hashed (#166).
       customStorage: hashedRateLimit(deps.db, config.authSecret, deps.now),
-      customRules: { '/email-otp/send-verification-otp': { window: 60, max: OTP_SENDS_PER_MINUTE } },
+      customRules: {
+        '/email-otp/send-verification-otp': { window: 60, max: OTP_SENDS_PER_MINUTE },
+        '/passkey/generate-authenticate-options': { window: 60, max: PASSKEY_OPTIONS_PER_MINUTE },
+        '/passkey/verify-authentication': { window: 60, max: PASSKEY_SIGN_INS_PER_MINUTE },
+        '/passkey/generate-register-options': { window: 60, max: PASSKEY_REGISTRATIONS_PER_MINUTE },
+        '/passkey/verify-registration': { window: 60, max: PASSKEY_REGISTRATIONS_PER_MINUTE },
+      },
     },
     advanced: {
       ipAddress: { ipAddressHeaders: ['cf-connecting-ip'] },
@@ -83,6 +129,14 @@ export function createAuth(deps: ServerDeps) {
         async sendVerificationOTP({ email, otp }) {
           deps.background(deps.mailer.sendSignInCode(email, otp).catch((error: unknown) => console.error('sign-in code not sent', error)))
         },
+      }),
+      passkey({
+        rpID: config.passkeyRpId,
+        rpName: 'Wordado',
+        origin: passkeyOrigins(config),
+        authenticatorSelection: { residentKey: 'required', userVerification: 'required' },
+        registration: { afterVerification: requireUserVerification.registration },
+        authentication: { afterVerification: requireUserVerification.authentication },
       }),
       signUpAfterAge(),
     ],

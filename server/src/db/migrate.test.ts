@@ -60,6 +60,7 @@ describe('migrate', () => {
         'feedback',
         'feedback_send',
         'learner',
+        'passkey',
         'push_subscription',
         'push_window',
         'rateLimit',

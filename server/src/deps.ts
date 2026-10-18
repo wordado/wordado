@@ -18,6 +18,8 @@ export interface ServerConfig {
   /** Other origins allowed to call with the session cookie (the Vite dev server, in development). */
   readonly trustedOrigins: readonly string[]
   readonly authSecret: string
+  /** The passkeys' relying party (#287): a registrable domain of the app's origin; once passkeys exist it cannot change without losing them. */
+  readonly passkeyRpId: string
   /** Pushes and pulls below this protocol version get `upgrade_required` (spec §4.3). */
   readonly minProtocolVersion: number
   /** Null disables reminders. */

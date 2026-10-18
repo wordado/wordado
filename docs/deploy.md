@@ -108,6 +108,15 @@ private `wordado/wordado-research`, cloned into `docs/research/` and ignored her
      (built in as `VITE_TRIAL_MANIFEST_URL`, e.g. `https://content.example.test/trial-manifest.json`). Without it a
      visitor studies the bundled sample, as before; the deploy does not refuse an environment that lacks it.
    - `APP_ORIGIN`: `https://wordado-preview.<subdomain>.workers.dev` for preview, `https://app.wordado.com` for production.
+   - `PASSKEY_RP_ID`, the passkeys' relying party (#287): not a GitHub variable but a var in `server/wrangler.jsonc`.
+     Production has `wordado.com` there; the preview and local runs leave it unset, and it falls back to `BASE_URL`'s
+     hostname (the preview's `workers.dev` name, `localhost`). Production uses the registrable domain rather than
+     `app.wordado.com` because a passkey made for `wordado.com` works on every subdomain: it survives a move of the
+     app (the section on `app.wordado.com` below), and the native apps can later share the passkeys through
+     associated domains served by the site at `wordado.com/.well-known/`. The origins a passkey is accepted from are
+     still only `BASE_URL` and `TRUSTED_ORIGINS`. Changing the RP ID later strands every passkey made under the old
+     one (the learner signs in with a code and adds a new one), so it is set before the first passkey deployment and
+     left alone. Passkeys made on the preview never work on production, nor the reverse.
    - The R2 token pair is the content repository's secret (`pipeline/README.md`), not this one's: the copies
      kept here during the first corpus releases were removed on 2026-10-10.
    - Reminders, per environment: a pair from `pnpm --filter @wordado/server vapid-keys` as

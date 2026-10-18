@@ -1,19 +1,32 @@
 import { act, cleanup, fireEvent, screen, within } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { ApiError, OfflineError, type CodeOutcome } from '../account/api'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiError, OfflineError, PasskeyCancelled, type CodeOutcome } from '../account/api'
+import { offerAnswered, offerPending } from '../account/passkeys'
+import { memoryStorage, type KeyValue } from '../account/storage'
 import { fakeApi } from '../test/fakeApi'
 import { answerNew, fakeAccounts, renderWith, setup } from '../test/fixtures'
+import { App } from '../app/App'
 import { SignIn } from './SignIn'
 
-beforeEach(() => window.history.replaceState(null, '', '/signin'))
-afterEach(cleanup)
+/** This device's own values (the answer to the passkey offer), fresh for each test. */
+let device: KeyValue = memoryStorage()
+
+beforeEach(() => {
+  window.history.replaceState(null, '', '/signin')
+  device = memoryStorage()
+})
+afterEach(() => {
+  cleanup()
+  vi.unstubAllGlobals()
+  offerPending.set(false)
+})
 
 async function render(options: Parameters<typeof fakeAccounts>[0] = {}, apiOver: Parameters<typeof fakeApi>[0] = {}, codeOutcome?: CodeOutcome) {
   const ctx = await setup()
   const api = fakeApi(apiOver)
   if (codeOutcome) api.codeOutcome = codeOutcome
   const accounts = fakeAccounts(options)
-  renderWith(<SignIn />, { ...ctx, api, accounts })
+  renderWith(<SignIn deviceStore={device} />, { ...ctx, api, accounts })
   // The country pre-fill arrives from the server.
   await act(async () => undefined)
   return { ...ctx, api, accounts }
@@ -431,5 +444,393 @@ describe('SignIn: the privacy policy (spec §11)', () => {
   it('links to the policy where the email address is asked for', async () => {
     await render()
     expect(screen.getByRole('link', { name: 'Privacy policy' }).getAttribute('href')).toBe('https://wordado.com/en/privacy/')
+  })
+})
+
+/** A browser that can do passkeys: a platform authenticator (fingerprint, face, PIN) and autofill, as the test says. */
+function passkeyBrowser(options: { platform?: boolean; conditional?: boolean } = {}) {
+  vi.stubGlobal('PublicKeyCredential', {
+    isUserVerifyingPlatformAuthenticatorAvailable: async () => options.platform ?? true,
+    isConditionalMediationAvailable: async () => options.conditional ?? false,
+  })
+}
+
+const ANA = { userId: 'u1', email: 'ana@example.com' }
+
+const OFFER = 'Sign in faster next time'
+
+async function pressPasskey() {
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Sign in with a passkey' })))
+}
+
+describe('SignIn: a passkey (#287)', () => {
+  it('shows no passkey button where the browser cannot do passkeys', async () => {
+    await render()
+    expect(screen.queryByRole('button', { name: 'Sign in with a passkey' })).toBeNull()
+    expect(screen.getByLabelText('Email').getAttribute('autocomplete')).toBe('email')
+  })
+
+  it('offers the passkey button on the first step only, below the email form', async () => {
+    passkeyBrowser()
+    await render()
+    const button = screen.getByRole('button', { name: 'Sign in with a passkey' })
+    expect(screen.getByRole('button', { name: 'Email me a code' }).compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    await enterEmail()
+    expect(screen.queryByRole('button', { name: 'Sign in with a passkey' })).toBeNull()
+  })
+
+  it('signs in with the passkey, completes the sign-in as a code does, and goes home with no offer', async () => {
+    passkeyBrowser({ platform: true })
+    const { api, accounts } = await render()
+    await pressPasskey()
+    expect(api.calls).toEqual(['requestCountry', 'passkeySignIn button'])
+    expect(accounts.calls).toEqual(['completeSignIn'])
+    expect(offerPending.get()).toBe(false)
+    expect(window.location.pathname).toBe('/')
+  })
+
+  it.each([
+    ['a cancelled prompt', new PasskeyCancelled(), null],
+    ['a removed passkey', new ApiError(401, 'PASSKEY_NOT_FOUND'), 'This passkey no longer works. Sign in with a code, then you can add a new one.'],
+    ['too many requests', new ApiError(429, null), 'Too many attempts. Wait a minute and try again.'],
+    ['no connection', new OfflineError(new TypeError('Failed to fetch')), 'Signing in needs a connection. You can keep studying offline.'],
+    ['a failed check', new ApiError(400, 'AUTHENTICATION_FAILED'), 'Something went wrong. Try again.'],
+    ['no device unlock', new ApiError(401, 'USER_NOT_VERIFIED'), 'Something went wrong. Try again.'],
+  ])('after %s, stays on the email and says what it should', async (_, error, message) => {
+    passkeyBrowser()
+    const { accounts } = await render({}, { passkeySignIn: async () => Promise.reject(error) })
+    await pressPasskey()
+    if (message === null) expect(screen.queryByRole('alert')).toBeNull()
+    else expect(screen.getByRole('alert').textContent).toBe(message)
+    expect(screen.getByLabelText('Email')).toBeTruthy()
+    expect(accounts.calls).toEqual([])
+    expect(window.location.pathname).toBe('/signin')
+  })
+
+  it('refuses a passkey of another account on a device that holds a learner’s progress, as a code', async () => {
+    passkeyBrowser()
+    const ctx = await setup()
+    const accounts = fakeAccounts({
+      completeSignIn: async () => {
+        accounts.calls.push('completeSignIn')
+        return 'other-account'
+      },
+    })
+    renderWith(<SignIn deviceStore={device} />, { ...ctx, api: fakeApi(), accounts, account: ANA })
+    await act(async () => undefined)
+    await pressPasskey()
+    expect(accounts.calls).toEqual(['completeSignIn'])
+    expect(screen.getByRole('alert').textContent).toContain('This device holds the progress of ana@example.com')
+    expect(window.location.pathname).toBe('/signin')
+  })
+
+  it('takes a demo with progress the same way as a code: the sign-in decides what is kept', async () => {
+    passkeyBrowser()
+    const ctx = await setup()
+    await answerNew(ctx.client, ctx.env, 1)
+    const accounts = fakeAccounts()
+    renderWith(<SignIn deviceStore={device} />, { ...ctx, api: fakeApi(), accounts })
+    await act(async () => undefined)
+    expect(screen.getByText(/the words you studied in the demo are deleted/)).toBeTruthy()
+    await pressPasskey()
+    expect(accounts.calls).toEqual(['completeSignIn'])
+    expect(window.location.pathname).toBe('/')
+  })
+})
+
+describe('SignIn: the conditional request comes back after a failure (#287)', () => {
+  /** Counts the conditional requests; each waits until aborted. */
+  function countingApi(apiOver: Parameters<typeof fakeApi>[0] = {}) {
+    const conditional: AbortSignal[] = []
+    const api = fakeApi({
+      passkeySignIn: ({ conditional: c, signal }) => {
+        if (!c) return Promise.resolve()
+        if (signal) conditional.push(signal)
+        return new Promise<void>((_, reject) => signal?.addEventListener('abort', () => reject(new PasskeyCancelled())))
+      },
+      ...apiOver,
+    })
+    return { api, conditional }
+  }
+
+  it('waits in the field again after a code could not be sent', async () => {
+    passkeyBrowser({ conditional: true })
+    const ctx = await setup()
+    const { api, conditional } = countingApi({ sendCode: async () => Promise.reject(new ApiError(500, null)) })
+    renderWith(<SignIn deviceStore={device} />, { ...ctx, api, accounts: fakeAccounts() })
+    await act(async () => undefined)
+    expect(conditional).toHaveLength(1)
+    await enterEmail()
+    expect(conditional[0]!.aborted).toBe(true)
+    expect(conditional).toHaveLength(2)
+    expect(conditional[1]!.aborted).toBe(false)
+    expect(screen.getByLabelText('Email')).toBeTruthy()
+  })
+
+  it('waits in the field again after a passkey from it was refused for another account’s progress', async () => {
+    passkeyBrowser({ conditional: true })
+    const ctx = await setup()
+    let first = true
+    const conditional: AbortSignal[] = []
+    const api = fakeApi({
+      passkeySignIn: ({ signal }) => {
+        if (signal) conditional.push(signal)
+        if (first) {
+          first = false
+          return Promise.resolve()
+        }
+        return new Promise<void>((_, reject) => signal?.addEventListener('abort', () => reject(new PasskeyCancelled())))
+      },
+    })
+    const accounts = fakeAccounts({ completeSignIn: async () => 'other-account' })
+    renderWith(<SignIn deviceStore={device} />, { ...ctx, api, accounts, account: ANA })
+    await act(async () => undefined)
+    expect(screen.getByRole('alert').textContent).toContain('This device holds the progress of ana@example.com')
+    expect(conditional).toHaveLength(2)
+    expect(conditional[1]!.aborted).toBe(false)
+  })
+})
+
+describe('SignIn: passkeys in the email field’s autofill (#287)', () => {
+  /** A passkey request that waits until it is aborted, as a conditional one does; logs whether it was aborted when the next call came. */
+  function waitingApi() {
+    let signal: AbortSignal | undefined
+    const log: string[] = []
+    const api = fakeApi({
+      passkeySignIn: ({ conditional, signal: s }) => {
+        if (!conditional) {
+          log.push(`button, autofill aborted ${signal?.aborted}`)
+          return Promise.resolve()
+        }
+        signal = s
+        log.push('conditional')
+        return new Promise<void>((_, reject) => s?.addEventListener('abort', () => reject(new PasskeyCancelled())))
+      },
+      sendCode: async () => {
+        log.push(`sendCode, autofill aborted ${signal?.aborted}`)
+      },
+    })
+    return { api, log }
+  }
+
+  async function renderWaiting() {
+    const ctx = await setup()
+    const { api, log } = waitingApi()
+    const accounts = fakeAccounts()
+    renderWith(<SignIn deviceStore={device} />, { ...ctx, api, accounts })
+    await act(async () => undefined)
+    return { log, accounts }
+  }
+
+  it('lists passkeys in the email field and waits for one, where the browser can', async () => {
+    passkeyBrowser({ conditional: true })
+    const { log } = await renderWaiting()
+    expect(screen.getByLabelText('Email').getAttribute('autocomplete')).toBe('email webauthn')
+    expect(log).toEqual(['conditional'])
+  })
+
+  it('does not wait in the field where the browser cannot list passkeys there', async () => {
+    passkeyBrowser({ conditional: false })
+    const { log } = await renderWaiting()
+    expect(screen.getByLabelText('Email').getAttribute('autocomplete')).toBe('email')
+    expect(log).toEqual([])
+  })
+
+  it('stops waiting before the passkey button asks, and says nothing of it', async () => {
+    passkeyBrowser({ conditional: true })
+    const { log, accounts } = await renderWaiting()
+    await pressPasskey()
+    expect(log).toEqual(['conditional', 'button, autofill aborted true'])
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(accounts.calls).toEqual(['completeSignIn'])
+  })
+
+  it('stops waiting before a code is sent, and says nothing of it', async () => {
+    passkeyBrowser({ conditional: true })
+    const { log } = await renderWaiting()
+    await enterEmail()
+    expect(log).toEqual(['conditional', 'sendCode, autofill aborted true'])
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(screen.getByLabelText('Code')).toBeTruthy()
+  })
+
+  it.each([
+    ['a removed passkey', new ApiError(401, 'PASSKEY_NOT_FOUND'), 'This passkey no longer works. Sign in with a code, then you can add a new one.'],
+    ['a refused check', new ApiError(400, 'AUTHENTICATION_FAILED'), 'Something went wrong. Try again.'],
+    ['no device unlock', new ApiError(401, 'USER_NOT_VERIFIED'), 'Something went wrong. Try again.'],
+    ['a cancelled prompt', new PasskeyCancelled(), null],
+    ['options the server could not give', new ApiError(404, null), null],
+    ['too many requests', new ApiError(429, null), null],
+    ['no connection', new OfflineError(new TypeError('Failed to fetch')), null],
+  ])('after %s in the field, says only what concerns a passkey the learner picked', async (_, error, message) => {
+    passkeyBrowser({ conditional: true })
+    const { accounts } = await render({}, { passkeySignIn: async () => Promise.reject(error) })
+    if (message === null) expect(screen.queryByRole('alert')).toBeNull()
+    else expect(screen.getByRole('alert').textContent).toBe(message)
+    expect(accounts.calls).toEqual([])
+  })
+
+  it('signs in with a passkey picked from the field, with no offer', async () => {
+    passkeyBrowser({ conditional: true, platform: true })
+    const { api, accounts } = await render()
+    expect(api.calls).toContain('passkeySignIn conditional')
+    expect(accounts.calls).toEqual(['completeSignIn'])
+    expect(offerPending.get()).toBe(false)
+    expect(window.location.pathname).toBe('/')
+  })
+})
+
+describe('SignIn: the offer of a passkey after a code (#287)', () => {
+  /** Finishing a sign-in switches the database, which mounts the app afresh: a new sign-in screen, the account now there. */
+  async function remountSignedIn(apiOver: Parameters<typeof fakeApi>[0] = {}) {
+    cleanup()
+    const ctx = await setup()
+    const api = fakeApi(apiOver)
+    const accounts = fakeAccounts()
+    renderWith(<SignIn deviceStore={device} />, { ...ctx, api, accounts, account: ANA })
+    await act(async () => undefined)
+    return { api, accounts }
+  }
+
+  /** A code sign-in that leaves the offer owed, then the screen the switch mounts. */
+  async function reachOffer(apiOver: Parameters<typeof fakeApi>[0] = {}) {
+    passkeyBrowser({ platform: true })
+    await render()
+    await enterEmail()
+    await enterCode()
+    expect(offerPending.get()).toBe(true)
+    expect(window.location.pathname).toBe('/signin')
+    return remountSignedIn(apiOver)
+  }
+
+  it('shows the offer on the screen mounted after the switch, its heading focused', async () => {
+    await reachOffer()
+    const heading = screen.getByRole('heading', { name: OFFER })
+    expect(document.activeElement).toBe(heading)
+    expect(screen.getByText('Your device’s fingerprint, face or PIN signs you in instead of a code. Nothing about your face or finger leaves the device.')).toBeTruthy()
+    expect(screen.queryByLabelText('Email')).toBeNull()
+  })
+
+  it('keeps focus on the offer when the shell mounted by the switch arrives (resumed), however the timing falls', async () => {
+    passkeyBrowser({ platform: true })
+    offerPending.set(true)
+    const ctx = await setup()
+    renderWith(<App resumed setup={false} onFinishSetup={() => undefined} />, { ...ctx, api: fakeApi(), accounts: fakeAccounts(), account: ANA })
+    await act(async () => undefined)
+    expect(document.activeElement).toBe(screen.getByRole('heading', { name: OFFER }))
+  })
+
+  it('leaves the shell’s arrival as it was on the first step: the screen itself, not its heading', async () => {
+    passkeyBrowser({ platform: true })
+    const ctx = await setup()
+    renderWith(<App resumed setup={false} onFinishSetup={() => undefined} />, { ...ctx, api: fakeApi(), accounts: fakeAccounts(), account: ANA })
+    await act(async () => undefined)
+    expect(document.activeElement?.tagName).toBe('MAIN')
+  })
+
+  it('shows the offer on the same screen when the sign-in switched nothing (an expired sign-in)', async () => {
+    passkeyBrowser({ platform: true })
+    const ctx = await setup()
+    renderWith(<SignIn deviceStore={device} />, { ...ctx, api: fakeApi(), accounts: fakeAccounts(), account: ANA })
+    await act(async () => undefined)
+    await enterEmail()
+    await enterCode()
+    expect(document.activeElement).toBe(screen.getByRole('heading', { name: OFFER }))
+  })
+
+  it('shows the method step, as before, to a screen mounted with no offer owed', async () => {
+    passkeyBrowser({ platform: true })
+    await remountSignedIn()
+    expect(screen.queryByRole('heading', { name: OFFER })).toBeNull()
+    expect(screen.getByRole('heading', { level: 2, name: 'How do you want to sign in?' })).toBeTruthy()
+  })
+
+  it('adds a passkey, says so, and goes home', async () => {
+    const { api } = await reachOffer()
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Use a passkey' })))
+    expect(api.calls).toContain('passkeyRegister')
+    expect(screen.getByRole('status').textContent).toBe('Passkey added. Next time, sign in with it.')
+    expect(offerAnswered(device)).toBe(true)
+    expect(window.location.pathname).toBe('/signin')
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue' })))
+    expect(window.location.pathname).toBe('/')
+    expect(offerPending.get()).toBe(false)
+  })
+
+  it('goes home at once on "Not now", and the device has answered', async () => {
+    const { api } = await reachOffer()
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Not now' })))
+    expect(api.calls).not.toContain('passkeyRegister')
+    expect(offerAnswered(device)).toBe(true)
+    expect(offerPending.get()).toBe(false)
+    expect(window.location.pathname).toBe('/')
+  })
+
+  it.each([
+    ['cancels the device prompt', new PasskeyCancelled()],
+    ['fails', new ApiError(400, 'FAILED_TO_VERIFY_REGISTRATION')],
+  ])('says in one line when the learner %s, and goes on', async (_, error) => {
+    await reachOffer({ passkeyRegister: async () => Promise.reject(error) })
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Use a passkey' })))
+    expect(screen.getByRole('status').textContent).toBe('The passkey was not added. You can add one in settings.')
+    expect(offerAnswered(device)).toBe(true)
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue' })))
+    expect(window.location.pathname).toBe('/')
+  })
+
+  it('offers once per device: a second code sign-in goes straight home', async () => {
+    await reachOffer()
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Not now' })))
+    cleanup()
+    window.history.replaceState(null, '', '/signin')
+    await render()
+    await enterEmail()
+    await enterCode()
+    expect(offerPending.get()).toBe(false)
+    expect(window.location.pathname).toBe('/')
+  })
+
+  it('starts completing the sign-in without waiting for the platform check', async () => {
+    let release: (v: boolean) => void = () => {}
+    vi.stubGlobal('PublicKeyCredential', {
+      isUserVerifyingPlatformAuthenticatorAvailable: () => new Promise<boolean>((r) => (release = r)),
+      isConditionalMediationAvailable: async () => false,
+    })
+    const { accounts } = await render()
+    await enterEmail()
+    await enterCode()
+    expect(accounts.calls).toEqual(['completeSignIn'])
+    expect(offerPending.get()).toBe(false)
+    await act(async () => release(true))
+    expect(offerPending.get()).toBe(true)
+  })
+
+  it('offers nothing on a device without its own unlock', async () => {
+    passkeyBrowser({ platform: false })
+    await render()
+    await enterEmail()
+    await enterCode()
+    expect(offerPending.get()).toBe(false)
+    expect(window.location.pathname).toBe('/')
+  })
+
+  it('offers it after the age step of a new account too', async () => {
+    passkeyBrowser({ platform: true })
+    await render({}, {}, NEW)
+    await reachGate()
+    await passGate('BG')
+    expect(offerPending.get()).toBe(true)
+  })
+
+  it.each([
+    ['refused for another account’s progress', async () => 'other-account' as const],
+    ['failed', async () => Promise.reject(new OfflineError(new TypeError('Failed to fetch')))],
+  ])('owes no offer when completing the sign-in was %s', async (_, completeSignIn) => {
+    passkeyBrowser({ platform: true })
+    await render({ completeSignIn })
+    await enterEmail()
+    await enterCode()
+    expect(offerPending.get()).toBe(false)
+    expect(screen.getByRole('alert')).toBeTruthy()
   })
 })
