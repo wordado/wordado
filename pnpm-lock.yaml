@@ -312,6 +312,9 @@ importers:
         specifier: ^8.23.0
         version: 8.23.0
     devDependencies:
+      '@simplewebauthn/server':
+        specifier: 13.3.3
+        version: 13.3.3
       '@types/node':
         specifier: ^24.0.0
         version: 24.13.6
