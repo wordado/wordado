@@ -1,7 +1,7 @@
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { BASE_URL, harness, type Harness, type Reply, type Session } from '../test/harness'
 import { softAuthenticator, type SoftAuthenticator } from '../test/softAuthenticator'
-import { PASSKEY_SIGN_INS_PER_MINUTE, passkeyOrigins } from './auth'
+import { PASSKEY_SIGN_INS_PER_MINUTE, passkeyOrigins, USER_NOT_VERIFIED } from './auth'
 
 const DAY = 86_400_000
 
@@ -163,6 +163,36 @@ describe('passkeys (#287)', () => {
     expect(statuses).toEqual([...Array<number>(PASSKEY_SIGN_INS_PER_MINUTE).fill(200), 429])
     h.clock.advance(60_000)
     expect((await h.request('/api/auth/passkey/generate-authenticate-options', { headers })).status).toBe(200)
+  })
+
+  it('refuses to register a passkey without the device unlock', async () => {
+    const h = harness()
+    const ana = await h.signIn()
+    const refused = await register(h, ana, softAuthenticator('localhost', BASE_URL, { userVerified: false }))
+    expect(refused.status).toBe(400)
+    expect(refused.body.code).toBe(USER_NOT_VERIFIED)
+    expect(await passkeys(h, ana.userId)).toEqual([])
+    expect((await register(h, ana, softAuthenticator('localhost', BASE_URL))).status).toBe(200)
+    expect(await passkeys(h, ana.userId)).toHaveLength(1)
+  })
+
+  it('refuses a sign-in without the device unlock, and leaves the counter as it was', async () => {
+    const h = harness()
+    const ana = await h.signIn()
+    const device = softAuthenticator('localhost', BASE_URL)
+    expect((await register(h, ana, device)).status).toBe(200)
+    const counter = async () => (await h.deps.db.query<{ counter: number }>('select counter from passkey where "userId" = $1', [ana.userId]))[0]?.counter
+
+    const refused = await authenticate(h, device.with({ userVerified: false, counter: 5 }))
+    expect(refused.status).toBe(401)
+    expect(refused.body.code).toBe(USER_NOT_VERIFIED)
+    expect(cookiesOf(refused)).not.toMatch(/session_token=/)
+    expect(await counter()).toBe(0)
+
+    const signedIn = await authenticate(h, device.with({ counter: 5 }))
+    expect(signedIn.status).toBe(200)
+    expect(cookiesOf(signedIn)).toMatch(/session_token=/)
+    expect(await counter()).toBe(5)
   })
 
   it('refuses a response from another origin', async () => {

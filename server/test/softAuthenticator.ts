@@ -28,8 +28,21 @@ export interface SoftAuthenticator {
   authenticate(options: PublicKeyCredentialRequestOptionsJSON): AuthenticationResponseJSON
   /** The ids of the credentials it holds, base64url, oldest first. */
   readonly credentialIds: readonly string[]
-  /** The same keys, answering a page at another origin, as a relayed (phished) ceremony would. */
+  /**
+   * The same keys, answering a page at another origin, as a relayed (phished) ceremony would. A credential it makes
+   * joins the shared list even when the server refuses it, as on a real device, which never hears the server's answer;
+   * a later sign-in with no allow list offers the newest credential, so a test registers the one it means to use last.
+   */
   at(origin: string): SoftAuthenticator
+  /** The same keys, other options: e.g. leaving the user-verified flag off, as a device that skipped the unlock. */
+  with(options: SoftAuthenticatorOptions): SoftAuthenticator
+}
+
+export interface SoftAuthenticatorOptions {
+  /** Whether the device reports the unlock (the UV flag). Default true. */
+  readonly userVerified?: boolean
+  /** The signature counter it reports. Default 0, as synced passkeys report. */
+  readonly counter?: number
 }
 
 const sha256 = (data: Bytes): Bytes => new Uint8Array(createHash('sha256').update(data).digest())
@@ -41,23 +54,28 @@ const clientData = (type: 'webauthn.create' | 'webauthn.get', challenge: string,
 
 /**
  * A platform authenticator in software, for driving the passkey endpoints in tests: a P-256 key per credential,
- * `none` attestation, user verified on every ceremony, the counter always 0 (as synced passkeys report), an
- * all-zero AAGUID. Every credential is discoverable. It refuses options for another relying party, as a device does.
+ * `none` attestation, an all-zero AAGUID. By default the user is verified on every ceremony and the counter is 0, as
+ * synced passkeys report (`SoftAuthenticatorOptions`). Every credential is discoverable. It refuses options for another
+ * relying party, as a device does.
  */
-export function softAuthenticator(rpId: string, origin: string): SoftAuthenticator {
-  return device(rpId, origin, [])
+export function softAuthenticator(rpId: string, origin: string, options: SoftAuthenticatorOptions = {}): SoftAuthenticator {
+  return device(rpId, origin, options, [])
 }
 
-function device(rpId: string, origin: string, credentials: Credential[]): SoftAuthenticator {
-  const rpIdHash = sha256(isoUint8Array.fromUTF8String(rpId))
+function device(rpId: string, origin: string, settings: SoftAuthenticatorOptions, credentials: Credential[]): SoftAuthenticator {
+  const uv = (settings.userVerified ?? true) ? UV : 0
   const counter = new Uint8Array(4)
+  new DataView(counter.buffer).setUint32(0, settings.counter ?? 0)
+  const rpIdHash = sha256(isoUint8Array.fromUTF8String(rpId))
 
   return {
     get credentialIds() {
       return credentials.map((c) => isoBase64URL.fromBuffer(c.id))
     },
 
-    at: (other) => device(rpId, other, credentials),
+    at: (other) => device(rpId, other, settings, credentials),
+
+    with: (more) => device(rpId, origin, { ...settings, ...more }, credentials),
 
     register(options) {
       if (options.rp.id !== rpId) throw new Error(`soft authenticator: relying party ${options.rp.id ?? '(none)'}, not ${rpId}`)
@@ -75,7 +93,7 @@ function device(rpId: string, origin: string, credentials: Credential[]): SoftAu
         [cose.COSEKEYS.y, isoBase64URL.toBuffer(jwk.y!)],
       ])
       const id = new Uint8Array(randomBytes(16))
-      const authData = isoUint8Array.concat([rpIdHash, new Uint8Array([UP | UV | AT]), counter, new Uint8Array(16), u16(id.length), id, isoCBOR.encode(coseKey)])
+      const authData = isoUint8Array.concat([rpIdHash, new Uint8Array([UP | uv | AT]), counter, new Uint8Array(16), u16(id.length), id, isoCBOR.encode(coseKey)])
       const attestationObject = isoCBOR.encode(
         new Map<string, string | Bytes | Map<string, string>>([
           ['fmt', 'none'],
@@ -107,7 +125,7 @@ function device(rpId: string, origin: string, credentials: Credential[]): SoftAu
       const credential = allowed.length === 0 ? credentials.at(-1) : credentials.find((c) => allowed.includes(isoBase64URL.fromBuffer(c.id)))
       if (!credential) throw new Error('soft authenticator: no credential for this request (NotAllowedError)')
 
-      const authData = isoUint8Array.concat([rpIdHash, new Uint8Array([UP | UV]), counter])
+      const authData = isoUint8Array.concat([rpIdHash, new Uint8Array([UP | uv]), counter])
       const clientDataJSON = clientData('webauthn.get', options.challenge, origin)
       // ECDSA in DER, as WebAuthn carries it.
       const signature = sign('sha256', isoUint8Array.concat([authData, sha256(clientDataJSON)]), credential.privateKey)

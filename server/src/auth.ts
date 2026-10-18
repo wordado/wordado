@@ -1,5 +1,6 @@
 import { passkey } from '@better-auth/passkey'
 import { betterAuth } from 'better-auth'
+import { APIError } from 'better-auth/api'
 import { emailOTP } from 'better-auth/plugins/email-otp'
 import { recordSignIn } from './account/lastSignIn'
 import type { ServerConfig, ServerDeps } from './deps'
@@ -39,9 +40,27 @@ export const withoutDevice = <T extends object>(session: T): T => ({ ...session,
 export const passkeyOrigins = (config: ServerConfig): string[] => [...new Set([config.baseUrl, ...config.trustedOrigins].map((url) => new URL(url).origin))]
 
 /**
+ * A passkey always asks for the device unlock (spec §4). The plugin verifies with `requireUserVerification: false`
+ * whatever `authenticatorSelection` says, so these refuse a response without the user-verified flag. The plugin runs
+ * them after the signature checks and before it stores a passkey, moves the counter or makes a session.
+ */
+export const USER_NOT_VERIFIED = 'USER_NOT_VERIFIED'
+const unverified = (status: 'BAD_REQUEST' | 'UNAUTHORIZED') =>
+  new APIError(status, { code: USER_NOT_VERIFIED, message: 'The device did not verify the learner' })
+export const requireUserVerification = {
+  registration: ({ verification }: { verification: { registrationInfo?: { userVerified: boolean } | undefined } }): void => {
+    if (verification.registrationInfo?.userVerified !== true) throw unverified('BAD_REQUEST')
+  },
+  authentication: ({ verification }: { verification: { authenticationInfo: { userVerified: boolean } } }): void => {
+    if (!verification.authenticationInfo.userVerified) throw unverified('UNAUTHORIZED')
+  },
+}
+
+/**
  * A passkey (#287) is a second way to sign in, added while signed in and used instead of the emailed code. The
  * server keeps the credential's id, public key and counter; never a name for it nor the authenticator's model,
- * which a trigger blanks (migrations/0013_passkeys.sql). Renaming is off, as there is no name.
+ * which a trigger blanks (migrations/0013_passkeys.sql). Renaming is off, as there is no name. Every registration and
+ * sign-in must carry the device unlock (`requireUserVerification`).
  */
 export function createAuth(deps: ServerDeps) {
   const { config } = deps
@@ -110,6 +129,8 @@ export function createAuth(deps: ServerDeps) {
         rpName: 'Wordado',
         origin: passkeyOrigins(config),
         authenticatorSelection: { residentKey: 'required', userVerification: 'required' },
+        registration: { afterVerification: requireUserVerification.registration },
+        authentication: { afterVerification: requireUserVerification.authentication },
       }),
       signUpAfterAge(),
     ],
