@@ -1657,6 +1657,37 @@ test.describe('the trial at the visitor’s level', () => {
     }
   })
 
+  test('a reload in the middle of the setup goes on with it where it was (#234)', async ({ browser }, testInfo) => {
+    const context = await browser.newContext({ serviceWorkers: 'block', ...(testInfo.project.use.viewport ? { viewport: testInfo.project.use.viewport } : {}) })
+    forwardConsole(context)
+    await context.addInitScript(() => localStorage.setItem('wordado.locale', 'en'))
+    await serveTrialSample(context)
+    try {
+      const page = await context.newPage()
+      await page.goto('/')
+      await page.getByRole('radio', { name: 'Български' }).check()
+      await page.getByRole('button', { name: 'Continue' }).click()
+      await expect(page.getByRole('heading', { name: 'Your English level' })).toBeVisible()
+      await page.getByRole('radio', { name: 'B1 · Intermediate' }).click()
+      await expect(page.getByRole('radio', { name: 'B1 · Intermediate' })).toBeChecked()
+      await page.getByRole('button', { name: 'Continue' }).click()
+      await expect(page.getByRole('heading', { name: 'A daily goal' })).toBeVisible()
+      await page.reload()
+      // The setup, at its goal: not the home screen's level question, which would ask the level again.
+      await expect(page.getByRole('heading', { name: 'A daily goal' })).toBeVisible()
+      await expect(page.getByText('Step 3 of 3')).toBeVisible()
+      await expect(page.getByRole('heading', { name: 'Where do you start?' })).toHaveCount(0)
+      await page.getByRole('button', { name: 'Start studying' }).click()
+      await expect(today(page)).toBeVisible()
+      await page.reload()
+      await expect(today(page)).toBeVisible()
+      await page.goto('/path')
+      await expect(page.getByText('This is the demo: one unit of B1.')).toBeVisible()
+    } finally {
+      await context.close()
+    }
+  })
+
   test('the open theme can be chosen and studied in the demo (#290)', async ({ browser }, testInfo) => {
     const context = await browser.newContext({ serviceWorkers: 'block', ...(testInfo.project.use.viewport ? { viewport: testInfo.project.use.viewport } : {}) })
     forwardConsole(context)
