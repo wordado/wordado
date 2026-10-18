@@ -249,6 +249,48 @@ describe('validatePack: trial', () => {
     expect(paths(withTrial(trial({ themes: { nowhere: 30 } })))).toEqual(['trial.themes.nowhere'])
   })
 
+  describe('open theme (#290)', () => {
+    const open = (over: Partial<PackTrial> = {}, extra: PackEntry[] = []): unknown => ({
+      ...fixture({
+        themes: [theme('greetings'), theme('food'), theme('daily-life')],
+        entries: [...fixture().entries, entry({ entry_id: 'lamp-1', unit_id: 'gone', themes: ['daily-life'] }), ...extra],
+      }),
+      trial: trial({ open_theme: 'daily-life', ...over }),
+    })
+
+    it('accepts entries of the open theme whose unit is not in the pack', () => {
+      const result = validatePack(open())
+      expect(result.status).toBe('ok')
+      if (result.status === 'ok') expect(result.pack.trial?.open_theme).toBe('daily-life')
+    })
+
+    it('still refuses a unit-less entry that is not of the open theme', () => {
+      const result = validatePack(open({}, [entry({ entry_id: 'stray-1', unit_id: 'gone-too' })]))
+      expect(result.status).toBe('invalid')
+      if (result.status === 'invalid') {
+        expect(result.errors).toEqual([{ path: 'entries[4].unit_id', message: 'unknown unit "gone-too"' }])
+      }
+    })
+
+    it('refuses an open theme the pack does not define', () => {
+      const result = validatePack(open({ open_theme: 'nope' }))
+      expect(result.status).toBe('invalid')
+      if (result.status === 'invalid') {
+        expect(result.errors).toContainEqual({ path: 'trial.open_theme', message: 'unknown theme "nope"' })
+      }
+    })
+
+    it('refuses a unit-less entry when the pack has no open theme', () => {
+      const raw = open() as { trial: PackTrial }
+      const { open_theme: _unused, ...closed } = raw.trial
+      const result = validatePack({ ...raw, trial: closed })
+      expect(result.status).toBe('invalid')
+      if (result.status === 'invalid') {
+        expect(result.errors).toEqual([{ path: 'entries[3].unit_id', message: 'unknown unit "gone"' }])
+      }
+    })
+  })
+
   it('accepts a probe that is also an entry only when the shared fields are equal', () => {
     const same = probe({ entry_id: 'hello-1', headword: 'hello', pos: 'intj', level: 'A1', translation: 'hello-1' })
     expect(validatePack(withTrial(trial({ probes: [same] }))).status).toBe('ok')

@@ -27,6 +27,8 @@ export interface CorpusTrial {
   readonly course: Readonly<Partial<Record<CefrLevel, PackCourseSize>>>
   /** The themes the whole course offers, with their live words there, by theme ID; empty for a pack built before them. */
   readonly themes: Readonly<Record<string, number>>
+  /** The one theme the trial opens, whole (#290); null when it opens none. */
+  readonly openTheme: string | null
 }
 
 /** Every loaded pack, merged: what `PathContext`, `DistractorContext` and the screens read. */
@@ -111,6 +113,7 @@ export function loadCorpus(packs: readonly Pack[]): Corpus {
         })),
         course: pack.trial.course,
         themes: pack.trial.themes ?? {},
+        openTheme: pack.trial.open_theme ?? null,
       }
     }
     for (const u of pack.units) {
@@ -166,19 +169,21 @@ export function themeSize(corpus: Corpus, themeId: string): number {
 /** The themes big enough to offer (spec §8.9), by `themeSize`. A theme appears as the corpus grows; nothing is stored. */
 export function offeredThemes(corpus: Corpus): Theme[] {
   // A trial pack holds one unit per level, so a theme's size there says nothing about the course (spec 2026-10-12 §4.4).
-  if (corpus.trial !== null) return []
+  // It offers the one theme it opens (#290), whole; the pipeline checked its size.
+  if (corpus.trial !== null) return corpus.themes.filter((t) => t.themeId === corpus.trial?.openTheme)
   return corpus.themes.filter((t) => themeSize(corpus, t.themeId) >= MIN_THEME_SIZE)
 }
 
 /**
  * What a trial shows of the course's themes (#244): each theme the course offers, with its size there, in the
- * pack's order. Empty for a course, whose own themes are `offeredThemes`.
+ * pack's order, without the one it opens (#290), which is `offeredThemes`. Empty for a course, whose own themes are
+ * `offeredThemes` too.
  */
 export function trialThemes(corpus: Corpus): { readonly theme: Theme; readonly words: number }[] {
   const sizes = corpus.trial?.themes ?? {}
   return corpus.themes.flatMap((theme) => {
     const words = sizes[theme.themeId]
-    return words === undefined ? [] : [{ theme, words }]
+    return words === undefined || theme.themeId === corpus.trial?.openTheme ? [] : [{ theme, words }]
   })
 }
 

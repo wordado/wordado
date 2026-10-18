@@ -426,7 +426,7 @@ describe('Themes in a trial (#244)', () => {
     expect(within(cards[0]!).getByText('240 words')).toBeTruthy()
     expect(within(cards[1]!).getByText('1 word')).toBeTruthy()
     // Each card says why it does not open (#289).
-    for (const card of cards) expect(within(card).getByText('With an account')).toBeTruthy()
+    for (const card of cards) expect(within(card).getByText('With an account').closest('.theme-tag')?.getAttribute('aria-hidden')).toBeNull()
     // Nothing to open, choose, practise or search; and not the fault-like line of a course with no theme yet.
     expect(within(screen.getByRole('list')).queryByRole('link')).toBeNull()
     expect(screen.queryByRole('button')).toBeNull()
@@ -442,5 +442,58 @@ describe('Themes in a trial (#244)', () => {
     expect(screen.getByText(/^Themes come with the whole course/)).toBeTruthy()
     expect(screen.queryByRole('list')).toBeNull()
     expect(screen.queryByText('No themes are big enough yet.')).toBeNull()
+  })
+})
+
+describe('Themes in a trial with an open theme (#290)', () => {
+  it('shows the open theme as a course card first, then the closed cards', async () => {
+    const ctx = await setupTrial({ openTheme: 'daily-life' })
+    renderWith(<Themes />, ctx)
+    const cards = screen.getAllByRole('listitem')
+    expect(within(cards[0]!).getByRole('heading', { name: 'Daily life' })).toBeTruthy()
+    expect(within(cards[0]!).getByRole('button', { name: /Study this next/ })).toBeTruthy()
+    const closed = cards.slice(1)
+    expect(closed.length).toBeGreaterThan(0)
+    for (const card of closed) {
+      expect(within(card).queryByRole('button')).toBeNull()
+      // The heading above says it once; the tag stays to be seen but is not read out per card.
+      expect(within(card).getByText('With an account').closest('.theme-tag')?.getAttribute('aria-hidden')).toBe('true')
+      expect(within(card).queryByRole('heading', { name: 'Daily life' })).toBeNull()
+    }
+    expect(screen.getByRole('link', { name: 'Create an account' }).getAttribute('href')).toBe('/signin')
+    expect(screen.queryByRole('search')).toBeNull()
+    // The closed cards stand under a heading of their own, not as part of "Not started".
+    expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual(['Studying now', 'Not started', 'With an account'])
+    expect(screen.getByRole('heading', { level: 2, name: 'With an account' }).closest('section')?.contains(closed[0]!)).toBe(true)
+  })
+
+  it('chooses the open theme', async () => {
+    const ctx = await setupTrial({ openTheme: 'daily-life' })
+    renderWith(<Themes />, ctx)
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: /Study this next/ })))
+    expect(ctx.client.snapshot.settings.activeTheme).toBe('daily-life')
+  })
+})
+
+describe('Themes in a trial with a leftover chosen theme (#290)', () => {
+  it('offers no way back to the path, with or without an open theme', async () => {
+    const plain = await setupTrial()
+    await plain.client.updateSettings({ activeTheme: 'food' })
+    renderWith(<Themes />, plain)
+    expect(screen.queryByRole('button', { name: 'Back to the path' })).toBeNull()
+    expect(screen.queryByRole('button')).toBeNull()
+    expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual(['Daily life', 'Travel and transport'])
+    cleanup()
+    const open = await setupTrial({ openTheme: 'daily-life' })
+    await open.client.updateSettings({ activeTheme: 'food' })
+    renderWith(<Themes />, open)
+    expect(screen.queryByRole('button', { name: 'Back to the path' })).toBeNull()
+    const cards = screen.getAllByRole('listitem')
+    expect(within(cards[0]!).getByRole('heading', { name: 'Daily life' })).toBeTruthy()
+    expect(within(cards[0]!).getByRole('button', { name: /Study this next/ })).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 2, name: 'Not started' })).toBeTruthy()
+    // Nothing offered is chosen: the first group says so.
+    expect(document.querySelector('.theme-none-chosen')).toBeTruthy()
+    expect(document.querySelector('.theme-group-new')!.contains(cards[0]!)).toBe(true)
   })
 })

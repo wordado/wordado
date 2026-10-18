@@ -57,15 +57,34 @@ export function trialProbes(levels: readonly CefrLevel[]): { entry_id: string; h
  * The sample as a trial: its units relabelled one per level (in order, entries with them), plus probes for
  * `probeLevels`. The pack is what a client installs; nothing else about it changes.
  */
-export function trialPack(unitLevels: readonly CefrLevel[], probeLevels: readonly CefrLevel[] = unitLevels): Pack {
+export interface OpenThemeOptions {
+  /** A theme the trial opens whole (#290). */
+  readonly openTheme?: string
+  /** With `openTheme`: the level whose unit the pack keeps; default the last of the unit levels. */
+  readonly declared?: CefrLevel
+}
+
+/**
+ * With `options.openTheme` the pack is cut as the pipeline cuts it (#290): the unit of the declared level only, its
+ * entries and every entry tagged with the theme (each with its own `unit_id`), and the clips they name.
+ */
+export function trialPack(unitLevels: readonly CefrLevel[], probeLevels: readonly CefrLevel[] = unitLevels, options: OpenThemeOptions = {}): Pack {
   const pack = JSON.parse(readFileSync(join(SAMPLE_DIR, 'corpus-v0-bg.pack'), 'utf8')) as Pack
   const levelOf = new Map(pack.units.map((u, i) => [u.unit_id, unitLevels[i]!]))
-  return {
+  const relabelled = {
     ...pack,
     entries: pack.entries.map((e) => ({ ...e, level: levelOf.get(e.unit_id)! })),
     units: pack.units.map((u) => ({ ...u, level: levelOf.get(u.unit_id)! })),
     trial: { probes: trialProbes(probeLevels), course: { A1: { units: 10, words: 200 }, B1: { units: 12, words: 300 } }, themes: { 'daily-life': 240, travel: 1 } },
   }
+  const { openTheme } = options
+  if (openTheme === undefined) return relabelled
+  const declared = options.declared ?? unitLevels.at(-1)!
+  const units = relabelled.units.filter((u) => u.level === declared)
+  const kept = new Set(units.map((u) => u.unit_id))
+  const entries = relabelled.entries.filter((e) => kept.has(e.unit_id) || e.themes.includes(openTheme))
+  const clips = new Set(entries.flatMap((e) => Object.values(e.audio)))
+  return { ...relabelled, units, entries, audio: relabelled.audio.filter((c) => clips.has(c.clip_id)), trial: { ...relabelled.trial, open_theme: openTheme } }
 }
 
 /**
@@ -87,9 +106,9 @@ export async function packServing(pack: Pack, env: TestEnv): Promise<{ manifest:
 }
 
 /** A client on the sample as a trial. */
-export async function openTrialClient(unitLevels: readonly CefrLevel[], env: TestEnv = testEnv(), declaredLevel?: CefrLevel): Promise<Client> {
+export async function openTrialClient(unitLevels: readonly CefrLevel[], env: TestEnv = testEnv(), declaredLevel?: CefrLevel, options: Pick<OpenThemeOptions, 'openTheme'> = {}): Promise<Client> {
   const client = await Client.open({ driver: nodeSqliteDriver(), env, l1: 'bg' })
-  const served = await packServing(trialPack(unitLevels), env)
+  const served = await packServing(trialPack(unitLevels, unitLevels, declaredLevel === undefined ? options : { ...options, declared: declaredLevel }), env)
   await client.installPacks(served.manifest, served.fetch)
   await client.startSession()
   if (declaredLevel) await client.updateSettings({ declaredLevel })
@@ -97,6 +116,6 @@ export async function openTrialClient(unitLevels: readonly CefrLevel[], env: Tes
 }
 
 /** `trialPack` as a loaded corpus, for tests that need no client. */
-export function trialCorpus(unitLevels: readonly CefrLevel[], probeLevels: readonly CefrLevel[] = unitLevels): Corpus {
-  return loadCorpus([trialPack(unitLevels, probeLevels)])
+export function trialCorpus(unitLevels: readonly CefrLevel[], probeLevels: readonly CefrLevel[] = unitLevels, options: OpenThemeOptions = {}): Corpus {
+  return loadCorpus([trialPack(unitLevels, probeLevels, options)])
 }

@@ -11,12 +11,12 @@ import { ThemeStep } from './ThemeStep'
 
 type StepName = 'language' | 'level' | 'theme' | 'goal'
 
-/** The steps that show for `corpus`: Level only when its units span more than one level, Theme only when one is offered. */
+/** The steps that show for `corpus`: Level only when its units span more than one level, Theme only when one is offered, and never in a trial, whose one theme is the open one (#290). */
 function stepsFor(corpus: Corpus | null): readonly StepName[] {
   return [
     'language',
     ...(hasLevels(corpus) ? (['level'] as const) : []),
-    ...(corpus !== null && offeredThemes(corpus).length > 0 ? (['theme'] as const) : []),
+    ...(corpus !== null && corpus.trial === null && offeredThemes(corpus).length > 0 ? (['theme'] as const) : []),
     'goal',
   ]
 }

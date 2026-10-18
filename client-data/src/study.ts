@@ -18,6 +18,7 @@ import {
   streakStatus,
   studyUnits,
   themeEntries,
+  openThemeLeft,
   trialFinished,
   unitProgress,
   type AudioClip,
@@ -96,8 +97,9 @@ function servableStates(ctx: Pick<StudyContext, 'corpus' | 'learner'>): Readonly
 export function sessionPlan(ctx: StudyContext): SessionPlan {
   const day = today(ctx)
   const counts = todayCounts(ctx.learner, day)
-  // A trial serves no theme collection, whatever the settings name: it would bring in the other levels' units (spec 2026-10-12 §4.4).
-  const theme = ctx.corpus.trial === null ? ctx.settings.activeTheme : null
+  // A trial serves no theme collection but its open theme, whatever the settings name: any other would bring in the
+  // other levels' units (spec 2026-10-12 §4.4). The open theme chosen is served first; once all started, the unit follows (#290).
+  const theme = ctx.corpus.trial === null || ctx.settings.activeTheme === ctx.corpus.trial.openTheme ? ctx.settings.activeTheme : null
   return composeSession({
     now: ctx.now,
     today: day,
@@ -155,9 +157,14 @@ export interface ProgressView {
 export function progressView(ctx: StudyContext, plan: SessionPlan): ProgressView {
   const day = today(ctx)
   const visibility = { retired: ctx.corpus.retired, notTaught: ctx.corpus.notTaught, flags: ctx.flags, declaredLevel: ctx.settings.declaredLevel }
-  // A trial shows the one unit it studies, not the other levels' units it cannot (spec 2026-10-12 §4.4).
+  // A trial shows the one unit it studies, not the other levels' units it cannot (spec 2026-10-12 §4.4), and the words
+  // of the theme it opens, which the unit may not hold (#290).
   const shown = studyUnits(ctx.corpus, ctx.settings.declaredLevel)
-  const words = ctx.corpus.trial === null ? [...ctx.corpus.entries.values()].map((entry) => corpusWordId(entry.entryId)) : shown.flatMap((u) => u.wordIds)
+  const openTheme = ctx.corpus.trial?.openTheme ?? null
+  const words =
+    ctx.corpus.trial === null
+      ? [...ctx.corpus.entries.values()].map((entry) => corpusWordId(entry.entryId))
+      : [...new Set([...shown.flatMap((u) => u.wordIds), ...(openTheme === null ? [] : themeEntries(ctx.corpus, openTheme).map((e) => corpusWordId(e.entryId)))])]
   const tiers: Record<MasteryTier, number> = { new: 0, learning: 0, young: 0, mature: 0 }
   for (const wordId of words) {
     if (!isLive(wordId, visibility)) continue
@@ -208,15 +215,20 @@ export interface PathView {
   readonly currentUnitId: string | null
   /** A trial whose unit has no word left to start; always false for a course (spec 2026-10-12 §4.4). */
   readonly trialFinished: boolean
+  /** The ID of the theme a finished trial opens and the learner has not chosen, with words left to start; else null (#290). */
+  readonly trialOpenTheme: string | null
 }
 
 export function pathView(ctx: StudyContext): PathView {
   const path = pathContext(ctx)
   const currentUnitId = currentUnit(path)?.unitId ?? null
+  const finished = trialFinished(ctx.corpus, currentUnitId, ctx.settings.activeTheme, ctx.learner.states, ctx.flags)
+  const openTheme = ctx.corpus.trial?.openTheme ?? null
   return {
     unlocked: new Set([...ctx.unlocked, ...computeUnlocks(path)]),
     currentUnitId,
-    trialFinished: trialFinished(ctx.corpus, currentUnitId),
+    trialFinished: finished,
+    trialOpenTheme: finished && ctx.settings.activeTheme !== openTheme && openThemeLeft(ctx.corpus, ctx.learner.states, ctx.flags) ? openTheme : null,
   }
 }
 

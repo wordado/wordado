@@ -1,14 +1,14 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { DEFAULT_SETTINGS, Grade, loadCorpus, validatePack, type Corpus, type WordFlag, type WordId } from '@wordado/core'
+import { corpusWordId, DEFAULT_SETTINGS, Grade, loadCorpus, themeEntries, validatePack, type CefrLevel, type Corpus, type WordFlag, type WordId } from '@wordado/core'
 import { describe, expect, it } from 'vitest'
 import { Database } from './database'
 import { nodeSqliteDriver } from './drivers/nodeSqlite'
 import { appendAnswer, loadLearner, type AnswerInput, type Learner } from './learner'
 import { ensureDevice } from './meta'
 import { migrate } from './schema'
-import { availableModes, dayCompleteInput, newUnlocks, progressView, sessionPlan, type StudyContext } from './study'
-import { trialCorpus } from './testing/sample'
+import { availableModes, dayCompleteInput, entryOf, newUnlocks, pathView, progressView, sessionPlan, type StudyContext } from './study'
+import { openTrialClient, trialCorpus } from './testing/sample'
 import { testEnv, type TestEnv } from './testing/testEnv'
 
 const SAMPLE = fileURLToPath(new URL('../../pipeline/samples/a1/corpus-v0-bg.pack', import.meta.url))
@@ -97,14 +97,90 @@ describe('sessionPlan in a trial (spec 2026-10-12 §4.4)', () => {
     expect(plan.reviews).toContain(started)
   })
 
-  it('serves no theme collection, whatever theme the settings name', async () => {
-    const { ctx } = await setup()
-    const trial = trialCorpus(['A1', 'A2', 'B1'])
-    const [a1] = trial.units
-    // A theme the A2 and B1 units' entries carry, and the A1 unit's do not: a course would start with its words.
-    const settings = { ...DEFAULT_SETTINGS, declaredLevel: 'A1' as const, newWordLimit: 3, activeTheme: 'daily-life' }
-    expect(sessionPlan(ctx({ corpus: trial, settings })).newWords).toEqual(a1!.wordIds.slice(0, 3))
-    expect(sessionPlan(ctx({ corpus: { ...trial, trial: null }, settings })).newWords.some((wordId) => a1!.wordIds.includes(wordId))).toBe(false)
+  describe('a trial with an open theme (#290)', () => {
+    const open = async (declared: CefrLevel = 'B1') => {
+      const { db, env, learner, ctx } = await setup()
+      const client = await openTrialClient(['A1', 'A2', 'B1'], env, declared, { openTheme: 'daily-life' })
+      const trial = client.snapshot.corpus!
+      const unit = trial.units[0]!
+      const themeWords = themeEntries(trial, 'daily-life').filter((e) => e.taught).map((e) => corpusWordId(e.entryId))
+      const settings = (activeTheme: string | null) => ({ ...DEFAULT_SETTINGS, declaredLevel: declared, newWordLimit: 3, activeTheme })
+      return { db, env, learner, ctx, trial, unit, themeWords, settings }
+    }
+
+    it('serves the open theme first when it is chosen', async () => {
+      const { ctx, trial, unit, settings } = await open()
+      const plan = sessionPlan(ctx({ corpus: trial, settings: settings('daily-life') }))
+      expect(plan.newWords).toHaveLength(3)
+      for (const wordId of plan.newWords) expect(entryOf(trial, wordId)!.themes).toContain('daily-life')
+      // The theme sorts by level, so its first words are of a lower level than the unit's.
+      expect(unit.wordIds).not.toContain(plan.newWords[0])
+    })
+
+    it('ignores another theme the settings name', async () => {
+      const { ctx, trial, unit, settings } = await open()
+      expect(sessionPlan(ctx({ corpus: trial, settings: settings('food') })).newWords).toEqual(unit.wordIds.slice(0, 3))
+    })
+
+    it('falls back to the unit once the chosen theme is all started', async () => {
+      // The A2 unit holds words outside the theme; the B1 unit is wholly in it.
+      const { db, env, learner, ctx, trial, unit, themeWords, settings } = await open('A2')
+      for (const wordId of themeWords) {
+        await appendAnswer(db, env, learner, answer(wordId))
+        env.advance(5_000)
+      }
+      // Another day, or today's new-word limit would hold the unit back.
+      env.advance(2 * 86_400_000)
+      const plan = sessionPlan(ctx({ corpus: trial, settings: settings('daily-life') }))
+      const unitLeft = unit.wordIds.filter((id) => !learner.states.has(id))
+      expect(plan.newWords).toEqual(unitLeft.slice(0, 3))
+      expect(plan.newWords.length).toBe(3)
+    })
+
+    it('counts the open theme in the progress tiers', async () => {
+      const { db, env, learner, ctx, trial, unit, themeWords, settings } = await open()
+      await appendAnswer(db, env, learner, answer(themeWords[0]!))
+      const c = ctx({ corpus: trial, settings: settings('daily-life') })
+      const view = progressView(c, sessionPlan(c))
+      const extra = themeWords.filter((id) => !unit.wordIds.includes(id))
+      expect(extra.length).toBeGreaterThan(0)
+      expect(Object.values(view.tiers).reduce((a, b) => a + b, 0)).toBe(unit.wordIds.length + extra.length)
+      expect([...view.units.keys()]).toEqual([unit.unitId])
+      expect(Object.keys(view.levels)).toEqual(['B1'])
+    })
+
+    it('points to the unchosen open theme at the end', async () => {
+      const { db, env, learner, ctx, trial, unit, settings } = await open()
+      for (const wordId of unit.wordIds) {
+        await appendAnswer(db, env, learner, answer(wordId))
+        env.advance(5_000)
+      }
+      expect(pathView(ctx({ corpus: trial, settings: settings(null) }))).toMatchObject({ trialFinished: true, trialOpenTheme: 'daily-life' })
+      expect(pathView(ctx({ corpus: trial, settings: settings('food') }))).toMatchObject({ trialFinished: true, trialOpenTheme: 'daily-life' })
+      expect(pathView(ctx({ corpus: trial, settings: settings('daily-life') }))).toMatchObject({ trialFinished: false, trialOpenTheme: null })
+    })
+
+    it('ends when the chosen theme has every word started and the unit is finished', async () => {
+      const { db, env, learner, ctx, trial, unit, themeWords, settings } = await open()
+      for (const wordId of new Set([...unit.wordIds, ...themeWords])) {
+        await appendAnswer(db, env, learner, answer(wordId))
+        env.advance(5_000)
+      }
+      expect(pathView(ctx({ corpus: trial, settings: settings('daily-life') }))).toMatchObject({ trialFinished: true, trialOpenTheme: null })
+    })
+
+    it('ends when the words of the chosen theme that are left are set aside', async () => {
+      const { db, env, learner, ctx, trial, unit, themeWords, settings } = await open()
+      for (const wordId of unit.wordIds) {
+        await appendAnswer(db, env, learner, answer(wordId))
+        env.advance(5_000)
+      }
+      const left = themeWords.filter((id) => !learner.states.has(id))
+      expect(left.length).toBeGreaterThan(0)
+      const flags = new Map<WordId, WordFlag>(left.map((id, i) => [id, i % 2 === 0 ? 'known' : 'suspended']))
+      expect(pathView(ctx({ corpus: trial, settings: settings('daily-life'), flags }))).toMatchObject({ trialFinished: true, trialOpenTheme: null })
+      expect(pathView(ctx({ corpus: trial, settings: settings(null), flags }))).toMatchObject({ trialFinished: true, trialOpenTheme: null })
+    })
   })
 })
 

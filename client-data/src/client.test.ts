@@ -160,7 +160,7 @@ describe('Client', () => {
 describe('Client views for the screens', () => {
   it('shows the first unit unlocked and current before any answer', async () => {
     const client = await openClient()
-    expect(client.snapshot.path).toEqual({ unlocked: new Set(['a1-01']), currentUnitId: 'a1-01', trialFinished: false })
+    expect(client.snapshot.path).toEqual({ unlocked: new Set(['a1-01']), currentUnitId: 'a1-01', trialFinished: false, trialOpenTheme: null })
     expect(client.snapshot.packVersion).toBe(0)
   })
 

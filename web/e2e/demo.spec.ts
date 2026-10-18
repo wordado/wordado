@@ -1642,6 +1642,39 @@ test.describe('the trial at the visitor’s level', () => {
     }
   })
 
+  test('the open theme can be chosen and studied in the demo (#290)', async ({ browser }, testInfo) => {
+    const context = await browser.newContext({ serviceWorkers: 'block', ...(testInfo.project.use.viewport ? { viewport: testInfo.project.use.viewport } : {}) })
+    forwardConsole(context)
+    await context.addInitScript(() => localStorage.setItem('wordado.locale', 'en'))
+    const entries = await serveTrialSample(context, { openTheme: 'daily-life' })
+    try {
+      const page = await context.newPage()
+      await page.goto('/')
+      // Language, Level, Goal: no Theme step in a trial, whose one theme is the open one (finishSetupAt would fail on a Theme step).
+      await finishSetupAt(page, 'B1 · Intermediate')
+      await page.goto('/themes')
+      const cards = page.locator('.theme-grid > li')
+      await expect(cards).toHaveCount(2)
+      await expect(cards.filter({ hasText: 'Daily life' }).getByRole('button', { name: /Study this next/ })).toHaveCount(1)
+      await expect(cards.filter({ hasText: 'Food' }).getByRole('button')).toHaveCount(0)
+      await expect(page.locator('#main').getByRole('button', { name: /Study this next/ })).toHaveCount(1)
+      await expectAccessible(page, { dark: true })
+      await cards.filter({ hasText: 'Daily life' }).getByRole('button', { name: /Study this next/ }).click()
+      await expect(page.getByRole('heading', { name: 'Studying now' })).toBeVisible()
+      await page.goto('/study?mode=flashcard')
+      const card = page.locator('.card[data-phase="prompt"]')
+      await expect(card).toBeVisible()
+      const shown = ((await card.locator('.hw-word, .translation').first().textContent()) ?? '').trim()
+      const has = (list: readonly { headword: string; translation: string }[]) => list.some((e) => e.headword === shown || e.translation === shown)
+      // The theme's words come first, by level: at B1 the first is a daily-life word of the A2 unit, not the B1 unit's.
+      const themed = Object.values(entries).flat().filter((e) => e.themes?.includes('daily-life'))
+      expect(has(themed)).toBe(true)
+      expect(has(entries.B1.filter((e) => !e.themes?.includes('daily-life')))).toBe(false)
+    } finally {
+      await context.close()
+    }
+  })
+
   test('the setup’s test places the visitor, and the level comes back selected', async ({ browser }, testInfo) => {
     const context = await browser.newContext({ serviceWorkers: 'block', ...(testInfo.project.use.viewport ? { viewport: testInfo.project.use.viewport } : {}) })
     forwardConsole(context)
