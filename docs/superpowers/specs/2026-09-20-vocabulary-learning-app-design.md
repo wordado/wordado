@@ -1163,6 +1163,34 @@ Sessions are long-lived and refreshed on use, so a returning learner is not
 asked for a new code; this also keeps sign-in email volume inside the email
 provider's daily free allowance (§17).
 
+**Passkeys, a second way to sign in** (#287, decided 2026-10-17; design
+`2026-10-18-passkeys-design.md`). A passkey signs in with the device's own
+unlock (fingerprint, face, PIN), with no mail. The emailed code stays: it
+creates every account, signs in on a device with no passkey, and recovers
+access; a passkey never creates an account. The sign-in screen's first step
+has a *Sign in with a passkey* button, and where the browser lists passkeys in
+the email field's suggestions it waits there from the start. A passkey signs
+in to an existing account with the same rules as a code for the demo and for
+another account's progress on the device. After a code sign-in, a device with
+its own unlock that has not answered before is offered a passkey once (*Sign
+in faster next time*, *Use a passkey* or *Not now*): the offer comes after the
+demo's carry-over or discard, whose notice shows on the screen the learner
+lands on. Either answer is kept on the device, not synced, and the offer does
+not come back there. *Settings › Account* lists the passkeys by the day each
+was added, removes any of them, and adds one on the device; adding needs a
+session less than a day old, else a new code first. Where the browser cannot
+do passkeys nothing about them is shown.
+
+The server keeps, for each passkey, its id and owner, the credential id, the
+public key and its counter (to verify a sign-in and catch a cloned key), its
+creation date (the list and the export), the transports hint the browser gets
+back (`internal`, `hybrid`; it names no device), and the two flags the library
+requires (synced or single-device, backed up). It keeps no name and not the
+authenticator's model (`aaguid`): a database trigger blanks both. Nothing
+about the face or finger ever leaves the device. Every passkey asks for the
+device unlock, and the server refuses a sign-in or registration without it.
+The relying party is `wordado.com` in production (`docs/deploy.md`).
+
 A **demo mode** offers a
 session at the visitor's level so a prospective user can study before
 committing. It studies the trial pack (§5.1), and takes new words only from the
@@ -1853,8 +1881,12 @@ on their next pull. That failure is far worse than the cheating it prevents.
   again. The account keeps one value, one of the interface languages or
   none, and nothing beside it (not when, not from which device): with several
   devices it is that of the last to say it. It goes with the account, and the
-  data export shows it (`account.interfaceLanguage`, export format
-  `wordado-export-4`).
+  data export shows it (`account.interfaceLanguage`).
+- **Passkeys** (#287, §8.6) go with the account. The data export (format
+  `wordado-export-5`) lists them as `account.passkeys`, each with its creation
+  date only, oldest first, and no key material. Deleting the account deletes
+  them with it; a passkey removed in settings no longer signs in, though it
+  stays in the device's password manager until the learner removes it there.
 - Words a learner submits for enrichment are sent to third-party processors
   (dictionary, LLM, TTS) without any user identifier; the privacy policy says
   so.

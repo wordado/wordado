@@ -1,6 +1,6 @@
 # Passkeys beside the emailed code — design
 
-**Date:** 2026-10-18 · **Status:** approved 2026-10-18 · **Issue:** #287
+**Date:** 2026-10-18 · **Status:** approved 2026-10-18, built by plan 2026-10-18-passkeys · **Issue:** #287
 **Parent spec:** `2026-09-20-vocabulary-learning-app-design.md`, §8.6 (accounts and sign-in), §11 (export and
 erasure).
 
@@ -77,12 +77,21 @@ added to an account that already exists. The plugin also wants a *fresh* session
 `authenticatorSelection`: `residentKey: 'required'` and `userVerification: 'required'`, so the passkey is
 discoverable (sign-in needs no email first) and always asks for the device unlock. No attestation.
 
+*As built:* the plugin verifies responses with `requireUserVerification: false` whatever `authenticatorSelection`
+says, so the server enforces the unlock itself: `afterVerification` hooks on registration and authentication refuse
+a response without the user-verified flag (`USER_NOT_VERIFIED`), before a passkey is stored, a counter moved or a
+session made (`requireUserVerification` in `server/src/auth.ts`). A registration on a session older than a day is
+refused with 403 `SESSION_NOT_FRESH`.
+
 **Endpoints.** The plugin's, under `/api/auth/passkey/`: generate and verify registration, generate and verify
 authentication, list, delete. `update-passkey` (renaming) is turned off with `disabledPaths`, since nothing is
 named.
 
-**Rate limits.** In `customRules`, on the hashed store as today: `generate-authenticate-options` and
-`verify-authentication` 10 a minute; `generate-register-options` and `verify-registration` 5 a minute.
+**Rate limits.** In `customRules`, on the hashed store as today: `generate-authenticate-options` 60 a minute,
+`verify-authentication` 10 a minute; `generate-register-options` and `verify-registration` 5 a minute. The
+options were first set at 10 like the sign-ins; the build raised them to 60 because the email field's autofill
+asks for options every time the sign-in screen opens, so 10 per shared address (a classroom, an office) would run
+out before anyone signed in. Options are only a challenge; the verifications, which are the attempts, stay at 10.
 
 **What is kept.** A migration adds the plugin's table `passkey`:
 
@@ -128,6 +137,10 @@ first screen does not grow. Where `PublicKeyCredential` is missing, nothing abou
   there again. *Use a passkey* runs the registration; on success, a short confirmation, then on to where the
   sign-in was going. If the learner cancels the device prompt or it fails, the app says so in one line and goes
   on; it is not offered again. Settings remains the way back (§5.3).
+- *As built:* the answer ends in a status line (*Passkey added. Next time, sign in with it.* or *The passkey was
+  not added. You can add one in settings.*) and a *Continue* button, which takes focus and goes home; *Not now*
+  goes home at once. The answer is the local-storage key `wordado.passkeyOffer`. The offer owed is kept outside
+  the screen, because finishing the sign-in switches the database and remounts the app.
 
 ### 5.2 The sign-in screen
 
@@ -141,6 +154,10 @@ first screen does not grow. Where `PublicKeyCredential` is missing, nothing abou
 - **Failures.** Cancelled by the learner: nothing is said. A passkey the server no longer knows (removed in
   settings, or from another deployment): *This passkey no longer works. Sign in with a code, then you can add a
   new one.* Rate limited or offline: the screen's existing messages.
+- *As built:* these are the button's. The request waiting in the email field is silent about its own failures
+  (no connection, options refused), since the learner has asked for nothing yet; it speaks only when the server
+  refused a passkey the learner picked (not found, failed, or without the device unlock). Pressing the button
+  aborts the waiting request first, and the wait starts again after a button attempt that did not sign in.
 
 ### 5.3 Settings › Account
 

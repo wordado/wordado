@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs'
-import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test'
+import { expect, test, type Browser, type BrowserContext, type CDPSession, type Page } from '@playwright/test'
 import { WORKER_LOG } from './accounts.setup'
 import { expectAccessible, finishSetup, finishSetupAt, forwardConsole, heading, serveTrialSample, studyNew, today } from './helpers'
 
@@ -137,6 +137,63 @@ async function signIn(page: Page, email: string, gate: { country?: string; news?
   if (gate.news) await newsBox(page).check()
   await continuePastGate(page)
   await expect(page).toHaveURL('/')
+}
+
+/**
+ * Chromium's virtual authenticator (CDP WebAuthn), standing in for the device's own unlock: built in, holding
+ * discoverable passkeys, verifying the learner and touched at once (#287). The page then has a platform
+ * authenticator, so a code sign-in is followed by the passkey offer.
+ */
+async function virtualAuthenticator(page: Page): Promise<{ cdp: CDPSession; authenticatorId: string }> {
+  const cdp = await page.context().newCDPSession(page)
+  await cdp.send('WebAuthn.enable')
+  const { authenticatorId } = await cdp.send('WebAuthn.addVirtualAuthenticator', {
+    options: { protocol: 'ctap2', transport: 'internal', hasResidentKey: true, hasUserVerification: true, isUserVerified: true, automaticPresenceSimulation: true },
+  })
+  return { cdp, authenticatorId }
+}
+
+/** One `navigator.credentials.get` the page made: how it mediated, and whether its signal was aborted since. */
+interface CredentialsGet {
+  readonly mediation: string
+  aborted: boolean
+}
+
+/** Records the page's `navigator.credentials.get` calls on `window.__gets`, page load by page load (test-only). */
+async function recordCredentialGets(ctx: BrowserContext): Promise<void> {
+  await ctx.addInitScript(() => {
+    const gets: CredentialsGet[] = []
+    ;(window as unknown as { __gets: CredentialsGet[] }).__gets = gets
+    const original = navigator.credentials.get.bind(navigator.credentials)
+    navigator.credentials.get = (options?: CredentialRequestOptions) => {
+      const call: CredentialsGet = { mediation: options?.mediation ?? 'none', aborted: false }
+      gets.push(call)
+      options?.signal?.addEventListener('abort', () => (call.aborted = true))
+      return original(options)
+    }
+  })
+}
+
+const credentialGets = (page: Page) => page.evaluate(() => (window as unknown as { __gets: CredentialsGet[] }).__gets)
+
+/** The offer after a code sign-in (#287). */
+const offerHeading = (page: Page) => page.getByRole('heading', { name: 'Sign in faster next time' })
+
+/** The age step's answers for a new address, up to the account being made: what `signIn` does before it expects Home. */
+async function passGate(page: Page, email: string): Promise<void> {
+  await emailAndCode(page, email)
+  await expect(gateHeading(page)).toBeVisible()
+  await page.getByLabel('Country where you live').selectOption('BG')
+  await page.getByRole('checkbox', { name: /^I’m \d+ or older$/ }).check()
+  await continuePastGate(page)
+}
+
+/** Signs out from the account menu, wherever the masthead is. */
+async function signOut(page: Page, email: string): Promise<void> {
+  await page.goto('/')
+  await page.getByRole('button', { name: `Account: ${email}` }).click()
+  await page.getByRole('button', { name: 'Sign out' }).click()
+  await expect(page.getByText('You are signed out. Nothing of your account is left on this device.')).toBeVisible()
 }
 
 /** The sync line lives in the account menu: open it (it stays open until the next navigation) and read it. */
@@ -415,9 +472,12 @@ test('sends feedback from the account menu; the export names neither it nor a co
   await ctx.close()
 })
 
-test('meets WCAG 2.2 A and AA on the account screens, light and dark (spec §11.1)', async ({ browser }) => {
+test('meets WCAG 2.2 A and AA on the account screens, light and dark (spec §11.1)', async ({ browser, browserName }) => {
   const ctx = await context(browser)
   const page = await ctx.newPage()
+  // Where a virtual authenticator can stand in for the device's unlock, the passkey offer is one of the screens (#287).
+  const offer = browserName === 'chromium'
+  if (offer) await virtualAuthenticator(page)
   const email = address('a11y')
   await page.goto('/signin')
   await expectAccessible(page, { dark: true })
@@ -431,6 +491,11 @@ test('meets WCAG 2.2 A and AA on the account screens, light and dark (spec §11.
   await expectAccessible(page, { dark: true })
   await page.getByRole('checkbox', { name: /^I’m \d+ or older$/ }).check()
   await page.getByRole('button', { name: 'Create account' }).click()
+  if (offer) {
+    await expect(offerHeading(page)).toBeVisible()
+    await expectAccessible(page, { dark: true })
+    await page.getByRole('button', { name: 'Not now' }).click()
+  }
   await expect(page).toHaveURL('/')
   // A new account opens in the setup.
   await expect(page.getByRole('heading', { name: 'Which language do you speak?' })).toBeVisible()
@@ -560,4 +625,91 @@ test('a returning account signing in on a fresh browser lands on Home, without t
   await b.goto('/settings/languages')
   await expect(b.getByRole('region', { name: 'Native language' }).getByText('Deutsch', { exact: true })).toBeVisible()
   await fresh.close()
+})
+
+test('adds a passkey after a code, signs back in with it, and a removed one is refused (#287)', async ({ browser, browserName }) => {
+  test.skip(browserName !== 'chromium', 'The virtual authenticator is Chromium’s (CDP WebAuthn)')
+  const ctx = await context(browser)
+  const page = await ctx.newPage()
+  const { cdp, authenticatorId } = await virtualAuthenticator(page)
+  await recordCredentialGets(ctx)
+  // A demo with progress, so the carry-over's notice has to outlast the offer.
+  await page.goto('/')
+  await finishSetup(page)
+  await studyNew(page, 1)
+  const email = address('passkey')
+  await passGate(page, email)
+
+  // The offer comes once the account is made, and taking it registers the authenticator's passkey.
+  await expect(offerHeading(page)).toBeVisible()
+  await page.getByRole('button', { name: 'Use a passkey' }).click()
+  await expect(page.getByRole('status').filter({ hasText: 'Passkey added. Next time, sign in with it.' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Continue' })).toBeFocused()
+  const { credentials } = await cdp.send('WebAuthn.getCredentials', { authenticatorId })
+  expect(credentials).toHaveLength(1)
+  expect(credentials[0]).toMatchObject({ isResidentCredential: true, rpId: 'localhost' })
+  expect(await page.evaluate(() => localStorage.getItem('wordado.passkeyOffer'))).not.toBeNull()
+  await page.getByRole('button', { name: 'Continue' }).click()
+  // Home, with the demo's carry-over said as it is without the offer.
+  await expect(page).toHaveURL('/')
+  await expect(page.getByText('Your account is ready, and the words you studied in the demo are in it.')).toBeVisible()
+  await synced(page)
+
+  // Back with the passkey, from the email field's autofill: Chromium's virtual authenticator answers a conditional
+  // request at once, as a learner picking the passkey from the field's suggestions would.
+  await signOut(page, email)
+  await page.goto('/signin')
+  await expect(page).toHaveURL('/')
+  await expect(page.getByRole('button', { name: `Account: ${email}` })).toBeVisible()
+  await expect(offerHeading(page)).toHaveCount(0)
+
+  // And with the button while the autofill's request is still waiting: without presence the authenticator holds that
+  // one open, and the button's request aborts it before asking the browser itself.
+  await signOut(page, email)
+  await cdp.send('WebAuthn.setAutomaticPresenceSimulation', { authenticatorId, enabled: false })
+  await page.goto('/signin')
+  await expect(page.getByLabel('Email')).toHaveAttribute('autocomplete', 'email webauthn')
+  await expect.poll(() => credentialGets(page)).toEqual([{ mediation: 'conditional', aborted: false }])
+  await cdp.send('WebAuthn.setAutomaticPresenceSimulation', { authenticatorId, enabled: true })
+  await page.getByRole('button', { name: 'Sign in with a passkey' }).click()
+  await expect(page.getByRole('button', { name: `Account: ${email}` })).toBeVisible()
+  await expect(page).toHaveURL('/')
+  // The sign-in was the button's: the waiting request was aborted, and the button's own asked the browser.
+  expect(await credentialGets(page)).toEqual([
+    { mediation: 'conditional', aborted: true },
+    { mediation: 'none', aborted: false },
+  ])
+  // No offer after a passkey sign-in, and the account's progress came back.
+  await expect(offerHeading(page)).toHaveCount(0)
+  await synced(page)
+  expect((await exported(page)).reviewEvents).toHaveLength(1)
+
+  // Settings lists it by date; removing it asks once.
+  await page.goto('/settings/account')
+  const list = page.locator('ul.passkey-list')
+  await expect(list.getByRole('listitem')).toHaveCount(1)
+  await expect(list).toContainText(/^Passkey added on /)
+  await page.locator('.passkeys').screenshot({ path: test.info().outputPath('passkey-list.png') })
+  await list.getByRole('button', { name: /^Remove the passkey added on / }).click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog).toContainText('Remove this passkey? It will no longer sign you in.')
+  await dialog.getByRole('button', { name: 'Remove' }).click()
+  await expect(dialog).toHaveCount(0)
+  await expect(page.getByText('The passkey is removed from Wordado. It stays in your device’s password manager until you remove it there.')).toBeVisible()
+  await expect(list).toHaveCount(0)
+  await expect(page.getByText('A passkey lets your device’s fingerprint, face or PIN sign you in instead of a code.')).toBeVisible()
+
+  // The app told the device it is gone (signalUnknownCredential), and Chromium's authenticator dropped it.
+  await expect.poll(async () => (await cdp.send('WebAuthn.getCredentials', { authenticatorId })).credentials).toHaveLength(0)
+  // A password manager that ignores the signal, or another device's copy, still offers it: the server refuses it.
+  await cdp.send('WebAuthn.addCredential', { authenticatorId, credential: credentials[0]! })
+  await signOut(page, email)
+  await cdp.send('WebAuthn.setAutomaticPresenceSimulation', { authenticatorId, enabled: false })
+  await page.goto('/signin')
+  await expect(page.getByLabel('Email')).toHaveAttribute('autocomplete', 'email webauthn')
+  await cdp.send('WebAuthn.setAutomaticPresenceSimulation', { authenticatorId, enabled: true })
+  await page.getByRole('button', { name: 'Sign in with a passkey' }).click()
+  await expect(page.getByRole('alert')).toHaveText('This passkey no longer works. Sign in with a code, then you can add a new one.')
+  expect((await page.request.get('/v1/me')).status()).toBe(401)
+  await ctx.close()
 })
