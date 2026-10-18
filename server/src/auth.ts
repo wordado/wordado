@@ -11,6 +11,12 @@ import { refuseAccountWithoutAge, signUpAfterAge } from './signUp'
 export const SESSION_DAYS = 60
 export const OTP_SECONDS = 300
 export const OTP_SENDS_PER_MINUTE = 3
+/**
+ * The options for a passkey sign-in are asked for each time the sign-in screen opens, by the email field's autofill,
+ * so learners behind one address (a classroom) need room; they are only a challenge. The attempts themselves are the
+ * verifications, kept tight.
+ */
+export const PASSKEY_OPTIONS_PER_MINUTE = 60
 export const PASSKEY_SIGN_INS_PER_MINUTE = 10
 export const PASSKEY_REGISTRATIONS_PER_MINUTE = 5
 
@@ -100,7 +106,7 @@ export function createAuth(deps: ServerDeps) {
       customStorage: hashedRateLimit(deps.db, config.authSecret, deps.now),
       customRules: {
         '/email-otp/send-verification-otp': { window: 60, max: OTP_SENDS_PER_MINUTE },
-        '/passkey/generate-authenticate-options': { window: 60, max: PASSKEY_SIGN_INS_PER_MINUTE },
+        '/passkey/generate-authenticate-options': { window: 60, max: PASSKEY_OPTIONS_PER_MINUTE },
         '/passkey/verify-authentication': { window: 60, max: PASSKEY_SIGN_INS_PER_MINUTE },
         '/passkey/generate-register-options': { window: 60, max: PASSKEY_REGISTRATIONS_PER_MINUTE },
         '/passkey/verify-registration': { window: 60, max: PASSKEY_REGISTRATIONS_PER_MINUTE },

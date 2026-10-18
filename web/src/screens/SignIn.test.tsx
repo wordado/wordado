@@ -5,6 +5,7 @@ import { offerAnswered, offerPending } from '../account/passkeys'
 import { memoryStorage, type KeyValue } from '../account/storage'
 import { fakeApi } from '../test/fakeApi'
 import { answerNew, fakeAccounts, renderWith, setup } from '../test/fixtures'
+import { App } from '../app/App'
 import { SignIn } from './SignIn'
 
 /** This device's own values (the answer to the passkey offer), fresh for each test. */
@@ -655,6 +656,23 @@ describe('SignIn: the offer of a passkey after a code (#287)', () => {
     expect(document.activeElement).toBe(heading)
     expect(screen.getByText('Your device’s fingerprint, face or PIN signs you in instead of a code. Nothing about your face or finger leaves the device.')).toBeTruthy()
     expect(screen.queryByLabelText('Email')).toBeNull()
+  })
+
+  it('keeps focus on the offer when the shell mounted by the switch arrives (resumed), however the timing falls', async () => {
+    passkeyBrowser({ platform: true })
+    offerPending.set(true)
+    const ctx = await setup()
+    renderWith(<App resumed setup={false} onFinishSetup={() => undefined} />, { ...ctx, api: fakeApi(), accounts: fakeAccounts(), account: ANA })
+    await act(async () => undefined)
+    expect(document.activeElement).toBe(screen.getByRole('heading', { name: OFFER }))
+  })
+
+  it('leaves the shell’s arrival as it was on the first step: the screen itself, not its heading', async () => {
+    passkeyBrowser({ platform: true })
+    const ctx = await setup()
+    renderWith(<App resumed setup={false} onFinishSetup={() => undefined} />, { ...ctx, api: fakeApi(), accounts: fakeAccounts(), account: ANA })
+    await act(async () => undefined)
+    expect(document.activeElement?.tagName).toBe('MAIN')
   })
 
   it('shows the offer on the same screen when the sign-in switched nothing (an expired sign-in)', async () => {

@@ -430,7 +430,8 @@ export function SignIn(props: { readonly deviceStore?: KeyValue }) {
     return (
       <section className="setup signin" aria-labelledby="signin-title">
         <div className="setup-head">
-          <h1 id="signin-title" ref={heading} tabIndex={-1}>
+          {/* Named for the shell too: the shell the sign-in's switch mounts arrives after this screen's own focus (#287). */}
+          <h1 id="signin-title" ref={heading} tabIndex={-1} data-route-focus>
             {t('passkey.offerTitle')}
           </h1>
         </div>

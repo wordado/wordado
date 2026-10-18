@@ -1,7 +1,7 @@
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { BASE_URL, harness, type Harness, type Reply, type Session } from '../test/harness'
 import { softAuthenticator, type SoftAuthenticator } from '../test/softAuthenticator'
-import { PASSKEY_SIGN_INS_PER_MINUTE, passkeyOrigins, USER_NOT_VERIFIED } from './auth'
+import { PASSKEY_OPTIONS_PER_MINUTE, PASSKEY_SIGN_INS_PER_MINUTE, passkeyOrigins, USER_NOT_VERIFIED } from './auth'
 
 const DAY = 86_400_000
 
@@ -155,14 +155,28 @@ describe('passkeys (#287)', () => {
     expect(await passkeys(h, ana.userId)).toHaveLength(1)
   })
 
-  it('limits passkey sign-in attempts', async () => {
+  it('gives the sign-in options room for one address opening the sign-in often (autofill), and limits them', async () => {
     const h = harness()
     const headers = from('198.51.100.31')
     const statuses: number[] = []
-    for (let i = 0; i <= PASSKEY_SIGN_INS_PER_MINUTE; i += 1) statuses.push((await h.request('/api/auth/passkey/generate-authenticate-options', { headers })).status)
-    expect(statuses).toEqual([...Array<number>(PASSKEY_SIGN_INS_PER_MINUTE).fill(200), 429])
+    for (let i = 0; i <= PASSKEY_OPTIONS_PER_MINUTE; i += 1) statuses.push((await h.request('/api/auth/passkey/generate-authenticate-options', { headers })).status)
+    expect(PASSKEY_OPTIONS_PER_MINUTE).toBe(60)
+    expect(statuses).toEqual([...Array<number>(PASSKEY_OPTIONS_PER_MINUTE).fill(200), 429])
     h.clock.advance(60_000)
     expect((await h.request('/api/auth/passkey/generate-authenticate-options', { headers })).status).toBe(200)
+  })
+
+  it('limits passkey sign-in attempts: the verifications', async () => {
+    const h = harness()
+    const headers = { ...from('198.51.100.32'), 'content-type': 'application/json' }
+    const attempt = async () => (await h.request('/api/auth/passkey/verify-authentication', { method: 'POST', headers, body: JSON.stringify({ response: {} }) })).status
+    const statuses: number[] = []
+    for (let i = 0; i <= PASSKEY_SIGN_INS_PER_MINUTE; i += 1) statuses.push(await attempt())
+    expect(PASSKEY_SIGN_INS_PER_MINUTE).toBe(10)
+    expect(statuses.slice(0, PASSKEY_SIGN_INS_PER_MINUTE)).not.toContain(429)
+    expect(statuses.at(-1)).toBe(429)
+    h.clock.advance(60_000)
+    expect(await attempt()).not.toBe(429)
   })
 
   it('refuses to register a passkey without the device unlock', async () => {
