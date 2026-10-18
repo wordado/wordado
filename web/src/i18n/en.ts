@@ -435,7 +435,7 @@ export const en = {
   'gives.course': 'The whole course: every level, and its themes.',
   'gives.courseSize': { one: 'The whole course: {count} unit at {level} alone, every level, and its themes.', other: 'The whole course: {count} units at {level} alone, every level, and its themes.' },
   'gives.progress': 'Your progress kept in your account, on every device you sign in on.',
-  'gives.email': 'Your email is used only to send you a sign-in code. News only if you ask for it, and you can delete your account at any time.',
+  'gives.email': 'Your email is used to send you a sign-in code and to tell you about important changes to the service. News only if you ask for it, and you can delete your account at any time.',
 
   'flag.known': 'Known',
   'flag.suspended': 'Not now',

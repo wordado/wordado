@@ -392,7 +392,7 @@ describe('SignIn: news by email (#186)', () => {
     expect(within(gives).getAllByRole('listitem').map((item) => item.textContent)).toEqual([
       'The whole course: every level, and its themes.',
       'Your progress kept in your account, on every device you sign in on.',
-      'Your email is used only to send you a sign-in code. News only if you ask for it, and you can delete your account at any time.',
+      'Your email is used to send you a sign-in code and to tell you about important changes to the service. News only if you ask for it, and you can delete your account at any time.',
     ])
     expect(gives.compareDocumentPosition(screen.getByLabelText('Email')) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy()
   })

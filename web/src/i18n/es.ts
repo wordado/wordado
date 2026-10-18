@@ -447,7 +447,7 @@ export const es: Messages = {
   'gives.course': 'El curso completo: todos los niveles y sus temas.',
   'gives.courseSize': { one: 'El curso completo: {count} unidad solo de {level}, todos los niveles y sus temas.', other: 'El curso completo: {count} unidades solo de {level}, todos los niveles y sus temas.' },
   'gives.progress': 'Tu progreso guardado en tu cuenta, en cada dispositivo donde inicies sesión.',
-  'gives.email': 'Tu correo solo se usa para enviarte un código de acceso. Noticias solo si las pides, y puedes eliminar tu cuenta cuando quieras.',
+  'gives.email': 'Tu correo se usa para enviarte un código de acceso y para avisarte de cambios importantes en el servicio. Noticias solo si las pides, y puedes eliminar tu cuenta cuando quieras.',
 
   'flag.known': 'Conocida',
   'flag.suspended': 'Ahora no',

@@ -449,7 +449,7 @@ export const de: Messages = {
   'gives.course': 'Der ganze Kurs: alle Niveaus und ihre Themen.',
   'gives.courseSize': { one: 'Der ganze Kurs: {count} Einheit allein auf {level}, alle Niveaus und ihre Themen.', other: 'Der ganze Kurs: {count} Einheiten allein auf {level}, alle Niveaus und ihre Themen.' },
   'gives.progress': 'Dein Fortschritt bleibt in deinem Konto, auf jedem Gerät, auf dem du dich anmeldest.',
-  'gives.email': 'Deine E-Mail-Adresse dient nur dazu, dir einen Anmeldecode zu schicken. Neuigkeiten nur, wenn du sie möchtest, und du kannst dein Konto jederzeit löschen.',
+  'gives.email': 'Deine E-Mail-Adresse dient dazu, dir einen Anmeldecode zu schicken und dir wichtige Änderungen am Dienst mitzuteilen. Neuigkeiten nur, wenn du sie möchtest, und du kannst dein Konto jederzeit löschen.',
 
   'flag.known': 'Bekannt',
   'flag.suspended': 'Nicht jetzt',

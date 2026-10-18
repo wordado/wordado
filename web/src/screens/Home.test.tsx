@@ -137,7 +137,7 @@ describe('Home: listening follows the connection and the audio setting (spec §9
       expect(within(gives).getAllByRole('listitem').map((item) => item.textContent)).toEqual([
         'The whole course: 12 units at B1 alone, every level, and its themes.',
         'Your progress kept in your account, on every device you sign in on.',
-        'Your email is used only to send you a sign-in code. News only if you ask for it, and you can delete your account at any time.',
+        'Your email is used to send you a sign-in code and to tell you about important changes to the service. News only if you ask for it, and you can delete your account at any time.',
       ])
       expect(screen.getByRole('link', { name: 'Practise words you know' })).toBeTruthy()
       const invite = screen.getByRole('link', { name: 'Create an account' })
