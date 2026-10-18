@@ -20,7 +20,13 @@ describe('configFromEnv', () => {
       feedbackReadToken: null,
       adminWriteToken: null,
       announcementMailsPerDay: DEFAULT_ANNOUNCEMENT_MAILS_PER_DAY,
+      passkeyRpId: 'localhost',
     })
+  })
+
+  it('takes the passkey relying party from PASSKEY_RP_ID, else from the BASE_URL hostname (#287)', () => {
+    expect(configFromEnv(env({ PASSKEY_RP_ID: 'wordado.com' })).passkeyRpId).toBe('wordado.com')
+    expect(configFromEnv(env({ BASE_URL: 'https://app.example.test' })).passkeyRpId).toBe('app.example.test')
   })
 
   it('reads the optional settings', () => {

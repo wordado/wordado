@@ -15,6 +15,8 @@ export interface Env {
   readonly BETTER_AUTH_SECRET: string
   /** Comma-separated. */
   readonly TRUSTED_ORIGINS?: string
+  /** The relying party id of passkeys (#287), a domain the app's origin is on. Unset, BASE_URL's hostname; set in production to the site's domain. */
+  readonly PASSKEY_RP_ID?: string
   readonly MIN_PROTOCOL_VERSION?: string
   readonly RESEND_API_KEY?: string
   readonly EMAIL_FROM?: string
@@ -61,6 +63,7 @@ export function configFromEnv(env: Env): ServerConfig {
       .map((origin) => origin.trim())
       .filter((origin) => origin !== ''),
     authSecret: env.BETTER_AUTH_SECRET,
+    passkeyRpId: env.PASSKEY_RP_ID?.trim() || new URL(env.BASE_URL).hostname,
     minProtocolVersion: min,
     vapid:
       env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY
