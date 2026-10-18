@@ -87,10 +87,23 @@ describe('pruning the sign-in limits', () => {
       `insert into "rateLimit" (id, key, count, "lastRequest") values ('old', 'k-old', 1, $1), ('new', 'k-new', 1, $2)`,
       [h.clock.now - SIGN_IN_LIMIT_RETENTION_MS - 1, h.clock.now - HOUR],
     )
-    expect(await pruneSignInLimits(h.deps)).toEqual({ codeSends: 2, rateLimits: 1 })
+    expect(await pruneSignInLimits(h.deps)).toEqual({ codeSends: 2, rateLimits: 1, verifications: 0 })
     await seedSends(h, 1, h.clock.now - 2 * DAY)
     await runScheduled(h.deps)
     expect(await h.deps.db.query('select count(*)::int as n from sign_in_code_send')).toEqual([{ n: 1 }])
     expect(await h.deps.db.query(`select key from "rateLimit"`)).toEqual([{ key: 'k-new' }])
+  })
+
+  it('drops the sign-in codes and passkey challenges that expired unused, from the cron (#306)', async () => {
+    const h = harness()
+    const insert = (identifier: string, expiresAt: number) =>
+      h.deps.db.query(`insert into verification (id, identifier, value, "expiresAt") values ($1, $1, '{}', $2)`, [identifier, new Date(expiresAt)])
+    await insert('challenge-expired', h.clock.now - 1)
+    await insert('sign-in-otp-expired', h.clock.now - DAY)
+    await insert('challenge-live', h.clock.now + 1)
+    expect(await pruneSignInLimits(h.deps)).toEqual({ codeSends: 0, rateLimits: 0, verifications: 2 })
+    await insert('challenge-expired-later', h.clock.now - 1)
+    await runScheduled(h.deps)
+    expect(await h.deps.db.query('select identifier from verification')).toEqual([{ identifier: 'challenge-live' }])
   })
 })
