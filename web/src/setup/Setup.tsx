@@ -1,6 +1,6 @@
 import { placementAvailable, useClient } from '@wordado/client-data'
 import { offeredThemes, type CefrLevel, type Corpus } from '@wordado/core'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Placement } from '../screens/Placement'
 import { useT } from '../i18n/i18n'
 import { GoalStep } from './GoalStep'
@@ -9,7 +9,7 @@ import { hasLevels } from './LevelAsk'
 import { LevelStep } from './LevelStep'
 import { ThemeStep } from './ThemeStep'
 
-type StepName = 'language' | 'level' | 'theme' | 'goal'
+export type StepName = 'language' | 'level' | 'theme' | 'goal'
 
 /** The steps that show for `corpus`: Level only when its units span more than one level, Theme only when one is offered, and never in a trial, whose one theme is the open one (#290). */
 function stepsFor(corpus: Corpus | null): readonly StepName[] {
@@ -31,14 +31,30 @@ function stepsFor(corpus: Corpus | null): readonly StepName[] {
  * The level step offers the placement test, which takes the whole screen while it runs, as it does from Settings
  * (`onFocus` tells the shell); leaving it or taking its result comes back to the level step. Reached by the test's
  * address (`startWithTest`, #213), the test opens by itself after the language, where it can run.
+ *
+ * Each step after the language is told to `onStep`, so that a reload can come back to it (`resumeAt`, #234): the words
+ * being installed by then, the setup starts there instead of at the language.
  */
-export function Setup(props: { onFinish(): void; onFocus?(on: boolean): void; /** Reached by the test's address (#213): the test starts once the language is installed, where it can run. */ readonly startWithTest?: boolean }) {
+export function Setup(props: {
+  onFinish(): void
+  onFocus?(on: boolean): void
+  /** Reached by the test's address (#213): the test starts once the language is installed, where it can run. */
+  readonly startWithTest?: boolean
+  /** The step a reload left the setup on (#234): with the words installed, the setup goes on there. */
+  readonly resumeAt?: string | null
+  /** The step shown, from the one after the language on. */
+  onStep?(step: StepName): void
+}) {
   const { t } = useT()
   const client = useClient()
+  const { onStep } = props
   /** Null until the language is installed: until then nobody knows which steps will show, so there is no counter. */
-  const [steps, setSteps] = useState<readonly StepName[] | null>(null)
-  const [index, setIndex] = useState(0)
+  const [steps, setSteps] = useState<readonly StepName[] | null>(() => (props.resumeAt != null && client.snapshot.corpus !== null ? stepsFor(client.snapshot.corpus) : null))
+  const [index, setIndex] = useState(() => (steps === null ? 0 : Math.max(1, steps.indexOf(props.resumeAt as StepName))))
   const step = steps?.[index] ?? 'language'
+  useEffect(() => {
+    if (steps !== null) onStep?.(step)
+  }, [steps, step, onStep])
   const last = steps !== null && index === steps.length - 1
   const next = () => setIndex((i) => (steps === null ? i : Math.min(i + 1, steps.length - 1)))
   const stepProps = { last, next, finish: () => props.onFinish() }

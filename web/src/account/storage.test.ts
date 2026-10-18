@@ -62,6 +62,24 @@ describe('the mark that a visitor was asked for a level (spec 2026-10-12 §4.6)'
     expect(mark.read()).toBe(true)
     expect(() => mark.set()).not.toThrow()
   })
+
+  it('reads as asked when the browser refuses its storage outright, as a browser blocking site data does (#234)', () => {
+    const own = Object.getOwnPropertyDescriptor(window, 'localStorage')
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      get: () => {
+        throw new DOMException('denied', 'SecurityError')
+      },
+    })
+    try {
+      const mark = trialLevelMark()
+      expect(mark.read()).toBe(true)
+      expect(() => mark.set()).not.toThrow()
+    } finally {
+      if (own) Object.defineProperty(window, 'localStorage', own)
+      else delete (window as { localStorage?: Storage }).localStorage
+    }
+  })
 })
 
 describe('file names', () => {

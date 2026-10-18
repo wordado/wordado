@@ -439,6 +439,7 @@ export const es: Messages = {
   'trial.path': 'Esta es la demo: una unidad de {level}.',
   'trial.course': { one: 'El curso completo tiene {count} unidad de {level}.', other: 'El curso completo tiene {count} unidades de {level}.' },
   'trial.finished': 'Has empezado todas las palabras de la demo.',
+  'trial.finishedAside': 'Has empezado o apartado todas las palabras de la demo.',
   'trial.invite': 'Crea una cuenta para seguir con el curso completo.',
   'trial.openTheme': 'Prueba también un tema: {name} está abierto en la demo.',
   'trial.themes': 'Los temas vienen con el curso completo: elige un tema y sus palabras irán primero.',
