@@ -312,6 +312,7 @@ export const de: Messages = {
   'signin.working': 'Du wirst angemeldet …',
   'signin.passkey': 'Mit einem Passkey anmelden',
   'signin.passkeyGone': 'Dieser Passkey funktioniert nicht mehr. Melde dich mit einem Code an, danach kannst du einen neuen hinzufügen.',
+  'signin.passkeyHint': 'Noch kein Passkey hier? Melde dich mit einem Code an und füge dann unter Einstellungen › Konto einen hinzu. Ein Passkey funktioniert nur in dem Passwortmanager, der ihn gespeichert hat.',
   'passkey.offerTitle': 'Nächstes Mal schneller anmelden',
   'passkey.offerText': 'Statt mit einem Code meldest du dich mit Fingerabdruck, Gesicht oder PIN deines Geräts an. Nichts über dein Gesicht oder deinen Finger verlässt das Gerät.',
   'passkey.offerUse': 'Passkey verwenden',

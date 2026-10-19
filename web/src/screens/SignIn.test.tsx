@@ -479,6 +479,21 @@ describe('SignIn: a passkey (#287)', () => {
     expect(screen.queryByRole('button', { name: 'Sign in with a passkey' })).toBeNull()
   })
 
+  it('says under the button where a passkey comes from, and that it lives in the password manager that saved it (#308)', async () => {
+    passkeyBrowser()
+    await render()
+    const button = screen.getByRole('button', { name: 'Sign in with a passkey' })
+    expect(button.getAttribute('aria-describedby')).toBeTruthy()
+    expect(document.getElementById(button.getAttribute('aria-describedby')!)?.textContent).toBe(
+      'No passkey here yet? Sign in with a code, then add one in Settings › Account. A passkey works only in the password manager that saved it.',
+    )
+  })
+
+  it('says nothing about passkeys where the browser cannot do them (#308)', async () => {
+    await render()
+    expect(screen.queryByText(/No passkey here yet/)).toBeNull()
+  })
+
   it('signs in with the passkey, completes the sign-in as a code does, and goes home with no offer', async () => {
     passkeyBrowser({ platform: true })
     const { api, accounts } = await render()

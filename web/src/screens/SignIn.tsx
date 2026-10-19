@@ -123,6 +123,7 @@ export function SignIn(props: { readonly deviceStore?: KeyValue }) {
   const [step, setStep] = useState<Step>({ kind: 'method' })
   const pending = useStore(offerPending)
   const [offer, setOffer] = useState<OfferState>('ask')
+  const passkeyHint = useId()
   // Where the browser lists passkeys in the email field (conditional mediation), and the request waiting there.
   const [autofill, setAutofill] = useState(false)
   const waiting = useRef<AbortController | null>(null)
@@ -521,9 +522,21 @@ export function SignIn(props: { readonly deviceStore?: KeyValue }) {
               </button>
             </form>
             {passkeysSupported() && (
-              <button type="button" className="button signin-wide" disabled={busy || !online} onClick={() => void pressPasskey()}>
-                {t('signin.passkey')}
-              </button>
+              <>
+                <button
+                  type="button"
+                  className="button signin-wide"
+                  disabled={busy || !online}
+                  aria-describedby={passkeyHint}
+                  onClick={() => void pressPasskey()}
+                >
+                  {t('signin.passkey')}
+                </button>
+                {/* A passkey is made only after a code, and is found only where it was saved (#308). */}
+                <p className="note" id={passkeyHint}>
+                  {t('signin.passkeyHint')}
+                </p>
+              </>
             )}
             {working}
             <p className="privacy-link">
