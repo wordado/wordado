@@ -146,7 +146,10 @@ first screen does not grow. Where `PublicKeyCredential` is missing, nothing abou
 
 - **Button.** On the first step, below the email form, a secondary button *Sign in with a passkey*. It runs the
   authentication with no email: the passkey is discoverable. On success the sign-in finishes as a code one does,
-  with the same rules for the demo and for another account's progress on the device.
+  with the same rules for the demo and for another account's progress on the device. Under it, a note tied to the
+  button (`aria-describedby`) says a passkey is added in Settings › Account after a code sign-in, and works only in
+  the password manager that saved it (#308): a passkey made on one device is often missing on another, and the
+  browser's "no passkey found" says nothing about why.
 - **Autofill.** Where the browser supports conditional mediation
   (`PublicKeyCredential.isConditionalMediationAvailable()`), the email field gets `autocomplete="email webauthn"`
   and the screen starts a conditional authentication when it opens: the browser lists the learner's passkeys in

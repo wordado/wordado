@@ -310,6 +310,7 @@ export const es: Messages = {
   'signin.working': 'Iniciando sesión…',
   'signin.passkey': 'Iniciar sesión con una llave de acceso',
   'signin.passkeyGone': 'Esta llave de acceso ya no funciona. Inicia sesión con un código y luego podrás añadir una nueva.',
+  'signin.passkeyHint': '¿Aún no tienes una llave de acceso aquí? Inicia sesión con un código y añade una en Ajustes › Cuenta. Una llave de acceso solo funciona en el gestor de contraseñas que la guardó.',
   'passkey.offerTitle': 'Inicia sesión más rápido la próxima vez',
   'passkey.offerText': 'En lugar de un código, inicias sesión con la huella, la cara o el PIN de tu dispositivo. Nada de tu cara ni de tu dedo sale del dispositivo.',
   'passkey.offerUse': 'Usar una llave de acceso',

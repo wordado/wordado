@@ -1169,7 +1169,8 @@ provider's daily free allowance (§17).
 unlock (fingerprint, face, PIN), with no mail. The emailed code stays: it
 creates every account, signs in on a device with no passkey, and recovers
 access; a passkey never creates an account. The sign-in screen's first step
-has a *Sign in with a passkey* button, and where the browser lists passkeys in
+has a *Sign in with a passkey* button, with a note under it on where a passkey
+comes from (#308), and where the browser lists passkeys in
 the email field's suggestions it waits there from the start. A passkey signs
 in to an existing account with the same rules as a code for the demo and for
 another account's progress on the device. After a code sign-in, a device with

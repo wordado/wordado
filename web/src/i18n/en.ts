@@ -304,6 +304,7 @@ export const en = {
   'signin.working': 'Signing you in…',
   'signin.passkey': 'Sign in with a passkey',
   'signin.passkeyGone': 'This passkey no longer works. Sign in with a code, then you can add a new one.',
+  'signin.passkeyHint': 'No passkey here yet? Sign in with a code, then add one in Settings › Account. A passkey works only in the password manager that saved it.',
   'passkey.offerTitle': 'Sign in faster next time',
   'passkey.offerText': 'Your device’s fingerprint, face or PIN signs you in instead of a code. Nothing about your face or finger leaves the device.',
   'passkey.offerUse': 'Use a passkey',
