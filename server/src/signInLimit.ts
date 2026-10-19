@@ -56,10 +56,15 @@ export function signInEmailLimit(deps: ServerDeps): MiddlewareHandler<AppEnv> {
   }
 }
 
-/** The cron's step: code sends and Better Auth's rate-limit rows a day old are no longer needed by any limit. */
-export async function pruneSignInLimits(deps: ServerDeps): Promise<{ codeSends: number; rateLimits: number }> {
+/**
+ * The cron's step: code sends and Better Auth's rate-limit rows a day old are no longer needed by any limit; nor is
+ * a sign-in code or passkey challenge past its expiry, which Better Auth removes only when it is used (#306: the
+ * privacy policy keeps them at most 5 minutes, and the sign-in screen asks for a challenge each time it opens).
+ */
+export async function pruneSignInLimits(deps: ServerDeps): Promise<{ codeSends: number; rateLimits: number; verifications: number }> {
   const before = deps.now() - SIGN_IN_LIMIT_RETENTION_MS
   const codeSends = await deps.db.query('delete from sign_in_code_send where sent_at < $1 returning id', [before])
   const rateLimits = await deps.db.query('delete from "rateLimit" where "lastRequest" < $1 returning id', [before])
-  return { codeSends: codeSends.length, rateLimits: rateLimits.length }
+  const verifications = await deps.db.query('delete from verification where "expiresAt" < $1 returning id', [new Date(deps.now())])
+  return { codeSends: codeSends.length, rateLimits: rateLimits.length, verifications: verifications.length }
 }
