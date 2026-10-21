@@ -162,10 +162,58 @@ describe('Settings: passkeys (#287)', () => {
         },
       }),
     )
+    // The region is there before it says anything, so a screen reader announces what fills it (#302).
+    expect(screen.getByRole('status').textContent).toBe('')
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Add a passkey on this device' })))
-    expect(screen.getByText(/For your safety, sign in again with a code to add a passkey\./)).toBeTruthy()
-    expect(screen.getByRole('link', { name: 'Sign in' }).getAttribute('href')).toBe('/signin')
+    expect(screen.getByRole('status').textContent).toBe('For your safety, sign in again with a code to add a passkey. Sign in')
+    // The sign-in returns here, to Settings › Account (#302).
+    expect(screen.getByRole('link', { name: 'Sign in' }).getAttribute('href')).toBe('/signin?back=account')
     expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('does not list again after an add that failed (#302)', async () => {
+    browser()
+    const api = fakeApi({
+      listPasskeys: async () => {
+        api.calls.push('listPasskeys')
+        return two
+      },
+      passkeyRegister: async () => {
+        throw new ApiError(500, 'FAILED_TO_VERIFY_REGISTRATION')
+      },
+    })
+    await show(api)
+    expect(api.calls.filter((c) => c === 'listPasskeys')).toHaveLength(1)
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Add a passkey on this device' })))
+    expect(api.calls.filter((c) => c === 'listPasskeys')).toHaveLength(1)
+  })
+
+  it('keeps the add button off until the new passkey is listed (#302)', async () => {
+    browser()
+    let release: () => void = () => {}
+    let rows: readonly PasskeyInfo[] = [two[0]!]
+    let registered = false
+    const api = fakeApi({
+      listPasskeys: () => (registered ? new Promise((resolve) => (release = () => resolve((rows = two)))) : Promise.resolve(rows)),
+      passkeyRegister: async () => {
+        registered = true
+      },
+    })
+    await show(api)
+    const add = () => screen.getByRole('button', { name: 'Add a passkey on this device' }) as HTMLButtonElement
+    await act(async () => fireEvent.click(add()))
+    expect(add().disabled).toBe(true)
+    await act(async () => release())
+    expect(screen.getAllByRole('listitem')).toHaveLength(2)
+    expect(add().disabled).toBe(false)
+  })
+
+  it('builds the date format once for the language, not once per date (#302)', async () => {
+    browser()
+    const made = vi.spyOn(Intl, 'DateTimeFormat')
+    await show()
+    expect(screen.getAllByRole('listitem')).toHaveLength(2)
+    expect(made).toHaveBeenCalledTimes(1)
   })
 
   it('disables adding and removing offline, as the neighbouring controls are', async () => {

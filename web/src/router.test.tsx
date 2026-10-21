@@ -99,6 +99,12 @@ describe('routes', () => {
     expect(routeHref({ name: 'signin' })).toBe('/signin')
   })
 
+  it('keeps where a sign-in returns to only when it is Settings › Account (#302)', () => {
+    expect(parseRoute('/signin', '?back=account')).toEqual({ name: 'signin', back: 'account' })
+    expect(routeHref({ name: 'signin', back: 'account' })).toBe('/signin?back=account')
+    expect(parseRoute('/signin', '?back=https://example.com')).toEqual({ name: 'signin' })
+  })
+
   it('routes settings', () => {
     expect(parseRoute('/settings', '')).toEqual({ name: 'settings' })
     expect(routeHref({ name: 'settings' })).toBe('/settings')
