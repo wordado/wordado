@@ -1,4 +1,4 @@
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Pack, PackManifest, Target } from '@wordado/core'
@@ -62,6 +62,10 @@ function initOtherTarget(dir: string, target: Target): void {
   const pack = JSON.parse(readFileSync(join(SAMPLE_DIR, 'corpus-v0-bg.pack'), 'utf8')) as Pack
   writeJson(paths.themes, pack.themes.map((t) => ({ theme_id: t.theme_id, name: { en: t.name.en, bg: t.name.l1 }, description: { en: t.description.en, bg: t.description.l1 } })))
   writeJson(paths.registry, { entries: [], units: [] })
+  // The template's essentials are English headwords; the language writes its own list under the same header.
+  const essentials = readFileSync(paths.essentials, 'utf8').split('\n')
+  const header = essentials.slice(0, essentials.findIndex((l) => !l.startsWith('#')))
+  writeFileSync(paths.essentials, `${header.join('\n')}\n`)
   mkdirSync(paths.lastPublished, { recursive: true })
   writeJson(join(paths.lastPublished, 'manifest.json'), { schema_version: 1, corpus_version: 0, packs: [] })
   writeJson(join(paths.lastPublished, 'fixes.json'), { schema_version: 1, corpus_version: 0, fixes: [] })

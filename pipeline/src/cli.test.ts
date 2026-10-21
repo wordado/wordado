@@ -28,6 +28,10 @@ describe('corpus (the CLI)', () => {
     expect(readdirSync(paths.lastPublished).sort()).toEqual(['fixes.json', 'manifest.json'])
     expect(JSON.parse(readFileSync(join(paths.lastPublished, 'manifest.json'), 'utf8')).packs).toEqual([])
     expect(JSON.parse(readFileSync(paths.themes, 'utf8')).length).toBeGreaterThan(0)
+    // The English essentials are English words: the language writes its own list, under the template's header.
+    const essentials = readFileSync(paths.essentials, 'utf8')
+    expect(essentials.split('\n').filter((l) => l.trim() !== '' && !l.startsWith('#'))).toEqual([])
+    expect(essentials).toMatch(/^# Everyday spoken words/)
   })
 
   it('init without --target is the English directory, seeded with the sample', () => {
