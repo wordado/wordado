@@ -23,7 +23,11 @@ export function countInto(counts: Map<string, number>, text: string): void {
   // One normalisation per text rather than per token: this runs over billions of tokens.
   for (const [token] of text.normalize('NFC').toLowerCase().matchAll(TOKEN)) {
     const form = token.includes('’') ? token.replaceAll('’', "'") : token
-    counts.set(form, (counts.get(form) ?? 0) + 1)
+    const n = counts.get(form)
+    // A new form is stored as a copy: a matched substring of 13 or more characters can be a slice that keeps the
+    // whole text alive, and German web text, full of long compounds, then outgrows the heap (#322).
+    if (n === undefined) counts.set(Buffer.from(form).toString(), 1)
+    else counts.set(form, n + 1)
   }
 }
 
