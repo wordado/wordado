@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { SAMPLE_DIR } from '@wordado/client-data/src/testing/sample'
 import { describe, expect, it } from 'vitest'
-import { clipUrl, fetchManifest, manifestUrlFor, packFetcher, SAMPLE_MANIFEST_URL, TRIAL_MANIFEST_URL, type Fetch } from './packs'
+import { clipUrl, fetchManifest, manifestUrlFor, packFetcher, parseTargets, SAMPLE_MANIFEST_URL, targetManifestUrl, TRIAL_MANIFEST_URL, type Fetch } from './packs'
 
 const PAGE = 'https://wordado.test/study'
 
@@ -123,20 +123,44 @@ describe('learner content (plan 7)', () => {
   })
 
   it('gives the demo the bundled sample and a learner the CDN’s manifest, or the sample when none is configured', () => {
-    expect(manifestUrlFor(null, 'https://content.wordado.com/manifest.json')).toBe(SAMPLE_MANIFEST_URL)
-    expect(manifestUrlFor({ userId: 'u1', email: 'a@b.c' }, 'https://content.wordado.com/manifest.json')).toBe('https://content.wordado.com/manifest.json')
-    expect(manifestUrlFor({ userId: 'u1', email: 'a@b.c' }, SAMPLE_MANIFEST_URL)).toBe(SAMPLE_MANIFEST_URL)
+    expect(manifestUrlFor(null, 'en', 'https://content.wordado.com/manifest.json')).toBe(SAMPLE_MANIFEST_URL)
+    expect(manifestUrlFor({ userId: 'u1', email: 'a@b.c' }, 'en', 'https://content.wordado.com/manifest.json')).toBe('https://content.wordado.com/manifest.json')
+    expect(manifestUrlFor({ userId: 'u1', email: 'a@b.c' }, 'en', SAMPLE_MANIFEST_URL)).toBe(SAMPLE_MANIFEST_URL)
   })
 
   it('gives a visitor the trial manifest when the build names one, and a learner still the learner manifest', () => {
     const learner = 'https://content.example.test/manifest.json'
     const trial = 'https://content.example.test/trial-manifest.json'
-    expect(manifestUrlFor(null, learner, trial)).toBe(trial)
-    expect(manifestUrlFor({ userId: 'u1', email: 'a@b.c' }, learner, trial)).toBe(learner)
+    expect(manifestUrlFor(null, 'en', learner, trial)).toBe(trial)
+    expect(manifestUrlFor({ userId: 'u1', email: 'a@b.c' }, 'en', learner, trial)).toBe(learner)
   })
 
   it('defaults a visitor to the bundled sample when the build names no trial manifest', () => {
     expect(TRIAL_MANIFEST_URL).toBe(SAMPLE_MANIFEST_URL)
-    expect(manifestUrlFor(null)).toBe(SAMPLE_MANIFEST_URL)
+    expect(manifestUrlFor(null, 'en')).toBe(SAMPLE_MANIFEST_URL)
+  })
+})
+
+describe('courses (spec §5.1, §5.5)', () => {
+  it('puts a target before the manifest file name', () => {
+    expect(targetManifestUrl('https://cdn.example/manifest.json', 'en')).toBe('https://cdn.example/manifest.json')
+    expect(targetManifestUrl('https://cdn.example/manifest.json', 'de')).toBe('https://cdn.example/de/manifest.json')
+    expect(targetManifestUrl('/content/sample/manifest.json', 'de')).toBe('/content/sample/de/manifest.json')
+    expect(targetManifestUrl('https://cdn.example/trial-manifest.json', 'de')).toBe('https://cdn.example/de/trial-manifest.json')
+  })
+
+  it('gives each course its own manifest, a visitor the trial’s and a learner the CDN’s', () => {
+    const learner = 'https://content.example.test/manifest.json'
+    const trial = 'https://content.example.test/trial-manifest.json'
+    expect(manifestUrlFor(null, 'de', learner, trial)).toBe('https://content.example.test/de/trial-manifest.json')
+    expect(manifestUrlFor({ userId: 'u1', email: 'a@b.c' }, 'de', learner, trial)).toBe('https://content.example.test/de/manifest.json')
+    expect(manifestUrlFor(null, 'de')).toBe('/content/sample/de/manifest.json')
+  })
+
+  it('offers English always, and the targets the build names', () => {
+    expect(parseTargets(undefined)).toEqual(['en'])
+    expect(parseTargets('en,de')).toEqual(['en', 'de'])
+    expect(parseTargets('de')).toEqual(['en', 'de'])
+    expect(parseTargets('de, fr ,en')).toEqual(['en', 'de'])
   })
 })

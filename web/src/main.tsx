@@ -13,9 +13,9 @@ import { httpTransport } from './account/transport'
 import { Boot, defaultL1 } from './app/boot'
 import { noteInstallReport, refreshAudioOnActivation, startPackChecks } from './app/content'
 import { watchContentFiles } from './app/contentFiles'
+import { watchCourse } from './app/courseWatch'
 import { Credits } from './app/credits'
 import { FixNotices } from './app/fixNotices'
-import { watchL1 } from './app/l1Watch'
 import { fetchLegalDates, LegalNotice } from './app/legalNotice'
 import { AppLifecycle, AUTO_UPDATE_KEY, watchUpdates, type InstallEvent } from './app/lifecycle'
 import { PackSwitcher } from './app/packSwitch'
@@ -90,9 +90,9 @@ const credits = new Credits({
 const fixNotices = new FixNotices({ storage: browserStorage('localStorage'), fetchFixes: (url) => fetchSibling(url, 'fixes.json', validateFixes) })
 /** The terms or the privacy policy changed since the learner last saw them (#184). */
 const legalNotice = new LegalNotice({ storage: browserStorage('localStorage'), fetch: () => fetchLegalDates(), now: env.now, online: () => navigator.onLine })
-/** The one place that installs a language's pack (plan 11): the L1 watcher, the setup's Language step and Settings. */
+/** The one place that installs a course's pack (plan 11, spec §8.6): the course watcher, the setup's Language step and Settings. */
 const packs = new PackSwitcher({
-  fetchManifest: (account) => fetchManifest(manifestUrlFor(account)),
+  fetchManifest: (account, target) => fetchManifest(manifestUrlFor(account, target)),
   fetcher: (onProgress) => packFetcher(undefined, onProgress),
 })
 
@@ -108,12 +108,13 @@ const boot = new Boot(
     listDatabases,
     transport: () => transport,
     startSync: (client, backend) => startSyncLoop(client, { everyAnswer: backend === 'memory', now: env.now }),
-    fetchManifest: (account) => fetchManifest(manifestUrlFor(account)),
+    fetchManifest: (account, target) => fetchManifest(manifestUrlFor(account, target)),
     // The app cannot open until this pack is in: its download is shown. The periodic check's is not (below).
     fetchPack: packFetcher(undefined, (received, total) => openingDownload.set({ received, total })),
     // Before the app shows, so the first session already knows which clips can play (spec §9.3).
     prepare: async (client, account) => {
-      audio.use(manifestUrlFor(account))
+      // The installed course's manifest: a clip's URL is relative to the manifest that listed its pack.
+      audio.use(manifestUrlFor(account, client.course.target))
       if (client.snapshot.corpus) await audio.refresh(client.snapshot.corpus)
     },
     onReady: async (client) => {
@@ -133,7 +134,16 @@ let stopAudioWatch: (() => void) | null = null
 boot.store.subscribe(() => {
   const state = boot.store.get()
   stopAudioWatch?.()
-  stopAudioWatch = state.status === 'ready' ? refreshAudioOnActivation(state.client, audio) : null
+  stopAudioWatch =
+    state.status === 'ready'
+      ? refreshAudioOnActivation(state.client, {
+          // Another course's pack lists its clips relative to its own manifest (spec §5.1): the audio follows it.
+          refresh: (corpus) => {
+            audio.use(manifestUrlFor(state.account, corpus.target))
+            return audio.refresh(corpus)
+          },
+        })
+      : null
   if (state.status === 'ready') lifecycle.recordVisit(dayToIsoDate(localDay(env.now(), env.tzOffsetMin())))
 })
 
@@ -149,7 +159,7 @@ boot.store.subscribe(() => {
   stopContentWatch?.()
   if (state.status === 'ready') {
     stopContentWatch = watchContentFiles(state.client, () => {
-      const manifestUrl = manifestUrlFor(state.account)
+      const manifestUrl = manifestUrlFor(state.account, state.client.course.target)
       void credits.refresh(manifestUrl).catch(() => undefined)
       void fixNotices.check(state.client, manifestUrl).catch(() => undefined)
     })
@@ -161,16 +171,17 @@ boot.store.subscribe(() => {
   }
 })
 
-// The one place that switches packs (plan 10, Decision 2): whenever the learner's L1 setting differs from the installed L1.
-let stopL1Watch: (() => void) | null = null
+// The one place that switches packs (plan 10, Decision 2; spec §8.6): whenever the learner's course setting (its
+// target and its L1) differs from the installed course.
+let stopCourseWatch: (() => void) | null = null
 boot.store.subscribe(() => {
   const state = boot.store.get()
-  stopL1Watch?.()
-  stopL1Watch =
+  stopCourseWatch?.()
+  stopCourseWatch =
     state.status === 'ready'
-      ? watchL1(
+      ? watchCourse(
           state.client,
-          (l1) => packs.install(state.client, state.account, l1),
+          (course) => packs.install(state.client, state.account, course),
           () => navigator.onLine,
           (retry) => {
             window.addEventListener('online', retry)
@@ -185,10 +196,13 @@ startPackChecks({
     const state = boot.store.get()
     return state.status === 'ready' ? state.client : null
   },
-  // Whoever is studying now: a visitor's trial manifest or the bundled sample, or the learner's CDN manifest.
+  // Whoever is studying now: a visitor's trial manifest or the bundled sample, or the learner's CDN manifest; the
+  // installed course's, whose newer packs `installPacks` looks for.
   fetchManifest: () => {
     const state = boot.store.get()
-    return fetchManifest(manifestUrlFor(state.status === 'ready' ? state.account : null))
+    return state.status === 'ready'
+      ? fetchManifest(manifestUrlFor(state.account, state.client.course.target))
+      : fetchManifest(manifestUrlFor(null, 'en'))
   },
   // Staged behind the open app, to swap in at the next session's start: no bar for it.
   fetchPack: packFetcher(),

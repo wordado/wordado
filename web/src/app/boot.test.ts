@@ -1,16 +1,16 @@
-import { mkdtempSync } from 'node:fs'
+import { mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Client, type PackFetcher, type SqlDriver, type SyncTransport } from '@wordado/client-data'
 import { nodeSqliteDriver } from '@wordado/client-data/src/drivers/nodeSqlite'
-import { sampleFetcher, sampleManifest } from '@wordado/client-data/src/testing/sample'
+import { SAMPLE_DIR, sampleFetcher, sampleManifest } from '@wordado/client-data/src/testing/sample'
 import { testEnv, type TestEnv } from '@wordado/client-data/src/testing/testEnv'
 import { FakeServer } from '@wordado/client-data/src/testing/fakeServer'
-import type { WordId } from '@wordado/core'
+import { DEFAULT_SETTINGS, type Corpus, type PackManifest, type Settings, type WordId } from '@wordado/core'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { accountStorage, DEMO_FILE, learnerFile, memoryStorage } from '../account/storage'
 import { answerTo, chosenL1, disk, fileDriver, flaky } from '../test/disk'
-import { Boot, type BootDeps, defaultL1, FLUSH_TIMEOUT_MS, type LockPort, OPEN_TIMEOUT_MS, SETUP_PULL_TIMEOUT_MS } from './boot'
+import { Boot, type BootDeps, defaultL1, FLUSH_TIMEOUT_MS, type LockPort, OPEN_TIMEOUT_MS, SETUP_PULL_TIMEOUT_MS, setupNeeded } from './boot'
 
 const hello = answerTo('c:hello-1')
 
@@ -1159,6 +1159,101 @@ describe('the first-run setup (plan 11)', () => {
     expect(d.exists(DEMO_FILE)).toBe(false)
     expect(log).toEqual(['start'])
     await expect(demo.updateSettings({ newWordLimit: 5 })).rejects.toThrow()
+  })
+})
+
+/** The German sample course (spec §8.6): its manifest sits in `de/` beside English's, its packs beside it. */
+const germanManifest = JSON.parse(readFileSync(join(SAMPLE_DIR, 'de', 'manifest.json'), 'utf8')) as PackManifest
+const germanFetcher: PackFetcher = async (d) => new Uint8Array(readFileSync(join(SAMPLE_DIR, 'de', d.url)))
+
+/** Each course's manifest and packs, as the dev server serves them; `asked` lists the target of every manifest fetched. */
+function courses(): { readonly fetchManifest: BootDeps['fetchManifest']; readonly fetchPack: PackFetcher; readonly asked: string[] } {
+  const asked: string[] = []
+  return {
+    fetchManifest: async (_account, target) => {
+      asked.push(target)
+      return target === 'de' ? germanManifest : sampleManifest
+    },
+    fetchPack: (d) => (d.target === 'de' ? germanFetcher(d) : sampleFetcher(d)),
+    asked,
+  }
+}
+
+describe('setupNeeded', () => {
+  const s = (over: Partial<Settings>): Settings => ({ ...DEFAULT_SETTINGS, ...over })
+  const englishCorpus = { target: 'en', l1: 'bg' } as unknown as Corpus
+
+  it('is the first run: no words, no language, nothing studied', () => {
+    expect(setupNeeded({ corpus: null, settings: s({}), states: new Map() })).toBe(true)
+    expect(setupNeeded({ corpus: null, settings: s({}), states: new Map([['c:apple-1', {}]]) })).toBe(false)
+  })
+
+  it('is a new course: the installed words are another course and its language is not chosen (Review Focus 2)', () => {
+    expect(setupNeeded({ corpus: englishCorpus, settings: s({ course: 'de', l1: null }), states: new Map([['c:apple-1', {}]]) })).toBe(true)
+    expect(setupNeeded({ corpus: englishCorpus, settings: s({ course: 'en', l1: 'bg' }), states: new Map() })).toBe(false)
+  })
+
+  it('is not owed once the language is chosen, nor for the installed course', () => {
+    expect(setupNeeded({ corpus: null, settings: s({ course: 'de', l1: 'bg' }), states: new Map() })).toBe(false)
+    expect(setupNeeded({ corpus: englishCorpus, settings: s({ course: 'en', l1: null }), states: new Map() })).toBe(false)
+  })
+})
+
+describe('Boot opens the settings’ course (spec §5.5, §8.6)', () => {
+  it('fetches the German manifest when the settings name the German course, and installs its pack', async () => {
+    const c = courses()
+    const { boot: b } = boot({
+      openDriver: async () => {
+        const driver = nodeSqliteDriver()
+        const client = await Client.open({ driver: { ...driver, close: async () => undefined }, env: testEnv(), l1: 'bg' })
+        await client.updateSettings({ course: 'de', l1: 'bg' })
+        await client.close()
+        return { driver, backend: 'opfs' }
+      },
+      fetchManifest: c.fetchManifest,
+      fetchPack: c.fetchPack,
+    })
+    await b.start()
+    expect(b.store.get()).toMatchObject({ status: 'ready', setup: false })
+    expect(c.asked).toEqual(['de'])
+    expect(ready(b).snapshot.corpus).toMatchObject({ target: 'de', l1: 'bg' })
+    expect(ready(b).course).toEqual({ target: 'de', l1: 'bg' })
+  })
+
+  it('opens in the setup after a switch to a course never started, though another course’s words are installed', async () => {
+    const d = disk()
+    const c = courses()
+    const first = boot({ openDriver: choosing(d.openDriver), fetchManifest: c.fetchManifest, fetchPack: c.fetchPack })
+    await first.boot.start()
+    expect(await ready(first.boot).switchCourse('de')).toEqual({ needsSetup: true })
+    await first.release()
+
+    const again = boot({ openDriver: d.openDriver, fetchManifest: c.fetchManifest, fetchPack: c.fetchPack })
+    await again.boot.start()
+    expect(again.boot.store.get()).toMatchObject({ status: 'ready', setup: true })
+    expect(c.asked).toEqual(['en'])
+  })
+
+  it('after a switch back to a course started before, fetches that course’s manifest: the watcher installs its pack, the old one meanwhile', async () => {
+    const d = disk()
+    const c = courses()
+    const first = boot({ openDriver: choosing(d.openDriver), fetchManifest: c.fetchManifest, fetchPack: c.fetchPack })
+    await first.boot.start()
+    const client = ready(first.boot)
+    await client.switchCourse('de')
+    await client.updateSettings({ l1: 'bg' })
+    expect(await client.changeCourse({ target: 'de', l1: 'bg' }, germanManifest, c.fetchPack)).toEqual({ ok: true })
+    // Back to English, its language restored: the German pack is still the installed one (the tab closed at once).
+    expect(await client.switchCourse('en')).toEqual({ needsSetup: false })
+    await first.release()
+
+    const again = boot({ openDriver: d.openDriver, fetchManifest: c.fetchManifest, fetchPack: c.fetchPack })
+    await again.boot.start()
+    expect(again.boot.store.get()).toMatchObject({ status: 'ready', setup: false })
+    expect(c.asked).toEqual(['en', 'en'])
+    expect(ready(again.boot).snapshot.settings).toMatchObject({ course: 'en', l1: 'bg' })
+    // The pending change (as for an L1 changed offline): `watchCourse` installs the English pack from here.
+    expect(ready(again.boot).course).toEqual({ target: 'de', l1: 'bg' })
   })
 })
 

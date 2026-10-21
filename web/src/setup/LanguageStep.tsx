@@ -51,7 +51,7 @@ export function LanguageStep(props: { readonly mode: 'setup' | 'change'; readonl
   /** Installs `l1`; the caller has set `going`. */
   const install = async (l1: L1) => {
     setAttempt({ phase: 'installing', l1 })
-    const outcome = await packs.install(client, account, l1)
+    const outcome = await packs.install(client, account, { target: settings.course, l1 })
     going.current = false
     if (!mounted.current) return
     if (outcome.ok) {
@@ -83,14 +83,14 @@ export function LanguageStep(props: { readonly mode: 'setup' | 'change'; readonl
     }
     // An interface that spoke the old native language follows the new one (plan 10).
     if (props.mode === 'change' && locale === installed) setLocale(l1)
-    // In `change` mode `watchL1` asks for the same install; the switcher joins the two.
+    // In `change` mode `watchCourse` asks for the same install; the switcher joins the two.
     await install(l1)
   }
 
   const retry = async (l1: L1) => {
     if (going.current) return
     going.current = true
-    // Only a failure is cleared: a download that is running (`watchL1`'s, say) is left alone.
+    // Only a failure is cleared: a download that is running (`watchCourse`'s, say) is left alone.
     const state = packs.store.get()
     if (state.phase === 'failed' && state.client === client) packs.reset()
     await install(l1)
@@ -99,7 +99,7 @@ export function LanguageStep(props: { readonly mode: 'setup' | 'change'; readonl
   const busy = attempt.phase === 'installing'
   const failed = attempt.phase === 'failed' ? attempt.l1 : null
   // Until the pack's size is known (its manifest is still being fetched) the bar only says that something is happening.
-  const progress = busy && download.phase === 'downloading' && download.client === client && download.l1 === attempt.l1 ? download : null
+  const progress = busy && download.phase === 'downloading' && download.client === client && download.course.target === settings.course && download.course.l1 === attempt.l1 ? download : null
   const percent = progress && progress.total > 0
     ? new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 0 }).format(Math.min(1, progress.received / progress.total))
     : null

@@ -1,11 +1,13 @@
 import { ClientClosed, type ChangeL1Outcome, type Client, type PackFetcher } from '@wordado/client-data'
-import type { L1, PackDescriptor, PackManifest } from '@wordado/core'
+import type { Course, L1, PackDescriptor, PackManifest } from '@wordado/core'
 import { describe, expect, it, vi } from 'vitest'
 import type { AccountRecord } from '../account/storage'
 import { PackSwitcher } from './packSwitch'
 
 const descriptor = (l1: L1): PackDescriptor => ({ pack_id: `corpus-${l1}`, l1, corpus_version: 1, schema_version: 1, url: `${l1}.pack`, sha256: '', bytes: 100 })
 const manifestFor = (l1: L1): PackManifest => ({ schema_version: 1, corpus_version: 1, packs: [descriptor(l1)] })
+/** The English course from `l1`. */
+const en = (l1: L1): Course => ({ target: 'en', l1 })
 
 /** Lets microtask chains (promise joins, `.then` callbacks) settle before the next assertion. */
 async function flush(): Promise<void> {
@@ -67,7 +69,7 @@ function fakeFetcher(reports: readonly [number, number][] = [[0, 100], [100, 100
     }
 }
 
-function harness(options: { readonly reports?: readonly [number, number][]; readonly fetchManifest?: (account: AccountRecord | null) => Promise<PackManifest> } = {}) {
+function harness(options: { readonly reports?: readonly [number, number][]; readonly fetchManifest?: (account: AccountRecord | null, target: string) => Promise<PackManifest> } = {}) {
   const switcher = new PackSwitcher({
     fetchManifest: options.fetchManifest ?? ((account) => Promise.resolve(manifestFor(account ? 'de' : 'bg'))),
     fetcher: fakeFetcher(options.reports),
@@ -76,40 +78,74 @@ function harness(options: { readonly reports?: readonly [number, number][]; read
 }
 
 describe('PackSwitcher (plan 11)', () => {
+  it('installs a course: the manifest of its target, and changeCourse with the whole course', async () => {
+    const targets: string[] = []
+    const switcher = harness({
+      fetchManifest: (_account, target) => {
+        targets.push(target)
+        return Promise.resolve(manifestFor('bg'))
+      },
+    })
+    const courses: Course[] = []
+    const client = {
+      changeCourse: async (course: Course) => {
+        courses.push(course)
+        return { ok: true }
+      },
+    } as unknown as Client
+    expect(await switcher.install(client, null, { target: 'de', l1: 'bg' })).toEqual({ ok: true })
+    expect(targets).toEqual(['de'])
+    expect(courses).toEqual([{ target: 'de', l1: 'bg' }])
+  })
+
+  it('joins only the same course: the same L1 in another course queues instead', async () => {
+    const switcher = harness()
+    const d = deferredClient()
+    const a = switcher.install(d.client, null, { target: 'de', l1: 'bg' })
+    const b = switcher.install(d.client, null, en('bg'))
+    await flush()
+    expect(d.calls).toEqual(['bg'])
+    d.settle('bg', { ok: true })
+    await vi.waitFor(() => expect(d.calls).toEqual(['bg', 'bg']))
+    d.settle('bg', { ok: true })
+    expect(await a).toEqual({ ok: true })
+    expect(await b).toEqual({ ok: true })
+  })
+
   it('publishes a zeroed download at once, then the fetcher\'s progress, then idle on success, and resolves ok', async () => {
     const switcher = harness({ reports: [[0, 100], [50, 100], [100, 100]] })
     const { client } = fakeClient()
     const seen: unknown[] = []
     switcher.store.subscribe(() => seen.push(switcher.store.get()))
-    const outcome = await switcher.install(client, null, 'bg')
+    const outcome = await switcher.install(client, null, en('bg'))
     expect(outcome).toEqual({ ok: true })
     expect(seen).toEqual([
-      { phase: 'downloading', client, l1: 'bg', received: 0, total: 0 },
-      { phase: 'downloading', client, l1: 'bg', received: 0, total: 100 },
-      { phase: 'downloading', client, l1: 'bg', received: 50, total: 100 },
-      { phase: 'downloading', client, l1: 'bg', received: 100, total: 100 },
+      { phase: 'downloading', client, course: en('bg'), received: 0, total: 0 },
+      { phase: 'downloading', client, course: en('bg'), received: 0, total: 100 },
+      { phase: 'downloading', client, course: en('bg'), received: 50, total: 100 },
+      { phase: 'downloading', client, course: en('bg'), received: 100, total: 100 },
       { phase: 'idle' },
     ])
     expect(switcher.store.get()).toEqual({ phase: 'idle' })
   })
 
-  it('joins a call for the same client and L1 already being installed: changeCourse runs once, both resolve with the same outcome', async () => {
+  it('joins a call for the same client and course already being installed: changeCourse runs once, both resolve with the same outcome', async () => {
     const switcher = harness()
     const { client, calls } = fakeClient()
-    const first = switcher.install(client, null, 'de')
-    const second = switcher.install(client, null, 'de')
+    const first = switcher.install(client, null, en('de'))
+    const second = switcher.install(client, null, en('de'))
     const [a, b] = await Promise.all([first, second])
     expect(calls).toEqual(['de'])
     expect(a).toEqual({ ok: true })
     expect(b).toEqual({ ok: true })
   })
 
-  it('joins only when the client matches too: a same-L1 call for a different client queues instead of joining', async () => {
+  it('joins only when the client matches too: a same-course call for a different client queues instead of joining', async () => {
     const switcher = harness()
     const first = deferredClient()
     const second = deferredClient()
-    const a = switcher.install(first.client, null, 'de')
-    const b = switcher.install(second.client, null, 'de')
+    const a = switcher.install(first.client, null, en('de'))
+    const b = switcher.install(second.client, null, en('de'))
     await flush()
     // Still only the first client's install has started; the second is queued behind it, not joined.
     expect(first.calls).toEqual(['de'])
@@ -121,11 +157,11 @@ describe('PackSwitcher (plan 11)', () => {
     expect(await b).toEqual({ ok: true })
   })
 
-  it('queues a call for another L1: changeCourse for it is not called until the running install settles', async () => {
+  it('queues a call for another course: changeCourse for it is not called until the running install settles', async () => {
     const switcher = harness()
     const d = deferredClient()
-    const first = switcher.install(d.client, null, 'de')
-    const second = switcher.install(d.client, null, 'bg')
+    const first = switcher.install(d.client, null, en('de'))
+    const second = switcher.install(d.client, null, en('bg'))
     await flush()
     // Proves the queue, not coincidence: 'bg' must not have been called while 'de' is still pending.
     expect(d.calls).toEqual(['de'])
@@ -139,9 +175,9 @@ describe('PackSwitcher (plan 11)', () => {
   it('queues several calls behind the running install, and runs each in order once the one before it settles', async () => {
     const switcher = harness()
     const d = deferredClient()
-    const first = switcher.install(d.client, null, 'de')
-    const second = switcher.install(d.client, null, 'bg')
-    const third = switcher.install(d.client, null, 'de')
+    const first = switcher.install(d.client, null, en('de'))
+    const second = switcher.install(d.client, null, en('bg'))
+    const third = switcher.install(d.client, null, en('de'))
     await flush()
     expect(d.calls).toEqual(['de'])
     d.settle('de', { ok: true })
@@ -152,11 +188,11 @@ describe('PackSwitcher (plan 11)', () => {
     await Promise.all([first, second, third])
   })
 
-  it('a changeCourse that throws does not block the queue, and a later call for the same L1 runs again rather than joining the dead promise', async () => {
+  it('a changeCourse that throws does not block the queue, and a later call for the same course runs again rather than joining the dead promise', async () => {
     const switcher = harness()
     const d = deferredClient()
-    const first = switcher.install(d.client, null, 'de')
-    const second = switcher.install(d.client, null, 'bg')
+    const first = switcher.install(d.client, null, en('de'))
+    const second = switcher.install(d.client, null, en('bg'))
     await flush()
     expect(d.calls).toEqual(['de'])
     d.fail('de', new Error('boom'))
@@ -167,7 +203,7 @@ describe('PackSwitcher (plan 11)', () => {
     expect(await second).toEqual({ ok: true })
 
     // 'de' already settled (with a failure): a fresh call for it must run again, not join that dead promise.
-    const third = switcher.install(d.client, null, 'de')
+    const third = switcher.install(d.client, null, en('de'))
     await vi.waitFor(() => expect(d.calls).toEqual(['de', 'bg', 'de']))
     d.settle('de', { ok: true })
     expect(await third).toEqual({ ok: true })
@@ -179,32 +215,32 @@ describe('PackSwitcher (plan 11)', () => {
     const second = fakeClient().client
     const seen: unknown[] = []
     switcher.store.subscribe(() => seen.push(switcher.store.get()))
-    await switcher.install(first, null, 'de')
-    await switcher.install(second, null, 'de')
+    await switcher.install(first, null, en('de'))
+    await switcher.install(second, null, en('de'))
     expect(seen).toEqual([
-      { phase: 'downloading', client: first, l1: 'de', received: 0, total: 0 },
-      { phase: 'downloading', client: first, l1: 'de', received: 50, total: 100 },
-      { phase: 'failed', client: first, l1: 'de' },
-      { phase: 'downloading', client: second, l1: 'de', received: 0, total: 0 },
-      { phase: 'downloading', client: second, l1: 'de', received: 50, total: 100 },
+      { phase: 'downloading', client: first, course: en('de'), received: 0, total: 0 },
+      { phase: 'downloading', client: first, course: en('de'), received: 50, total: 100 },
+      { phase: 'failed', client: first, course: en('de') },
+      { phase: 'downloading', client: second, course: en('de'), received: 0, total: 0 },
+      { phase: 'downloading', client: second, course: en('de'), received: 50, total: 100 },
       { phase: 'idle' },
     ])
   })
 
-  it('a changeCourse that returns ok:false leaves the store failed with that L1', async () => {
+  it('a changeCourse that returns ok:false leaves the store failed with that course', async () => {
     const switcher = harness()
     const { client } = fakeClient({ de: { ok: false, reason: 'unsupported' } })
-    const outcome = await switcher.install(client, null, 'de')
+    const outcome = await switcher.install(client, null, en('de'))
     expect(outcome).toEqual({ ok: false, reason: 'unsupported' })
-    expect(switcher.store.get()).toEqual({ phase: 'failed', client, l1: 'de' })
+    expect(switcher.store.get()).toEqual({ phase: 'failed', client, course: en('de') })
   })
 
   it('never throws: a failing manifest fetch resolves unavailable and leaves the store failed; reset returns it to idle', async () => {
     const switcher = harness({ fetchManifest: () => Promise.reject(new Error('offline')) })
     const { client } = fakeClient()
-    const outcome = await switcher.install(client, null, 'de')
+    const outcome = await switcher.install(client, null, en('de'))
     expect(outcome).toEqual({ ok: false, reason: 'unavailable' })
-    expect(switcher.store.get()).toEqual({ phase: 'failed', client, l1: 'de' })
+    expect(switcher.store.get()).toEqual({ phase: 'failed', client, course: en('de') })
     switcher.reset()
     expect(switcher.store.get()).toEqual({ phase: 'idle' })
   })
@@ -212,7 +248,7 @@ describe('PackSwitcher (plan 11)', () => {
   it('treats a closed client (an account switched away mid-install) as no failure: idle, not a stale failed, resolved unavailable', async () => {
     const switcher = harness()
     const client = { changeCourse: async () => Promise.reject(new ClientClosed()) } as unknown as Client
-    const outcome = await switcher.install(client, null, 'de')
+    const outcome = await switcher.install(client, null, en('de'))
     expect(outcome).toEqual({ ok: false, reason: 'unavailable' })
     expect(switcher.store.get()).toEqual({ phase: 'idle' })
   })

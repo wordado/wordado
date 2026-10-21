@@ -1,5 +1,5 @@
 import { Client, createStore, type ClientEnv, type InstallReport, type PackFetcher, type SqlDriver, type Store, type SyncTransport } from '@wordado/client-data'
-import { isCourseL1, type L1, type PackManifest } from '@wordado/core'
+import { isCourseL1, type Corpus, type L1, type PackManifest, type Settings, type Target } from '@wordado/core'
 import { DEMO_FILE, learnerFile, type AccountRecord, type AccountStorage } from '../account/storage'
 import type { Locale } from '../i18n/i18n'
 import type { Backend } from '../storage/protocol'
@@ -78,8 +78,11 @@ export interface BootDeps {
   readonly setupPullTimeoutMs?: number
   /** Tests shorten OPEN_TIMEOUT_MS. */
   readonly openTimeoutMs?: number
-  /** The manifest to install from: a visitor's (the trial manifest when the build names one, the bundled sample otherwise) or a learner's (the CDN, plan 7). */
-  fetchManifest(account: AccountRecord | null): Promise<PackManifest>
+  /**
+   * The manifest to install from: a visitor's (the trial manifest when the build names one, the bundled sample
+   * otherwise) or a learner's (the CDN, plan 7), for `target`'s course (spec §5.5).
+   */
+  fetchManifest(account: AccountRecord | null, target: Target): Promise<PackManifest>
   readonly fetchPack: PackFetcher
   /** Quick work before the app shows, such as reading the audio cache's index. Its failure never fails the boot. */
   prepare?(client: Client, account: AccountRecord | null): Promise<void>
@@ -95,6 +98,13 @@ export interface SwitchOptions {
 }
 
 const messageOf = (err: unknown): string => (err instanceof Error ? err.message : String(err))
+
+/** The first-run setup, or a new course's (spec §8.6): its language is not chosen and its words are not installed. */
+export function setupNeeded(s: { corpus: Corpus | null; settings: Settings; states: ReadonlyMap<unknown, unknown> }): boolean {
+  if (s.settings.l1 !== null) return false
+  if (s.corpus === null) return s.states.size === 0
+  return s.corpus.target !== s.settings.course
+}
 
 /**
  * Starts the app (spec §9.1, §5.1): take the tab lock, open the database,
@@ -371,7 +381,9 @@ export class Boot {
       if (generation !== this.generation) return
       let installFailure: unknown = null
       try {
-        const report = await client.installPacks(await this.deps.fetchManifest(this.account), this.deps.fetchPack)
+        // The settings' course's manifest (spec §8.6). A course switched to that is not installed yet stages nothing
+        // here (`installPacks` stages the installed course's packs): the course watcher installs it once the app is open.
+        const report = await client.installPacks(await this.deps.fetchManifest(this.account, client.snapshot.settings.course), this.deps.fetchPack)
         this.deps.onInstallReport?.(report)
       } catch (err) {
         installFailure = err
@@ -391,12 +403,13 @@ export class Boot {
 
   /**
    * The first-run setup (plan 11, Decision 1): this file has no pack, its settings name no L1, and nothing has been
-   * studied. For an account those facts count only after a pull completes, so a returning learner's own settings and
-   * progress decide. A pull that fails or times out takes the ordinary path. Even without the setup, a completed pull
-   * has done its other job: `settings.l1` now chooses the first install.
+   * studied. Or a new course's (spec §8.6): the settings name a course whose L1 is not chosen, and the installed pack
+   * is another course's (`setupNeeded`). For an account those facts count only after a pull completes, so a returning
+   * learner's own settings and progress decide. A pull that fails or times out takes the ordinary path. Even without
+   * the setup, a completed pull has done its other job: `settings.l1` now chooses the first install.
    */
   private async needsSetup(client: Client, generation: number): Promise<boolean> {
-    if (client.snapshot.corpus !== null) return false
+    if (client.snapshot.corpus !== null && client.snapshot.corpus.target === client.snapshot.settings.course) return false
     if (this.account) {
       let timer: ReturnType<typeof setTimeout> | undefined
       const timeout = new Promise<'timeout'>((resolve) => {
@@ -406,8 +419,7 @@ export class Boot {
       clearTimeout(timer)
       if (generation !== this.generation || outcome !== 'synced') return false
     }
-    const { settings, states } = client.snapshot
-    return settings.l1 === null && states.size === 0
+    return setupNeeded(client.snapshot)
   }
 
   /**

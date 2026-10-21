@@ -2,7 +2,7 @@ import { Client, createStore } from '@wordado/client-data'
 import { nodeSqliteDriver } from '@wordado/client-data/src/drivers/nodeSqlite'
 import { openSampleClient, sampleFetcher, sampleManifest } from '@wordado/client-data/src/testing/sample'
 import { testEnv } from '@wordado/client-data/src/testing/testEnv'
-import type { Corpus, PackDescriptor } from '@wordado/core'
+import type { Corpus, Course, PackDescriptor } from '@wordado/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { memoryStorage } from '../account/storage'
 import { noteInstallReport, PACK_CHECK_INTERVAL_MS, refreshAudioOnActivation, startPackChecks } from './content'
@@ -58,27 +58,40 @@ describe('content (spec §9.3)', () => {
   })
 
   it('re-reads the audio index when a new pack becomes active, not before', async () => {
-    const store = createStore<{ packVersion: number | null; corpus: Corpus | null; l1: string }>({ packVersion: 1, corpus: null, l1: 'bg' })
+    const store = createStore<{ packVersion: number | null; corpus: Corpus | null; course: Course }>({ packVersion: 1, corpus: null, course: { target: 'en', l1: 'bg' } })
     const refreshed: (Corpus | null)[] = []
     const corpus = {} as Corpus
     const stop = refreshAudioOnActivation({ store }, { refresh: async (c) => void refreshed.push(c) })
-    store.set({ packVersion: 1, corpus, l1: 'bg' })
+    store.set({ packVersion: 1, corpus, course: { target: 'en', l1: 'bg' } })
     expect(refreshed).toEqual([])
-    store.set({ packVersion: 2, corpus, l1: 'bg' })
+    store.set({ packVersion: 2, corpus, course: { target: 'en', l1: 'bg' } })
     expect(refreshed).toEqual([corpus])
     stop()
-    store.set({ packVersion: 3, corpus, l1: 'bg' })
+    store.set({ packVersion: 3, corpus, course: { target: 'en', l1: 'bg' } })
     expect(refreshed).toEqual([corpus])
   })
 
   it('re-reads the audio index when the native language changes, even at the same corpus version (plan 10)', () => {
     const bg = {} as Corpus
     const de = {} as Corpus
-    const store = createStore<{ packVersion: number | null; corpus: Corpus | null; l1: string }>({ packVersion: 0, corpus: bg, l1: 'bg' })
+    const store = createStore<{ packVersion: number | null; corpus: Corpus | null; course: Course }>({ packVersion: 0, corpus: bg, course: { target: 'en', l1: 'bg' } })
     const refreshed: (Corpus | null)[] = []
     const stop = refreshAudioOnActivation({ store }, { refresh: async (c) => void refreshed.push(c) })
-    store.set({ packVersion: 0, corpus: de, l1: 'de' })
+    store.set({ packVersion: 0, corpus: de, course: { target: 'en', l1: 'de' } })
     expect(refreshed).toEqual([de])
+    stop()
+  })
+
+  it('re-reads the audio index when the course changes, not when a snapshot names the same course again (spec §8.6)', () => {
+    const english = {} as Corpus
+    const german = {} as Corpus
+    const store = createStore<{ packVersion: number | null; corpus: Corpus | null; course: Course }>({ packVersion: 0, corpus: english, course: { target: 'en', l1: 'bg' } })
+    const refreshed: (Corpus | null)[] = []
+    const stop = refreshAudioOnActivation({ store }, { refresh: async (c) => void refreshed.push(c) })
+    store.set({ packVersion: 0, corpus: english, course: { target: 'en', l1: 'bg' } })
+    expect(refreshed).toEqual([])
+    store.set({ packVersion: 0, corpus: german, course: { target: 'de', l1: 'bg' } })
+    expect(refreshed).toEqual([german])
     stop()
   })
 })

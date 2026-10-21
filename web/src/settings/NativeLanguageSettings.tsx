@@ -17,7 +17,7 @@ export function NativeLanguageSettings() {
   const current = settings.l1 ?? installed
   // Intl's own form of the name, as it sits mid-sentence: "German", "Deutsch", "немски".
   const inSentence = (l1: L1) => new Intl.DisplayNames([locale], { type: 'language' }).of(l1) ?? l1
-  /** A setting the installed pack does not match yet: `watchL1` installs it once it can (offline, it waits). */
+  /** A setting the installed pack does not match yet: `watchCourse` installs it once it can (offline, it waits). */
   const pending = settings.l1 !== null && settings.l1 !== installed ? settings.l1 : null
 
   return (

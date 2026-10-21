@@ -1,5 +1,5 @@
 import type { PackFetcher } from '@wordado/client-data'
-import { validateManifest, type AudioClip, type PackManifest } from '@wordado/core'
+import { TARGETS, validateManifest, type AudioClip, type PackManifest, type Target } from '@wordado/core'
 import type { AccountRecord } from '../account/storage'
 
 /** The bundled sample (spec §8.6): the demo's content, and a learner's where no CDN manifest is configured. */
@@ -11,13 +11,32 @@ export const CONTENT_MANIFEST_URL: string = import.meta.env.VITE_CONTENT_MANIFES
 /** A visitor's manifest (spec 2026-10-12 §4.1): the trial's when the build names one, otherwise the bundled sample. */
 export const TRIAL_MANIFEST_URL: string = import.meta.env.VITE_TRIAL_MANIFEST_URL || SAMPLE_MANIFEST_URL
 
-/** A visitor studies the trial's packs (the bundled sample when the build names none); a signed-in learner studies the CDN's. */
+/** A target's manifest sits beside English's, in a folder named after the target (spec §5.1). */
+export function targetManifestUrl(manifestUrl: string, target: string): string {
+  if (target === 'en') return manifestUrl
+  const slash = manifestUrl.lastIndexOf('/')
+  return `${manifestUrl.slice(0, slash + 1)}${target}/${manifestUrl.slice(slash + 1)}`
+}
+
+/** The courses this build offers (spec §5.5): English always, then what `VITE_COURSE_TARGETS` adds, in `TARGETS` order. */
+export function parseTargets(value: string | undefined): readonly Target[] {
+  const named = new Set((value ?? '').split(',').map((s) => s.trim()))
+  return TARGETS.filter((t) => t === 'en' || named.has(t))
+}
+
+export const OFFERED_TARGETS: readonly Target[] = parseTargets(import.meta.env.VITE_COURSE_TARGETS)
+
+/**
+ * A visitor studies the trial's packs (the bundled sample when the build names none); a signed-in learner studies the
+ * CDN's. Either way, each course's manifest is its own (`targetManifestUrl`).
+ */
 export function manifestUrlFor(
   account: AccountRecord | null,
+  target: string,
   learnerManifest: string = CONTENT_MANIFEST_URL,
   visitorManifest: string = TRIAL_MANIFEST_URL,
 ): string {
-  return account === null ? visitorManifest : learnerManifest
+  return targetManifestUrl(account === null ? visitorManifest : learnerManifest, target)
 }
 
 export type Fetch = (input: string, init?: RequestInit) => Promise<Response>

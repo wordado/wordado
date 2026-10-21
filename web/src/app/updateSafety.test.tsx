@@ -108,7 +108,7 @@ describe('the shell’s guard (spec §9.1)', () => {
     inSetup.unmount()
     const after = renderWith(<Shell />, { ...ctx, lifecycle, packs, accounts })
     expect(lifecycle.safe?.()).toBe(true)
-    packs.store.set({ phase: 'downloading', client: ctx.client, l1: 'de', received: 0, total: 0 })
+    packs.store.set({ phase: 'downloading', client: ctx.client, course: { target: 'en', l1: 'de' }, received: 0, total: 0 })
     expect(lifecycle.safe?.()).toBe(false)
     packs.store.set({ phase: 'idle' })
     accounts.store.set({ expired: false, notice: 'signed-in' })
