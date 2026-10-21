@@ -1,6 +1,7 @@
 import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join, relative } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { checkPackSuccession, loadCorpus, offeredThemes, validatePack, type Pack } from '@wordado/core'
 import { describe, expect, it } from 'vitest'
 import { audioQueueItems, readAudioRecords } from './audio'
@@ -14,7 +15,7 @@ import { PROFILES } from './profiles'
 import { exportQueues, importQueues, pendingItems, queueSpecs } from './queues'
 import { adoptRelease, planRelease, writeRelease } from './release'
 import { triage } from './reports'
-import { makeContent, recordAudio, sampleLlm } from './testing/fixture'
+import { approveAll, makeContent, recordAudio, sampleLlm } from './testing/fixture'
 
 /** The reviewer: opens every review file, says ok to each row, and edits the rows `edits` names first. */
 function review(dir: string, edits: Record<string, Record<string, string>> = {}): void {
@@ -148,6 +149,39 @@ describe('the corpus pipeline, end to end (spec §13)', () => {
     expect(v2.units.find((u) => u.entry_ids.includes('bank-2'))!.level).toBe('B1')
     const fixes = JSON.parse(readFileSync(join(v2Dir, 'fixes.json'), 'utf8')) as { fixes: { word_id: string; field: string; fixed_in: number }[] }
     expect(fixes.fixes.some((f) => f.word_id === 'c:bank-2' && f.field === 'level' && f.fixed_in === 2)).toBe(true)
+  }, 30_000)
+})
+
+describe('an English corpus with no target', () => {
+  // The files under testing/english-release were written by this same flow on the code before a second target
+  // language existed (#313): with no `target` in pipeline.json, the review CSVs, packs, trial packs, manifests and
+  // clip IDs stay byte for byte what they were. A difference is a regression to fix, never a snapshot to rewrite.
+  const snapshots = join(dirname(fileURLToPath(import.meta.url)), 'testing', 'english-release')
+  const filesUnder = (root: string): string[] =>
+    readdirSync(root, { recursive: true, withFileTypes: true })
+      .filter((d) => d.isFile())
+      .map((d) => relative(root, join(d.parentPath, d.name)))
+      .sort()
+
+  it('exports the same review files and releases the same bytes as before', async () => {
+    const dir = makeContent()
+    await runDraft({ dir, llm: sampleLlm(), offline: false })
+    await recordAudio(dir, '20261001T1000')
+    const csvs = queues(dir, '2026-10-01')
+    approveAll(dir)
+    const plan = planRelease(dir, { draft: false, now: '2026-10-01T13:00:00Z' })
+    expect([plan.problems, plan.pending]).toEqual([[], []])
+    const releaseDir = join(mkdtempSync(join(tmpdir(), 'e2e-')), 'release')
+    const files = writeRelease(dir, releaseDir, plan)
+
+    const actual = new Map<string, Buffer>()
+    for (const f of files.filter((f) => !f.startsWith('audio/'))) actual.set(f, readFileSync(join(releaseDir, f)))
+    actual.set('audio.txt', Buffer.from(`${files.filter((f) => f.startsWith('audio/')).sort().join('\n')}\n`))
+    for (const f of csvs) actual.set(f, readFileSync(join(dir, f)))
+
+    expect([...actual.keys()].sort()).toEqual(filesUnder(snapshots))
+    for (const [f, bytes] of actual) expect(bytes.toString('utf8'), f).toBe(readFileSync(join(snapshots, f), 'utf8'))
+    for (const [f, bytes] of actual) expect(bytes.equals(readFileSync(join(snapshots, f))), f).toBe(true)
   }, 30_000)
 })
 
