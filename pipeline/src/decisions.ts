@@ -36,6 +36,8 @@ export const QUEUES = {
   english: 'english',
   level: 'level',
   audio: 'audio',
+  /** The grammar block of a target that has one (spec §5.5). */
+  grammar: 'grammar',
   translation: (l1: string) => `translation-${l1}`,
   title: (l1: string) => `title-${l1}`,
 } as const

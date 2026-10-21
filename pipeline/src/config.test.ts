@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { aiReviewRequired, configProblems, themeProblems, type AiReviewConfig } from './config'
+import { aiReviewRequired, configProblems, reviewQueues, themeProblems, type AiReviewConfig } from './config'
+import { PROFILES } from './profiles'
 import { contentPaths } from './content'
 
 export const validConfig = {
@@ -172,5 +173,30 @@ describe('ai_review', () => {
 describe('contentPaths', () => {
   it('keeps AI-review verdicts under ai-review/', () => {
     expect(contentPaths('/c').aiReview('translation-bg')).toBe('/c/ai-review/translation-bg.jsonl')
+  })
+})
+
+describe('target', () => {
+  const valid = () => validConfig
+  const de = { target: 'de', l1s: ['bg', 'es', 'en'], tts: { ...valid().tts, accents: { de: valid().tts.accents.uk } } }
+  it('accepts a German directory with a German voice', () => {
+    expect(configProblems({ ...valid(), ...de })).toEqual([])
+  })
+  it('refuses a target it does not know', () => {
+    expect(configProblems({ ...valid(), target: 'fr' })).toContain('target: must be one of en, de')
+  })
+  it('refuses an L1 that is the target', () => {
+    expect(configProblems({ ...valid(), ...de, l1s: ['bg', 'de'] })).toContain('l1s: de is the target language')
+  })
+  it('asks for the target voices', () => {
+    expect(configProblems({ ...valid(), target: 'de' })).toEqual(expect.arrayContaining(['tts.accents.de: required', 'tts.accents.uk: accent must be de']))
+  })
+  it('keeps the English messages', () => {
+    expect(configProblems({ ...valid(), tts: { ...valid().tts, accents: { xx: valid().tts.accents.uk } } }))
+      .toEqual(expect.arrayContaining(['tts.accents.uk: required', 'tts.accents.xx: accent must be uk or us']))
+  })
+  it('names the grammar queue only for a target with grammar', () => {
+    expect(reviewQueues(['bg'], PROFILES.en)).toEqual(['english', 'level', 'audio', 'translation-bg', 'title-bg'])
+    expect(reviewQueues(['bg'], PROFILES.de)).toEqual(['german', 'level', 'audio', 'grammar', 'translation-bg', 'title-bg'])
   })
 })

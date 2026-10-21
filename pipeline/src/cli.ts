@@ -24,6 +24,7 @@ import { reopenReviewed } from './reopen'
 import { aliveKeys, exportQueues, importQueues, pendingItems, queueSpecs } from './queues'
 import { adoptRelease, planRelease, writeRelease } from './release'
 import { pgQuery, pullReports, triage } from './reports'
+import { profileOf } from './profiles'
 import { readClearedSources } from './sources'
 import { openRouterTts } from './tts'
 
@@ -235,7 +236,7 @@ function importReviewed(dir: string): void {
 
 function reopen(dir: string, queue: string): void {
   const config = readConfig(dir)
-  const queues = reviewQueues(config.l1s)
+  const queues = reviewQueues(config.l1s, profileOf(config))
   if (!queues.includes(queue)) {
     console.error(`${queue} is not a review queue; one of ${queues.join(', ')}`)
     process.exit(2)
