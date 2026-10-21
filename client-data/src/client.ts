@@ -299,13 +299,23 @@ export class Client {
    * Nothing changes when the pack cannot be had (offline): the caller tries again later. Also installs a learner's
    * first pack (the setup's Language step): with no pack yet active, this always fetches and installs, even when
    * `course` already equals `Client.course` (which follows the settings before any pack exists).
+   *
+   * With `switchCourse`, a switch to a course started before (Settings' course page): the settings follow the pack
+   * (`switchCourse`'s patch) once it is active and before anyone is told, so nothing ever sees the new pack under the
+   * old course's settings, and nothing changes at all when the pack cannot be had.
    */
-  changeCourse(course: Course, manifest: PackManifest, fetchPack: PackFetcher): Promise<ChangeL1Outcome> {
+  changeCourse(course: Course, manifest: PackManifest, fetchPack: PackFetcher, options: { readonly switchCourse?: boolean } = {}): Promise<ChangeL1Outcome> {
     return this.guarded(async () => {
       if (!isCourseL1(course.target, course.l1)) return { ok: false, reason: 'unsupported' }
       // Compared with the active corpus, not `this.course`: with no pack yet, `this.course` follows the settings, and
       // the first install (the setup's Language step) must still fetch.
-      if (this.corpus !== null && this.corpus.target === course.target && this.corpus.l1 === course.l1) return { ok: true }
+      if (this.corpus !== null && this.corpus.target === course.target && this.corpus.l1 === course.l1) {
+        if (options.switchCourse) {
+          await this.switchSettings(course.target)
+          this.refresh()
+        }
+        return { ok: true }
+      }
       const report = await installPacks(this.db, this.env, manifest, course, fetchPack)
       const installed = await installedPacks(this.db)
       const has = report.staged.length > 0 || installed.some((p) => p.pack_id === coursePackId(course.target, course.l1))
@@ -314,6 +324,8 @@ export class Client {
       // A `startSession` running at the same moment may have dropped the staged pack (another course's, to it) between
       // staging and activating: nothing of the course is then active, and the caller tries again later.
       if (promoted.length === 0 && !(await hasActiveCourse(this.db, course))) return { ok: false, reason: 'unavailable' }
+      // Parked while the old course's pack is still the corpus, so an L1 installed from the default is parked with it.
+      if (options.switchCourse) await this.switchSettings(course.target)
       // Reload what `open` loads from the active packs (corpus, pack version, session plan), as `startSession` does.
       // The new corpus's course is now `this.course`.
       await this.reloadCorpus()
@@ -330,21 +342,26 @@ export class Client {
    */
   switchCourse(to: Target): Promise<{ needsSetup: boolean }> {
     return this.guarded(async () => {
-      this.settings = await this.db.transaction(async (tx) => {
-        const stored = await readSettings(tx)
-        // A course installed from the default L1 (a demo, or before the setup wrote `settings.l1`) is still started:
-        // its installed L1 is parked with it, so its level and theme are not lost as those of a course never begun.
-        const installed = this.corpus !== null && this.corpus.target === stored.course && isCourseL1(stored.course, this.corpus.l1) ? this.corpus.l1 : null
-        // An L1 the course is not taught from (a two-device merge can leave `{ course: 'de', l1: 'de' }`) is not parked:
-        // the server would refuse the write. The course is then parked as never started.
-        const l1 = isCourseL1(stored.course, stored.l1) ? stored.l1 : installed
-        const current = l1 === stored.l1 ? stored : { ...stored, l1 }
-        const { park, settings } = courseSwitchPatch(current, await readParkedCourse(tx, to), to)
-        if (park) await writeParkedCourse(tx, current.course, park)
-        return Object.keys(settings).length === 0 ? stored : patchSettings(tx, settings)
-      })
+      await this.switchSettings(to)
       this.refresh()
       return { needsSetup: this.settings.l1 === null }
+    })
+  }
+
+  /** `switchCourse`'s settings patch and parking, in one transaction; the caller refreshes. */
+  private async switchSettings(to: Target): Promise<void> {
+    this.settings = await this.db.transaction(async (tx) => {
+      const stored = await readSettings(tx)
+      // A course installed from the default L1 (a demo, or before the setup wrote `settings.l1`) is still started:
+      // its installed L1 is parked with it, so its level and theme are not lost as those of a course never begun.
+      const installed = this.corpus !== null && this.corpus.target === stored.course && isCourseL1(stored.course, this.corpus.l1) ? this.corpus.l1 : null
+      // An L1 the course is not taught from (a two-device merge can leave `{ course: 'de', l1: 'de' }`) is not parked:
+      // the server would refuse the write. The course is then parked as never started.
+      const l1 = isCourseL1(stored.course, stored.l1) ? stored.l1 : installed
+      const current = l1 === stored.l1 ? stored : { ...stored, l1 }
+      const { park, settings } = courseSwitchPatch(current, await readParkedCourse(tx, to), to)
+      if (park) await writeParkedCourse(tx, current.course, park)
+      return Object.keys(settings).length === 0 ? stored : patchSettings(tx, settings)
     })
   }
 

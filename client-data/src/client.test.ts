@@ -812,6 +812,44 @@ describe('Client courses (spec §5.5, §8.6)', () => {
     expect(client.snapshot.states.size).toBe(1) // the English review state survived both switches
   })
 
+  it('a switch to a course started before follows its pack: one refresh shows the new pack under its own settings', async () => {
+    const env = testEnv()
+    const german = await germanServing(env)
+    const client = await openClient(env)
+    await client.updateSettings({ declaredLevel: 'B1' })
+    await client.switchCourse('de')
+    await client.updateSettings({ l1: 'bg', declaredLevel: 'A2' })
+    expect(await client.changeCourse({ target: 'de', l1: 'bg' }, german.manifest, german.fetch)).toEqual({ ok: true })
+    await client.switchCourse('en')
+    expect(await client.changeCourse({ target: 'en', l1: 'bg' }, german.manifest, german.fetch)).toEqual({ ok: true })
+
+    const seen: { course: string; corpus: string | undefined; level: string }[] = []
+    client.store.subscribe(() => {
+      const s = client.snapshot
+      seen.push({ course: s.settings.course, corpus: s.corpus?.target, level: s.settings.declaredLevel })
+    })
+    expect(await client.changeCourse({ target: 'de', l1: 'bg' }, german.manifest, german.fetch, { switchCourse: true })).toEqual({ ok: true })
+
+    expect(seen).toEqual([{ course: 'de', corpus: 'de', level: 'A2' }])
+    expect(await client.parkedCourse('en')).toEqual({ l1: 'bg', declaredLevel: 'B1', activeTheme: null })
+  })
+
+  it('a switch whose pack cannot be had changes nothing: neither the pack nor the settings', async () => {
+    const env = testEnv()
+    const german = await germanServing(env)
+    const client = await openClient(env)
+    await client.switchCourse('de')
+    await client.updateSettings({ l1: 'bg' })
+    await client.switchCourse('en')
+    const before = client.snapshot.settings
+
+    const outcome = await client.changeCourse({ target: 'de', l1: 'bg' }, german.manifest, () => Promise.reject(new Error('offline')), { switchCourse: true })
+
+    expect(outcome).toEqual({ ok: false, reason: 'unavailable' })
+    expect(client.snapshot.settings).toEqual(before)
+    expect(client.snapshot.corpus?.target).toBe('en')
+  })
+
   it('switching to the course already studied changes nothing', async () => {
     const client = await openClient()
     await client.updateSettings({ l1: 'bg', declaredLevel: 'B1' })
