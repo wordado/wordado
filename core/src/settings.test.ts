@@ -85,7 +85,8 @@ describe('l1', () => {
     expect(settingsFromFields({ l1: 'xx' }).l1).toBeNull()
     expect(isSupportedL1('bg')).toBe(true)
     expect(isSupportedL1('es')).toBe(true)
-    expect(isSupportedL1('en')).toBe(false)
+    expect(isSupportedL1('en')).toBe(true)
+    expect(isSupportedL1('fr')).toBe(false)
   })
 })
 
@@ -103,5 +104,14 @@ describe('termsSeen and privacySeen', () => {
       expect(errorsOf({ privacySeen: value }), String(value)).toEqual(['privacySeen'])
     }
     expect(settingsFromFields({ termsSeen: 'yesterday', privacySeen: '2026-10-10' })).toMatchObject({ termsSeen: null, privacySeen: '2026-10-10' })
+  })
+})
+
+describe('the course setting', () => {
+  it('validates the course and accepts English as an L1', () => {
+    expect(validateSettingsPatch({ course: 'de' })).toEqual({ ok: true, fields: { course: 'de' } })
+    expect(validateSettingsPatch({ course: 'fr' })).toEqual({ ok: false, errors: ['course'] })
+    expect(validateSettingsPatch({ l1: 'en' })).toEqual({ ok: true, fields: { l1: 'en' } })
+    expect(DEFAULT_SETTINGS.course).toBe('en')
   })
 })

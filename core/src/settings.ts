@@ -1,11 +1,17 @@
 import { RETENTION_TARGETS, type RetentionSetting } from './scheduler'
 import { DEFAULT_NEW_WORD_LIMIT, DEFAULT_REVIEW_CAP, MAX_NEW_WORD_LIMIT } from './session'
+import { isTarget, type Target } from './target'
 import { CEFR_LEVELS, type CefrLevel } from './types'
 
-/** The learners' native languages (spec §3): one pack per L1. A new L1 adds its code here. */
-export const SUPPORTED_L1S = ['bg', 'de', 'es'] as const
+/** The learners' native languages (spec §3): a course is taught from one of them. A new L1 adds its code here. */
+export const SUPPORTED_L1S = ['bg', 'de', 'es', 'en'] as const
 export type L1 = (typeof SUPPORTED_L1S)[number]
 export const isSupportedL1 = (v: unknown): v is L1 => typeof v === 'string' && (SUPPORTED_L1S as readonly string[]).includes(v)
+
+/** The L1s each course is taught from (spec §3, §5.5), in the order the setup lists them. */
+export const COURSE_L1S: Readonly<Record<Target, readonly L1[]>> = { en: ['bg', 'de', 'es'], de: ['bg', 'es', 'en'] }
+export const isCourseL1 = (target: string, l1: unknown): l1 is L1 =>
+  isTarget(target) && typeof l1 === 'string' && (COURSE_L1S[target] as readonly string[]).includes(l1)
 
 /** The learner's settings document (spec §6.2, §7.4, §8.4). Validated before any rule reads it. */
 export interface Settings {
@@ -20,8 +26,10 @@ export interface Settings {
   readonly audio: boolean
   /** Slow correct answers count as Hard (spec §7.3); off grades on correctness alone (spec §11.1). */
   readonly latencyGrading: boolean
-  /** The learner's L1 (spec §6.2, §8.6); null until chosen. An account without one studies Bulgarian, the only L1 before plan 10. */
+  /** The learner's L1 for the current course (spec §6.2, §8.6); null until chosen. */
   readonly l1: L1 | null
+  /** The course being studied (spec §8.6): its target. `l1`, `declaredLevel` and `activeTheme` are that course's; another course's wait in its `course` document. */
+  readonly course: Target
   /**
    * The date of the terms of use whose notice the learner last dismissed (#184), as the website dates them
    * (`YYYY-MM-DD`); null until one is dismissed. In the account, so one dismissal covers every device.
@@ -43,6 +51,7 @@ export const DEFAULT_SETTINGS: Settings = {
   audio: true,
   latencyGrading: true,
   l1: null,
+  course: 'en',
   termsSeen: null,
   privacySeen: null,
 }
@@ -83,9 +92,11 @@ export function validateSettingsPatch(patch: Record<string, unknown>): SettingsV
                     ? typeof value === 'boolean'
                     : key === 'l1'
                       ? value === null || isSupportedL1(value)
-                      : key === 'termsSeen' || key === 'privacySeen'
-                        ? value === null || isDate(value)
-                        : false
+                      : key === 'course'
+                        ? isTarget(value)
+                        : key === 'termsSeen' || key === 'privacySeen'
+                          ? value === null || isDate(value)
+                          : false
     if (valid) fields[key] = value
     else errors.push(key)
   }
