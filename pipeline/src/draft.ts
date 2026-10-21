@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs'
-import { norm, type CefrLevel, type LocalizedText, type PartOfSpeech } from '@wordado/core'
+import { norm, type CefrLevel, type Grammar, type LocalizedText, type PartOfSpeech } from '@wordado/core'
 import { StageCache } from './cache'
 import { readConfig, readThemes } from './config'
 import { contentPaths } from './content'
@@ -47,6 +47,8 @@ export interface DraftEntry {
   readonly themes: readonly string[]
   readonly english: EnglishFields
   readonly l1: Readonly<Record<string, TranslationFields>>
+  /** The target's grammar (spec §5.5); null when it has none. */
+  readonly grammar: Grammar | null
   /**
    * False for an entry not-taught.txt names: known from the start, shipped with `taught: false`, searchable and never
    * taught (issue #285). Absent means taught.
@@ -182,12 +184,13 @@ export async function runDraft(opts: DraftOptions): Promise<Draft> {
       themes: [],
       english: { ipa: s.ipa, variants: s.variants, examples: s.examples },
       l1: s.l1,
+      grammar: s.grammar ?? null,
       ...(notTaught.has(entry_id) ? { taught: false as const } : {}),
     }
   })
 
   const dropped = (e: DraftEntry) =>
-    foldField(e.english, decisions.for(QUEUES.english, e.entry_id)).dropped ||
+    foldField(e.english, decisions.for(profile.reviewQueue, e.entry_id)).dropped ||
     config.l1s.some((l) => foldField(e.l1[l], decisions.for(QUEUES.translation(l), e.entry_id)).dropped)
   const live = selectLive(
     proposed.map((e) => ({ entry_id: e.entry_id, level: e.level, rank: e.rank, order: e.order, pinned: e.pinned || e.essential, wasLive: last.live.has(e.entry_id), dropped: dropped(e) })),

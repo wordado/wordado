@@ -219,16 +219,17 @@ function queues(dir: string): void {
   const config = readConfig(dir)
   const decisions = Decisions.read(dir)
   const draft = readDraft(dir)
-  const items = pendingItems(draft, decisions, config.l1s)
+  const items = pendingItems(draft, decisions, config.l1s, profileOf(config))
   items.set(QUEUES.audio, audioQueueItems(readAudioRecords(dir), decisions))
-  const files = exportQueues(dir, items, queueSpecs(config.l1s), { stamp: now().slice(0, 10), alive: aliveKeys(draft, config.l1s) })
+  const files = exportQueues(dir, items, queueSpecs(config.l1s, profileOf(config)), { stamp: now().slice(0, 10), alive: aliveKeys(draft, config.l1s, profileOf(config)) })
   console.log(files.length > 0 ? files.join('\n') : 'no new review items')
 }
 
 function importReviewed(dir: string): void {
   const by = option('--by')
   if (!by) usage()
-  const out = importQueues(dir, queueSpecs(readConfig(dir).l1s), { by, now: now() })
+  const config = readConfig(dir)
+  const out = importQueues(dir, queueSpecs(config.l1s, profileOf(config)), { by, now: now() })
   console.log(`${out.applied} decisions applied; ${out.pending} rows still open`)
   for (const e of out.errors) console.error(e)
   if (out.errors.length > 0) process.exit(1)

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { Decisions, QUEUES } from '../decisions'
 import { readDraft, runDraft } from '../draft'
+import { PROFILES } from '../profiles'
 import { pendingItems } from '../queues'
 import { makeContent, sampleLlm } from '../testing/fixture'
 import { reviewRows } from './rows'
@@ -11,8 +12,8 @@ describe('reviewRows', () => {
     await runDraft({ dir, llm: sampleLlm(), offline: false })
     const draft = readDraft(dir)
     const queue = QUEUES.translation('bg')
-    const items = pendingItems(draft, Decisions.read(dir), ['bg']).get(queue)!
-    const rows = reviewRows(queue, items, draft, ['bg'])
+    const items = pendingItems(draft, Decisions.read(dir), ['bg'], PROFILES.en).get(queue)!
+    const rows = reviewRows(queue, items, draft, ['bg'], PROFILES.en)
     const first = rows[0]!
     expect(Object.keys(first.cells)).toEqual(['translation', 'alternates', 'sense'])
     expect(first.context).toMatchObject({ headword: expect.any(String), pos: expect.any(String), sense_en: expect.any(String), example: expect.any(String), learner_reports: '' })

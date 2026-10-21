@@ -1,12 +1,13 @@
 import { norm } from '@wordado/core'
 import type { Draft } from '../draft'
+import type { LanguageProfile } from '../profiles'
 import { queueSpecs, type QueueItem } from '../queues'
 import { queueKind, type ReviewRow } from './prompts'
 
 /** The review rows of one queue's open items, with the context the reviewer needs. */
-export function reviewRows(queue: string, items: readonly QueueItem[], draft: Draft, l1s: readonly string[]): ReviewRow[] {
+export function reviewRows(queue: string, items: readonly QueueItem[], draft: Draft, l1s: readonly string[], profile: LanguageProfile): ReviewRow[] {
   const kind = queueKind(queue)
-  const spec = queueSpecs(l1s).get(queue)
+  const spec = queueSpecs(l1s, profile).get(queue)
   if (!kind || !spec) throw new Error(`${queue} is not a queue AI review covers`)
   const live = new Set(draft.live)
   const byId = new Map(draft.entries.map((e) => [e.entry_id, e]))

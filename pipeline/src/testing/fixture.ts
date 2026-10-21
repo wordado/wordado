@@ -10,6 +10,7 @@ import { readDraft } from '../draft'
 import { writeJson } from '../files'
 import { initContent, SAMPLE_DIR } from '../init'
 import { fakeLlm } from '../llm'
+import { profileOf } from '../profiles'
 import { pendingItems } from '../queues'
 
 /**
@@ -161,7 +162,7 @@ export function approveAll(dir: string): void {
   const config = readConfig(dir)
   const decisions = Decisions.read(dir)
   const at = '2026-10-01T11:00:00Z'
-  for (const [queue, items] of pendingItems(readDraft(dir), decisions, config.l1s)) {
+  for (const [queue, items] of pendingItems(readDraft(dir), decisions, config.l1s, profileOf(config))) {
     decisions.append(queue, items.map((i) => ({ key: i.key, at, verdict: 'ok' as const, proposed: i.proposed, by: 'fixture' })))
   }
   decisions.append(QUEUES.audio, audioQueueItems(readAudioRecords(dir), decisions).map((i) => ({ key: i.key, at, verdict: 'ok' as const, proposed: i.key, by: 'fixture' })))

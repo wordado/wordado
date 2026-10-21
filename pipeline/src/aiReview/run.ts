@@ -3,6 +3,7 @@ import { Decisions } from '../decisions'
 import { readDraft } from '../draft'
 import { AnswerDoesNotFit, type Llm } from '../llm'
 import { mapLimit } from '../mapLimit'
+import { profileOf } from '../profiles'
 import { pendingItems } from '../queues'
 import { AI_REVIEW_VERSION, queueKind, reviewRequest, type ReviewRow } from './prompts'
 import { reviewRows } from './rows'
@@ -39,7 +40,7 @@ export async function runAiReview(run: AiReviewRun): Promise<AiReviewSummary[]> 
   if (run.queue !== undefined && !cfg.queues.includes(run.queue)) throw new Error(`${run.queue} is not in ai_review.queues`)
   const queues = run.queue !== undefined ? [run.queue] : cfg.queues
   const draft = readDraft(run.dir)
-  const pending = pendingItems(draft, Decisions.read(run.dir), config.l1s)
+  const pending = pendingItems(draft, Decisions.read(run.dir), config.l1s, profileOf(config))
   const store = AiReviewStore.read(run.dir)
   const out: AiReviewSummary[] = []
   for (const queue of queues) {
@@ -47,7 +48,7 @@ export async function runAiReview(run: AiReviewRun): Promise<AiReviewSummary[]> 
     const items = pending.get(queue) ?? []
     const contentOf = new Map(items.map((i) => [i.key, rowContent(queue, i.proposed, i.context['reopened'] ?? '')]))
     const todo = items.filter((i) => !store.current(queue, i.key, run.reviewer, contentOf.get(i.key)!))
-    const rows = reviewRows(queue, todo, draft, config.l1s)
+    const rows = reviewRows(queue, todo, draft, config.l1s, profileOf(config))
     let flagged = 0
     const ask = async (batch: readonly ReviewRow[]): Promise<void> => {
       let verdicts

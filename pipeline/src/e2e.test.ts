@@ -10,6 +10,7 @@ import { Decisions } from './decisions'
 import { readDraft, runDraft } from './draft'
 import { readLastPublished } from './lastPublished'
 import { publishProblems } from './publishable'
+import { PROFILES } from './profiles'
 import { exportQueues, importQueues, pendingItems, queueSpecs } from './queues'
 import { adoptRelease, planRelease, writeRelease } from './release'
 import { triage } from './reports'
@@ -35,9 +36,9 @@ function review(dir: string, edits: Record<string, Record<string, string>> = {})
 function queues(dir: string, stamp: string): string[] {
   const config = readConfig(dir)
   const decisions = Decisions.read(dir)
-  const items = pendingItems(readDraft(dir), decisions, config.l1s)
+  const items = pendingItems(readDraft(dir), decisions, config.l1s, PROFILES.en)
   items.set('audio', audioQueueItems(readAudioRecords(dir), decisions))
-  return exportQueues(dir, items, queueSpecs(config.l1s), { stamp })
+  return exportQueues(dir, items, queueSpecs(config.l1s, PROFILES.en), { stamp })
 }
 
 const pack = (dir: string, file: string): Pack => {
@@ -56,7 +57,7 @@ const reader = (dir: string) => (p: string) => {
 describe('the corpus pipeline, end to end (spec §13)', () => {
   it('drafts, reviews through spreadsheets, releases v1, triages reports and releases the fix as v2', async () => {
     const dir = makeContent()
-    const specs = queueSpecs(['bg'])
+    const specs = queueSpecs(['bg'], PROFILES.en)
 
     await runDraft({ dir, llm: sampleLlm(), offline: false })
     await recordAudio(dir, '20261001T1000')
@@ -108,7 +109,7 @@ describe('the corpus pipeline, end to end (spec §13)', () => {
 
   it('rebuilds levels and units once, reviews the moved level in a spreadsheet, and releases v2 with every entry kept', async () => {
     const dir = makeContent({ config: { levels: ['A1', 'A2', 'B1', 'B2', 'C1'] } })
-    const specs = queueSpecs(['bg'])
+    const specs = queueSpecs(['bg'], PROFILES.en)
     await runDraft({ dir, llm: sampleLlm(), offline: false })
     await recordAudio(dir, '20261001T1000')
     queues(dir, '2026-10-01')

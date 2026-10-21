@@ -14,6 +14,7 @@ import { readDraft } from './draft'
 import { writeJson } from './files'
 import { diffFixes, nextFixesFile } from './fixes'
 import { readLastPublished, type Fix, type FixesFile } from './lastPublished'
+import { profileOf } from './profiles'
 import { pendingItems } from './queues'
 import { readClearedSources } from './sources'
 import { planTrial, TRIAL_MANIFEST, TRIAL_PROBES_PER_LEVEL, type TrialOutput } from './trial'
@@ -85,7 +86,7 @@ export function planRelease(dir: string, opts: { draft: boolean; now: string }):
   if (accepted.has(QUEUES.audio)) unreviewed.push(...audio.unheard.map((line) => ({ queue: QUEUES.audio, line })))
   else pending.push(...audio.unheard)
   // AI review gates every release (spec §5.4), whether or not its queue is in accept_unreviewed.
-  pending.push(...aiGate(config.ai_review, pendingItems(draft, decisions, config.l1s), AiReviewStore.read(dir)))
+  pending.push(...aiGate(config.ai_review, pendingItems(draft, decisions, config.l1s, profileOf(config)), AiReviewStore.read(dir)))
 
   for (const l1 of config.l1s) {
     const previous = last.packs.get(l1) ?? null

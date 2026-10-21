@@ -8,6 +8,7 @@ import { csvRecords } from '@wordado/pipeline/csv'
 import { Decisions } from '@wordado/pipeline/decisions'
 import { readDraft, type Draft, type DraftEntry } from '@wordado/pipeline/draft'
 import { readJson } from '@wordado/pipeline/files'
+import { profileOf } from '@wordado/pipeline/profiles'
 import { pendingItems, type QueueItem } from '@wordado/pipeline/queues'
 import { FIELDS, queueKind } from '@wordado/pipeline/aiReview/prompts'
 import { AiReviewStore, rowContent } from '@wordado/pipeline/aiReview/store'
@@ -43,7 +44,7 @@ function makeCtx(dir: string): Ctx {
     const k = `${norm(e.headword)}|${e.pos}`
     siblings.set(k, [...(siblings.get(k) ?? []), e.entry_id])
   }
-  const pending = pendingItems(draft, Decisions.read(dir), config.l1s)
+  const pending = pendingItems(draft, Decisions.read(dir), config.l1s, profileOf(config))
   return { cfg, store, byId, siblings, pending }
 }
 

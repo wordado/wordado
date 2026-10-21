@@ -1,8 +1,9 @@
-import { norm, type Accent, type Pack, type PackEntry, type PackUnit } from '@wordado/core'
+import { coursePackId, norm, type Accent, type Pack, type PackEntry, type PackUnit } from '@wordado/core'
 import { currentClips, voiceKey, type AudioRecord } from './audio'
 import type { CuratedTheme, PipelineConfig, TtsVoice } from './config'
 import { foldField, QUEUES, type Decisions } from './decisions'
 import type { Draft } from './draft'
+import { profileOf } from './profiles'
 import { levelSampled } from './queues'
 import { inPathOrder } from './units'
 
@@ -49,6 +50,7 @@ export interface Unreviewed {
  */
 export function assemble(input: AssembleInput): Assembled {
   const { l1, draft, decisions, config } = input
+  const profile = profileOf(config)
   const problems: string[] = []
   const pending: string[] = []
   const unreviewed: Unreviewed[] = []
@@ -66,11 +68,13 @@ export function assemble(input: AssembleInput): Assembled {
 
   const entries: PackEntry[] = []
   for (const e of liveEntries) {
-    const english = foldField(e.english, decisions.for(QUEUES.english, e.entry_id))
+    const english = foldField(e.english, decisions.for(profile.reviewQueue, e.entry_id))
     const translation = foldField(e.l1[l1]!, decisions.for(QUEUES.translation(l1), e.entry_id))
     const level = foldField(e.level_proposal, decisions.for(QUEUES.level, e.entry_id))
-    if (!english.reviewed) awaiting(QUEUES.english, `${e.entry_id}: english not reviewed`)
+    if (!english.reviewed) awaiting(profile.reviewQueue, `${e.entry_id}: ${profile.reviewQueue} not reviewed`)
     if (!translation.reviewed) awaiting(QUEUES.translation(l1), `${e.entry_id}: translation (${l1}) not reviewed`)
+    const grammar = profile.grammar && e.grammar !== null ? foldField(e.grammar, decisions.for(QUEUES.grammar, e.entry_id)) : null
+    if (grammar && !grammar.reviewed) awaiting(QUEUES.grammar, `${e.entry_id}: grammar not reviewed`)
     if ((e.level_flagged || levelSampled(e.entry_id)) && !level.reviewed) {
       awaiting(QUEUES.level, `${e.entry_id}: level not reviewed`)
     }
@@ -108,6 +112,8 @@ export function assemble(input: AssembleInput): Assembled {
       retired: false,
       // Written only when false, so the bytes of every entry that is taught stay as they were.
       ...(e.taught === false ? { taught: false } : {}),
+      // Written only when there is a block to write, so an English entry's bytes stay as they were.
+      ...(grammar && Object.keys(grammar.value).length > 0 ? { grammar: grammar.value } : {}),
     })
   }
 
@@ -163,7 +169,7 @@ export function assemble(input: AssembleInput): Assembled {
   }))
   const clipIds = entries.flatMap((e) => Object.values(e.audio)).sort()
   return {
-    source: { pack_id: `corpus-${l1}`, corpus_version: input.corpusVersion, l1, target: 'en', units, themes, entries },
+    source: { pack_id: coursePackId(profile.code, l1), corpus_version: input.corpusVersion, l1, target: profile.code, units, themes, entries },
     clipIds,
     problems,
     pending,
