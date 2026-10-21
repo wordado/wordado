@@ -2,6 +2,7 @@ import type { PartOfSpeech } from '@wordado/core'
 import { cachedBatch } from '../cache'
 import type { CuratedTheme } from '../config'
 import { ParseError } from '../llm'
+import type { LanguageProfile } from '../profiles'
 import type { StageRun } from './lemmas'
 
 export const THEMES_VERSION = 1
@@ -14,7 +15,7 @@ export interface ThemeSense {
   readonly example: string
 }
 
-const SYSTEM = `You sort the words of an English vocabulary course for adult learners into themes.
+export const themeSystem = (p: LanguageProfile) => `You sort the words of ${p.course} for adult learners into themes.
 For each item, in the order given, choose up to three theme ids from the list given whose description the word, in the sense its gloss and example show, clearly fits; most relevant first; empty if none fits.
 Choose a topic theme only when the word is mainly used when talking about that topic. A general word that is used in every topic (make, case, increase, therefore) goes to the theme for what it does, such as thinking, comparing, changing or linking ideas, when the list has one.
 Return one item per input item, with "key" exactly as given, and nothing else.`
@@ -75,7 +76,7 @@ export async function themeSenses(senses: readonly ThemeSense[], themes: readonl
     run: (batch) =>
       run.llm.json({
         name: 'themes',
-        system: SYSTEM,
+        system: themeSystem(run.profile),
         input: { themes: list, items: batch.map((s, i) => ({ key: String(i), ...s })) },
         schema: schema(ids),
         parse: parse(batch.length, known),

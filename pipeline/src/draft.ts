@@ -107,7 +107,7 @@ export async function runDraft(opts: DraftOptions): Promise<Draft> {
   }
   const decisions = Decisions.read(dir)
   let registry = readJson<Registry>(paths.registry)
-  const run = (stage: string): StageRun => ({ llm, cache: StageCache.open(paths.cache(stage)), concurrency: opts.concurrency ?? config.llm.concurrency, offline })
+  const run = (stage: string): StageRun => ({ llm, cache: StageCache.open(paths.cache(stage)), concurrency: opts.concurrency ?? config.llm.concurrency, offline, profile })
 
   const forms = rankForms(sources.map((s) => parseFrequencyList(s.text, s.record.id)), config.max_forms)
   const lemmaResults = await lemmatise(forms, run('lemmas'))

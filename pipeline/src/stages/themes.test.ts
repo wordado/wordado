@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { StageCache } from '../cache'
 import type { CuratedTheme } from '../config'
 import { fakeLlm } from '../llm'
+import { PROFILES } from '../profiles'
 import { themeSenses } from './themes'
 
 const theme = (theme_id: string, en: string): CuratedTheme => ({ theme_id, name: { en, bg: en }, description: { en: `${en}.`, bg: `${en}.` } })
@@ -13,7 +14,7 @@ const bread = { headword: 'bread', pos: 'noun' as const, gloss: '', example: 'I 
 const compare = { headword: 'compare', pos: 'verb' as const, gloss: '', example: 'Compare the two prices.' }
 
 const cacheFile = () => join(mkdtempSync(join(tmpdir(), 'themes-')), 'themes.jsonl')
-const run = (answer: (n: string, i: unknown) => unknown, file = cacheFile()) => ({ llm: fakeLlm(answer), cache: StageCache.open(file), concurrency: 1, offline: false })
+const run = (answer: (n: string, i: unknown) => unknown, file = cacheFile()) => ({ llm: fakeLlm(answer), cache: StageCache.open(file), concurrency: 1, offline: false, profile: PROFILES.en })
 
 describe('themeSenses', () => {
   it('keeps known themes, at most three, most relevant first, and asks with the list and its descriptions', async () => {

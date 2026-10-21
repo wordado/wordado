@@ -4,17 +4,19 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { cacheKey, StageCache } from '../cache'
 import { fakeLlm } from '../llm'
-import { SYSTEM, titleUnits } from './titles'
+import { PROFILES } from '../profiles'
+import { titleSystem, titleUnits } from './titles'
 
 const run = (answer: (n: string, i: unknown) => unknown) => ({
   llm: fakeLlm(answer),
   cache: StageCache.open(join(mkdtempSync(join(tmpdir(), 'titles-')), 'titles.jsonl')),
   concurrency: 1,
   offline: false,
+  profile: PROFILES.en,
 })
 
 const shared = () => join(mkdtempSync(join(tmpdir(), 'titles-')), 'titles.jsonl')
-const on = (file: string, answer: (n: string, i: unknown) => unknown) => ({ llm: fakeLlm(answer), cache: StageCache.open(file), concurrency: 1, offline: false })
+const on = (file: string, answer: (n: string, i: unknown) => unknown) => ({ llm: fakeLlm(answer), cache: StageCache.open(file), concurrency: 1, offline: false, profile: PROFILES.en })
 const perL1 = (_: string, input: unknown) => {
   const { l1s, units } = input as { l1s: string[]; units: { unit: string }[] }
   return { items: units.map((u) => ({ unit: u.unit, en: l1s[0] === 'bg' ? 'Food' : 'Eating', ...Object.fromEntries(l1s.map((l) => [l, l === 'bg' ? 'Храна' : 'Essen'])) })) }
@@ -48,11 +50,11 @@ describe('titleUnits', () => {
 
 describe('SYSTEM', () => {
   it('names a known L1’s language, so Spanish titles come back in Spain’s Spanish and not a Latin American variety', () => {
-    expect(SYSTEM(['es'])).toContain('es (Spanish, as written in Spain)')
+    expect(titleSystem(['es'], PROFILES.en)).toContain('es (Spanish, as written in Spain)')
   })
 
   it('falls back to the bare code for an unknown L1', () => {
-    expect(SYSTEM(['xx'])).toContain('xx')
-    expect(SYSTEM(['xx'])).not.toContain('xx (')
+    expect(titleSystem(['xx'], PROFILES.en)).toContain('xx')
+    expect(titleSystem(['xx'], PROFILES.en)).not.toContain('xx (')
   })
 })

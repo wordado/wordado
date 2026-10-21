@@ -4,14 +4,17 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { StageCache } from '../cache'
 import { fakeLlm } from '../llm'
+import { PROFILES, type LanguageProfile } from '../profiles'
 import { bandLevel, describeLemmas, frequencyBand } from './senses'
 
-const run = (answer: (n: string, i: unknown) => unknown) => ({
+const runFor = (profile: LanguageProfile, answer: (n: string, i: unknown) => unknown) => ({
   llm: fakeLlm(answer),
   cache: StageCache.open(join(mkdtempSync(join(tmpdir(), 'senses-')), 'senses.jsonl')),
   concurrency: 1,
   offline: false,
+  profile,
 })
+const run = (answer: (n: string, i: unknown) => unknown) => runFor(PROFILES.en, answer)
 const bank = {
   lemma: 'bank',
   senses: [
@@ -87,5 +90,35 @@ describe('bandLevel (Decision 7; two steps since 2026-10-06)', () => {
   })
   it('drops C2, which no Phase 1 path teaches', () => {
     expect(bandLevel('C2', 'A1')).toEqual({ level: null, flagged: false })
+  })
+})
+
+describe('describeLemmas for a target with grammar', () => {
+  const german = (lemma: string, sense: Record<string, unknown>) => ({
+    lemma,
+    senses: [{ gloss: '', level: 'A1', ipa: 'x', variants: [], themes: [], examples: ['Ein Satz.'], ...sense }],
+  })
+  const deAnswer = () => ({
+    items: [
+      german('gehen', { pos: 'verb', grammar: { gender: '', plural: '', separable: false, irregular: true, auxiliary: 'sein' } }),
+      german('haus', { pos: 'noun', grammar: { gender: 'n', plural: 'Häuser', separable: false, irregular: false, auxiliary: '' } }),
+    ],
+  })
+  const ranked = (...names: string[]) => names.map((lemma, i) => ({ lemma, perMillion: 100, rank: i + 1, pinned: false }))
+
+  it('keeps the grammar fields of each part of speech for German', async () => {
+    const out = await describeLemmas(ranked('gehen', 'haus'), [], runFor(PROFILES.de, deAnswer))
+    expect(out[0]![0]!.grammar).toEqual({ separable: false, irregular: true, auxiliary: 'sein' })
+    expect(out[1]![0]!.grammar).toEqual({ gender: 'n', plural: 'Häuser' })
+  })
+
+  it('rejects a German grammar value of the wrong type', async () => {
+    const bad = () => ({ items: [german('haus', { pos: 'noun', grammar: { gender: 'n', plural: 5, separable: false, irregular: false, auxiliary: '' } })] })
+    await expect(describeLemmas(ranked('haus'), [], runFor(PROFILES.de, bad))).rejects.toThrow(/haus sense 0/)
+  })
+
+  it('asks English senses without grammar', async () => {
+    const out = await describeLemmas(lemmas, [], runFor(PROFILES.en, () => ({ items: [bank] })))
+    expect(out[0]![0]!.grammar).toBeUndefined()
   })
 })

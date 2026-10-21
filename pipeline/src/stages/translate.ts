@@ -1,6 +1,7 @@
 import { norm, type PartOfSpeech } from '@wordado/core'
 import { cachedBatch } from '../cache'
 import { ParseError } from '../llm'
+import type { LanguageProfile } from '../profiles'
 import type { StageRun } from './lemmas'
 
 export const TRANSLATE_VERSION = 1
@@ -25,6 +26,14 @@ export interface TranslateItem {
  * here and its code to `pipeline.json`; nothing else changes.
  */
 export const L1_GUIDES: Readonly<Record<string, string>> = {
+  en: `Translate into English, as a bilingual dictionary would.
+- Nouns: the singular, without an article (water, not the water).
+- Verbs: the bare infinitive, without "to" (write). Phrasal verbs as a dictionary gives them (get up; look after).
+- Adjectives: the base form (big).
+- Interjections and phrases: what an English speaker would actually say.
+- Alternates: other translations a learner might give that are also correct for this sense, most common first, at most four. No near-synonyms that would be wrong in the example sentence.
+- Sense: two to four English words that tell this sense apart from the headword's other senses (for Bank: "for money", "to sit on"). Empty when the gloss is empty.
+Use British English spelling (colour, centre, organise). No explanations in brackets.`,
   bg: `Translate into Bulgarian, in Cyrillic, as a bilingual dictionary would.
 - Nouns: the indefinite singular (вода, not водата).
 - Verbs: the first person singular present, the Bulgarian dictionary form (пиша). When both aspects are common, give the imperfective as the translation and the perfective among the alternates (пиша; напиша).
@@ -51,8 +60,8 @@ Use standard German as written in Germany, in the current spelling, with ß and 
 Use the standard Spanish of Spain (ordenador, coche, móvil, zumo, patata), with accents and ñ. No English words, no explanations in brackets.`,
 }
 
-const SYSTEM = (guide: string) => `You translate an English vocabulary course for adult learners.
-For each item, in the order given, translate the English headword in the sense its gloss and example show.
+export const translateSystem = (guide: string, p: LanguageProfile) => `You translate ${p.course} for adult learners.
+For each item, in the order given, translate the ${p.name} headword in the sense its gloss and example show.
 ${guide}
 Return one item per input item, with "key" exactly as given, and nothing else.`
 
@@ -120,7 +129,7 @@ export async function translateSenses(l1: string, items: readonly TranslateItem[
     run: (batch) =>
       run.llm.json({
         name: 'translate',
-        system: SYSTEM(guide),
+        system: translateSystem(guide, run.profile),
         input: { l1, items: batch.map((item, i) => ({ key: String(i), ...item })) },
         schema: SCHEMA,
         parse: parse(batch.length),
