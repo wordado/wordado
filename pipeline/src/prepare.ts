@@ -3,9 +3,17 @@ import { dirname } from 'node:path'
 import { Readable } from 'node:stream'
 import type { ReadableStream as WebReadableStream } from 'node:stream/web'
 import { createInterface } from 'node:readline'
-import { createGunzip } from 'node:zlib'
+import { createGunzip, zstdDecompressSync } from 'node:zlib'
 import { norm } from '@wordado/core'
-import { asyncBufferFromUrl, parquetMetadataAsync, parquetReadObjects } from 'hyparquet'
+import { asyncBufferFromUrl, parquetMetadataAsync, parquetReadObjects, type Compressors } from 'hyparquet'
+
+/**
+ * Codecs hyparquet does not read by itself. FineWeb-2's shards are ZSTD (#322); Node decompresses it natively,
+ * so no extra dependency is needed.
+ */
+const COMPRESSORS: Compressors = {
+  ZSTD: (input) => new Uint8Array(zstdDecompressSync(input)),
+}
 
 /** A running word: letters, with apostrophes inside (don't). Hyphens and digits split words. */
 const TOKEN = /\p{L}+(?:['’]\p{L}+)*/gu
@@ -42,7 +50,7 @@ export async function* parquetTexts(source: string, column = 'text'): AsyncGener
   let rowStart = 0
   for (const group of metadata.row_groups) {
     const rowEnd = rowStart + Number(group.num_rows)
-    const rows = (await parquetReadObjects({ file: buffer, metadata, columns: [column], rowStart, rowEnd })) as Record<string, unknown>[]
+    const rows = (await parquetReadObjects({ file: buffer, metadata, columns: [column], rowStart, rowEnd, compressors: COMPRESSORS })) as Record<string, unknown>[]
     for (const row of rows) {
       const text = row[column]
       if (typeof text === 'string') yield text
