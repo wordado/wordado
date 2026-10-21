@@ -112,6 +112,17 @@ describe('describeLemmas for a target with grammar', () => {
     expect(out[1]![0]!.grammar).toEqual({ gender: 'n', plural: 'Häuser' })
   })
 
+  it('gives a part of speech without grammar fields no grammar block, and does not reject it', async () => {
+    const answer = () => ({ items: [german('gut', { pos: 'adj', grammar: { gender: '', plural: '', separable: false, irregular: false, auxiliary: '' } })] })
+    const out = await describeLemmas(ranked('gut'), [], runFor(PROFILES.de, answer))
+    expect(out[0]![0]!.grammar).toBeUndefined()
+  })
+
+  it('rejects a German sense without a grammar object', async () => {
+    const answer = () => ({ items: [german('gut', { pos: 'adj' })] })
+    await expect(describeLemmas(ranked('gut'), [], runFor(PROFILES.de, answer))).rejects.toThrow(/gut sense 0: grammar must be an object/)
+  })
+
   it('rejects a German grammar value of the wrong type', async () => {
     const bad = () => ({ items: [german('haus', { pos: 'noun', grammar: { gender: 'n', plural: 5, separable: false, irregular: false, auxiliary: '' } })] })
     await expect(describeLemmas(ranked('haus'), [], runFor(PROFILES.de, bad))).rejects.toThrow(/haus sense 0/)

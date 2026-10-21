@@ -138,8 +138,11 @@ function parseSense(profile: LanguageProfile, headword: string, themeIds: Readon
   if (examples.length === 0) throw new ParseError(`${where}: needs at least one example sentence`)
   const ipa = cell(String(raw['ipa'] ?? '')).replace(/^\/|\/$/g, '')
   if (ipa === '') throw new ParseError(`${where}: needs IPA`)
-  const grammar = keptGrammar(profile, pos, (raw['grammar'] ?? {}) as Record<string, unknown>)
-  if (profile.grammar) {
+  const rawGrammar = raw['grammar']
+  if (profile.grammar && (typeof rawGrammar !== 'object' || rawGrammar === null || Array.isArray(rawGrammar))) throw new ParseError(`${where}: grammar must be an object`)
+  const grammar = keptGrammar(profile, pos, (rawGrammar ?? {}) as Record<string, unknown>)
+  // A part of speech the schema gives no field (an adjective, say) keeps no block, and there is nothing to check.
+  if (grammar) {
     const problems = grammarProblems(profile.code, pos, grammar)
     if (problems.length > 0) throw new ParseError(`${where}: ${problems.join('; ')}`)
   }
