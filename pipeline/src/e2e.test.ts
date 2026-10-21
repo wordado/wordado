@@ -1,4 +1,4 @@
-import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { checkPackSuccession, loadCorpus, offeredThemes, validatePack, type Pack } from '@wordado/core'
@@ -148,5 +148,46 @@ describe('the corpus pipeline, end to end (spec §13)', () => {
     expect(v2.units.find((u) => u.entry_ids.includes('bank-2'))!.level).toBe('B1')
     const fixes = JSON.parse(readFileSync(join(v2Dir, 'fixes.json'), 'utf8')) as { fixes: { word_id: string; field: string; fixed_in: number }[] }
     expect(fixes.fixes.some((f) => f.word_id === 'c:bank-2' && f.field === 'level' && f.fixed_in === 2)).toBe(true)
+  }, 30_000)
+})
+
+describe('a German corpus', () => {
+  it('drafts, reviews through spreadsheets, records audio and releases German packs for Bulgarian and English speakers', async () => {
+    const dir = makeContent({
+      config: { target: 'de', l1s: ['bg', 'en'], tts: { model: 'fake', max_clips_per_run: 1000, accents: { de: { voice: 'v', instructions: 'Say the German word once.' } } } },
+    })
+    const specs = queueSpecs(['bg', 'en'], PROFILES.de)
+    await runDraft({ dir, llm: sampleLlm({ grammar: true }), offline: false })
+    await recordAudio(dir, '20261021T1000')
+    const decisions = Decisions.read(dir)
+    const items = pendingItems(readDraft(dir), decisions, ['bg', 'en'], PROFILES.de)
+    items.set('audio', audioQueueItems(readAudioRecords(dir), decisions))
+    exportQueues(dir, items, specs, { stamp: '2026-10-21' })
+    // The German profile's queues: headwords under its own name, and the grammar block.
+    expect(existsSync(join(dir, 'review', 'german'))).toBe(true)
+    expect(existsSync(join(dir, 'review', 'grammar'))).toBe(true)
+    review(dir)
+    expect(importQueues(dir, specs, { by: 'reviewer', now: '2026-10-21T12:00:00Z' }).errors).toEqual([])
+
+    const plan = planRelease(dir, { draft: false, now: '2026-10-21T13:00:00Z' })
+    expect([plan.problems, plan.pending]).toEqual([[], []])
+    expect(plan.outputs.map((o) => o.pack.l1).sort()).toEqual(['bg', 'en'])
+    const bg = plan.outputs.find((o) => o.pack.l1 === 'bg')!.pack
+    expect(bg.target).toBe('de')
+    expect(bg.pack_id).toBe('corpus-de-bg')
+    expect(bg.entries.length).toBeGreaterThan(0)
+    expect(bg.entries.every((e) => e.entry_id.startsWith('de.'))).toBe(true)
+    expect(bg.units.every((u) => u.unit_id.startsWith('de.'))).toBe(true)
+    const nouns = bg.entries.filter((e) => e.pos === 'noun')
+    expect(nouns.length).toBeGreaterThan(0)
+    expect(nouns.every((e) => e.grammar !== undefined && e.grammar !== null && 'gender' in e.grammar)).toBe(true)
+    expect(Object.keys(bg.entries[0]!.audio)).toEqual(['de'])
+    expect(plan.manifest.packs.every((d) => d.target === 'de')).toBe(true)
+    for (const o of plan.outputs) expect(validatePack(JSON.parse(new TextDecoder().decode(o.packBytes))).status).toBe('ok')
+    // An English speaker's unit titles are one English title, not two answers that could disagree.
+    const en = plan.outputs.find((o) => o.pack.l1 === 'en')!.pack
+    expect(en.pack_id).toBe('corpus-de-en')
+    expect(en.units.every((u) => u.title.l1 === u.title.en)).toBe(true)
+    expect(en.units.map((u) => u.title.en)).toEqual(bg.units.map((u) => u.title.en))
   }, 30_000)
 })

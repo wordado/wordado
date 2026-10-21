@@ -1,9 +1,10 @@
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Pack } from '@wordado/core'
 import { audioQueueItems, clipsNeeded, generateClips, readAudioRecords } from '../audio'
 import { readConfig } from '../config'
+import { contentPaths } from '../content'
 import type { PipelineConfig } from '../config'
 import { Decisions, QUEUES } from '../decisions'
 import { readDraft } from '../draft'
@@ -50,8 +51,18 @@ const EXTRA_DE: Record<string, { translation: string; alternates: string[]; sens
   'bank|river': { translation: 'Ufer', alternates: [], sense: 'Flussufer' },
 }
 
-/** A fake LLM that answers every stage from the sample pack and the few invented words above. */
-export function sampleLlm() {
+/** The German grammar the fake answers with `grammar`: a neuter noun with no plural, an irregular verb with haben. */
+function sampleGrammar(pos: string) {
+  if (pos === 'noun') return { gender: 'n', plural: '', separable: false, irregular: false, auxiliary: '' }
+  if (pos === 'verb') return { gender: '', plural: '', separable: false, irregular: true, auxiliary: 'haben' }
+  return { gender: '', plural: '', separable: false, irregular: false, auxiliary: '' }
+}
+
+/**
+ * A fake LLM that answers every stage from the sample pack and the few invented words above.
+ * `grammar`: the senses carry a German grammar block, as the senses stage asks of a target with one.
+ */
+export function sampleLlm(opts: { grammar?: boolean } = {}) {
   return fakeLlm((name, input) => {
     if (name === 'lemmas') {
       const forms = (input as { forms: string[] }).forms
@@ -65,20 +76,21 @@ export function sampleLlm() {
     if (name === 'senses') {
       const headwords = (input as { headwords: string[] }).headwords
       return {
-        items: headwords.map((lemma) => ({
-          lemma,
-          senses:
-            EXTRA_SENSES[lemma] ??
+        items: headwords.map((lemma) => {
+          const senses = (EXTRA_SENSES[lemma] ??
             sample.entries
               .filter((e) => e.headword === lemma)
-              .map((e) => ({ pos: e.pos, gloss: '', level: e.level, ipa: e.ipa, variants: e.variants, themes: e.themes, examples: e.examples })),
-        })),
+              .map((e) => ({ pos: e.pos, gloss: '', level: e.level, ipa: e.ipa, variants: e.variants, themes: e.themes, examples: e.examples }))) as { pos: string }[]
+          return { lemma, senses: opts.grammar ? senses.map((s) => ({ ...s, grammar: sampleGrammar(s.pos) })) : senses }
+        }),
       }
     }
     if (name === 'translate') {
       const { l1, items } = input as { l1: string; items: { key: string; headword: string; gloss: string }[] }
       return {
         items: items.map((item) => {
+          // English as an L1 (a German corpus): the fixture's words stand in for German ones, so each translates as itself.
+          if (l1 === 'en') return { key: item.key, translation: item.headword, alternates: [], sense: item.gloss }
           if (l1 === 'de') {
             const extra = EXTRA_DE[`${item.headword}|${item.gloss}`]
             return { key: item.key, ...(extra ?? { translation: `DE ${item.headword}`, alternates: [], sense: '' }) }
@@ -99,7 +111,7 @@ export function sampleLlm() {
         items: units.map((u) => ({
           unit: u.unit,
           en: `Unit ${u.unit}`,
-          ...Object.fromEntries(l1s.map((l) => [l, l === 'bg' ? `Урок ${u.unit}` : `Lektion ${u.unit}`])),
+          ...Object.fromEntries(l1s.map((l) => [l, l === 'bg' ? `Урок ${u.unit}` : l === 'en' ? `Unit ${u.unit}` : `Lektion ${u.unit}`])),
         })),
       }
     }
@@ -139,6 +151,18 @@ export function makeContent(overrides: { config?: Partial<PipelineConfig> } = {}
   writeFileSync(join(dir, 'sources', 'invented.tsv'), FIXTURE_TSV)
   // The template's starting list would ask the fake LLM about words it does not know; tests add their own.
   writeFileSync(join(dir, 'essentials.txt'), '')
+  if ((overrides.config?.target ?? 'en') !== 'en') {
+    // The English sample is no predecessor of another target's corpus (spec §5.5): that directory starts with
+    // nothing published and no pinned IDs. The sample's words come in as essentials instead, so its themed units
+    // are built and named here too.
+    const paths = contentPaths(dir)
+    writeFileSync(join(dir, 'essentials.txt'), `${[...new Set(sample.entries.map((e) => e.headword))].join('\n')}\n`)
+    writeJson(paths.registry, { entries: [], units: [] })
+    rmSync(paths.lastPublished, { recursive: true })
+    mkdirSync(paths.lastPublished)
+    writeJson(join(paths.lastPublished, 'manifest.json'), { schema_version: 1, corpus_version: 0, packs: [] })
+    writeJson(join(paths.lastPublished, 'fixes.json'), { schema_version: 1, corpus_version: 0, fixes: [] })
+  }
   return dir
 }
 
