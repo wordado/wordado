@@ -22,7 +22,6 @@ const entry = (entry_id: string): DraftEntry => ({
   themes: [],
   english: { ipa: 'ˈwɔːtə', variants: [], examples: ['I drink water.'] },
   l1: { bg: { translation: 'вода', alternates: [], sense: '' } },
-  grammar: null,
 })
 const entries = ['water-1', 'tea-1', 'milk-1', 'bread-1'].map(entry)
 const draft: Draft = { live: entries.map((e) => e.entry_id), entries, units: [], problems: [] }

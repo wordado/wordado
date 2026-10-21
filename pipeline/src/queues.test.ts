@@ -24,7 +24,6 @@ const entry = (entry_id: string, extra: Partial<DraftEntry> = {}): DraftEntry =>
   themes: [],
   english: { ipa: 'ˈwɔːtə', variants: [], examples: ['Water, please.', 'I drink water.'] },
   l1: { bg: { translation: 'вода', alternates: ['водичка'], sense: '' } },
-  grammar: null,
   ...extra,
 })
 const draft = (entries: DraftEntry[], live = entries.map((e) => e.entry_id)): Draft => ({

@@ -154,7 +154,7 @@ describe('the corpus pipeline, end to end (spec §13)', () => {
 
 describe('an English corpus with no target', () => {
   // The files under testing/english-release were written by this same flow on the code before a second target
-  // language existed (#313): with no `target` in pipeline.json, the review CSVs, packs, trial packs, manifests and
+  // language existed (#313): with no `target` in pipeline.json, the draft, review CSVs, packs, trial packs, manifests and
   // clip IDs stay byte for byte what they were. A difference is a regression to fix, never a snapshot to rewrite.
   const snapshots = join(dirname(fileURLToPath(import.meta.url)), 'testing', 'english-release')
   const filesUnder = (root: string): string[] =>
@@ -166,6 +166,7 @@ describe('an English corpus with no target', () => {
   it('exports the same review files and releases the same bytes as before', async () => {
     const dir = makeContent()
     await runDraft({ dir, llm: sampleLlm(), offline: false })
+    const draftJson = readFileSync(join(dir, 'work', 'draft.json'))
     await recordAudio(dir, '20261001T1000')
     const csvs = queues(dir, '2026-10-01')
     approveAll(dir)
@@ -178,6 +179,7 @@ describe('an English corpus with no target', () => {
     for (const f of files.filter((f) => !f.startsWith('audio/'))) actual.set(f, readFileSync(join(releaseDir, f)))
     actual.set('audio.txt', Buffer.from(`${files.filter((f) => f.startsWith('audio/')).sort().join('\n')}\n`))
     for (const f of csvs) actual.set(f, readFileSync(join(dir, f)))
+    actual.set(join('work', 'draft.json'), draftJson)
 
     expect([...actual.keys()].sort()).toEqual(filesUnder(snapshots))
     for (const [f, bytes] of actual) expect(bytes.toString('utf8'), f).toBe(readFileSync(join(snapshots, f), 'utf8'))

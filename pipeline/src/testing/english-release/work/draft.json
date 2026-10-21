@@ -1,0 +1,2232 @@
+{
+  "live": [
+    "the-1",
+    "go-1",
+    "bank-1",
+    "bank-2",
+    "apple-1",
+    "bed-1",
+    "boy-1",
+    "bread-1",
+    "breakfast-1",
+    "brother-1",
+    "chair-1",
+    "cheese-1",
+    "child-1",
+    "coffee-1",
+    "day-1",
+    "dinner-1",
+    "door-1",
+    "drink-1",
+    "eat-1",
+    "egg-1",
+    "family-1",
+    "father-1",
+    "fish-1",
+    "food-1",
+    "friend-1",
+    "girl-1",
+    "goodbye-1",
+    "hello-1",
+    "home-1",
+    "house-1",
+    "hungry-1",
+    "key-1",
+    "kitchen-1",
+    "lunch-1",
+    "man-1",
+    "meat-1",
+    "milk-1",
+    "money-1",
+    "morning-1",
+    "mother-1",
+    "name-1",
+    "night-1",
+    "no-1",
+    "please-1",
+    "rice-1",
+    "room-1",
+    "salt-1",
+    "school-1",
+    "shop-1",
+    "sister-1",
+    "sorry-1",
+    "sugar-1",
+    "table-1",
+    "tea-1",
+    "teacher-1",
+    "thank_you-1",
+    "time-1",
+    "today-1",
+    "water-1",
+    "week-1",
+    "window-1",
+    "woman-1",
+    "work-1",
+    "yes-1"
+  ],
+  "entries": [
+    {
+      "entry_id": "the-1",
+      "headword": "the",
+      "pos": "det",
+      "sense_en": "",
+      "rank": 1,
+      "order": 0,
+      "pinned": false,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [],
+      "english": {
+        "ipa": "ðə",
+        "variants": [],
+        "examples": [
+          "The door is open."
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "(определителен член)",
+          "alternates": [],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "go-1",
+      "headword": "go",
+      "pos": "verb",
+      "sense_en": "",
+      "rank": 2,
+      "order": 0,
+      "pinned": false,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [],
+      "english": {
+        "ipa": "ɡəʊ",
+        "variants": [],
+        "examples": [
+          "We go home at six."
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "отивам",
+          "alternates": [
+            "ходя"
+          ],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "bank-1",
+      "headword": "bank",
+      "pos": "noun",
+      "sense_en": "money",
+      "rank": 3,
+      "order": 0,
+      "pinned": false,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A2",
+      "level": "A2",
+      "level_flagged": false,
+      "themes": [],
+      "english": {
+        "ipa": "bæŋk",
+        "variants": [],
+        "examples": [
+          "The bank opens at nine."
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "банка",
+          "alternates": [],
+          "sense": "за пари"
+        }
+      }
+    },
+    {
+      "entry_id": "bank-2",
+      "headword": "bank",
+      "pos": "noun",
+      "sense_en": "river",
+      "rank": 27,
+      "order": 2,
+      "pinned": false,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A2",
+      "level": "A2",
+      "level_flagged": false,
+      "themes": [],
+      "english": {
+        "ipa": "bæŋk",
+        "variants": [],
+        "examples": [
+          "We sat on the bank of the river."
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "бряг",
+          "alternates": [],
+          "sense": "на река"
+        }
+      }
+    },
+    {
+      "entry_id": "apple-1",
+      "headword": "apple",
+      "pos": "noun",
+      "sense_en": "",
+      "rank": 4,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "food"
+      ],
+      "english": {
+        "ipa": "ˈæpl",
+        "variants": [],
+        "examples": [
+          "An apple a day is good for you."
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "ябълка",
+          "alternates": [],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "bed-1",
+      "headword": "bed",
+      "pos": "noun",
+      "sense_en": "",
+      "rank": 5,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "home",
+        "daily-life"
+      ],
+      "english": {
+        "ipa": "bed",
+        "variants": [],
+        "examples": [
+          "The cat is on the bed."
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "легло",
+          "alternates": [],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "boy-1",
+      "headword": "boy",
+      "pos": "noun",
+      "sense_en": "",
+      "rank": 6,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "people"
+      ],
+      "english": {
+        "ipa": "bɔɪ",
+        "variants": [],
+        "examples": [
+          "The boy is six."
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "момче",
+          "alternates": [],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "bread-1",
+      "headword": "bread",
+      "pos": "noun",
+      "sense_en": "",
+      "rank": 7,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "food"
+      ],
+      "english": {
+        "ipa": "bred",
+        "variants": [],
+        "examples": [
+          "We buy bread every morning."
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "хляб",
+          "alternates": [],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "breakfast-1",
+      "headword": "breakfast",
+      "pos": "noun",
+      "sense_en": "",
+      "rank": 8,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "food",
+        "daily-life"
+      ],
+      "english": {
+        "ipa": "ˈbrekfəst",
+        "variants": [],
+        "examples": [
+          "Breakfast is at eight."
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "закуска",
+          "alternates": [],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "brother-1",
+      "headword": "brother",
+      "pos": "noun",
+      "sense_en": "",
+      "rank": 9,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "people"
+      ],
+      "english": {
+        "ipa": "ˈbrʌðə",
+        "variants": [],
+        "examples": [
+          "I have one brother."
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "брат",
+          "alternates": [],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "chair-1",
+      "headword": "chair",
+      "pos": "noun",
+      "sense_en": "",
+      "rank": 10,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "home",
+        "daily-life"
+      ],
+      "english": {
+        "ipa": "tʃeə",
+        "variants": [],
+        "examples": [
+          "Sit on this chair."
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "стол",
+          "alternates": [],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "cheese-1",
+      "headword": "cheese",
+      "pos": "noun",
+      "sense_en": "",
+      "rank": 11,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "food"
+      ],
+      "english": {
+        "ipa": "tʃiːz",
+        "variants": [],
+        "examples": [
+          "This cheese is from Bulgaria."
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "сирене",
+          "alternates": [
+            "кашкавал"
+          ],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "child-1",
+      "headword": "child",
+      "pos": "noun",
+      "sense_en": "",
+      "rank": 12,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "people"
+      ],
+      "english": {
+        "ipa": "tʃaɪld",
+        "variants": [],
+        "examples": [
+          "The child is playing."
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "дете",
+          "alternates": [],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "coffee-1",
+      "headword": "coffee",
+      "pos": "noun",
+      "sense_en": "",
+      "rank": 13,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "food"
+      ],
+      "english": {
+        "ipa": "ˈkɒfi",
+        "variants": [],
+        "examples": [
+          "I drink coffee in the morning."
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "кафе",
+          "alternates": [],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "day-1",
+      "headword": "day",
+      "pos": "noun",
+      "sense_en": "",
+      "rank": 14,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "time",
+        "daily-life"
+      ],
+      "english": {
+        "ipa": "deɪ",
+        "variants": [],
+        "examples": [
+          "Have a nice day!"
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "ден",
+          "alternates": [],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "dinner-1",
+      "headword": "dinner",
+      "pos": "noun",
+      "sense_en": "",
+      "rank": 15,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "food",
+        "daily-life"
+      ],
+      "english": {
+        "ipa": "ˈdɪnə",
+        "variants": [],
+        "examples": [
+          "Dinner is ready!"
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "вечеря",
+          "alternates": [],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "door-1",
+      "headword": "door",
+      "pos": "noun",
+      "sense_en": "",
+      "rank": 16,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "home",
+        "daily-life"
+      ],
+      "english": {
+        "ipa": "dɔː",
+        "variants": [],
+        "examples": [
+          "Please close the door."
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "врата",
+          "alternates": [],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "drink-1",
+      "headword": "drink",
+      "pos": "verb",
+      "sense_en": "",
+      "rank": 17,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "food",
+        "daily-life",
+        "actions"
+      ],
+      "english": {
+        "ipa": "drɪŋk",
+        "variants": [],
+        "examples": [
+          "Drink some water."
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "пия",
+          "alternates": [],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "eat-1",
+      "headword": "eat",
+      "pos": "verb",
+      "sense_en": "",
+      "rank": 18,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "food",
+        "daily-life",
+        "actions"
+      ],
+      "english": {
+        "ipa": "iːt",
+        "variants": [],
+        "examples": [
+          "What do you want to eat?"
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "ям",
+          "alternates": [],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "egg-1",
+      "headword": "egg",
+      "pos": "noun",
+      "sense_en": "",
+      "rank": 19,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "food"
+      ],
+      "english": {
+        "ipa": "eɡ",
+        "variants": [],
+        "examples": [
+          "I eat an egg for breakfast."
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "яйце",
+          "alternates": [],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "family-1",
+      "headword": "family",
+      "pos": "noun",
+      "sense_en": "",
+      "rank": 20,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "people"
+      ],
+      "english": {
+        "ipa": "ˈfæməli",
+        "variants": [],
+        "examples": [
+          "I have a big family."
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "семейство",
+          "alternates": [],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "father-1",
+      "headword": "father",
+      "pos": "noun",
+      "sense_en": "",
+      "rank": 21,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "people"
+      ],
+      "english": {
+        "ipa": "ˈfɑːðə",
+        "variants": [],
+        "examples": [
+          "My father works in a bank."
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "баща",
+          "alternates": [
+            "татко"
+          ],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "fish-1",
+      "headword": "fish",
+      "pos": "noun",
+      "sense_en": "",
+      "rank": 22,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "food"
+      ],
+      "english": {
+        "ipa": "fɪʃ",
+        "variants": [],
+        "examples": [
+          "We have fish for dinner."
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "риба",
+          "alternates": [],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "food-1",
+      "headword": "food",
+      "pos": "noun",
+      "sense_en": "",
+      "rank": 23,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "food"
+      ],
+      "english": {
+        "ipa": "fuːd",
+        "variants": [],
+        "examples": [
+          "I like Italian food."
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "храна",
+          "alternates": [],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "friend-1",
+      "headword": "friend",
+      "pos": "noun",
+      "sense_en": "",
+      "rank": 24,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "people"
+      ],
+      "english": {
+        "ipa": "frend",
+        "variants": [],
+        "examples": [
+          "She is my best friend."
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "приятел",
+          "alternates": [
+            "приятелка"
+          ],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "girl-1",
+      "headword": "girl",
+      "pos": "noun",
+      "sense_en": "",
+      "rank": 25,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "people"
+      ],
+      "english": {
+        "ipa": "ɡɜːl",
+        "variants": [],
+        "examples": [
+          "The girl has a red bag."
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "момиче",
+          "alternates": [],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "goodbye-1",
+      "headword": "goodbye",
+      "pos": "intj",
+      "sense_en": "",
+      "rank": 26,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "greetings"
+      ],
+      "english": {
+        "ipa": "ˌɡʊdˈbaɪ",
+        "variants": [
+          "good-bye"
+        ],
+        "examples": [
+          "Goodbye! See you tomorrow."
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "довиждане",
+          "alternates": [
+            "чао"
+          ],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "hello-1",
+      "headword": "hello",
+      "pos": "intj",
+      "sense_en": "",
+      "rank": 27,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "greetings"
+      ],
+      "english": {
+        "ipa": "həˈləʊ",
+        "variants": [],
+        "examples": [
+          "Hello, my name is Anna."
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "здравей",
+          "alternates": [
+            "здравейте"
+          ],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "home-1",
+      "headword": "home",
+      "pos": "noun",
+      "sense_en": "",
+      "rank": 28,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "home",
+        "daily-life"
+      ],
+      "english": {
+        "ipa": "həʊm",
+        "variants": [],
+        "examples": [
+          "I am at home now."
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "дом",
+          "alternates": [],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "house-1",
+      "headword": "house",
+      "pos": "noun",
+      "sense_en": "",
+      "rank": 29,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "home",
+        "daily-life"
+      ],
+      "english": {
+        "ipa": "haʊs",
+        "variants": [],
+        "examples": [
+          "They live in a small house."
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "къща",
+          "alternates": [],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "hungry-1",
+      "headword": "hungry",
+      "pos": "adj",
+      "sense_en": "",
+      "rank": 30,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "food"
+      ],
+      "english": {
+        "ipa": "ˈhʌŋɡri",
+        "variants": [],
+        "examples": [
+          "I am hungry."
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "гладен",
+          "alternates": [
+            "гладна"
+          ],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "key-1",
+      "headword": "key",
+      "pos": "noun",
+      "sense_en": "",
+      "rank": 31,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "home",
+        "daily-life"
+      ],
+      "english": {
+        "ipa": "kiː",
+        "variants": [],
+        "examples": [
+          "Where is my key?"
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "ключ",
+          "alternates": [],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "kitchen-1",
+      "headword": "kitchen",
+      "pos": "noun",
+      "sense_en": "",
+      "rank": 32,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "home",
+        "daily-life"
+      ],
+      "english": {
+        "ipa": "ˈkɪtʃɪn",
+        "variants": [],
+        "examples": [
+          "Mum is in the kitchen."
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "кухня",
+          "alternates": [],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "lunch-1",
+      "headword": "lunch",
+      "pos": "noun",
+      "sense_en": "",
+      "rank": 33,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "food",
+        "daily-life"
+      ],
+      "english": {
+        "ipa": "lʌntʃ",
+        "variants": [],
+        "examples": [
+          "We have lunch at work."
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "обяд",
+          "alternates": [],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "man-1",
+      "headword": "man",
+      "pos": "noun",
+      "sense_en": "",
+      "rank": 34,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "people"
+      ],
+      "english": {
+        "ipa": "mæn",
+        "variants": [],
+        "examples": [
+          "The man is reading a book."
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "мъж",
+          "alternates": [],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "meat-1",
+      "headword": "meat",
+      "pos": "noun",
+      "sense_en": "",
+      "rank": 35,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "food"
+      ],
+      "english": {
+        "ipa": "miːt",
+        "variants": [],
+        "examples": [
+          "He does not eat meat."
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "месо",
+          "alternates": [],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "milk-1",
+      "headword": "milk",
+      "pos": "noun",
+      "sense_en": "",
+      "rank": 36,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "food"
+      ],
+      "english": {
+        "ipa": "mɪlk",
+        "variants": [],
+        "examples": [
+          "The milk is in the fridge."
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "мляко",
+          "alternates": [],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "money-1",
+      "headword": "money",
+      "pos": "noun",
+      "sense_en": "",
+      "rank": 37,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "shopping",
+        "daily-life"
+      ],
+      "english": {
+        "ipa": "ˈmʌni",
+        "variants": [],
+        "examples": [
+          "I have no money."
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "пари",
+          "alternates": [],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "morning-1",
+      "headword": "morning",
+      "pos": "noun",
+      "sense_en": "",
+      "rank": 38,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "time",
+        "daily-life"
+      ],
+      "english": {
+        "ipa": "ˈmɔːnɪŋ",
+        "variants": [],
+        "examples": [
+          "I get up at seven in the morning."
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "сутрин",
+          "alternates": [
+            "утро"
+          ],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "mother-1",
+      "headword": "mother",
+      "pos": "noun",
+      "sense_en": "",
+      "rank": 39,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "people"
+      ],
+      "english": {
+        "ipa": "ˈmʌðə",
+        "variants": [],
+        "examples": [
+          "My mother is a doctor."
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "майка",
+          "alternates": [
+            "мама"
+          ],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "name-1",
+      "headword": "name",
+      "pos": "noun",
+      "sense_en": "",
+      "rank": 40,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "people"
+      ],
+      "english": {
+        "ipa": "neɪm",
+        "variants": [],
+        "examples": [
+          "My name is Peter."
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "име",
+          "alternates": [],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "night-1",
+      "headword": "night",
+      "pos": "noun",
+      "sense_en": "",
+      "rank": 41,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "time",
+        "daily-life"
+      ],
+      "english": {
+        "ipa": "naɪt",
+        "variants": [],
+        "examples": [
+          "Good night!"
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "нощ",
+          "alternates": [],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "no-1",
+      "headword": "no",
+      "pos": "adv",
+      "sense_en": "",
+      "rank": 42,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "greetings"
+      ],
+      "english": {
+        "ipa": "nəʊ",
+        "variants": [],
+        "examples": [
+          "No, thank you."
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "не",
+          "alternates": [],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "please-1",
+      "headword": "please",
+      "pos": "adv",
+      "sense_en": "",
+      "rank": 43,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "greetings"
+      ],
+      "english": {
+        "ipa": "pliːz",
+        "variants": [],
+        "examples": [
+          "A coffee, please."
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "моля",
+          "alternates": [],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "rice-1",
+      "headword": "rice",
+      "pos": "noun",
+      "sense_en": "",
+      "rank": 44,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "food"
+      ],
+      "english": {
+        "ipa": "raɪs",
+        "variants": [],
+        "examples": [
+          "Rice with vegetables, please."
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "ориз",
+          "alternates": [],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "room-1",
+      "headword": "room",
+      "pos": "noun",
+      "sense_en": "",
+      "rank": 45,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "home",
+        "daily-life"
+      ],
+      "english": {
+        "ipa": "ruːm",
+        "variants": [],
+        "examples": [
+          "My room is small."
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "стая",
+          "alternates": [],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "salt-1",
+      "headword": "salt",
+      "pos": "noun",
+      "sense_en": "",
+      "rank": 46,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "food"
+      ],
+      "english": {
+        "ipa": "sɔːlt",
+        "variants": [],
+        "examples": [
+          "Pass the salt, please."
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "сол",
+          "alternates": [],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "school-1",
+      "headword": "school",
+      "pos": "noun",
+      "sense_en": "",
+      "rank": 47,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "school",
+        "daily-life"
+      ],
+      "english": {
+        "ipa": "skuːl",
+        "variants": [],
+        "examples": [
+          "The children are at school."
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "училище",
+          "alternates": [],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "shop-1",
+      "headword": "shop",
+      "pos": "noun",
+      "sense_en": "",
+      "rank": 48,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "shopping",
+        "daily-life"
+      ],
+      "english": {
+        "ipa": "ʃɒp",
+        "variants": [],
+        "examples": [
+          "The shop opens at nine."
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "магазин",
+          "alternates": [],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "sister-1",
+      "headword": "sister",
+      "pos": "noun",
+      "sense_en": "",
+      "rank": 49,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "people"
+      ],
+      "english": {
+        "ipa": "ˈsɪstə",
+        "variants": [],
+        "examples": [
+          "My sister is ten years old."
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "сестра",
+          "alternates": [],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "sorry-1",
+      "headword": "sorry",
+      "pos": "intj",
+      "sense_en": "",
+      "rank": 50,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "greetings"
+      ],
+      "english": {
+        "ipa": "ˈsɒri",
+        "variants": [],
+        "examples": [
+          "Sorry, I am late."
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "извинявай",
+          "alternates": [
+            "извинете",
+            "съжалявам"
+          ],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "sugar-1",
+      "headword": "sugar",
+      "pos": "noun",
+      "sense_en": "",
+      "rank": 51,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "food"
+      ],
+      "english": {
+        "ipa": "ˈʃʊɡə",
+        "variants": [],
+        "examples": [
+          "No sugar in my tea, thanks."
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "захар",
+          "alternates": [],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "table-1",
+      "headword": "table",
+      "pos": "noun",
+      "sense_en": "",
+      "rank": 52,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "home",
+        "daily-life"
+      ],
+      "english": {
+        "ipa": "ˈteɪbl",
+        "variants": [],
+        "examples": [
+          "The book is on the table."
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "маса",
+          "alternates": [],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "tea-1",
+      "headword": "tea",
+      "pos": "noun",
+      "sense_en": "",
+      "rank": 53,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "food"
+      ],
+      "english": {
+        "ipa": "tiː",
+        "variants": [],
+        "examples": [
+          "Do you want tea or coffee?"
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "чай",
+          "alternates": [],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "teacher-1",
+      "headword": "teacher",
+      "pos": "noun",
+      "sense_en": "",
+      "rank": 54,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "people",
+        "school"
+      ],
+      "english": {
+        "ipa": "ˈtiːtʃə",
+        "variants": [],
+        "examples": [
+          "Our teacher is very kind."
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "учител",
+          "alternates": [
+            "учителка"
+          ],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "thank_you-1",
+      "headword": "thank you",
+      "pos": "phrase",
+      "sense_en": "",
+      "rank": 55,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "greetings"
+      ],
+      "english": {
+        "ipa": "ˈθæŋk juː",
+        "variants": [],
+        "examples": [
+          "Thank you for your help."
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "благодаря",
+          "alternates": [
+            "мерси"
+          ],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "time-1",
+      "headword": "time",
+      "pos": "noun",
+      "sense_en": "",
+      "rank": 56,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "time",
+        "daily-life"
+      ],
+      "english": {
+        "ipa": "taɪm",
+        "variants": [],
+        "examples": [
+          "What time is it?"
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "време",
+          "alternates": [
+            "час"
+          ],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "today-1",
+      "headword": "today",
+      "pos": "adv",
+      "sense_en": "",
+      "rank": 57,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "time",
+        "daily-life"
+      ],
+      "english": {
+        "ipa": "təˈdeɪ",
+        "variants": [],
+        "examples": [
+          "Today is Monday."
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "днес",
+          "alternates": [],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "water-1",
+      "headword": "water",
+      "pos": "noun",
+      "sense_en": "",
+      "rank": 58,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "food"
+      ],
+      "english": {
+        "ipa": "ˈwɔːtə",
+        "variants": [],
+        "examples": [
+          "A glass of water, please."
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "вода",
+          "alternates": [],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "week-1",
+      "headword": "week",
+      "pos": "noun",
+      "sense_en": "",
+      "rank": 59,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "time",
+        "daily-life"
+      ],
+      "english": {
+        "ipa": "wiːk",
+        "variants": [],
+        "examples": [
+          "See you next week."
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "седмица",
+          "alternates": [],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "window-1",
+      "headword": "window",
+      "pos": "noun",
+      "sense_en": "",
+      "rank": 60,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "home",
+        "daily-life"
+      ],
+      "english": {
+        "ipa": "ˈwɪndəʊ",
+        "variants": [],
+        "examples": [
+          "Open the window, please."
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "прозорец",
+          "alternates": [],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "woman-1",
+      "headword": "woman",
+      "pos": "noun",
+      "sense_en": "",
+      "rank": 61,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "people"
+      ],
+      "english": {
+        "ipa": "ˈwʊmən",
+        "variants": [],
+        "examples": [
+          "The woman is my teacher."
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "жена",
+          "alternates": [],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "work-1",
+      "headword": "work",
+      "pos": "noun",
+      "sense_en": "",
+      "rank": 62,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A1",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "work",
+        "daily-life"
+      ],
+      "english": {
+        "ipa": "wɜːk",
+        "variants": [],
+        "examples": [
+          "I go to work by bus."
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "работа",
+          "alternates": [],
+          "sense": ""
+        }
+      }
+    },
+    {
+      "entry_id": "yes-1",
+      "headword": "yes",
+      "pos": "adv",
+      "sense_en": "",
+      "rank": 63,
+      "order": 0,
+      "pinned": true,
+      "essential": false,
+      "band": "A2",
+      "level_proposal": "A1",
+      "level": "A1",
+      "level_flagged": false,
+      "themes": [
+        "greetings"
+      ],
+      "english": {
+        "ipa": "jes",
+        "variants": [],
+        "examples": [
+          "Yes, I am from Sofia."
+        ]
+      },
+      "l1": {
+        "bg": {
+          "translation": "да",
+          "alternates": [],
+          "sense": ""
+        }
+      }
+    }
+  ],
+  "units": [
+    {
+      "unit_id": "a1-01",
+      "level": "A1",
+      "entry_ids": [
+        "hello-1",
+        "goodbye-1",
+        "please-1",
+        "thank_you-1",
+        "yes-1",
+        "no-1",
+        "sorry-1",
+        "name-1",
+        "friend-1",
+        "family-1",
+        "mother-1",
+        "father-1",
+        "brother-1",
+        "sister-1",
+        "child-1",
+        "man-1",
+        "woman-1",
+        "boy-1",
+        "girl-1",
+        "teacher-1"
+      ],
+      "titles": {
+        "bg": {
+          "en": "Unit a1-01",
+          "l1": "Урок a1-01"
+        }
+      }
+    },
+    {
+      "unit_id": "a1-02",
+      "level": "A1",
+      "entry_ids": [
+        "food-1",
+        "water-1",
+        "bread-1",
+        "milk-1",
+        "coffee-1",
+        "tea-1",
+        "apple-1",
+        "egg-1",
+        "cheese-1",
+        "meat-1",
+        "fish-1",
+        "rice-1",
+        "sugar-1",
+        "salt-1",
+        "breakfast-1",
+        "lunch-1",
+        "dinner-1",
+        "eat-1",
+        "drink-1",
+        "hungry-1"
+      ],
+      "titles": {
+        "bg": {
+          "en": "Unit a1-02",
+          "l1": "Урок a1-02"
+        }
+      }
+    },
+    {
+      "unit_id": "a1-03",
+      "level": "A1",
+      "entry_ids": [
+        "house-1",
+        "home-1",
+        "room-1",
+        "door-1",
+        "window-1",
+        "bed-1",
+        "table-1",
+        "chair-1",
+        "kitchen-1",
+        "key-1",
+        "day-1",
+        "night-1",
+        "morning-1",
+        "today-1",
+        "time-1",
+        "week-1",
+        "work-1",
+        "school-1",
+        "shop-1",
+        "money-1"
+      ],
+      "titles": {
+        "bg": {
+          "en": "Unit a1-03",
+          "l1": "Урок a1-03"
+        }
+      }
+    },
+    {
+      "unit_id": "a1-04",
+      "level": "A1",
+      "entry_ids": [
+        "the-1",
+        "go-1"
+      ],
+      "group": "mixed",
+      "titles": {
+        "bg": {
+          "en": "More words 1",
+          "l1": "Още думи 1"
+        }
+      }
+    },
+    {
+      "unit_id": "a2-01",
+      "level": "A2",
+      "entry_ids": [
+        "bank-1",
+        "bank-2"
+      ],
+      "group": "mixed",
+      "titles": {
+        "bg": {
+          "en": "More words 1",
+          "l1": "Още думи 1"
+        }
+      }
+    }
+  ],
+  "problems": []
+}

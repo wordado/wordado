@@ -47,8 +47,8 @@ export interface DraftEntry {
   readonly themes: readonly string[]
   readonly english: EnglishFields
   readonly l1: Readonly<Record<string, TranslationFields>>
-  /** The target's grammar (spec §5.5); null when it has none. */
-  readonly grammar: Grammar | null
+  /** The target's grammar (spec §5.5); absent when it has none, so an English draft is written as before. */
+  readonly grammar?: Grammar
   /**
    * False for an entry not-taught.txt names: known from the start, shipped with `taught: false`, searchable and never
    * taught (issue #285). Absent means taught.
@@ -184,7 +184,7 @@ export async function runDraft(opts: DraftOptions): Promise<Draft> {
       themes: [],
       english: { ipa: s.ipa, variants: s.variants, examples: s.examples },
       l1: s.l1,
-      grammar: s.grammar ?? null,
+      ...(s.grammar ? { grammar: s.grammar } : {}),
       ...(notTaught.has(entry_id) ? { taught: false as const } : {}),
     }
   })

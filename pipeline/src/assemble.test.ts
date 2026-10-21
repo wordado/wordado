@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { Grammar } from '@wordado/core'
 import { assemble } from './assemble'
 import { readAudioRecords } from './audio'
 import { readConfig, readThemes } from './config'
@@ -47,15 +48,15 @@ describe('assemble', () => {
     const dir = makeContent()
     const base = readConfig(dir)
     const config = { ...base, target: 'de' as const, l1s: ['bg'], tts: { ...base.tts, accents: { de: base.tts.accents.uk! } } }
-    const entry = (entry_id: string, headword: string, pos: DraftEntry['pos'], grammar: DraftEntry['grammar']): DraftEntry => ({
+    const entry = (entry_id: string, headword: string, pos: DraftEntry['pos'], grammar?: Grammar): DraftEntry => ({
       entry_id, headword, pos, sense_en: '', rank: 1, order: 0, pinned: false, essential: false, band: 'A1', level_proposal: 'A1', level: 'A1',
       level_flagged: false, themes: [], english: { ipa: 'x', variants: [], examples: ['Beispiel.'] },
-      l1: { bg: { translation: 'превод', alternates: [], sense: '' } }, grammar,
+      l1: { bg: { translation: 'превод', alternates: [], sense: '' } }, ...(grammar ? { grammar } : {}),
     })
     const entries = [
       entry('de.haus-1', 'Haus', 'noun', { gender: 'n', plural: 'Häuser' }),
       entry('de.gehen-1', 'gehen', 'verb', { separable: false, irregular: true, auxiliary: 'sein' }),
-      entry('de.gross-1', 'groß', 'adj', null),
+      entry('de.gross-1', 'groß', 'adj'),
     ]
     const draft: Draft = {
       live: entries.map((e) => e.entry_id), entries, problems: [],
