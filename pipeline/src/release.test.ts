@@ -7,6 +7,7 @@ import { AiReviewStore, rowContent } from './aiReview/store'
 import { sha256Hex } from './checksum'
 import { Decisions, QUEUES } from './decisions'
 import { readDraft, runDraft } from './draft'
+import { PROFILES } from './profiles'
 import { levelSampled, pendingItems } from './queues'
 import { writeJson } from './files'
 import { readLastPublished } from './lastPublished'
@@ -218,7 +219,7 @@ describe('planRelease and writeRelease', () => {
     // A reviewer does only the Bulgarian translations.
     const decisions = Decisions.read(dir)
     const t = QUEUES.translation('bg')
-    const pending = pendingItems(readDraft(dir), decisions, ['bg']).get(t)!
+    const pending = pendingItems(readDraft(dir), decisions, ['bg'], PROFILES.en).get(t)!
     decisions.append(t, pending.map((i) => ({ key: i.key, at: NOW, verdict: 'ok' as const, proposed: i.proposed, by: 'Мария' })))
 
     const plan = planRelease(dir, { draft: false, now: NOW })
@@ -232,7 +233,7 @@ describe('planRelease and writeRelease', () => {
     expect(publishProblems(reader(o))).toEqual([])
     expect(JSON.parse(readFileSync(join(o, 'release.json'), 'utf8')).unreviewed).toEqual(counts)
     // Nothing was recorded as reviewed: the accepted queues' items are still open for a later review.
-    expect(pendingItems(readDraft(dir), Decisions.read(dir), ['bg']).get(QUEUES.english)).toHaveLength(64)
+    expect(pendingItems(readDraft(dir), Decisions.read(dir), ['bg'], PROFILES.en).get('english')).toHaveLength(64)
   })
 
   it('carries an entry the last version had and this one does not, retired with its published fields', async () => {
@@ -376,7 +377,7 @@ describe('planRelease and writeRelease', () => {
     expect(blocked.pending.some((l) => l.endsWith('not yet AI-reviewed (level)'))).toBe(true)
 
     // Review it: an ok verdict matching the row's current content clears the gate.
-    const item = pendingItems(readDraft(dir), decisions, config.l1s).get(QUEUES.level)!.find((i) => i.key === key)!
+    const item = pendingItems(readDraft(dir), decisions, config.l1s, PROFILES.en).get(QUEUES.level)!.find((i) => i.key === key)!
     const store = AiReviewStore.read(dir)
     store.append(QUEUES.level, [
       {

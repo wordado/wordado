@@ -2,6 +2,7 @@ import { norm } from '@wordado/core'
 import { cachedBatch, type StageCache } from '../cache'
 import type { RankedForm } from '../frequency'
 import { ParseError, type Llm } from '../llm'
+import type { LanguageProfile } from '../profiles'
 
 /** Bump when the prompt or schema changes: every form is asked again, and proposals built on it are re-reviewed. */
 export const LEMMAS_VERSION = 1
@@ -22,13 +23,14 @@ export interface StageRun {
   readonly cache: StageCache
   readonly concurrency: number
   readonly offline: boolean
+  readonly profile: LanguageProfile
 }
 
-const SYSTEM = `You prepare an English vocabulary course for adult learners.
-For each English word form you are given, in the order given, return:
+export const lemmaSystem = (p: LanguageProfile) => `You prepare ${p.course} for adult learners.
+For each ${p.name} word form you are given, in the order given, return:
 - "form": the form exactly as given.
-- "kind": "word" for an ordinary English word; "name" for a proper noun (person, place, brand); "abbreviation" for an abbreviation or acronym; "foreign" for a word that is not English; "offensive" for a slur, profanity or vulgar word; "fragment" for a contraction piece or tokenisation fragment (e.g. "ll", "don").
-- "lemmas": for a "word", the dictionary headword(s) the form can be an inflection of, in lowercase (went → go; saw → see, saw; better → good, well, better). Otherwise an empty list.
+${p.lemmaKindLine}
+${p.lemmaLemmasLine}
 Return one item per form, in the same order, and nothing else.`
 
 const SCHEMA = {
@@ -80,7 +82,7 @@ export function lemmatise(forms: readonly RankedForm[], run: StageRun): Promise<
     concurrency: run.concurrency,
     offline: run.offline,
     model: run.llm.model,
-    run: (batch) => run.llm.json({ name: 'lemmas', system: SYSTEM, input: { forms: batch }, schema: SCHEMA, parse: parse(batch) }),
+    run: (batch) => run.llm.json({ name: 'lemmas', system: lemmaSystem(run.profile), input: { forms: batch }, schema: SCHEMA, parse: parse(batch) }),
   })
 }
 

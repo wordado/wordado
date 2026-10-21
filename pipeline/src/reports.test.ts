@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { AudioRecord } from './audio'
 import { Decisions, QUEUES } from './decisions'
 import { pullReports, REPORTS_SQL, triage, type ReportRow } from './reports'
+import { PROFILES } from './profiles'
 import { makeContent } from './testing/fixture'
 
 const NOW = '2026-10-10T00:00:00Z'
@@ -16,6 +17,7 @@ const input = (reports: ReportRow[], extra: Partial<Parameters<typeof triage>[0]
   fixes: [],
   live: new Set(['go-1', 'water-1']),
   l1s: ['bg'],
+  profile: PROFILES.en,
   threshold: 2,
   now: NOW,
   ...extra,
@@ -49,6 +51,16 @@ describe('triage (spec §8.10, Decision 13)', () => {
   it('sends examples to the English queue and levels to the level queue', () => {
     const out = triage(input([r({ field: 'example' }), r({ field: 'example', reporter: 'b' }), r({ field: 'level' }), r({ field: 'level', reporter: 'b' })]))
     expect(out.events.map((e) => e.queue)).toEqual(['english', 'level'])
+  })
+
+  it('sends a German example report to the german queue', () => {
+    const out = triage(input([r({ word_id: 'c:de.haus-1', field: 'example' }), r({ word_id: 'c:de.haus-1', field: 'example', reporter: 'b' })], { profile: PROFILES.de, live: new Set(['de.haus-1']) }))
+    expect(out.events.map((e) => [e.queue, e.event.key])).toEqual([['german', 'de.haus-1']])
+  })
+
+  it('ignores a report for an entry of the other course', () => {
+    const out = triage(input([r({ word_id: 'c:de.haus-1' }), r({ word_id: 'c:de.haus-1', reporter: 'b' })]))
+    expect(out).toEqual({ events: [], summary: [] })
   })
 
   it('ignores reports made on a version before the field was last fixed, and reports already acted on', () => {

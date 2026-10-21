@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { StageCache } from '../cache'
 import { fakeLlm } from '../llm'
+import { PROFILES } from '../profiles'
 import { lemmatise, rankLemmas, type LemmaResult } from './lemmas'
 
 const cache = () => StageCache.open(join(mkdtempSync(join(tmpdir(), 'lemmas-')), 'lemmas.jsonl'))
@@ -24,7 +25,7 @@ const answer = (_name: string, input: unknown) => ({ items: (input as { forms: s
 describe('lemmatise', () => {
   it('asks for every form once and normalises the lemmas it gets back', async () => {
     const llm = fakeLlm(answer)
-    const run = { llm, cache: cache(), concurrency: 2, offline: false }
+    const run = { llm, cache: cache(), concurrency: 2, offline: false, profile: PROFILES.en }
     const out = await lemmatise(forms, run)
     expect(out[3]).toEqual({ form: 'go', kind: 'word', lemmas: ['go'] })
     expect(llm.calls.map((c) => c.name)).toEqual(['lemmas'])
@@ -34,7 +35,7 @@ describe('lemmatise', () => {
 
   it('rejects a response that answers other items than it was asked', async () => {
     const llm = fakeLlm(() => ({ items: [LEXICON['saw'], LEXICON['went'], LEXICON['london'], LEXICON['go']] }))
-    await expect(lemmatise(forms, { llm, cache: cache(), concurrency: 1, offline: false })).rejects.toThrow(/answers other items/)
+    await expect(lemmatise(forms, { llm, cache: cache(), concurrency: 1, offline: false, profile: PROFILES.en })).rejects.toThrow(/answers other items/)
   })
 })
 

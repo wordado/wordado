@@ -368,9 +368,36 @@ titles are asked per L1. To add one (German, `de`, is the model):
    Adding an L1 never changes another L1's pack: merged senses stay merged, and the new L1 keeps the first sense's
    translation with the other senses' words as alternates.
 
+English (`en`) is an L1 of the German corpus; an L1 may not be the directory's target.
+
 Shared rules to tell reviewers: a `drop` in any L1's file removes the word for every L1, so drop only a wrong English
 sense; a hard-to-translate word gets the best translation and a note. Until reports carry the learner's L1
 (plan 10), a translation report reopens every L1's translation of that word.
+
+## Adding a target language
+
+A target language is a whole corpus, not an L1: its own content directory (`content/<target>/`, a checkout path the
+content repository's workflows pass as `<dir>`), its own frequency sources, caches, registry, decisions, audio and
+releases (spec §5.5). German (`de`) is the model.
+
+1. **Code** (this repository): a profile in `PROFILES` (`pipeline/src/profiles.ts`): the course's name in prompts,
+   the ID prefix and transliteration, the accents its voices may have, its headword queue's name, its prompt lines,
+   and, when entries carry grammar, a schema in `GRAMMAR_SCHEMAS` (`core/src/grammar.ts`) and the target in
+   `TARGETS` and `ENTRY_ID_PREFIX` (`core/src/target.ts`).
+2. **Content directory:** start it with `corpus init "$PWD/content/<target>" --target <code>`: `pipeline.json` with
+   `"target": "<code>"`, `l1s` without the target itself, `tts.accents` with the profile's first accent, an empty
+   registry and nothing published (the English sample is no predecessor of another language). Then add `grammar`
+   to `ai_review.queues` when the profile has one and more accents if the profile lists them; add `sources.json`
+   and `sources/` with the language's frequency lists and licences; and check `themes.json` (init copies the
+   curated themes, named in English and the L1s). Write the language's own `essentials.txt`: init keeps the
+   template's header and no words, because the English list is English headwords.
+3. **Draft, review, audio, release** as for English. Entry and unit IDs start with the profile's prefix; packs are
+   `corpus-<target>-<l1>`; manifest descriptors carry `target`; the files are uploaded under `<target>/`.
+
+Sense glosses (`sense_en`) stay English in every corpus: they are a sense's identity, not what learners see.
+
+A German noun whose answer has no gender, or a verb with no auxiliary, is asked again (the senses stage requires
+them), so plural-only nouns (such as Leute) need a manual decision; this is tracked in wordado/wordado#316.
 
 ## When something is wrong
 

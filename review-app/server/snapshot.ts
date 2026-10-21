@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { dirname, join } from 'node:path'
 import { FIELDS, queueKind } from '@wordado/pipeline/aiReview/prompts'
 import { readConfig } from '@wordado/pipeline/config'
+import { profileOf } from '@wordado/pipeline/profiles'
 import { queueSpecs } from '@wordado/pipeline/queues'
 import { languageOf } from '../shared/hosted'
 import { CURRENT_KEY, digestRows, snapshotDigestKey, snapshotFileKey, snapshotIndexKey, type QueueDigest, type SnapshotFile, type SnapshotIndex, type SnapshotQueue } from '../shared/snapshot'
@@ -28,7 +29,8 @@ function write(out: string, key: string, value: unknown): void {
  */
 export function buildSnapshot(dir: string, out: string, meta: { commit: string; built: string }): SnapshotIndex {
   const id = snapshotId(meta.commit, meta.built)
-  const specs = queueSpecs(readConfig(dir).l1s)
+  const config = readConfig(dir)
+  const specs = queueSpecs(config.l1s, profileOf(config))
   const reviewDir = join(dir, 'review')
   const names = existsSync(reviewDir) ? readdirSync(reviewDir).sort() : []
   const queues: SnapshotQueue[] = []

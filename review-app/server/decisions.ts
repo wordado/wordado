@@ -1,13 +1,19 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
 import { readConfig } from '@wordado/pipeline/config'
+import { profileOf } from '@wordado/pipeline/profiles'
 import { importQueues, queueSpecs } from '@wordado/pipeline/queues'
 import { ACTIONS, applyDecisions } from '../shared/apply'
 import { fileVersion } from './model'
 import type { DecisionRequest, DecisionResult, ImportResult } from './types'
 
+function specsOf(dir: string) {
+  const config = readConfig(dir)
+  return queueSpecs(config.l1s, profileOf(config))
+}
+
 export function saveDecision(dir: string, req: DecisionRequest): DecisionResult {
-  const spec = queueSpecs(readConfig(dir).l1s).get(req.queue)
+  const spec = specsOf(dir).get(req.queue)
   if (!spec) return { ok: false, reason: 'invalid', message: `no queue ${req.queue}` }
   if (!ACTIONS.includes(req.action)) return { ok: false, reason: 'invalid', message: `${String(req.action)} is not accept, keep, edit or drop` }
   const folder = resolve(dir, 'review', req.queue)
@@ -27,5 +33,5 @@ export function saveDecision(dir: string, req: DecisionRequest): DecisionResult 
 }
 
 export function runImport(dir: string, by: string, now: string): ImportResult {
-  return importQueues(dir, queueSpecs(readConfig(dir).l1s), { by, now })
+  return importQueues(dir, specsOf(dir), { by, now })
 }

@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "corpus_version": 1,
+  "packs": [
+    {
+      "pack_id": "corpus-bg",
+      "l1": "bg",
+      "corpus_version": 1,
+      "schema_version": 1,
+      "url": "corpus-v1-bg.pack",
+      "sha256": "482dcafee49ffffcd7265a5ef678c5f5e0f2278f60319799a77a16678f23485e",
+      "bytes": 34844
+    }
+  ]
+}

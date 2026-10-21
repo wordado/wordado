@@ -1,3 +1,4 @@
+import type { Grammar } from './grammar'
 import type { WordId } from './wordId'
 
 /** FSRS grades. The numeric values are the ones FSRS uses. */
@@ -35,8 +36,11 @@ export const PARTS_OF_SPEECH = [
 ] as const
 export type PartOfSpeech = (typeof PARTS_OF_SPEECH)[number]
 
-/** Audio accents a pack may carry per entry (spec §5.2). */
-export type Accent = 'uk' | 'us'
+/** A voice of the target language (spec §5.5): `uk`/`us` for English, `de` for German. */
+export type Accent = string
+export const ACCENT = /^[a-z]{2}$/
+/** The order clips are offered in: these first, the rest by name. */
+export const ACCENT_ORDER: readonly string[] = ['uk', 'us']
 
 /** Text shipped in a pack in English and in the pack's L1: unit titles, theme names (spec §8.9). */
 export interface LocalizedText {
@@ -68,6 +72,8 @@ export interface CorpusEntry {
   readonly retired: boolean
   /** False for an entry known from the start (`PackEntry.taught`): searchable, shown as known, never taught. */
   readonly taught: boolean
+  /** The entry's grammar block (spec §5.2); null when it has none. */
+  readonly grammar: Grammar | null
 }
 
 /** A unit of the level path (spec §7.2). */

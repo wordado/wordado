@@ -1,3 +1,4 @@
+import type { Grammar } from './grammar'
 import type { Accent, CefrLevel, LocalizedText, PartOfSpeech } from './types'
 
 /**
@@ -34,7 +35,7 @@ export interface PackEntry {
   /** English example sentences; at least one for a live entry. */
   readonly examples: readonly string[]
   /** Clip IDs into the pack's audio manifest, by accent. */
-  readonly audio: Readonly<Partial<Record<Accent, string>>>
+  readonly audio: Readonly<Record<Accent, string>>
   readonly retired: boolean
   /**
    * False for an entry every learner knows from the start (a grammar word, issue #285): it is found by the search
@@ -42,6 +43,8 @@ export interface PackEntry {
    * pipeline writes it only as false, so the packs of entries that are taught keep their bytes.
    */
   readonly taught?: boolean
+  /** The target's grammar for this entry (spec §5.2, §5.5); absent when the target declares none or the part of speech carries none. */
+  readonly grammar?: Grammar
 }
 
 export interface PackUnit {

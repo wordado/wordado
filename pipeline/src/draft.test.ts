@@ -9,6 +9,7 @@ import { readDraft, runDraft } from './draft'
 import { writeJson } from './files'
 import type { Llm, LlmRequest } from './llm'
 import { readLastPublished } from './lastPublished'
+import { PROFILES } from './profiles'
 import { pendingItems } from './queues'
 import { adoptRelease, planRelease, writeRelease } from './release'
 import { LicenceError } from './sources'
@@ -274,7 +275,7 @@ describe('runDraft', () => {
     const again = await runDraft({ dir, llm: sampleLlm(), offline: true })
     expect(again.units).toEqual(rebuilt.units)
     expect(again.entries.map((e) => [e.entry_id, e.level, e.level_flagged])).toEqual(rebuilt.entries.map((e) => [e.entry_id, e.level, e.level_flagged]))
-    const pending = pendingItems(again, Decisions.read(dir), ['bg'])
+    const pending = pendingItems(again, Decisions.read(dir), ['bg'], PROFILES.en)
     expect(pending.get(QUEUES.level)!.find((i) => i.key === 'bank-2')).toMatchObject({ proposed: 'B1' })
     // A unit that lost all its words asks for no title.
     const emptied = ['a1-01', 'a1-02', 'a1-03', 'a1-04', 'a2-01']
@@ -304,7 +305,7 @@ describe('runDraft', () => {
 
   const fixLevel = (dir: string, key: string, proposed: string, value: string) =>
     Decisions.read(dir).append(QUEUES.level, [{ key, at: '2026-10-03T00:00:00Z', verdict: 'fix', proposed, value, by: 'r' }])
-  const levelQueue = (dir: string, d: Awaited<ReturnType<typeof runDraft>>) => pendingItems(d, Decisions.read(dir), ['bg']).get(QUEUES.level)!
+  const levelQueue = (dir: string, d: Awaited<ReturnType<typeof runDraft>>) => pendingItems(d, Decisions.read(dir), ['bg'], PROFILES.en).get(QUEUES.level)!
 
   it('a level a person chose is not a proposal to review again at the next draft', async () => {
     const dir = await publishedV1()
@@ -378,7 +379,7 @@ describe('adding an L1 (plan 9)', () => {
     expect(bg(after)).toEqual(bg(before))
     expect(after.units.map((u) => [u.unit_id, u.entry_ids, u.titles['bg']])).toEqual(before.units.map((u) => [u.unit_id, u.entry_ids, u.titles['bg']]))
     // Every Bulgarian review decision still holds: nothing Bulgarian is open again.
-    const pending = pendingItems(after, Decisions.read(dir), ['bg', 'de'])
+    const pending = pendingItems(after, Decisions.read(dir), ['bg', 'de'], PROFILES.en)
     expect(pending.get(QUEUES.translation('bg'))).toEqual([])
     expect(pending.get(QUEUES.title('bg'))).toEqual([])
     // German is there for every live entry, and bank's merged sense accepts both German words.
@@ -474,5 +475,16 @@ describe('adding an L1 (plan 9)', () => {
     )
     expect(llm.calls).toEqual([])
     expect(readFileSync(join(dir, 'registry.json'), 'utf8')).toEqual(registryBefore)
+  })
+
+  it('refuses a registry of another course than pipeline.json\'s target, before any LLM stage runs', async () => {
+    const english = makeContent()
+    writeJson(join(english, 'registry.json'), { entries: [{ entry_id: 'de.haus-1', headword: 'Haus', pos: 'noun', sense_en: '', pinned: false }], units: [] })
+    const llm = sampleLlm()
+    await expect(runDraft({ dir: english, llm, offline: false })).rejects.toThrow('registry.json holds de.haus-1, an ID of the de course, but pipeline.json\'s target is en')
+    expect(llm.calls).toEqual([])
+    const german = makeContent({ config: { target: 'de', l1s: ['bg'] } })
+    writeJson(join(german, 'registry.json'), { entries: [{ entry_id: 'water-1', headword: 'water', pos: 'noun', sense_en: '', pinned: false }], units: [] })
+    await expect(runDraft({ dir: german, llm, offline: false })).rejects.toThrow('registry.json holds water-1, an ID of the en course, but pipeline.json\'s target is de')
   })
 })

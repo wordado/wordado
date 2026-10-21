@@ -2,9 +2,10 @@ import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { csvRecords, formatCsv, parseCsv } from './csv'
-import { Decisions, QUEUES } from './decisions'
+import { Decisions } from './decisions'
 import type { Draft, DraftEntry } from './draft'
 import { aliveKeys, exportQueues, importQueues, levelSampled, pendingItems, queueSpecs, splitList } from './queues'
+import { PROFILES } from './profiles'
 import { makeContent } from './testing/fixture'
 
 const entry = (entry_id: string, extra: Partial<DraftEntry> = {}): DraftEntry => ({
@@ -31,11 +32,11 @@ const draft = (entries: DraftEntry[], live = entries.map((e) => e.entry_id)): Dr
   units: [{ unit_id: 'a1-01', level: 'A1', entry_ids: live, titles: { bg: { en: 'Water', l1: 'Вода' } } }],
   problems: [],
 })
-const specs = queueSpecs(['bg'])
+const specs = queueSpecs(['bg'], PROFILES.en)
 const NOW = '2026-10-01T10:00:00Z'
 
 function exportAll(dir: string, d: Draft): string[] {
-  return exportQueues(dir, pendingItems(d, Decisions.read(dir), ['bg']), specs, { stamp: '2026-10-01', alive: aliveKeys(d, ['bg']) })
+  return exportQueues(dir, pendingItems(d, Decisions.read(dir), ['bg'], PROFILES.en), specs, { stamp: '2026-10-01', alive: aliveKeys(d, ['bg'], PROFILES.en) })
 }
 
 function editRow(dir: string, file: string, key: string, cells: Record<string, string>): void {
@@ -47,9 +48,57 @@ function editRow(dir: string, file: string, key: string, cells: Record<string, s
   writeFileSync(path, formatCsv(rows))
 }
 
+describe('queueSpecs', () => {
+  it('names the headword queue after the target and adds a grammar queue for German', () => {
+    expect([...queueSpecs(['bg'], PROFILES.de).keys()]).toEqual(['german', 'level', 'audio', 'grammar', 'translation-bg', 'title-bg'])
+    expect([...queueSpecs(['bg'], PROFILES.en).keys()]).toEqual(['english', 'level', 'audio', 'translation-bg', 'title-bg'])
+  })
+  it('writes and reads a grammar row', () => {
+    const spec = queueSpecs(['bg'], PROFILES.de).get('grammar')!
+    expect(spec.columns).toEqual(['gender', 'plural', 'separable', 'irregular', 'auxiliary'])
+    expect(spec.toCells({ separable: true, irregular: false, auxiliary: 'sein' }))
+      .toEqual({ gender: '', plural: '', separable: 'yes', irregular: 'no', auxiliary: 'sein' })
+    expect(spec.fromCells({ gender: 'n', plural: 'Häuser', separable: '', irregular: '', auxiliary: '' })).toEqual({ gender: 'n', plural: 'Häuser' })
+    expect(() => spec.fromCells({ gender: 'x', plural: '', separable: '', irregular: '', auxiliary: '' })).toThrow('gender must be one of m, f, n')
+    expect(() => spec.fromCells({ gender: '', plural: '', separable: 'ja', irregular: '', auxiliary: '' })).toThrow('separable must be yes or no')
+    // A noun with no plural keeps its empty plural; a verb's row has no plural to keep.
+    expect(spec.fromCells({ ...spec.toCells({ gender: 'n', plural: '' }), pos: 'noun' })).toEqual({ gender: 'n', plural: '' })
+    expect(spec.fromCells({ ...spec.toCells({ separable: true, irregular: false, auxiliary: 'sein' }), pos: 'verb' })).toEqual({ separable: true, irregular: false, auxiliary: 'sein' })
+    expect(() => spec.fromCells({ gender: 'm', plural: '', separable: '', irregular: '', auxiliary: '', pos: 'verb' })).toThrow('gender is not a field of a verb')
+  })
+  it('records an untouched ok on a noun with no plural as ok, not a fix', () => {
+    const dir = makeContent()
+    const de = queueSpecs(['bg'], PROFILES.de)
+    const noun = entry('de.obst-1', { grammar: { gender: 'n', plural: '' } })
+    const d = draft([noun])
+    const files = exportQueues(dir, new Map([['grammar', pendingItems(d, Decisions.read(dir), ['bg'], PROFILES.de).get('grammar')!]]), de, { stamp: '2026-10-01' })
+    expect(files).toHaveLength(1)
+    editRow(dir, files[0]!, 'de.obst-1', { verdict: 'ok' })
+    expect(importQueues(dir, de, { by: 'r', now: NOW }).errors).toEqual([])
+    expect(Decisions.read(dir).for('grammar', 'de.obst-1').map((e) => e.verdict)).toEqual(['ok'])
+  })
+  it('queues the grammar of a live German entry that has one', () => {
+    const noun = entry('de.haus-1', { grammar: { gender: 'n', plural: 'Häuser' } })
+    const items = pendingItems(draft([noun, entry('de.gross-1')]), Decisions.read(makeContent()), ['bg'], PROFILES.de)
+    expect(items.get('german')!.map((i) => i.key)).toEqual(['de.haus-1', 'de.gross-1'])
+    expect(items.get('grammar')!.map((i) => [i.key, i.proposed])).toEqual([['de.haus-1', { gender: 'n', plural: 'Häuser' }]])
+    expect(items.get('grammar')![0]!.context).toMatchObject({ example: 'Water, please.' })
+    expect(pendingItems(draft([noun]), Decisions.read(makeContent()), ['bg'], PROFILES.en).has('grammar')).toBe(false)
+  })
+  it('queues no title for English as an L1 that is not the lead, and has no spec or alive keys for it', () => {
+    const d = { ...draft([entry('de.haus-1')]), units: [{ unit_id: 'de.a1-01', level: 'A1' as const, entry_ids: ['de.haus-1'], titles: { bg: { en: 'Home', l1: 'Дом' }, en: { en: 'Home', l1: 'Home' } } }] }
+    const items = pendingItems(d, Decisions.read(makeContent()), ['bg', 'en'], PROFILES.de)
+    expect(items.get('title-bg')!.map((i) => i.key)).toEqual(['de.a1-01'])
+    expect(items.has('title-en')).toBe(false)
+    expect(items.has('translation-en')).toBe(true)
+    expect(queueSpecs(['bg', 'en'], PROFILES.de).has('title-en')).toBe(false)
+    expect(aliveKeys(d, ['bg', 'en'], PROFILES.de).has('title-en')).toBe(false)
+  })
+})
+
 describe('pendingItems', () => {
   it('queues every live entry’s English and translation set, and each live unit’s title', () => {
-    const items = pendingItems(draft([entry('water-1'), entry('gone-1')], ['water-1']), Decisions.read(makeContent()), ['bg'])
+    const items = pendingItems(draft([entry('water-1'), entry('gone-1')], ['water-1']), Decisions.read(makeContent()), ['bg'], PROFILES.en)
     expect(items.get('english')!.map((i) => i.key)).toEqual(['water-1'])
     expect(items.get('translation-bg')![0]).toMatchObject({ key: 'water-1', proposed: { translation: 'вода', alternates: ['водичка'], sense: '' } })
     expect(items.get('title-bg')!.map((i) => i.key)).toEqual(['a1-01'])
@@ -61,7 +110,7 @@ describe('pendingItems', () => {
     const sampled = ids.filter(levelSampled)
     expect(sampled.length).toBeGreaterThan(3)
     expect(sampled.length).toBeLessThan(20)
-    const items = pendingItems(draft([flagged, ...ids.map((id) => entry(id))]), Decisions.read(makeContent()), ['bg'])
+    const items = pendingItems(draft([flagged, ...ids.map((id) => entry(id))]), Decisions.read(makeContent()), ['bg'], PROFILES.en)
     expect(items.get('level')!.map((i) => i.key)).toEqual(['a-1', ...sampled])
   })
 
@@ -69,10 +118,10 @@ describe('pendingItems', () => {
     const dir = makeContent()
     const e = entry('water-1')
     const d = Decisions.read(dir)
-    d.append(QUEUES.english, [{ key: 'water-1', at: NOW, verdict: 'ok', proposed: e.english, by: 'r' }])
-    expect(pendingItems(draft([e]), Decisions.read(dir), ['bg']).get('english')).toEqual([])
-    d.append(QUEUES.english, [{ key: 'water-1', at: NOW, verdict: 'reopen', by: 'reports', note: '2 reports: example' }])
-    expect(pendingItems(draft([e]), Decisions.read(dir), ['bg']).get('english')![0]!.context).toMatchObject({ reopened: '2 reports: example' })
+    d.append('english', [{ key: 'water-1', at: NOW, verdict: 'ok', proposed: e.english, by: 'r' }])
+    expect(pendingItems(draft([e]), Decisions.read(dir), ['bg'], PROFILES.en).get('english')).toEqual([])
+    d.append('english', [{ key: 'water-1', at: NOW, verdict: 'reopen', by: 'reports', note: '2 reports: example' }])
+    expect(pendingItems(draft([e]), Decisions.read(dir), ['bg'], PROFILES.en).get('english')![0]!.context).toMatchObject({ reopened: '2 reports: example' })
   })
 })
 

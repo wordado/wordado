@@ -1,8 +1,9 @@
 import { CEFR_LEVELS } from '@wordado/core'
 import { ParseError, type LlmRequest } from '../llm'
+import type { LanguageProfile } from '../profiles'
 import { L1_GUIDES } from '../stages/translate'
 
-export type QueueKind = 'translation' | 'title' | 'level'
+export type QueueKind = 'translation' | 'title' | 'level' | 'grammar'
 export type AiVerdictKind = 'ok' | 'minor' | 'major'
 
 export interface Objection {
@@ -25,22 +26,25 @@ export interface ReviewRow {
 }
 
 /** Bump a kind's version when its prompt or schema changes: every row of that kind is reviewed again. */
-export const AI_REVIEW_VERSION: Readonly<Record<QueueKind, number>> = { translation: 1, title: 1, level: 1 }
+export const AI_REVIEW_VERSION: Readonly<Record<QueueKind, number>> = { translation: 1, title: 1, level: 1, grammar: 1 }
 
 export const FIELDS: Readonly<Record<QueueKind, readonly string[]>> = {
   translation: ['translation', 'alternates', 'sense'],
   title: ['title_en', 'title_l1'],
   level: ['level'],
+  grammar: ['gender', 'plural', 'separable', 'irregular', 'auxiliary'],
 }
 const CATEGORIES: Readonly<Record<QueueKind, readonly string[]>> = {
   translation: ['wrong-sense', 'form', 'aspect', 'register', 'alternate-wrong', 'alternate-missing', 'sense', 'unnatural', 'spelling', 'other'],
   title: ['inaccurate', 'unnatural', 'mismatch', 'style', 'other'],
   level: ['too-low', 'too-high', 'other'],
+  grammar: ['gender', 'plural', 'verb-form', 'other'],
 }
 
 export function queueKind(queue: string): QueueKind | null {
   if (/^translation-[a-z]{2}$/.test(queue)) return 'translation'
   if (/^title-[a-z]{2}$/.test(queue)) return 'title'
+  if (queue === 'grammar') return 'grammar'
   return queue === 'level' ? 'level' : null
 }
 
@@ -52,9 +56,9 @@ const COMMON = `For each row, in the order given:
 3. Then give the verdict: ok (no errors), minor (only minor ones) or major (at least one major), and your confidence from 0 to 1.
 learner_reports, when not empty, is what learners said about this row: check their complaint first.`
 
-function systemPrompt(kind: QueueKind, l1: string): string {
+export function systemPrompt(kind: QueueKind, l1: string, profile: LanguageProfile): string {
   if (kind === 'translation') {
-    return `You are a native-speaker lexicographer reviewing an English vocabulary course for adults whose native language is the one below.
+    return `You are a native-speaker lexicographer reviewing ${profile.course} for adults whose native language is the one below.
 Another model wrote each row's translation, alternates and sense following these rules:
 
 ${L1_GUIDES[l1] ?? ''}
@@ -65,12 +69,19 @@ Learners are marked correct if they type the translation or any alternate, so a 
 ${COMMON}`
   }
   if (kind === 'title') {
-    return `You review the unit titles of an English vocabulary course. Each unit has about 20 words (words) and a title in English (title_en) and in the learners' native language (title_l1).
+    return `You review the unit titles of ${profile.course}. Each unit has about 20 words (words) and a title in English (title_en) and in the learners' native language (title_l1).
 A good title is two to four words that say what the words actually have in common; the English in sentence case; the native-language title as a textbook in that language would put it, saying the same as the English. Plain titles such as "Verbs 3" or "More words 1" are fine when the words share no theme.
 
 ${COMMON}`
   }
-  return `You check the CEFR level of each meaning in an English vocabulary course for adults (A1 to C1; there is no C2 in the course: give C1 and say so in the reason).
+  if (kind === 'grammar') {
+    return `You are a native-speaker lexicographer checking the grammar of each word in ${profile.course} for adults.
+For a noun: gender (m, f or n) and plural (the nominative plural without the article; empty only if the noun has no plural). For a verb: separable (yes or no), irregular (yes for a strong or mixed verb) and auxiliary (haben or sein, for the perfect). A field the part of speech lacks is empty; do not correct it.
+Judge the word in the meaning its gloss (sense_en) and example show.
+
+${COMMON}`
+  }
+  return `You check the CEFR level of each meaning in ${profile.course} for adults (A1 to C1; there is no C2 in the course: give C1 and say so in the reason).
 The question for each row: at which level does a typical adult learner first need this meaning?
 - A1: handles basic personal and everyday needs: greetings, family, food, the home, numbers, time.
 - A2: handles routine tasks and familiar topics: shopping, directions, work routines, simple past events.
@@ -121,8 +132,26 @@ function schema(kind: QueueKind): Record<string, unknown> {
   }
 }
 
+/**
+ * A grammar fix as the review cell writes it, or null: a field the row's part of speech carries, a flag as yes or
+ * no (a model may answer true or false), an enum one of its values.
+ */
+function grammarFix(field: string, fix: string, pos: unknown, profile: LanguageProfile): string | null {
+  const f = profile.grammar?.[field]
+  if (!f || typeof pos !== 'string' || !(f.pos as readonly string[]).includes(pos)) return null
+  if (f.kind === 'flag') {
+    const flag = fix.toLowerCase()
+    if (flag === 'true' || flag === 'yes') return 'yes'
+    if (flag === 'false' || flag === 'no') return 'no'
+    return null
+  }
+  if (f.kind === 'enum') return f.values!.includes(fix) ? fix : null
+  return fix
+}
+
 /** What remains of a raw objection: a known field and category, and a fix that changes something. */
-function cleanObjection(kind: QueueKind, raw: unknown, cells: Readonly<Record<string, string>>): Objection | null {
+function cleanObjection(kind: QueueKind, raw: unknown, row: ReviewRow, profile: LanguageProfile): Objection | null {
+  const cells = row.cells
   const o = raw as Partial<Record<keyof Objection, unknown>>
   if (typeof o.field !== 'string' || !FIELDS[kind].includes(o.field)) return null
   if (typeof o.category !== 'string' || !CATEGORIES[kind].includes(o.category)) return null
@@ -132,17 +161,22 @@ function cleanObjection(kind: QueueKind, raw: unknown, cells: Readonly<Record<st
     fix = fix.toUpperCase()
     if (!(CEFR_LEVELS as readonly string[]).includes(fix)) return null
   }
+  if (kind === 'grammar') {
+    const clean = grammarFix(o.field, fix, row.context['pos'], profile)
+    if (clean === null) return null
+    fix = clean
+  }
   if (fix === (cells[o.field] ?? '').trim()) return null
   return { field: o.field, category: o.category, severity: o.severity, reason: typeof o.reason === 'string' ? o.reason : '', fix }
 }
 
-export function reviewRequest(queue: string, rows: readonly ReviewRow[]): LlmRequest<RowVerdict[]> {
+export function reviewRequest(queue: string, rows: readonly ReviewRow[], profile: LanguageProfile): LlmRequest<RowVerdict[]> {
   const kind = queueKind(queue)
   if (!kind) throw new Error(`${queue} is not a queue AI review covers`)
   const l1 = queue.split('-')[1] ?? ''
   return {
     name: 'review',
-    system: systemPrompt(kind, l1),
+    system: systemPrompt(kind, l1, profile),
     input: { rows: rows.map((r) => ({ key: r.key, ...r.cells, ...r.context })) },
     schema: schema(kind),
     parse: (value) => {
@@ -152,7 +186,7 @@ export function reviewRequest(queue: string, rows: readonly ReviewRow[]): LlmReq
         const row = rows[i]!
         const item = raw as { key?: unknown; errors?: unknown }
         if (item.key !== row.key) throw new ParseError(`answers other rows than it was asked: item ${i} is ${JSON.stringify(item.key)}, not ${row.key}`)
-        const objections = (Array.isArray(item.errors) ? item.errors : []).map((e) => cleanObjection(kind, e, row.cells)).filter((o): o is Objection => o !== null)
+        const objections = (Array.isArray(item.errors) ? item.errors : []).map((e) => cleanObjection(kind, e, row, profile)).filter((o): o is Objection => o !== null)
         const verdict: AiVerdictKind = objections.length === 0 ? 'ok' : objections.some((o) => o.severity === 'major') ? 'major' : 'minor'
         return { key: row.key, verdict, objections }
       })

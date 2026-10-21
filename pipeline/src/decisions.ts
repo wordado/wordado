@@ -33,12 +33,22 @@ export interface FieldState<T> {
 }
 
 export const QUEUES = {
-  english: 'english',
   level: 'level',
   audio: 'audio',
+  /** The grammar block of a target that has one (spec §5.5). */
+  grammar: 'grammar',
   translation: (l1: string) => `translation-${l1}`,
   title: (l1: string) => `title-${l1}`,
 } as const
+
+/**
+ * English as an L1 that is not the lead (a German corpus) has no title of its own to review: its unit title is the
+ * lead's English, which every pack's `title.en` already carries.
+ */
+export const titleFollowsLead = (l1: string, l1s: readonly string[]): boolean => l1 === 'en' && l1 !== l1s[0]
+
+/** The L1s with a title queue of their own. */
+export const titledL1s = (l1s: readonly string[]): string[] => l1s.filter((l1) => !titleFollowsLead(l1, l1s))
 
 const same = (a: unknown, b: unknown) => canonicalJson(a) === canonicalJson(b)
 

@@ -1,5 +1,7 @@
 export * from './wordId'
 export * from './types'
+export * from './target'
+export * from './grammar'
 export * from './grading'
 export * from './scheduler'
 export * from './replay'

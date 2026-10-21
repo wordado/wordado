@@ -3,6 +3,7 @@ import { contentPaths } from '@wordado/pipeline/content'
 import { Decisions, QUEUES } from '@wordado/pipeline/decisions'
 import { readDraft, runDraft } from '@wordado/pipeline/draft'
 import { writeJson } from '@wordado/pipeline/files'
+import { profileOf } from '@wordado/pipeline/profiles'
 import { exportQueues, pendingItems, queueSpecs } from '@wordado/pipeline/queues'
 import { makeContent, sampleLlm } from '@wordado/pipeline/testing/fixture'
 import { AiReviewStore, rowContent } from '@wordado/pipeline/aiReview/store'
@@ -20,8 +21,8 @@ export async function reviewFixture(): Promise<string> {
   const decisions = Decisions.read(dir)
   const reopenKey = draft.live.find((k) => !k.startsWith('bank-'))!
   decisions.append(QUEUES.translation('bg'), [{ key: reopenKey, at: '2026-10-04T00:00:00Z', verdict: 'reopen', by: 'reports', note: '1 report (translation): odd word' }])
-  const items = pendingItems(draft, Decisions.read(dir), config.l1s)
-  exportQueues(dir, items, queueSpecs(config.l1s), { stamp: '2026-10-04' })
+  const items = pendingItems(draft, Decisions.read(dir), config.l1s, profileOf(config))
+  exportQueues(dir, items, queueSpecs(config.l1s, profileOf(config)), { stamp: '2026-10-04' })
   const store = AiReviewStore.read(dir)
   for (const queue of ['translation-bg', 'level']) {
     store.append(

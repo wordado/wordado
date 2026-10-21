@@ -1,6 +1,7 @@
-import { CEFR_LEVELS, levelIndex, norm, PARTS_OF_SPEECH, type CefrLevel, type PartOfSpeech } from '@wordado/core'
+import { CEFR_LEVELS, grammarProblems, levelIndex, norm, PARTS_OF_SPEECH, type CefrLevel, type Grammar, type GrammarValue, type PartOfSpeech } from '@wordado/core'
 import { cachedBatch } from '../cache'
 import { ParseError } from '../llm'
+import type { LanguageProfile } from '../profiles'
 import type { RankedLemma, StageRun } from './lemmas'
 
 export const SENSES_VERSION = 1
@@ -30,24 +31,48 @@ export interface SenseProposal {
   readonly variants: readonly string[]
   readonly themes: readonly string[]
   readonly examples: readonly string[]
+  /** Only for a target with a grammar block (German): gender and plural, separable, irregular and auxiliary, as the part of speech has them. */
+  readonly grammar?: Grammar
 }
 
 /**
  * The prompt judges level from the CEFR descriptors alone. It never names or
  * asks for a published list's levels, which must not be copied (spec §5.4, R1).
  */
-const SYSTEM = `You prepare an English vocabulary course for adult learners.
-For each headword you are given, in the order given, list the senses a learner up to CEFR C1 would need, most common first, at most four. For each sense:
-- "pos": one of ${PARTS_OF_SPEECH.join(', ')} ("det" is a determiner, "intj" an interjection, "phrase" a fixed multi-word expression).
-- "gloss": two to four plain English words that tell this sense apart from the headword's other senses with the same part of speech ("money" and "river" for bank). Empty only when the headword has a single sense for that part of speech.
-- "level": the CEFR level at which a typical learner first needs this sense, judged from the CEFR descriptors (A1: basic personal and everyday needs; A2: routine tasks and familiar topics; B1: work, school, leisure and travel; B2: abstract and technical topics in one's field; C1: flexible use for social, academic and professional purposes). Use C2 for a sense beyond that.
-- "ipa": the standard British pronunciation in IPA, without slashes.
-- "variants": other accepted spellings (colour → color); usually empty.
-- "themes": up to three theme ids from the list given, most relevant first; empty if none fits.
-- "examples": three short, natural English sentences using the headword in this sense, suitable for adults, at or below the sense's level. No names of real people or brands.
-Do not invent senses to reach four. Return one item per headword, in the same order, with "lemma" exactly as given, and "headword" as a dictionary prints it: with its capital letters where it has them (I, Monday, English, TV), otherwise the same as "lemma".`
+export const senseSystem = (p: LanguageProfile) =>
+  [
+    `You prepare ${p.course} for adult learners.`,
+    `For each headword you are given, in the order given, list the senses a learner up to CEFR C1 would need, most common first, at most four. For each sense:`,
+    `- "pos": one of ${PARTS_OF_SPEECH.join(', ')} ("det" is a determiner, "intj" an interjection, "phrase" a fixed multi-word expression).`,
+    `- "gloss": two to four plain English words that tell this sense apart from the headword's other senses with the same part of speech ("money" and "river" for bank). Empty only when the headword has a single sense for that part of speech.`,
+    `- "level": the CEFR level at which a typical learner first needs this sense, judged from the CEFR descriptors (A1: basic personal and everyday needs; A2: routine tasks and familiar topics; B1: work, school, leisure and travel; B2: abstract and technical topics in one's field; C1: flexible use for social, academic and professional purposes). Use C2 for a sense beyond that.`,
+    p.senseIpaLine,
+    p.senseVariantsLine,
+    `- "themes": up to three theme ids from the list given, most relevant first; empty if none fits.`,
+    `- "examples": three short, natural ${p.name} sentences using the headword in this sense, suitable for adults, at or below the sense's level. No names of real people or brands.`,
+    p.senseGrammarLine,
+    p.senseHeadwordRule,
+  ]
+    .filter((l) => l !== '')
+    .join('\n')
 
-function schema(themeIds: readonly string[]) {
+const SENSE_REQUIRED = ['pos', 'gloss', 'level', 'ipa', 'variants', 'themes', 'examples']
+
+/** What the model answers for a language with a grammar block; the parser keeps the fields a part of speech has. */
+const GRAMMAR_ANSWER = {
+  type: 'object',
+  properties: {
+    gender: { type: 'string', enum: ['m', 'f', 'n', ''] },
+    plural: { type: 'string' },
+    separable: { type: 'boolean' },
+    irregular: { type: 'boolean' },
+    auxiliary: { type: 'string', enum: ['haben', 'sein', ''] },
+  },
+  required: ['gender', 'plural', 'separable', 'irregular', 'auxiliary'],
+  additionalProperties: false,
+}
+
+function schema(themeIds: readonly string[], profile: LanguageProfile) {
   return {
     type: 'object',
     properties: {
@@ -70,8 +95,9 @@ function schema(themeIds: readonly string[]) {
                   variants: { type: 'array', items: { type: 'string' } },
                   themes: { type: 'array', items: themeIds.length > 0 ? { type: 'string', enum: themeIds } : { type: 'string' } },
                   examples: { type: 'array', items: { type: 'string' } },
+                  ...(profile.grammar ? { grammar: GRAMMAR_ANSWER } : {}),
                 },
-                required: ['pos', 'gloss', 'level', 'ipa', 'variants', 'themes', 'examples'],
+                required: profile.grammar ? [...SENSE_REQUIRED, 'grammar'] : SENSE_REQUIRED,
                 additionalProperties: false,
               },
             },
@@ -90,7 +116,19 @@ const BATCH = 10
 /** The review sheet separates list cells with " | " (Task 12); a sentence must not contain one. */
 const cell = (s: string) => s.replaceAll('|', '/').replace(/\s+/g, ' ').trim()
 
-function parseSense(headword: string, themeIds: ReadonlySet<string>, raw: Record<string, unknown>, where: string): SenseProposal {
+function keptGrammar(profile: LanguageProfile, pos: PartOfSpeech, raw: Record<string, unknown>): Grammar | undefined {
+  if (!profile.grammar) return undefined
+  const out: Record<string, GrammarValue> = {}
+  for (const [name, field] of Object.entries(profile.grammar)) {
+    if (!field.pos.includes(pos)) continue
+    const v = raw[name]
+    if (field.kind === 'enum' && v === '') continue
+    if (v !== undefined) out[name] = v as GrammarValue
+  }
+  return Object.keys(out).length > 0 ? out : undefined
+}
+
+function parseSense(profile: LanguageProfile, headword: string, themeIds: ReadonlySet<string>, raw: Record<string, unknown>, where: string): SenseProposal {
   const pos = raw['pos'] as PartOfSpeech
   if (!PARTS_OF_SPEECH.includes(pos)) throw new ParseError(`${where}: unknown part of speech`)
   const level = raw['level'] as LlmLevel
@@ -100,6 +138,15 @@ function parseSense(headword: string, themeIds: ReadonlySet<string>, raw: Record
   if (examples.length === 0) throw new ParseError(`${where}: needs at least one example sentence`)
   const ipa = cell(String(raw['ipa'] ?? '')).replace(/^\/|\/$/g, '')
   if (ipa === '') throw new ParseError(`${where}: needs IPA`)
+  const rawGrammar = raw['grammar']
+  if (profile.grammar && (typeof rawGrammar !== 'object' || rawGrammar === null || Array.isArray(rawGrammar))) throw new ParseError(`${where}: grammar must be an object`)
+  const grammar = keptGrammar(profile, pos, (rawGrammar ?? {}) as Record<string, unknown>)
+  // A part of speech the schema gives no field (an adjective, say) keeps no block, and there is nothing to check.
+  // One that has fields must carry each (a noun its gender, a verb its auxiliary): the stage asks again rather than
+  // let an entry through without it.
+  const missing = Object.entries(profile.grammar ?? {}).filter(([name, f]) => f.pos.includes(pos) && !(grammar && name in grammar)).map(([name]) => `${name} is missing`)
+  const problems = [...missing, ...(grammar ? grammarProblems(profile.code, pos, grammar) : [])]
+  if (problems.length > 0) throw new ParseError(`${where}: ${problems.join('; ')}`)
   return {
     headword,
     pos,
@@ -109,10 +156,11 @@ function parseSense(headword: string, themeIds: ReadonlySet<string>, raw: Record
     variants: [...new Set(strings(raw['variants']).map(norm))].filter((v) => v !== norm(headword)),
     themes: [...new Set(strings(raw['themes']))].filter((t) => themeIds.has(t)).slice(0, 3),
     examples,
+    ...(grammar ? { grammar } : {}),
   }
 }
 
-function parse(asked: readonly string[], themeIds: ReadonlySet<string>) {
+function parse(profile: LanguageProfile, asked: readonly string[], themeIds: ReadonlySet<string>) {
   return (value: unknown): SenseProposal[][] => {
     const items = (value as { items?: unknown }).items
     if (!Array.isArray(items) || items.length !== asked.length) throw new ParseError(`answers other items than it was asked`)
@@ -121,8 +169,10 @@ function parse(asked: readonly string[], themeIds: ReadonlySet<string>) {
       if (item.lemma !== asked[i]) throw new ParseError(`answers other items than it was asked: item ${i} is ${JSON.stringify(item.lemma)}`)
       // Frequency lists are lowercased; the headword keeps its capitals (I, Monday) when it is the same word.
       const display = String(item.headword ?? '').trim()
-      const headword = display !== '' && norm(display) === asked[i] ? display : asked[i]!
-      const senses = (Array.isArray(item.senses) ? item.senses : []).slice(0, 4).map((s, j) => parseSense(headword, themeIds, s as Record<string, unknown>, `${asked[i]} sense ${j}`))
+      // German prints a reflexive verb with "sich" (sich freuen), as its prompt asks.
+      const same = norm(display) === asked[i] || (profile.code === 'de' && norm(display) === `sich ${asked[i]}`)
+      const headword = display !== '' && same ? display : asked[i]!
+      const senses = (Array.isArray(item.senses) ? item.senses : []).slice(0, 4).map((s, j) => parseSense(profile, headword, themeIds, s as Record<string, unknown>, `${asked[i]} sense ${j}`))
       const byPos = new Map<string, SenseProposal[]>()
       for (const s of senses) byPos.set(s.pos, [...(byPos.get(s.pos) ?? []), s])
       for (const [pos, group] of byPos) {
@@ -149,7 +199,7 @@ export function describeLemmas(lemmas: readonly RankedLemma[], themeIds: readonl
     offline: run.offline,
     model: run.llm.model,
     run: (batch) =>
-      run.llm.json({ name: 'senses', system: SYSTEM, input: { themes: sortedThemes, headwords: batch }, schema: schema(sortedThemes), parse: parse(batch, known) }),
+      run.llm.json({ name: 'senses', system: senseSystem(run.profile), input: { themes: sortedThemes, headwords: batch }, schema: schema(sortedThemes, run.profile), parse: parse(run.profile, batch, known) }),
   })
 }
 

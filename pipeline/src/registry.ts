@@ -1,4 +1,5 @@
-import { norm, type CefrLevel, type Pack, type PartOfSpeech } from '@wordado/core'
+import { PROFILES, type LanguageProfile } from './profiles'
+import { ENTRY_ID_PREFIX, norm, type CefrLevel, type Pack, type PartOfSpeech } from '@wordado/core'
 
 /** An entry ID and the English sense it stands for (spec §5.2's identity). Never removed (spec §5.1). */
 export interface RegistryEntry {
@@ -30,14 +31,18 @@ export interface SenseKey {
 }
 
 /** The sample's ID style: `thank_you`, `oclock`, `cafe` (Decision 10). */
-export function slugOf(headword: string): string {
-  const slug = norm(headword)
+export function slugOf(headword: string, profile: LanguageProfile = PROFILES.en): string {
+  let lower = norm(headword)
+  for (const [from, to] of Object.entries(profile.transliterate)) lower = lower.replaceAll(from, to)
+  const slug = lower
     .normalize('NFD')
     .replace(/\p{M}/gu, '')
     .replace(/\s+/g, '_')
     .replace(/[^a-z0-9._-]/g, '')
     .replace(/^[^a-z0-9]+/, '')
-  return slug === '' ? 'w' : slug
+  // An unprefixed (English) slug never starts like another course's IDs: `de.x` would read as German.
+  const own = profile.idPrefix !== '' ? slug : Object.values(ENTRY_ID_PREFIX).reduce((s, p) => (p !== '' && s.startsWith(p) ? `${p.slice(0, -1)}_${s.slice(p.length)}` : s), slug)
+  return `${profile.idPrefix}${own === '' ? 'w' : own}`
 }
 
 const identity = (k: SenseKey) => `${norm(k.headword)}|${k.pos}|${norm(k.sense_en)}`
@@ -52,7 +57,7 @@ const headPos = (k: { headword: string; pos: string }) => `${norm(k.headword)}|$
  * ID too, because the gloss of a lone sense is only a label. Either way the
  * new gloss is recorded. Anything else gets the next number for its slug.
  */
-export function assignIds(registry: Registry, keys: readonly SenseKey[]): { registry: Registry; ids: string[] } {
+export function assignIds(registry: Registry, keys: readonly SenseKey[], profile: LanguageProfile = PROFILES.en): { registry: Registry; ids: string[] } {
   const seen = new Set<string>()
   for (const k of keys) {
     if (seen.has(identity(k))) throw new Error(`${k.headword} (${k.pos}, "${k.sense_en}") appears twice`)
@@ -99,7 +104,7 @@ export function assignIds(registry: Registry, keys: readonly SenseKey[]): { regi
   const out = ids.map((id, i) => {
     if (id !== null) return id
     const k = keys[i]!
-    const slug = slugOf(k.headword)
+    const slug = slugOf(k.headword, profile)
     const n = (highest.get(slug) ?? 0) + 1
     highest.set(slug, n)
     const entryId = `${slug}-${n}`

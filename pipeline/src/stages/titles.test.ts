@@ -4,17 +4,19 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { cacheKey, StageCache } from '../cache'
 import { fakeLlm } from '../llm'
-import { SYSTEM, titleUnits } from './titles'
+import { PROFILES } from '../profiles'
+import { titleSystem, titleUnits } from './titles'
 
 const run = (answer: (n: string, i: unknown) => unknown) => ({
   llm: fakeLlm(answer),
   cache: StageCache.open(join(mkdtempSync(join(tmpdir(), 'titles-')), 'titles.jsonl')),
   concurrency: 1,
   offline: false,
+  profile: PROFILES.en,
 })
 
 const shared = () => join(mkdtempSync(join(tmpdir(), 'titles-')), 'titles.jsonl')
-const on = (file: string, answer: (n: string, i: unknown) => unknown) => ({ llm: fakeLlm(answer), cache: StageCache.open(file), concurrency: 1, offline: false })
+const on = (file: string, answer: (n: string, i: unknown) => unknown) => ({ llm: fakeLlm(answer), cache: StageCache.open(file), concurrency: 1, offline: false, profile: PROFILES.en })
 const perL1 = (_: string, input: unknown) => {
   const { l1s, units } = input as { l1s: string[]; units: { unit: string }[] }
   return { items: units.map((u) => ({ unit: u.unit, en: l1s[0] === 'bg' ? 'Food' : 'Eating', ...Object.fromEntries(l1s.map((l) => [l, l === 'bg' ? 'Храна' : 'Essen'])) })) }
@@ -46,13 +48,33 @@ describe('titleUnits', () => {
   })
 })
 
+describe('titleUnits with English as an L1 (a German corpus)', () => {
+  const units = [{ unit_id: 'de.a1-04', level: 'A1' as const, words: ['milch', 'brot'] }]
+
+  it('gives the English L1 the English title the lead L1 was given, without asking again', async () => {
+    const r = run(perL1)
+    const out = await titleUnits(units, ['bg', 'en'], r)
+    expect(r.llm.calls.map((c) => (c.input as { l1s: string[] }).l1s)).toEqual([['bg']])
+    expect(out.get('de.a1-04')).toEqual({ bg: { en: 'Food', l1: 'Храна' }, en: { en: 'Food', l1: 'Food' } })
+  })
+
+  it('asks English when it leads, and its title is its English', async () => {
+    const answer = (_: string, input: unknown) => {
+      const { l1s, units: us } = input as { l1s: string[]; units: { unit: string }[] }
+      return { items: us.map((u) => ({ unit: u.unit, en: 'Food', ...(l1s[0] === 'en' ? {} : { [l1s[0]!]: 'Храна' }) })) }
+    }
+    const out = await titleUnits(units, ['en', 'bg'], run(answer))
+    expect(out.get('de.a1-04')).toEqual({ en: { en: 'Food', l1: 'Food' }, bg: { en: 'Food', l1: 'Храна' } })
+  })
+})
+
 describe('SYSTEM', () => {
   it('names a known L1’s language, so Spanish titles come back in Spain’s Spanish and not a Latin American variety', () => {
-    expect(SYSTEM(['es'])).toContain('es (Spanish, as written in Spain)')
+    expect(titleSystem(['es'], PROFILES.en)).toContain('es (Spanish, as written in Spain)')
   })
 
   it('falls back to the bare code for an unknown L1', () => {
-    expect(SYSTEM(['xx'])).toContain('xx')
-    expect(SYSTEM(['xx'])).not.toContain('xx (')
+    expect(titleSystem(['xx'], PROFILES.en)).toContain('xx')
+    expect(titleSystem(['xx'], PROFILES.en)).not.toContain('xx (')
   })
 })

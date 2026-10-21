@@ -19,6 +19,7 @@ const UNITS = [unit('a1-u1', 'A1', 1, [1, 2]), unit('a2-u1', 'A2', 2, [3, 4]), u
 
 const corpusOf = (units: readonly Unit[], trial: Corpus['trial']): Corpus => ({
   l1: 'bg',
+  target: 'en',
   entries: new Map(),
   units,
   themes: [],
@@ -94,6 +95,7 @@ const themed = (n: number, taught = true): CorpusEntry => ({
   audio: {},
   retired: false,
   taught,
+  grammar: null,
 })
 const open = (entries: CorpusEntry[]): Corpus => ({
   ...corpusOf(UNITS, { probes: [], course: {}, themes: {}, openTheme: 'food' }),

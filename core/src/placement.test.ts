@@ -135,6 +135,7 @@ const entry = (entryId: string, level: CefrLevel, retired = false): CorpusEntry 
   audio: {},
   retired,
   taught: true,
+  grammar: null,
 })
 
 describe('placementPool and placementLevels', () => {
@@ -172,6 +173,7 @@ describe('placementCorpus', () => {
   const withExamples = (e: CorpusEntry): CorpusEntry => ({ ...e, examples: ['An example.'], unitId: 'u-b1' })
   const corpusOf = (entries: CorpusEntry[], trial: Corpus['trial']): Corpus => ({
     l1: 'bg',
+    target: 'en',
     entries: new Map(entries.map((e) => [e.entryId, e])),
     units: [],
     themes: [],

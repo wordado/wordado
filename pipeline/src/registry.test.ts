@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { validatePack, type Pack } from '@wordado/core'
 import { describe, expect, it } from 'vitest'
+import { PROFILES } from './profiles'
 import { assignIds, registryFromSample, slugOf, type Registry } from './registry'
 
 const samplePack = (() => {
@@ -13,7 +14,7 @@ const samplePack = (() => {
 
 describe('slugOf (Decision 10)', () => {
   it('makes IDs like the sample’s', () => {
-    expect(['thank you', "o'clock", 'Café', 'well-known', '  ', "’"].map(slugOf)).toEqual(['thank_you', 'oclock', 'cafe', 'well-known', 'w', 'w'])
+    expect(['thank you', "o'clock", 'Café', 'well-known', '  ', "’"].map((h) => slugOf(h))).toEqual(['thank_you', 'oclock', 'cafe', 'well-known', 'w', 'w'])
   })
 })
 
@@ -73,5 +74,26 @@ describe('assignIds', () => {
 
   it('refuses the same sense twice in one call', () => {
     expect(() => assignIds(base, [{ headword: 'x', pos: 'noun', sense_en: '' }, { headword: 'X', pos: 'noun', sense_en: '' }])).toThrow(/twice/)
+  })
+})
+
+describe('German IDs', () => {
+  it('prefixes and transliterates', () => {
+    const de = PROFILES.de
+    expect(['Mädchen', 'Straße', 'Öl', 'über', 'Haustür', 'sich freuen'].map((h) => slugOf(h, de)))
+      .toEqual(['de.maedchen', 'de.strasse', 'de.oel', 'de.ueber', 'de.haustuer', 'de.sich_freuen'])
+  })
+  it('keeps English slugs exactly', () => {
+    expect(['thank you', "o'clock", 'Café'].map((h) => slugOf(h))).toEqual(['thank_you', 'oclock', 'cafe'])
+  })
+  it('never gives an English headword a slug with another course\'s prefix', () => {
+    expect(['de.x', 'De. Niro', 'de-x', 'delta', 'de'].map((h) => slugOf(h))).toEqual(['de_x', 'de__niro', 'de-x', 'delta', 'de'])
+  })
+  it('numbers two headwords that transliterate alike apart', () => {
+    const { ids } = assignIds({ entries: [], units: [] }, [
+      { headword: 'Mädchen', pos: 'noun', sense_en: '' },
+      { headword: 'Maedchen', pos: 'noun', sense_en: '' },
+    ], PROFILES.de)
+    expect(ids).toEqual(['de.maedchen-1', 'de.maedchen-2'])
   })
 })

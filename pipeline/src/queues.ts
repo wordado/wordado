@@ -1,12 +1,13 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
-import { canonicalJson, CEFR_LEVELS } from '@wordado/core'
+import { canonicalJson, CEFR_LEVELS, grammarProblems, PARTS_OF_SPEECH, type Grammar, type GrammarField, type GrammarValue, type PartOfSpeech } from '@wordado/core'
 import { sha256Hex } from './checksum'
 import { contentPaths } from './content'
 import { csvRecords, formatCsv } from './csv'
-import { Decisions, foldField, QUEUES, type DecisionEvent, type Verdict } from './decisions'
+import { Decisions, foldField, QUEUES, titleFollowsLead, titledL1s, type DecisionEvent, type Verdict } from './decisions'
 import type { Draft } from './draft'
 import { readJson, writeJson } from './files'
+import type { LanguageProfile } from './profiles'
 
 export interface QueueItem {
   readonly key: string
@@ -40,10 +41,27 @@ const required = (cells: Readonly<Record<string, string>>, col: string): string 
   return v
 }
 
-export function queueSpecs(l1s: readonly string[]): Map<string, QueueSpec> {
+/**
+ * What is wrong with a grammar row's values, field by field: `grammarProblems` without its part-of-speech check,
+ * since the row has no part-of-speech cell to check against.
+ */
+export function grammarShapeProblems(schema: Readonly<Record<string, GrammarField>>, value: Grammar): string[] {
+  const problems: string[] = []
+  for (const [name, v] of Object.entries(value)) {
+    if (!Object.hasOwn(schema, name)) continue
+    const field = schema[name]!
+    if (field.kind === 'text' && typeof v !== 'string') problems.push(`${name} must be text`)
+    else if (field.kind === 'flag' && typeof v !== 'boolean') problems.push(`${name} must be true or false`)
+    else if (field.kind === 'enum' && !field.values!.includes(v as string)) problems.push(`${name} must be one of ${field.values!.join(', ')}`)
+  }
+  return problems
+}
+
+/** The queues' specs in `reviewQueues` order: the headword queue, level, audio, grammar (a target with one), then per L1. */
+export function queueSpecs(l1s: readonly string[], profile: LanguageProfile): Map<string, QueueSpec> {
   const specs: QueueSpec[] = [
     {
-      name: QUEUES.english,
+      name: profile.reviewQueue,
       columns: ['ipa', 'variants', 'examples'],
       context: ['headword', 'pos', 'sense_en', 'level', 'reopened'],
       verdicts: ['ok', 'drop'],
@@ -78,6 +96,40 @@ export function queueSpecs(l1s: readonly string[]): Map<string, QueueSpec> {
       fromCells: () => null,
     },
   ]
+  const schema = profile.grammar
+  if (schema) {
+    specs.push({
+      name: QUEUES.grammar,
+      columns: Object.keys(schema),
+      context: ['headword', 'pos', 'sense_en', 'example', 'reopened'],
+      verdicts: ['ok'],
+      // A flag is written yes or no; an empty cell is a field the entry does not have.
+      toCells: (v) => Object.fromEntries(Object.entries(schema).map(([name, f]) => {
+        const value = (v as Grammar)[name]
+        return [name, value === undefined ? '' : f.kind === 'flag' ? (value ? 'yes' : 'no') : String(value)]
+      })),
+      // An empty text cell is an empty value (a noun with no plural) when the row's part of speech has the field;
+      // an empty enum or flag cell is a field the entry does not have.
+      fromCells: (c) => {
+        const out: Record<string, GrammarValue> = {}
+        const pos = (c['pos'] ?? '').trim()
+        for (const [name, f] of Object.entries(schema)) {
+          const cell = (c[name] ?? '').trim()
+          if (cell === '') {
+            if (f.kind === 'text' && (f.pos as readonly string[]).includes(pos)) out[name] = ''
+            continue
+          }
+          if (f.kind === 'flag' && cell !== 'yes' && cell !== 'no') throw new Error(`${name} must be yes or no`)
+          out[name] = f.kind === 'flag' ? cell === 'yes' : cell
+        }
+        const problems = (PARTS_OF_SPEECH as readonly string[]).includes(pos)
+          ? grammarProblems(profile.code, pos as PartOfSpeech, out)
+          : grammarShapeProblems(schema, out)
+        if (problems.length > 0) throw new Error(problems[0])
+        return out
+      },
+    })
+  }
   for (const l1 of l1s) {
     specs.push({
       name: QUEUES.translation(l1),
@@ -90,6 +142,7 @@ export function queueSpecs(l1s: readonly string[]): Map<string, QueueSpec> {
       },
       fromCells: (c) => ({ translation: required(c, 'translation'), alternates: splitList(c['alternates'] ?? ''), sense: (c['sense'] ?? '').trim() }),
     })
+    if (titleFollowsLead(l1, l1s)) continue
     specs.push({
       name: QUEUES.title(l1),
       columns: ['title_en', 'title_l1'],
@@ -111,11 +164,11 @@ export function levelSampled(entryId: string): boolean {
 }
 
 /** Every item still waiting for a reviewer, per queue, from the draft and the decisions so far. Audio's items come from `audioQueueItems`. */
-export function pendingItems(draft: Draft, decisions: Decisions, l1s: readonly string[]): Map<string, QueueItem[]> {
-  const out = new Map<string, QueueItem[]>([[QUEUES.english, []], [QUEUES.level, []]])
+export function pendingItems(draft: Draft, decisions: Decisions, l1s: readonly string[], profile: LanguageProfile): Map<string, QueueItem[]> {
+  const out = new Map<string, QueueItem[]>([[profile.reviewQueue, []], [QUEUES.level, []], ...(profile.grammar ? [[QUEUES.grammar, []] as [string, QueueItem[]]] : [])])
   for (const l1 of l1s) {
     out.set(QUEUES.translation(l1), [])
-    out.set(QUEUES.title(l1), [])
+    if (!titleFollowsLead(l1, l1s)) out.set(QUEUES.title(l1), [])
   }
   const live = new Set(draft.live)
   const push = <T>(queue: string, key: string, proposal: T, context: Record<string, string>) => {
@@ -128,7 +181,8 @@ export function pendingItems(draft: Draft, decisions: Decisions, l1s: readonly s
   for (const e of draft.entries) {
     if (!live.has(e.entry_id)) continue
     const base = { headword: e.headword, pos: e.pos, sense_en: e.sense_en, level: e.level }
-    push(QUEUES.english, e.entry_id, e.english, base)
+    push(profile.reviewQueue, e.entry_id, e.english, base)
+    if (profile.grammar && e.grammar != null) push(QUEUES.grammar, e.entry_id, e.grammar, { ...base, example: e.english.examples[0] ?? '' })
     for (const l1 of l1s) push(QUEUES.translation(l1), e.entry_id, e.l1[l1], { ...base, example: e.english.examples[0] ?? '' })
   }
   for (const e of draft.entries) {
@@ -139,7 +193,7 @@ export function pendingItems(draft: Draft, decisions: Decisions, l1s: readonly s
   for (const u of draft.units) {
     const words = u.entry_ids.filter((id) => live.has(id))
     if (words.length === 0) continue
-    for (const l1 of l1s) {
+    for (const l1 of titledL1s(l1s)) {
       const title = u.titles[l1]
       if (title) push(QUEUES.title(l1), u.unit_id, title, { level: u.level, words: words.map((id) => byId.get(id)?.headword ?? id).join(', ') })
     }
@@ -163,13 +217,13 @@ const sidecarOf = (csv: string) => csv.replace(/\.csv$/, '.json')
  * The keys a queue's rows may be about: live entries for the entry queues, units with a live word for the title
  * queues. A row about anything else needs no decision. Audio is left out: its rows are clips, judged on their own.
  */
-export function aliveKeys(draft: Draft, l1s: readonly string[]): Map<string, Set<string>> {
+export function aliveKeys(draft: Draft, l1s: readonly string[], profile: LanguageProfile): Map<string, Set<string>> {
   const live = new Set(draft.live)
   const units = new Set(draft.units.filter((u) => u.entry_ids.some((id) => live.has(id))).map((u) => u.unit_id))
-  const out = new Map<string, Set<string>>([[QUEUES.english, live], [QUEUES.level, live]])
+  const out = new Map<string, Set<string>>([[profile.reviewQueue, live], [QUEUES.level, live], ...(profile.grammar ? [[QUEUES.grammar, live] as [string, Set<string>]] : [])])
   for (const l1 of l1s) {
     out.set(QUEUES.translation(l1), live)
-    out.set(QUEUES.title(l1), units)
+    if (!titleFollowsLead(l1, l1s)) out.set(QUEUES.title(l1), units)
   }
   return out
 }

@@ -1,0 +1,312 @@
+{
+  "schema_version": 1,
+  "corpus_version": 1,
+  "fixes": [
+    {
+      "word_id": "c:apple-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:bed-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:boy-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:bread-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:breakfast-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:brother-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:chair-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:cheese-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:child-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:coffee-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:day-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:dinner-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:door-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:drink-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:eat-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:egg-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:family-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:father-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:fish-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:food-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:friend-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:girl-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:goodbye-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:hello-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:home-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:house-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:hungry-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:key-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:kitchen-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:lunch-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:man-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:meat-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:milk-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:money-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:morning-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:mother-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:name-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:night-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:no-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:please-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:rice-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:room-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:salt-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:school-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:shop-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:sister-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:sorry-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:sugar-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:table-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:tea-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:teacher-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:thank_you-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:time-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:time-1",
+      "field": "translation",
+      "fixed_in": 1,
+      "l1": "bg"
+    },
+    {
+      "word_id": "c:today-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:water-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:week-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:window-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:woman-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:work-1",
+      "field": "audio",
+      "fixed_in": 1
+    },
+    {
+      "word_id": "c:yes-1",
+      "field": "audio",
+      "fixed_in": 1
+    }
+  ]
+}

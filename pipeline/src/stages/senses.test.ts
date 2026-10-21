@@ -4,14 +4,17 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { StageCache } from '../cache'
 import { fakeLlm } from '../llm'
+import { PROFILES, type LanguageProfile } from '../profiles'
 import { bandLevel, describeLemmas, frequencyBand } from './senses'
 
-const run = (answer: (n: string, i: unknown) => unknown) => ({
+const runFor = (profile: LanguageProfile, answer: (n: string, i: unknown) => unknown) => ({
   llm: fakeLlm(answer),
   cache: StageCache.open(join(mkdtempSync(join(tmpdir(), 'senses-')), 'senses.jsonl')),
   concurrency: 1,
   offline: false,
+  profile,
 })
+const run = (answer: (n: string, i: unknown) => unknown) => runFor(PROFILES.en, answer)
 const bank = {
   lemma: 'bank',
   senses: [
@@ -39,6 +42,7 @@ describe('describeLemmas', () => {
     const lemma = [{ lemma: 'i', perMillion: 9000, rank: 10, pinned: false }]
     expect((await describeLemmas(lemma, [], run(() => ({ items: [pronoun] }))))[0]![0]!.headword).toBe('I')
     expect((await describeLemmas(lemma, [], run(() => ({ items: [{ ...pronoun, headword: 'Me' }] }))))[0]![0]!.headword).toBe('i')
+    expect((await describeLemmas(lemma, [], run(() => ({ items: [{ ...pronoun, headword: 'sich i' }] }))))[0]![0]!.headword).toBe('i')
   })
 
   it('drops a variant that is only the headword in other capitals', async () => {
@@ -87,5 +91,65 @@ describe('bandLevel (Decision 7; two steps since 2026-10-06)', () => {
   })
   it('drops C2, which no Phase 1 path teaches', () => {
     expect(bandLevel('C2', 'A1')).toEqual({ level: null, flagged: false })
+  })
+})
+
+describe('describeLemmas for a target with grammar', () => {
+  const german = (lemma: string, sense: Record<string, unknown>) => ({
+    lemma,
+    senses: [{ gloss: '', level: 'A1', ipa: 'x', variants: [], themes: [], examples: ['Ein Satz.'], ...sense }],
+  })
+  const deAnswer = () => ({
+    items: [
+      // A verb's answer with noun fields filled: they are not a verb's fields, and are dropped.
+      german('gehen', { pos: 'verb', grammar: { gender: 'm', plural: 'x', separable: false, irregular: true, auxiliary: 'sein' } }),
+      german('haus', { pos: 'noun', grammar: { gender: 'n', plural: 'Häuser', separable: false, irregular: false, auxiliary: '' } }),
+    ],
+  })
+  const ranked = (...names: string[]) => names.map((lemma, i) => ({ lemma, perMillion: 100, rank: i + 1, pinned: false }))
+
+  it('keeps the grammar fields of each part of speech for German', async () => {
+    const out = await describeLemmas(ranked('gehen', 'haus'), [], runFor(PROFILES.de, deAnswer))
+    expect(out[0]![0]!.grammar).toEqual({ separable: false, irregular: true, auxiliary: 'sein' })
+    expect(out[1]![0]!.grammar).toEqual({ gender: 'n', plural: 'Häuser' })
+  })
+
+  it('keeps a German reflexive verb\'s headword with "sich", which the prompt asks for', async () => {
+    const answer = () => ({ items: [{ ...german('freuen', { pos: 'verb', grammar: { gender: '', plural: '', separable: false, irregular: false, auxiliary: 'haben' } }), headword: 'sich freuen' }] })
+    const out = await describeLemmas(ranked('freuen'), [], runFor(PROFILES.de, answer))
+    expect(out[0]![0]!.headword).toBe('sich freuen')
+    // Anything else that is not the lemma is still the lemma.
+    const other = () => ({ items: [{ ...german('freuen', { pos: 'verb', grammar: { gender: '', plural: '', separable: false, irregular: false, auxiliary: 'haben' } }), headword: 'mich freuen' }] })
+    expect((await describeLemmas(ranked('freuen'), [], runFor(PROFILES.de, other)))[0]![0]!.headword).toBe('freuen')
+  })
+
+  it('gives a part of speech without grammar fields no grammar block, and does not reject it', async () => {
+    const answer = () => ({ items: [german('gut', { pos: 'adj', grammar: { gender: '', plural: '', separable: false, irregular: false, auxiliary: '' } })] })
+    const out = await describeLemmas(ranked('gut'), [], runFor(PROFILES.de, answer))
+    expect(out[0]![0]!.grammar).toBeUndefined()
+  })
+
+  it('rejects a German sense without a grammar object', async () => {
+    const answer = () => ({ items: [german('gut', { pos: 'adj' })] })
+    await expect(describeLemmas(ranked('gut'), [], runFor(PROFILES.de, answer))).rejects.toThrow(/gut sense 0: grammar must be an object/)
+  })
+
+  it('rejects a German noun without a gender and a verb without an auxiliary, so the stage asks again', async () => {
+    const noun = () => ({ items: [german('haus', { pos: 'noun', grammar: { gender: '', plural: 'Häuser', separable: false, irregular: false, auxiliary: '' } })] })
+    await expect(describeLemmas(ranked('haus'), [], runFor(PROFILES.de, noun))).rejects.toThrow(/haus sense 0: gender is missing/)
+    const verb = () => ({ items: [german('gehen', { pos: 'verb', grammar: { gender: '', plural: '', separable: false, irregular: true, auxiliary: '' } })] })
+    await expect(describeLemmas(ranked('gehen'), [], runFor(PROFILES.de, verb))).rejects.toThrow(/gehen sense 0: auxiliary is missing/)
+    const bare = () => ({ items: [german('haus', { pos: 'noun', grammar: { gender: '' } })] })
+    await expect(describeLemmas(ranked('haus'), [], runFor(PROFILES.de, bare))).rejects.toThrow(/haus sense 0: gender is missing; plural is missing/)
+  })
+
+  it('rejects a German grammar value of the wrong type', async () => {
+    const bad = () => ({ items: [german('haus', { pos: 'noun', grammar: { gender: 'n', plural: 5, separable: false, irregular: false, auxiliary: '' } })] })
+    await expect(describeLemmas(ranked('haus'), [], runFor(PROFILES.de, bad))).rejects.toThrow(/haus sense 0/)
+  })
+
+  it('asks English senses without grammar', async () => {
+    const out = await describeLemmas(lemmas, [], runFor(PROFILES.en, () => ({ items: [bank] })))
+    expect(out[0]![0]!.grammar).toBeUndefined()
   })
 })

@@ -1,2 +1,3 @@
 *.pack -text
 *.m4a binary
+pipeline/src/testing/english-release/** -text

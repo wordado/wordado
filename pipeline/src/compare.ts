@@ -6,6 +6,7 @@ import { StageCache } from './cache'
 import { readConfig, readThemes } from './config'
 import { readDraft, type DraftEntry } from './draft'
 import type { Llm } from './llm'
+import { profileOf } from './profiles'
 import type { StageRun } from './stages/lemmas'
 import { describeLemmas, SENSES_THEME_IDS } from './stages/senses'
 import { themeSenses } from './stages/themes'
@@ -44,7 +45,7 @@ export async function compareStages(dir: string, llm: Llm, opts: { readonly samp
   const live = new Set(draft.live)
   const picked = sampleEntries(draft.entries.filter((e) => live.has(e.entry_id)), opts.sample)
   const scratch = mkdtempSync(join(tmpdir(), 'corpus-compare-'))
-  const run = (stage: string): StageRun => ({ llm, cache: StageCache.open(join(scratch, `${stage}.jsonl`)), concurrency: opts.concurrency ?? config.llm.concurrency, offline: false })
+  const run = (stage: string): StageRun => ({ llm, cache: StageCache.open(join(scratch, `${stage}.jsonl`)), concurrency: opts.concurrency ?? config.llm.concurrency, offline: false, profile: profileOf(config) })
   const items = picked.map((e) => ({ headword: e.headword, pos: e.pos, gloss: e.sense_en, example: e.english.examples[0] ?? '' }))
   const rows: CompareRow[] = []
   const push = (stage: string, key: string, cached: string, fresh: string) => rows.push({ stage, key, cached, fresh, same: cached === fresh })

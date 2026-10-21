@@ -1,6 +1,8 @@
 import type { CefrLevel, LocalizedText } from '@wordado/core'
 import { cachedBatch } from '../cache'
+import { titleFollowsLead } from '../decisions'
 import { ParseError } from '../llm'
+import type { LanguageProfile } from '../profiles'
 import type { StageRun } from './lemmas'
 
 export const TITLES_VERSION = 1
@@ -13,12 +15,13 @@ export interface TitleUnit {
 
 /** Each L1's language, named precisely enough that the model picks the right regional variety (plan 12). An L1 missing here falls back to its bare code in the prompt. */
 export const L1_NAMES: Readonly<Record<string, string>> = {
+  en: 'English, as written in Britain',
   bg: 'Bulgarian',
   de: 'German, as written in Germany',
   es: 'Spanish, as written in Spain',
 }
 
-export const SYSTEM = (l1s: readonly string[]) => `You name the units of an English vocabulary course for adult learners.
+export const titleSystem = (l1s: readonly string[], p: LanguageProfile) => `You name the units of ${p.course} for adult learners.
 For each unit, in the order given, write a title of two to four words that says what its words have in common ("Food and drink", "At home"), in English ("en", title words in sentence case) and in each of these languages, as a native speaker would title a textbook unit: ${l1s.map((l1) => (L1_NAMES[l1] ? `${l1} (${L1_NAMES[l1]})` : l1)).join(', ')}.
 Return one item per unit with "unit" exactly as given.`
 
@@ -64,7 +67,10 @@ function parse(asked: readonly string[], l1s: readonly string[]) {
  */
 export async function titleUnits(units: readonly TitleUnit[], l1s: readonly string[], run: StageRun): Promise<Map<string, Titles>> {
   const byL1 = new Map<string, Titles[]>()
+  const lead = l1s[0]
   for (const l1 of l1s) {
+    // English as an L1 (a German corpus): its title is the English one, so a second answer could only disagree with the lead's.
+    if (titleFollowsLead(l1, l1s)) continue
     const one = [l1]
     byL1.set(
       l1,
@@ -81,7 +87,7 @@ export async function titleUnits(units: readonly TitleUnit[], l1s: readonly stri
         run: (batch) =>
           run.llm.json({
             name: 'titles',
-            system: SYSTEM(one),
+            system: titleSystem(one, run.profile),
             input: { l1s: one, units: batch.map((u) => ({ unit: u.unit_id, level: u.level, words: u.words })) },
             schema: schema(one),
             parse: parse(
@@ -92,11 +98,10 @@ export async function titleUnits(units: readonly TitleUnit[], l1s: readonly stri
       }),
     )
   }
-  const lead = l1s[0]
   return new Map(
     units.map((u, i) => {
       const en = lead === undefined ? '' : byL1.get(lead)![i]![lead]!.en
-      return [u.unit_id, Object.fromEntries(l1s.map((l1) => [l1, { en, l1: byL1.get(l1)![i]![l1]!.l1 }]))]
+      return [u.unit_id, Object.fromEntries(l1s.map((l1) => [l1, { en, l1: titleFollowsLead(l1, l1s) ? en : byL1.get(l1)![i]![l1]!.l1 }]))]
     }),
   )
 }

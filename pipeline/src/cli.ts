@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { checkPackSuccession, loadCorpus, offeredThemes, themeSize, validatePack, type CreditsFile, type Pack, type PackError } from '@wordado/core'
+import { TARGETS, checkPackSuccession, isTarget, loadCorpus, offeredThemes, themeSize, validatePack, type CreditsFile, type Pack, type PackError } from '@wordado/core'
 import { aiReviewConfig, runAiReview } from './aiReview/run'
 import { reviewerLlm } from './aiReview/reviewers'
 import { audioQueueItems, clipsNeeded, generateClips, readAudioRecords } from './audio'
@@ -24,12 +24,13 @@ import { reopenReviewed } from './reopen'
 import { aliveKeys, exportQueues, importQueues, pendingItems, queueSpecs } from './queues'
 import { adoptRelease, planRelease, writeRelease } from './release'
 import { pgQuery, pullReports, triage } from './reports'
+import { profileOf } from './profiles'
 import { readClearedSources } from './sources'
 import { openRouterTts } from './tts'
 
 const USAGE = `usage: corpus <command>
   content (a content directory, e.g. an absolute path to your clone of wordado-content):
-    init <dir>                     a new content directory, seeded with the sample
+    init <dir> [--target <code>]   a new content directory: English seeded with the sample, or another target's, empty
     draft <dir> [--offline] [--regroup | --rebuild]
                                    every LLM stage; --offline uses the cache only; --regroup rebuilds unpublished units;
                                    --rebuild, once: every entry takes its banded level and all units are built again
@@ -58,7 +59,7 @@ const USAGE = `usage: corpus <command>
     build <source-dir> | validate <pack-file> | check <previous-pack> <next-pack> | publishable <dir>`
 
 const argv = process.argv.slice(2)
-const VALUED = new Set(['--by', '--batch', '--from', '--to', '--keys', '--note', '--sample', '--stage', '--queue', '--reviewer'])
+const VALUED = new Set(['--by', '--batch', '--from', '--to', '--keys', '--note', '--sample', '--stage', '--queue', '--reviewer', '--target'])
 const option = (name: string): string | undefined => {
   const i = argv.indexOf(name)
   return i >= 0 ? argv[i + 1] : undefined
@@ -218,16 +219,17 @@ function queues(dir: string): void {
   const config = readConfig(dir)
   const decisions = Decisions.read(dir)
   const draft = readDraft(dir)
-  const items = pendingItems(draft, decisions, config.l1s)
+  const items = pendingItems(draft, decisions, config.l1s, profileOf(config))
   items.set(QUEUES.audio, audioQueueItems(readAudioRecords(dir), decisions))
-  const files = exportQueues(dir, items, queueSpecs(config.l1s), { stamp: now().slice(0, 10), alive: aliveKeys(draft, config.l1s) })
+  const files = exportQueues(dir, items, queueSpecs(config.l1s, profileOf(config)), { stamp: now().slice(0, 10), alive: aliveKeys(draft, config.l1s, profileOf(config)) })
   console.log(files.length > 0 ? files.join('\n') : 'no new review items')
 }
 
 function importReviewed(dir: string): void {
   const by = option('--by')
   if (!by) usage()
-  const out = importQueues(dir, queueSpecs(readConfig(dir).l1s), { by, now: now() })
+  const config = readConfig(dir)
+  const out = importQueues(dir, queueSpecs(config.l1s, profileOf(config)), { by, now: now() })
   console.log(`${out.applied} decisions applied; ${out.pending} rows still open`)
   for (const e of out.errors) console.error(e)
   if (out.errors.length > 0) process.exit(1)
@@ -235,7 +237,7 @@ function importReviewed(dir: string): void {
 
 function reopen(dir: string, queue: string): void {
   const config = readConfig(dir)
-  const queues = reviewQueues(config.l1s)
+  const queues = reviewQueues(config.l1s, profileOf(config))
   if (!queues.includes(queue)) {
     console.error(`${queue} is not a review queue; one of ${queues.join(', ')}`)
     process.exit(2)
@@ -271,6 +273,7 @@ async function triageReports(dir: string): Promise<void> {
     fixes: readLastPublished(dir).fixes.fixes,
     live: new Set(readDraft(dir).live),
     l1s: config.l1s,
+    profile: profileOf(config),
     threshold: config.report_threshold,
     now: now(),
   })
@@ -348,7 +351,19 @@ async function main(): Promise<void> {
   const [command, first, second] = positional
   switch (command) {
     case 'init':
-      initContent(arg(first))
+      {
+        const given = option('--target')
+        if (flag('--target') && (given === undefined || given.startsWith('--'))) {
+          console.error(`--target needs a target code: ${TARGETS.join(', ')}`)
+          process.exit(2)
+        }
+        const t = given ?? 'en'
+        if (!isTarget(t)) {
+          console.error(`unknown target "${t}"; the targets are ${TARGETS.join(', ')}`)
+          process.exit(2)
+        }
+        initContent(arg(first), { target: t })
+      }
       console.log(`initialised ${first}; next: fill in sources.json once the legal review clears a source`)
       break
     case 'draft':

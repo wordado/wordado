@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdtempSync } from 'node:fs'
+import { existsSync, mkdtempSync, readdirSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -15,6 +15,48 @@ const corpus = (...args: string[]) =>
   spawnSync(process.execPath, ['--import', 'tsx', 'src/cli.ts', ...args], { cwd: PIPELINE, encoding: 'utf8', env: { ...process.env, OPENROUTER_API_KEY: '' } })
 
 describe('corpus (the CLI)', () => {
+  it('init --target de starts a German corpus with nothing inherited from the English sample', () => {
+    const dir = join(mkdtempSync(join(tmpdir(), 'init-')), 'de')
+    expect(corpus('init', dir, '--target', 'de').status).toBe(0)
+    const config = readConfig(dir)
+    expect(config.target).toBe('de')
+    expect(config.l1s).toEqual(['bg'])
+    expect(Object.keys(config.tts.accents)).toEqual(['de'])
+    expect(config.tts.accents.de!.instructions).toBe('Say the German word or phrase once, clearly and naturally, in standard German. Nothing else.')
+    const paths = contentPaths(dir)
+    expect(JSON.parse(readFileSync(paths.registry, 'utf8'))).toEqual({ entries: [], units: [] })
+    expect(readdirSync(paths.lastPublished).sort()).toEqual(['fixes.json', 'manifest.json'])
+    expect(JSON.parse(readFileSync(join(paths.lastPublished, 'manifest.json'), 'utf8')).packs).toEqual([])
+    expect(JSON.parse(readFileSync(paths.themes, 'utf8')).length).toBeGreaterThan(0)
+    // The English essentials are English words: the language writes its own list, under the template's header.
+    const essentials = readFileSync(paths.essentials, 'utf8')
+    expect(essentials.split('\n').filter((l) => l.trim() !== '' && !l.startsWith('#'))).toEqual([])
+    expect(essentials).toMatch(/^# Everyday spoken words/)
+  })
+
+  it('init without --target is the English directory, seeded with the sample', () => {
+    const dir = join(mkdtempSync(join(tmpdir(), 'init-')), 'en')
+    expect(corpus('init', dir).status).toBe(0)
+    const config = readConfig(dir)
+    expect(config.target ?? 'en').toBe('en')
+    expect(Object.keys(config.tts.accents)).toEqual(['uk'])
+    expect(readdirSync(contentPaths(dir).lastPublished)).toContain('corpus-v0-bg.pack')
+  })
+
+  it('init refuses --target without a code, and makes nothing', () => {
+    const dir = join(mkdtempSync(join(tmpdir(), 'init-')), 'x')
+    const out = corpus('init', dir, '--target')
+    expect(out.status).toBe(2)
+    expect(out.stderr).toMatch(/--target needs a target code: en, de/)
+    expect(existsSync(dir)).toBe(false)
+  })
+
+  it('init refuses an unknown target', () => {
+    const out = corpus('init', join(mkdtempSync(join(tmpdir(), 'init-')), 'x'), '--target', 'fr')
+    expect(out.status).toBe(2)
+    expect(out.stderr).toMatch(/unknown target "fr"/)
+  })
+
   it('draft refuses --rebuild together with --regroup', () => {
     const out = corpus('draft', makeContent(), '--rebuild', '--regroup', '--offline')
     expect(out.status).toBe(2)

@@ -10,6 +10,7 @@ import { readDraft } from '../draft'
 import { writeJson } from '../files'
 import { initContent, SAMPLE_DIR } from '../init'
 import { fakeLlm } from '../llm'
+import { profileOf } from '../profiles'
 import { pendingItems } from '../queues'
 
 /**
@@ -49,8 +50,18 @@ const EXTRA_DE: Record<string, { translation: string; alternates: string[]; sens
   'bank|river': { translation: 'Ufer', alternates: [], sense: 'Flussufer' },
 }
 
-/** A fake LLM that answers every stage from the sample pack and the few invented words above. */
-export function sampleLlm() {
+/** The German grammar the fake answers with `grammar`: a neuter noun with no plural, an irregular verb with haben. */
+function sampleGrammar(pos: string) {
+  if (pos === 'noun') return { gender: 'n', plural: '', separable: false, irregular: false, auxiliary: '' }
+  if (pos === 'verb') return { gender: '', plural: '', separable: false, irregular: true, auxiliary: 'haben' }
+  return { gender: '', plural: '', separable: false, irregular: false, auxiliary: '' }
+}
+
+/**
+ * A fake LLM that answers every stage from the sample pack and the few invented words above.
+ * `grammar`: the senses carry a German grammar block, as the senses stage asks of a target with one.
+ */
+export function sampleLlm(opts: { grammar?: boolean } = {}) {
   return fakeLlm((name, input) => {
     if (name === 'lemmas') {
       const forms = (input as { forms: string[] }).forms
@@ -64,20 +75,21 @@ export function sampleLlm() {
     if (name === 'senses') {
       const headwords = (input as { headwords: string[] }).headwords
       return {
-        items: headwords.map((lemma) => ({
-          lemma,
-          senses:
-            EXTRA_SENSES[lemma] ??
+        items: headwords.map((lemma) => {
+          const senses = (EXTRA_SENSES[lemma] ??
             sample.entries
               .filter((e) => e.headword === lemma)
-              .map((e) => ({ pos: e.pos, gloss: '', level: e.level, ipa: e.ipa, variants: e.variants, themes: e.themes, examples: e.examples })),
-        })),
+              .map((e) => ({ pos: e.pos, gloss: '', level: e.level, ipa: e.ipa, variants: e.variants, themes: e.themes, examples: e.examples }))) as { pos: string }[]
+          return { lemma, senses: opts.grammar ? senses.map((s) => ({ ...s, grammar: sampleGrammar(s.pos) })) : senses }
+        }),
       }
     }
     if (name === 'translate') {
       const { l1, items } = input as { l1: string; items: { key: string; headword: string; gloss: string }[] }
       return {
         items: items.map((item) => {
+          // English as an L1 (a German corpus): the fixture's words stand in for German ones, so each translates as itself.
+          if (l1 === 'en') return { key: item.key, translation: item.headword, alternates: [], sense: item.gloss }
           if (l1 === 'de') {
             const extra = EXTRA_DE[`${item.headword}|${item.gloss}`]
             return { key: item.key, ...(extra ?? { translation: `DE ${item.headword}`, alternates: [], sense: '' }) }
@@ -98,7 +110,7 @@ export function sampleLlm() {
         items: units.map((u) => ({
           unit: u.unit,
           en: `Unit ${u.unit}`,
-          ...Object.fromEntries(l1s.map((l) => [l, l === 'bg' ? `Урок ${u.unit}` : `Lektion ${u.unit}`])),
+          ...Object.fromEntries(l1s.map((l) => [l, l === 'bg' ? `Урок ${u.unit}` : l === 'en' ? `Unit ${u.unit}` : `Lektion ${u.unit}`])),
         })),
       }
     }
@@ -109,7 +121,7 @@ export function sampleLlm() {
 /** A content directory as `corpus init` makes it, with a cleared invented source and small targets. */
 export function makeContent(overrides: { config?: Partial<PipelineConfig> } = {}): string {
   const dir = join(mkdtempSync(join(tmpdir(), 'content-')), 'content')
-  initContent(dir)
+  initContent(dir, { target: overrides.config?.target ?? 'en' })
   const config = JSON.parse(readFileSync(join(dir, 'pipeline.json'), 'utf8')) as PipelineConfig
   writeJson(join(dir, 'pipeline.json'), {
     ...config,
@@ -138,6 +150,11 @@ export function makeContent(overrides: { config?: Partial<PipelineConfig> } = {}
   writeFileSync(join(dir, 'sources', 'invented.tsv'), FIXTURE_TSV)
   // The template's starting list would ask the fake LLM about words it does not know; tests add their own.
   writeFileSync(join(dir, 'essentials.txt'), '')
+  if ((overrides.config?.target ?? 'en') !== 'en') {
+    // `corpus init --target` starts another target with nothing published and no pinned IDs (spec §5.5). The
+    // sample's words come in as essentials instead, so its themed units are built and named here too.
+    writeFileSync(join(dir, 'essentials.txt'), `${[...new Set(sample.entries.map((e) => e.headword))].join('\n')}\n`)
+  }
   return dir
 }
 
@@ -161,7 +178,7 @@ export function approveAll(dir: string): void {
   const config = readConfig(dir)
   const decisions = Decisions.read(dir)
   const at = '2026-10-01T11:00:00Z'
-  for (const [queue, items] of pendingItems(readDraft(dir), decisions, config.l1s)) {
+  for (const [queue, items] of pendingItems(readDraft(dir), decisions, config.l1s, profileOf(config))) {
     decisions.append(queue, items.map((i) => ({ key: i.key, at, verdict: 'ok' as const, proposed: i.proposed, by: 'fixture' })))
   }
   decisions.append(QUEUES.audio, audioQueueItems(readAudioRecords(dir), decisions).map((i) => ({ key: i.key, at, verdict: 'ok' as const, proposed: i.key, by: 'fixture' })))

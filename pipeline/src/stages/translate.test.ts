@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { StageCache } from '../cache'
 import { fakeLlm } from '../llm'
+import { PROFILES } from '../profiles'
 import { L1_GUIDES, mergeSenses, translateSenses } from './translate'
 
 const run = (answer: (n: string, i: unknown) => unknown) => ({
@@ -11,6 +12,7 @@ const run = (answer: (n: string, i: unknown) => unknown) => ({
   cache: StageCache.open(join(mkdtempSync(join(tmpdir(), 'translate-')), 'translate.jsonl')),
   concurrency: 1,
   offline: false,
+  profile: PROFILES.en,
 })
 const items = [{ headword: 'water', pos: 'noun' as const, gloss: '', example: 'Water, please.' }]
 

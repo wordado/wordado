@@ -1,8 +1,9 @@
-import { norm, type Accent, type Pack, type PackEntry, type PackUnit } from '@wordado/core'
+import { coursePackId, norm, type Accent, type Pack, type PackEntry, type PackUnit } from '@wordado/core'
 import { currentClips, voiceKey, type AudioRecord } from './audio'
 import type { CuratedTheme, PipelineConfig, TtsVoice } from './config'
-import { foldField, QUEUES, type Decisions } from './decisions'
+import { foldField, QUEUES, titleFollowsLead, type Decisions } from './decisions'
 import type { Draft } from './draft'
+import { profileOf } from './profiles'
 import { levelSampled } from './queues'
 import { inPathOrder } from './units'
 
@@ -49,6 +50,7 @@ export interface Unreviewed {
  */
 export function assemble(input: AssembleInput): Assembled {
   const { l1, draft, decisions, config } = input
+  const profile = profileOf(config)
   const problems: string[] = []
   const pending: string[] = []
   const unreviewed: Unreviewed[] = []
@@ -66,11 +68,13 @@ export function assemble(input: AssembleInput): Assembled {
 
   const entries: PackEntry[] = []
   for (const e of liveEntries) {
-    const english = foldField(e.english, decisions.for(QUEUES.english, e.entry_id))
+    const english = foldField(e.english, decisions.for(profile.reviewQueue, e.entry_id))
     const translation = foldField(e.l1[l1]!, decisions.for(QUEUES.translation(l1), e.entry_id))
     const level = foldField(e.level_proposal, decisions.for(QUEUES.level, e.entry_id))
-    if (!english.reviewed) awaiting(QUEUES.english, `${e.entry_id}: english not reviewed`)
+    if (!english.reviewed) awaiting(profile.reviewQueue, `${e.entry_id}: ${profile.reviewQueue} not reviewed`)
     if (!translation.reviewed) awaiting(QUEUES.translation(l1), `${e.entry_id}: translation (${l1}) not reviewed`)
+    const grammar = profile.grammar && e.grammar != null ? foldField(e.grammar, decisions.for(QUEUES.grammar, e.entry_id)) : null
+    if (grammar && !grammar.reviewed) awaiting(QUEUES.grammar, `${e.entry_id}: grammar not reviewed`)
     if ((e.level_flagged || levelSampled(e.entry_id)) && !level.reviewed) {
       awaiting(QUEUES.level, `${e.entry_id}: level not reviewed`)
     }
@@ -81,7 +85,7 @@ export function assemble(input: AssembleInput): Assembled {
     }
     const senses = perHead.get(`${norm(e.headword)}|${e.pos}`) ?? 1
     if (senses > 1 && translation.value.sense.trim() === '') problems.push(`${e.entry_id}: ${e.headword} (${e.pos}) has ${senses} live entries, so it needs a ${l1} sense gloss`)
-    const audio: Partial<Record<Accent, string>> = {}
+    const audio: Record<Accent, string> = {}
     for (const [accent, voice] of Object.entries(config.tts.accents) as [Accent, TtsVoice][]) {
       const cur = clips.get(`${e.entry_id}|${accent}`)
       if (cur && cur.voice_key === voiceKey(config.tts.model, voice) && input.hasClip(cur.clip_id)) audio[accent] = cur.clip_id
@@ -108,6 +112,8 @@ export function assemble(input: AssembleInput): Assembled {
       retired: false,
       // Written only when false, so the bytes of every entry that is taught stay as they were.
       ...(e.taught === false ? { taught: false } : {}),
+      // Written only when there is a block to write, so an English entry's bytes stay as they were.
+      ...(grammar && Object.keys(grammar.value).length > 0 ? { grammar: grammar.value } : {}),
     })
   }
 
@@ -134,9 +140,20 @@ export function assemble(input: AssembleInput): Assembled {
     const listed = new Set(members)
     const entry_ids = [...members, ...byUnit.get(u.unit_id)!.filter((id) => !listed.has(id))]
     const hasLive = entry_ids.some((id) => live.has(id))
+    // Every L1's title shares the lead's English (titleUnits): a decision that changes the lead's own title
+    // is folded only into the lead's pack, so a non-lead pack picks up the lead's current English here.
+    const leadTitleOf = () => {
+      const leadProposed = lead === undefined ? undefined : draftUnits.get(u.unit_id)?.titles[lead]
+      return hasLive && leadProposed ? foldField(leadProposed, decisions.for(QUEUES.title(lead!), u.unit_id)).value : previousLeadUnits.get(u.unit_id)?.title
+    }
     let title = previousUnits.get(u.unit_id)?.title
+    const follows = titleFollowsLead(l1, config.l1s)
     const proposed = draftUnits.get(u.unit_id)?.titles[l1]
-    if (hasLive && proposed) {
+    if (follows) {
+      // English as a non-lead L1 has no title queue: its whole title is the lead's English (the lead's pack waits on its review).
+      const leadTitle = leadTitleOf()
+      if (leadTitle) title = { en: leadTitle.en, l1: leadTitle.en }
+    } else if (hasLive && proposed) {
       const state = foldField(proposed, decisions.for(QUEUES.title(l1), u.unit_id))
       if (!state.reviewed) awaiting(QUEUES.title(l1), `unit ${u.unit_id}: title (${l1}) not reviewed`)
       title = state.value
@@ -144,13 +161,8 @@ export function assemble(input: AssembleInput): Assembled {
     if (!title) {
       problems.push(`unit ${u.unit_id}: has no ${l1} title`)
       title = { en: u.unit_id, l1: u.unit_id }
-    } else if (lead !== undefined && l1 !== lead) {
-      // Every L1's title shares the lead's English (titleUnits): a decision that changes the lead's own title
-      // is folded only into the lead's pack, so a non-lead pack picks up the lead's current English here.
-      const leadProposed = draftUnits.get(u.unit_id)?.titles[lead]
-      const leadTitle = hasLive && leadProposed
-        ? foldField(leadProposed, decisions.for(QUEUES.title(lead), u.unit_id)).value
-        : previousLeadUnits.get(u.unit_id)?.title
+    } else if (!follows && lead !== undefined && l1 !== lead) {
+      const leadTitle = leadTitleOf()
       if (leadTitle) title = { en: leadTitle.en, l1: title.l1 }
     }
     return { unit_id: u.unit_id, level: u.level, order: i + 1, title, entry_ids }
@@ -163,7 +175,7 @@ export function assemble(input: AssembleInput): Assembled {
   }))
   const clipIds = entries.flatMap((e) => Object.values(e.audio)).sort()
   return {
-    source: { pack_id: `corpus-${l1}`, corpus_version: input.corpusVersion, l1, target: 'en', units, themes, entries },
+    source: { pack_id: coursePackId(profile.code, l1), corpus_version: input.corpusVersion, l1, target: profile.code, units, themes, entries },
     clipIds,
     problems,
     pending,

@@ -1,6 +1,7 @@
-import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join, relative } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { checkPackSuccession, loadCorpus, offeredThemes, validatePack, type Pack } from '@wordado/core'
 import { describe, expect, it } from 'vitest'
 import { audioQueueItems, readAudioRecords } from './audio'
@@ -10,10 +11,11 @@ import { Decisions } from './decisions'
 import { readDraft, runDraft } from './draft'
 import { readLastPublished } from './lastPublished'
 import { publishProblems } from './publishable'
+import { PROFILES } from './profiles'
 import { exportQueues, importQueues, pendingItems, queueSpecs } from './queues'
 import { adoptRelease, planRelease, writeRelease } from './release'
 import { triage } from './reports'
-import { makeContent, recordAudio, sampleLlm } from './testing/fixture'
+import { approveAll, makeContent, recordAudio, sampleLlm } from './testing/fixture'
 
 /** The reviewer: opens every review file, says ok to each row, and edits the rows `edits` names first. */
 function review(dir: string, edits: Record<string, Record<string, string>> = {}): void {
@@ -35,9 +37,9 @@ function review(dir: string, edits: Record<string, Record<string, string>> = {})
 function queues(dir: string, stamp: string): string[] {
   const config = readConfig(dir)
   const decisions = Decisions.read(dir)
-  const items = pendingItems(readDraft(dir), decisions, config.l1s)
+  const items = pendingItems(readDraft(dir), decisions, config.l1s, PROFILES.en)
   items.set('audio', audioQueueItems(readAudioRecords(dir), decisions))
-  return exportQueues(dir, items, queueSpecs(config.l1s), { stamp })
+  return exportQueues(dir, items, queueSpecs(config.l1s, PROFILES.en), { stamp })
 }
 
 const pack = (dir: string, file: string): Pack => {
@@ -56,7 +58,7 @@ const reader = (dir: string) => (p: string) => {
 describe('the corpus pipeline, end to end (spec §13)', () => {
   it('drafts, reviews through spreadsheets, releases v1, triages reports and releases the fix as v2', async () => {
     const dir = makeContent()
-    const specs = queueSpecs(['bg'])
+    const specs = queueSpecs(['bg'], PROFILES.en)
 
     await runDraft({ dir, llm: sampleLlm(), offline: false })
     await recordAudio(dir, '20261001T1000')
@@ -82,7 +84,7 @@ describe('the corpus pipeline, end to end (spec §13)', () => {
       id: i + 1, word_id: 'c:go-1', field: 'translation' as const, note: i === 0 ? 'ида' : '', suggestion: '', pack_version: 1, reporter, received_at: Date.parse('2026-10-03T00:00:00Z'), l1: 'bg' as const,
     }))
     const decisions = Decisions.read(dir)
-    const t = triage({ reports, decisions, records: readAudioRecords(dir), fixes: readLastPublished(dir).fixes.fixes, live: new Set(readDraft(dir).live), l1s: ['bg'], threshold: 2, now: '2026-10-04T00:00:00Z' })
+    const t = triage({ reports, decisions, records: readAudioRecords(dir), fixes: readLastPublished(dir).fixes.fixes, live: new Set(readDraft(dir).live), l1s: ['bg'], profile: PROFILES.en, threshold: 2, now: '2026-10-04T00:00:00Z' })
     for (const { queue, event } of t.events) decisions.append(queue, [event])
     expect(t.summary).toEqual(['go-1: translation-bg reopened (2 reports)'])
 
@@ -108,7 +110,7 @@ describe('the corpus pipeline, end to end (spec §13)', () => {
 
   it('rebuilds levels and units once, reviews the moved level in a spreadsheet, and releases v2 with every entry kept', async () => {
     const dir = makeContent({ config: { levels: ['A1', 'A2', 'B1', 'B2', 'C1'] } })
-    const specs = queueSpecs(['bg'])
+    const specs = queueSpecs(['bg'], PROFILES.en)
     await runDraft({ dir, llm: sampleLlm(), offline: false })
     await recordAudio(dir, '20261001T1000')
     queues(dir, '2026-10-01')
@@ -147,5 +149,83 @@ describe('the corpus pipeline, end to end (spec §13)', () => {
     expect(v2.units.find((u) => u.entry_ids.includes('bank-2'))!.level).toBe('B1')
     const fixes = JSON.parse(readFileSync(join(v2Dir, 'fixes.json'), 'utf8')) as { fixes: { word_id: string; field: string; fixed_in: number }[] }
     expect(fixes.fixes.some((f) => f.word_id === 'c:bank-2' && f.field === 'level' && f.fixed_in === 2)).toBe(true)
+  }, 30_000)
+})
+
+describe('an English corpus with no target', () => {
+  // The files under testing/english-release were written by this same flow on the code before a second target
+  // language existed (#313): with no `target` in pipeline.json, the draft, review CSVs, packs, trial packs, manifests and
+  // clip IDs stay byte for byte what they were. A difference is a regression to fix, never a snapshot to rewrite.
+  const snapshots = join(dirname(fileURLToPath(import.meta.url)), 'testing', 'english-release')
+  const filesUnder = (root: string): string[] =>
+    readdirSync(root, { recursive: true, withFileTypes: true })
+      .filter((d) => d.isFile())
+      .map((d) => relative(root, join(d.parentPath, d.name)))
+      .sort()
+
+  it('exports the same review files and releases the same bytes as before', async () => {
+    const dir = makeContent()
+    await runDraft({ dir, llm: sampleLlm(), offline: false })
+    const draftJson = readFileSync(join(dir, 'work', 'draft.json'))
+    await recordAudio(dir, '20261001T1000')
+    const csvs = queues(dir, '2026-10-01')
+    approveAll(dir)
+    const plan = planRelease(dir, { draft: false, now: '2026-10-01T13:00:00Z' })
+    expect([plan.problems, plan.pending]).toEqual([[], []])
+    const releaseDir = join(mkdtempSync(join(tmpdir(), 'e2e-')), 'release')
+    const files = writeRelease(dir, releaseDir, plan)
+
+    const actual = new Map<string, Buffer>()
+    for (const f of files.filter((f) => !f.startsWith('audio/'))) actual.set(f, readFileSync(join(releaseDir, f)))
+    actual.set('audio.txt', Buffer.from(`${files.filter((f) => f.startsWith('audio/')).sort().join('\n')}\n`))
+    for (const f of csvs) actual.set(f, readFileSync(join(dir, f)))
+    actual.set(join('work', 'draft.json'), draftJson)
+
+    expect([...actual.keys()].sort()).toEqual(filesUnder(snapshots))
+    for (const [f, bytes] of actual) expect(bytes.toString('utf8'), f).toBe(readFileSync(join(snapshots, f), 'utf8'))
+    for (const [f, bytes] of actual) expect(bytes.equals(readFileSync(join(snapshots, f))), f).toBe(true)
+  }, 30_000)
+})
+
+describe('a German corpus', () => {
+  it('drafts, reviews through spreadsheets, records audio and releases German packs for Bulgarian and English speakers', async () => {
+    const dir = makeContent({
+      config: { target: 'de', l1s: ['bg', 'en'], tts: { model: 'fake', max_clips_per_run: 1000, accents: { de: { voice: 'v', instructions: 'Say the German word once.' } } } },
+    })
+    const specs = queueSpecs(['bg', 'en'], PROFILES.de)
+    await runDraft({ dir, llm: sampleLlm({ grammar: true }), offline: false })
+    await recordAudio(dir, '20261021T1000')
+    const decisions = Decisions.read(dir)
+    const items = pendingItems(readDraft(dir), decisions, ['bg', 'en'], PROFILES.de)
+    items.set('audio', audioQueueItems(readAudioRecords(dir), decisions))
+    exportQueues(dir, items, specs, { stamp: '2026-10-21' })
+    // The German profile's queues: headwords under its own name, and the grammar block.
+    expect(existsSync(join(dir, 'review', 'german'))).toBe(true)
+    expect(existsSync(join(dir, 'review', 'grammar'))).toBe(true)
+    // English as a non-lead L1 reviews no titles of its own: they are the lead's English.
+    expect(existsSync(join(dir, 'review', 'title-en'))).toBe(false)
+    review(dir)
+    expect(importQueues(dir, specs, { by: 'reviewer', now: '2026-10-21T12:00:00Z' }).errors).toEqual([])
+
+    const plan = planRelease(dir, { draft: false, now: '2026-10-21T13:00:00Z' })
+    expect([plan.problems, plan.pending]).toEqual([[], []])
+    expect(plan.outputs.map((o) => o.pack.l1).sort()).toEqual(['bg', 'en'])
+    const bg = plan.outputs.find((o) => o.pack.l1 === 'bg')!.pack
+    expect(bg.target).toBe('de')
+    expect(bg.pack_id).toBe('corpus-de-bg')
+    expect(bg.entries.length).toBeGreaterThan(0)
+    expect(bg.entries.every((e) => e.entry_id.startsWith('de.'))).toBe(true)
+    expect(bg.units.every((u) => u.unit_id.startsWith('de.'))).toBe(true)
+    const nouns = bg.entries.filter((e) => e.pos === 'noun')
+    expect(nouns.length).toBeGreaterThan(0)
+    expect(nouns.every((e) => e.grammar !== undefined && e.grammar !== null && 'gender' in e.grammar)).toBe(true)
+    expect(Object.keys(bg.entries[0]!.audio)).toEqual(['de'])
+    expect(plan.manifest.packs.every((d) => d.target === 'de')).toBe(true)
+    for (const o of plan.outputs) expect(validatePack(JSON.parse(new TextDecoder().decode(o.packBytes))).status).toBe('ok')
+    // An English speaker's unit titles are one English title, not two answers that could disagree.
+    const en = plan.outputs.find((o) => o.pack.l1 === 'en')!.pack
+    expect(en.pack_id).toBe('corpus-de-en')
+    expect(en.units.every((u) => u.title.l1 === u.title.en)).toBe(true)
+    expect(en.units.map((u) => u.title.en)).toEqual(bg.units.map((u) => u.title.en))
   }, 30_000)
 })

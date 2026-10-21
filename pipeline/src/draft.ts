@@ -1,9 +1,10 @@
 import { existsSync, readFileSync } from 'node:fs'
-import { norm, type CefrLevel, type LocalizedText, type PartOfSpeech } from '@wordado/core'
+import { norm, targetOfEntryId, type CefrLevel, type Grammar, type LocalizedText, type PartOfSpeech } from '@wordado/core'
 import { StageCache } from './cache'
 import { readConfig, readThemes } from './config'
 import { contentPaths } from './content'
 import { Decisions, foldField, QUEUES } from './decisions'
+import { profileOf } from './profiles'
 import { readJson, writeJson } from './files'
 import { parseFrequencyList, rankForms } from './frequency'
 import { readLastPublished } from './lastPublished'
@@ -46,6 +47,8 @@ export interface DraftEntry {
   readonly themes: readonly string[]
   readonly english: EnglishFields
   readonly l1: Readonly<Record<string, TranslationFields>>
+  /** The target's grammar (spec §5.5); absent when it has none, so an English draft is written as before. */
+  readonly grammar?: Grammar
   /**
    * False for an entry not-taught.txt names: known from the start, shipped with `taught: false`, searchable and never
    * taught (issue #285). Absent means taught.
@@ -100,12 +103,18 @@ export async function runDraft(opts: DraftOptions): Promise<Draft> {
   const publishedLevel = new Map<string, CefrLevel>()
   for (const pack of last.packs.values()) for (const e of pack.entries) if (!e.retired) publishedLevel.set(e.entry_id, e.level)
   const lead = config.l1s[0]
+  const profile = profileOf(config)
   if (last.packs.size > 0 && lead !== undefined && !last.packs.has(lead)) {
     throw new Error("the lead L1 (the first in pipeline.json's l1s) must be one published before: senses merge on it; append a new L1 instead")
   }
   const decisions = Decisions.read(dir)
   let registry = readJson<Registry>(paths.registry)
-  const run = (stage: string): StageRun => ({ llm, cache: StageCache.open(paths.cache(stage)), concurrency: opts.concurrency ?? config.llm.concurrency, offline })
+  // A directory whose registry is another course's would mint IDs of two courses into one (spec §5.5).
+  for (const id of [...registry.entries.map((e) => e.entry_id), ...registry.units.map((u) => u.unit_id)]) {
+    const of = targetOfEntryId(id)
+    if (of !== profile.code) throw new Error(`registry.json holds ${id}, an ID of the ${of} course, but pipeline.json's target is ${profile.code}`)
+  }
+  const run = (stage: string): StageRun => ({ llm, cache: StageCache.open(paths.cache(stage)), concurrency: opts.concurrency ?? config.llm.concurrency, offline, profile })
 
   const forms = rankForms(sources.map((s) => parseFrequencyList(s.text, s.record.id)), config.max_forms)
   const lemmaResults = await lemmatise(forms, run('lemmas'))
@@ -151,7 +160,7 @@ export async function runDraft(opts: DraftOptions): Promise<Draft> {
     config.l1s,
   )
 
-  const assigned = assignIds(registry, merged.map((s) => ({ headword: s.headword, pos: s.pos, sense_en: s.gloss })))
+  const assigned = assignIds(registry, merged.map((s) => ({ headword: s.headword, pos: s.pos, sense_en: s.gloss })), profile)
   registry = assigned.registry
   const pinned = new Set(registry.entries.filter((e) => e.pinned).map((e) => e.entry_id))
   const unitOf = new Map(registry.units.flatMap((u) => u.entry_ids.map((id) => [id, u] as const)))
@@ -180,12 +189,13 @@ export async function runDraft(opts: DraftOptions): Promise<Draft> {
       themes: [],
       english: { ipa: s.ipa, variants: s.variants, examples: s.examples },
       l1: s.l1,
+      ...(s.grammar ? { grammar: s.grammar } : {}),
       ...(notTaught.has(entry_id) ? { taught: false as const } : {}),
     }
   })
 
   const dropped = (e: DraftEntry) =>
-    foldField(e.english, decisions.for(QUEUES.english, e.entry_id)).dropped ||
+    foldField(e.english, decisions.for(profile.reviewQueue, e.entry_id)).dropped ||
     config.l1s.some((l) => foldField(e.l1[l], decisions.for(QUEUES.translation(l), e.entry_id)).dropped)
   const live = selectLive(
     proposed.map((e) => ({ entry_id: e.entry_id, level: e.level, rank: e.rank, order: e.order, pinned: e.pinned || e.essential, wasLive: last.live.has(e.entry_id), dropped: dropped(e) })),
@@ -213,6 +223,7 @@ export async function runDraft(opts: DraftOptions): Promise<Draft> {
     liveEntries.map((e) => ({ entry_id: e.entry_id, level: e.level, theme: e.themes[0] ?? '', pos: e.pos, rank: e.rank, order: e.order })),
     last.published,
     config.unit_size,
+    profile.idPrefix,
   )
   registry = { entries: registry.entries, units }
 

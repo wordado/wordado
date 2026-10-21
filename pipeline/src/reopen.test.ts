@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { Decisions, QUEUES } from './decisions'
 import type { Draft, DraftEntry } from './draft'
+import { PROFILES } from './profiles'
 import { pendingItems } from './queues'
 import { reopenReviewed } from './reopen'
 import { makeContent } from './testing/fixture'
@@ -46,7 +47,7 @@ describe('reopenReviewed', () => {
     const { dir, decisions } = reviewed()
     const out = reopenReviewed(decisions, T, { keys: 'all', by: 'Yordan', note: 'second review', now: LATER })
     expect(out).toEqual({ reopened: ['water-1', 'tea-1'], skipped: ['milk-1: dropped'] })
-    const items = pendingItems(draft, Decisions.read(dir), ['bg']).get(T)!
+    const items = pendingItems(draft, Decisions.read(dir), ['bg'], PROFILES.en).get(T)!
     expect(items.map((i) => [i.key, (i.proposed as { translation: string }).translation, i.context['reopened']])).toEqual([
       ['water-1', 'вода', 'second review'],
       ['tea-1', 'чай', 'second review'],

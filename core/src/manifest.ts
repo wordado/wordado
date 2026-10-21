@@ -12,6 +12,7 @@ import {
   type PackError,
   type Raw,
 } from './validation'
+import { isTarget, TARGETS } from './target'
 
 /** The manifest schema this build reads. Bump on any change an older client could not parse. */
 export const MANIFEST_SCHEMA_VERSION = 1
@@ -20,6 +21,7 @@ export const MANIFEST_SCHEMA_VERSION = 1
 export interface PackDescriptor {
   readonly pack_id: string
   readonly l1: string
+  readonly target?: string
   readonly corpus_version: number
   readonly schema_version: number
   readonly url: string
@@ -46,9 +48,12 @@ export type ManifestValidation =
 function parseDescriptor(r: Report, raw: Raw, path: string): PackDescriptor {
   const l1 = text(r, raw, 'l1', path)
   if (l1 !== '' && !LANG.test(l1)) r.add(`${path}.l1`, 'must be a two-letter lowercase language code')
+  const target = raw['target']
+  if (target !== undefined && !isTarget(target)) r.add(`${path}.target`, `must be one of ${TARGETS.join(', ')}`)
   return {
     pack_id: id(r, raw, 'pack_id', path),
     l1,
+    ...(typeof target === 'string' ? { target } : {}),
     corpus_version: integer(r, raw, 'corpus_version', path, 0),
     schema_version: integer(r, raw, 'schema_version', path, 1),
     url: relativeUrl(r, raw, 'url', path),

@@ -1,7 +1,8 @@
-import { CEFR_LEVELS, type Accent, type CefrLevel } from '@wordado/core'
+import { CEFR_LEVELS, TARGETS, isTarget, type Accent, type CefrLevel, type Target } from '@wordado/core'
 import { readJson } from './files'
 import { contentPaths } from './content'
-import { QUEUES } from './decisions'
+import { QUEUES, titleFollowsLead } from './decisions'
+import { PROFILES, type LanguageProfile } from './profiles'
 
 export interface TtsVoice {
   readonly voice: string
@@ -31,6 +32,8 @@ export interface AiReviewConfig {
 
 /** `pipeline.json`: everything a run may tune without a code change. */
 export interface PipelineConfig {
+  /** The language this directory's corpus teaches (spec §5.5); absent for English. */
+  readonly target?: Target
   readonly l1s: readonly string[]
   /** The levels this corpus ships (spec §14: A1–C1 since Phase 1b). */
   readonly levels: readonly CefrLevel[]
@@ -89,14 +92,15 @@ export class ConfigError extends Error {
 }
 
 /** Every review queue a content directory with these L1s has. */
-export const reviewQueues = (l1s: readonly string[]): string[] => [
-  QUEUES.english,
+export const reviewQueues = (l1s: readonly string[], profile: LanguageProfile): string[] => [
+  profile.reviewQueue,
   QUEUES.level,
   QUEUES.audio,
-  ...l1s.flatMap((l1) => [QUEUES.translation(l1), QUEUES.title(l1)]),
+  ...(profile.grammar ? [QUEUES.grammar] : []),
+  ...l1s.flatMap((l1) => [QUEUES.translation(l1), ...(titleFollowsLead(l1, l1s) ? [] : [QUEUES.title(l1)])]),
 ]
 
-export const AI_REVIEW_QUEUE = /^(translation|title)-[a-z]{2}$|^level$/
+export const AI_REVIEW_QUEUE = /^(translation|title)-[a-z]{2}$|^level$|^grammar$/
 
 export function aiReviewRequired(cfg: AiReviewConfig): readonly string[] {
   return cfg.required ?? [cfg.default]
@@ -106,15 +110,15 @@ const isRecord =(v: unknown): v is Record<string, unknown> => v !== null && type
 const LANG = /^[a-z]{2}$/
 const THEME_ID = /^[a-z0-9][a-z0-9-]*$/
 
-function aiReviewProblems(raw: unknown, l1s: readonly string[]): string[] {
+function aiReviewProblems(raw: unknown, l1s: readonly string[], profile: LanguageProfile): string[] {
   const p: string[] = []
   if (!isRecord(raw)) return ['ai_review: must be an object']
   const queues = raw['queues']
-  const known = reviewQueues(l1s)
+  const known = reviewQueues(l1s, profile)
   if (!Array.isArray(queues) || queues.length === 0) p.push('ai_review.queues: must list at least one queue')
   else
     queues.forEach((q, i) => {
-      if (typeof q !== 'string' || !AI_REVIEW_QUEUE.test(q)) p.push(`ai_review.queues[${i}]: ${String(q)} is not a queue AI review covers (translation-<l1>, title-<l1>, level)`)
+      if (typeof q !== 'string' || !AI_REVIEW_QUEUE.test(q)) p.push(`ai_review.queues[${i}]: ${String(q)} is not a queue AI review covers (translation-<l1>, title-<l1>, level, grammar)`)
       else if (!known.includes(q)) p.push(`ai_review.queues[${i}]: ${q} is not a queue of this content (l1s)`)
     })
   const reviewers = raw['reviewers']
@@ -156,12 +160,18 @@ export function configProblems(raw: unknown): string[] {
   const str = (v: unknown, path: string) => {
     if (typeof v !== 'string' || v.trim() === '') p.push(`${path}: must be a non-empty string`)
   }
+  const target = raw['target']
+  if (target !== undefined && !isTarget(target)) p.push(`target: must be one of ${TARGETS.join(', ')}`)
+  const profile = PROFILES[isTarget(target) ? target : 'en']
   const l1s = raw['l1s']
   if (!Array.isArray(l1s) || l1s.length === 0) p.push('l1s: must list at least one L1')
   else
     l1s.forEach((l, i) => {
       if (typeof l !== 'string' || !LANG.test(l)) p.push(`l1s[${i}]: must be a two-letter lowercase language code`)
     })
+  if (Array.isArray(l1s)) for (const l1 of l1s) if (l1 === profile.code) p.push(`l1s: ${l1} is the target language`)
+  // The lead's English title is the course's English title; English leading another target would review it twice.
+  if (Array.isArray(l1s) && profile.code !== 'en' && l1s[0] === 'en') p.push(`l1s: en may not lead a ${profile.code} course; put it after another L1`)
   const levels = raw['levels']
   if (!Array.isArray(levels) || levels.length === 0) p.push('levels: must list at least one level')
   else {
@@ -209,7 +219,7 @@ export function configProblems(raw: unknown): string[] {
   }
   const accept = raw['accept_unreviewed']
   if (accept !== undefined) {
-    const queues = reviewQueues(Array.isArray(l1s) ? l1s.filter((l): l is string => typeof l === 'string') : [])
+    const queues = reviewQueues(Array.isArray(l1s) ? l1s.filter((l): l is string => typeof l === 'string') : [], profile)
     if (!Array.isArray(accept)) p.push('accept_unreviewed: must be a list of review queues')
     else
       accept.forEach((q, i) => {
@@ -232,10 +242,11 @@ export function configProblems(raw: unknown): string[] {
     const accents = tts['accents']
     if (!isRecord(accents)) p.push('tts.accents: must be an object')
     else {
-      if (accents['uk'] === undefined) p.push('tts.accents.uk: required')
+      const [first] = profile.accents
+      if (accents[first!] === undefined) p.push(`tts.accents.${first}: required`)
       for (const [accent, voice] of Object.entries(accents)) {
         const path = `tts.accents.${accent}`
-        if (accent !== 'uk' && accent !== 'us') p.push(`${path}: accent must be uk or us`)
+        if (!profile.accents.includes(accent)) p.push(`${path}: accent must be ${profile.accents.join(' or ')}`)
         else if (!isRecord(voice)) p.push(`${path}: must be an object`)
         else {
           str(voice['voice'], `${path}.voice`)
@@ -248,7 +259,7 @@ export function configProblems(raw: unknown): string[] {
       }
     }
   }
-  if (raw['ai_review'] !== undefined) p.push(...aiReviewProblems(raw['ai_review'], Array.isArray(l1s) ? l1s.filter((l): l is string => typeof l === 'string') : []))
+  if (raw['ai_review'] !== undefined) p.push(...aiReviewProblems(raw['ai_review'], Array.isArray(l1s) ? l1s.filter((l): l is string => typeof l === 'string') : [], profile))
   return p
 }
 

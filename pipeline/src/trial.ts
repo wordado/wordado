@@ -113,6 +113,7 @@ export function buildTrial(pack: Pack, { probesPerLevel, openTheme }: TrialOptio
     descriptor: {
       pack_id: pack.pack_id,
       l1: pack.l1,
+      ...(pack.target === 'en' ? {} : { target: pack.target }),
       corpus_version: pack.corpus_version,
       schema_version: pack.schema_version,
       url: packFile,
