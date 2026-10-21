@@ -3,7 +3,7 @@ import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { gzipSync } from 'node:zlib'
+import { gzipSync, zstdCompressSync } from 'node:zlib'
 import { parquetWriteFile } from 'hyparquet-writer'
 import { describe, expect, it } from 'vitest'
 import { parseFrequencyList } from './frequency'
@@ -56,9 +56,18 @@ async function serve(files: Readonly<Record<string, Uint8Array>>): Promise<Serve
 }
 
 /** A Parquet file's bytes (written through a scratch file: the writer takes a filename). */
-async function parquetBytes(columnData: Parameters<typeof parquetWriteFile>[0]['columnData'], rowGroupSize?: number): Promise<Uint8Array> {
+async function parquetBytes(
+  columnData: Parameters<typeof parquetWriteFile>[0]['columnData'],
+  rowGroupSize?: number,
+  codec?: 'ZSTD',
+): Promise<Uint8Array> {
   const file = join(tmp(), 'shard.parquet')
-  await parquetWriteFile({ filename: file, columnData, ...(rowGroupSize ? { rowGroupSize } : {}) })
+  await parquetWriteFile({
+    filename: file,
+    columnData,
+    ...(rowGroupSize ? { rowGroupSize } : {}),
+    ...(codec ? { codec, compressors: { ZSTD: (input: Uint8Array) => new Uint8Array(zstdCompressSync(input)) } } : {}),
+  })
   return readFileSync(file)
 }
 
@@ -96,6 +105,16 @@ describe('parquetTexts and countParquet', () => {
       expect(texts).toEqual(['a b', 'b', 'c c c', 'd', 'e'])
       expect(server.ranges.length).toBeGreaterThan(0)
       expect(Object.fromEntries(await countParquet([url]))).toEqual({ a: 1, b: 2, c: 3, d: 1, e: 1 })
+    } finally {
+      await server.close()
+    }
+  })
+
+  it('reads a ZSTD-compressed shard, as FineWeb-2 ships them (#322)', async () => {
+    const bytes = await parquetBytes([{ name: 'text', data: ['Das Haus', 'die Häuser', 'das Haus'], type: 'STRING' }], undefined, 'ZSTD')
+    const server = await serve({ 'shard.parquet': bytes })
+    try {
+      expect(Object.fromEntries(await countParquet([`${server.base}/shard.parquet`]))).toEqual({ das: 2, haus: 2, die: 1, häuser: 1 })
     } finally {
       await server.close()
     }

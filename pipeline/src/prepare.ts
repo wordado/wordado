@@ -3,9 +3,17 @@ import { dirname } from 'node:path'
 import { Readable } from 'node:stream'
 import type { ReadableStream as WebReadableStream } from 'node:stream/web'
 import { createInterface } from 'node:readline'
-import { createGunzip } from 'node:zlib'
+import { createGunzip, zstdDecompressSync } from 'node:zlib'
 import { norm } from '@wordado/core'
-import { asyncBufferFromUrl, parquetMetadataAsync, parquetReadObjects } from 'hyparquet'
+import { asyncBufferFromUrl, parquetMetadataAsync, parquetReadObjects, type Compressors } from 'hyparquet'
+
+/**
+ * Codecs hyparquet does not read by itself. FineWeb-2's shards are ZSTD (#322); Node decompresses it natively,
+ * so no extra dependency is needed.
+ */
+const COMPRESSORS: Compressors = {
+  ZSTD: (input) => new Uint8Array(zstdDecompressSync(input)),
+}
 
 /** A running word: letters, with apostrophes inside (don't). Hyphens and digits split words. */
 const TOKEN = /\p{L}+(?:['’]\p{L}+)*/gu
@@ -15,7 +23,11 @@ export function countInto(counts: Map<string, number>, text: string): void {
   // One normalisation per text rather than per token: this runs over billions of tokens.
   for (const [token] of text.normalize('NFC').toLowerCase().matchAll(TOKEN)) {
     const form = token.includes('’') ? token.replaceAll('’', "'") : token
-    counts.set(form, (counts.get(form) ?? 0) + 1)
+    const n = counts.get(form)
+    // A new form is stored as a copy: a matched substring of 13 or more characters can be a slice that keeps the
+    // whole text alive, and German web text, full of long compounds, then outgrows the heap (#322).
+    if (n === undefined) counts.set(Buffer.from(form).toString(), 1)
+    else counts.set(form, n + 1)
   }
 }
 
@@ -42,7 +54,7 @@ export async function* parquetTexts(source: string, column = 'text'): AsyncGener
   let rowStart = 0
   for (const group of metadata.row_groups) {
     const rowEnd = rowStart + Number(group.num_rows)
-    const rows = (await parquetReadObjects({ file: buffer, metadata, columns: [column], rowStart, rowEnd })) as Record<string, unknown>[]
+    const rows = (await parquetReadObjects({ file: buffer, metadata, columns: [column], rowStart, rowEnd, compressors: COMPRESSORS })) as Record<string, unknown>[]
     for (const row of rows) {
       const text = row[column]
       if (typeof text === 'string') yield text
