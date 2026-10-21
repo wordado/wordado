@@ -1,13 +1,17 @@
 import {
   canUse,
+  courseSwitchPatch,
+  coursePackId,
+  isCourseL1,
   isDayComplete,
-  isSupportedL1,
   utcDay,
   type AudioClip,
   type Capability,
   type CefrLevel,
   type Corpus,
   type CorpusEntry,
+  type Course,
+  type ParkedCourse,
   type Entitlement,
   type L1,
   type Mode,
@@ -17,17 +21,18 @@ import {
   type ReviewState,
   type SessionPlan,
   type Settings,
+  type Target,
   type WordFlag,
   type WordId,
 } from '@wordado/core'
 import { Database } from './database'
 import { pendingDocumentWrites } from './documents'
-import { addContentReport, addUnlocks, patchSettings, readAliases, readEntitlement, readFlags, readReports, readSettings, readToLearn, readUnlocks, setFlag, setToLearn, type ContentReportInput } from './documentTypes'
+import { addContentReport, addUnlocks, patchSettings, readAliases, readEntitlement, readFlags, readParkedCourse, readReports, readSettings, readToLearn, readUnlocks, setFlag, setToLearn, writeParkedCourse, type ContentReportInput } from './documentTypes'
 import type { SqlDriver } from './driver'
 import type { ClientEnv } from './env'
 import { appendAnswer, loadLearner, pendingDayComplete, provisionalXp, recordDayComplete, unpushedEvents, type AnswerInput, type Learner } from './learner'
 import { ensureDevice, getUserId, setUserId } from './meta'
-import { activateStagedPacks, activePackVersion, installedPacks, installPacks, loadActiveCorpus, type InstallReport, type PackFetcher } from './packs'
+import { activateStagedPacks, activePackVersion, hasActiveCourse, installedPacks, installPacks, loadActiveCorpus, type InstallReport, type PackFetcher } from './packs'
 import { migrate } from './schema'
 import { createStore, type Store } from './store'
 import { PracticeVisit } from './practiceVisit'
@@ -46,7 +51,7 @@ export interface ClientOptions {
   readonly transport?: SyncTransport
 }
 
-/** The outcome of `Client.changeL1` (spec §8.6). */
+/** The outcome of `Client.changeCourse` (spec §8.6). The name is older than courses. */
 export type ChangeL1Outcome = { readonly ok: true } | { readonly ok: false; readonly reason: 'unsupported' | 'unavailable' }
 
 /** Lifetime and today's XP: the server's figures plus what it has not counted yet (spec §8.7). */
@@ -79,6 +84,8 @@ export interface ClientSnapshot {
   readonly entitlement: Entitlement | null
   readonly xp: ClientXp
   readonly sync: SyncStatus
+  /** The installed course (spec §5.5, §8.6): see `Client.course`. */
+  readonly course: Course
   /** The installed L1 (spec §8.6): see `Client.l1`. */
   readonly l1: string
 }
@@ -155,14 +162,22 @@ export class Client {
   }
 
   /**
-   * The installed L1 (spec §8.6): the active pack's L1 whenever one is installed, whatever `settings.l1` says. A
-   * setting that differs from it is a change still pending (offline, or the pack not yet fetched): only `changeL1`
-   * moves this, so reports, pack checks and `startSession` keep serving the words the learner actually sees. Before
-   * any pack is active it is `settings.l1 ?? options.l1`: the language the first install fetches.
+   * The installed course (spec §5.5, §8.6): the active pack's target and L1 whenever one is installed, whatever
+   * `settings.course` and `settings.l1` say. A setting that differs from it is a change still pending (offline, or the
+   * pack not yet fetched): only `changeCourse` moves this, so reports, pack checks and `startSession` keep serving the
+   * words the learner actually sees. Before any pack is active it is `settings.course` with `settings.l1 ??
+   * options.l1`: the course the first install fetches.
    */
-  get l1(): string {
+  get course(): Course {
+    if (this.corpus) return { target: this.corpus.target as Target, l1: this.corpus.l1 as L1 }
     // `settings` is unset only for the constructor's first snapshot, which `open` replaces at once.
-    return this.corpus?.l1 ?? (this.settings as Settings | undefined)?.l1 ?? this.defaultL1
+    const settings = this.settings as Settings | undefined
+    return { target: settings?.course ?? 'en', l1: (settings?.l1 ?? this.defaultL1) as L1 }
+  }
+
+  /** The installed L1 (spec §8.6): `course.l1`. */
+  get l1(): string {
+    return this.course.l1
   }
 
   private async reloadDocuments(): Promise<void> {
@@ -214,6 +229,7 @@ export class Client {
       xp: { total: (this.xp?.total ?? 0) + provisional, today: pulledToday + provisionalToday, provisional },
       // The outbox size is known from memory at all times, not only after a push.
       sync: { ...status, pendingEvents: this.learner.localEvents.filter((e) => !e.pushed).length },
+      course: this.course,
       l1: this.l1,
     }
   }
@@ -245,9 +261,9 @@ export class Client {
     return (await unpushedEvents(driver)).length > 0 || (await pendingDayComplete(driver)).length > 0 || (await pendingDocumentWrites(driver)).length > 0
   }
 
-  /** Fetches, verifies and stages newer packs for the learner's L1 (spec §5.1). Nothing changes until `startSession`. */
+  /** Fetches, verifies and stages newer packs for the learner's course (spec §5.1). Nothing changes until `startSession`. */
   installPacks(manifest: PackManifest, fetchPack: PackFetcher): Promise<InstallReport> {
-    return installPacks(this.db, this.env, manifest, this.l1, fetchPack)
+    return installPacks(this.db, this.env, manifest, this.course, fetchPack)
   }
 
   /** Loads what the active packs give the app: the corpus and its version (spec §5.1). */
@@ -264,7 +280,7 @@ export class Client {
    * is over, so this is the other place it is made.
    */
   async startSession(): Promise<string[]> {
-    const activated = await activateStagedPacks(this.db, this.l1)
+    const activated = await activateStagedPacks(this.db, this.course)
     if (activated.length > 0 || !this.corpus) await this.reloadCorpus()
     try {
       const ctx = this.context()
@@ -277,29 +293,81 @@ export class Client {
   }
 
   /**
-   * Switches the installed L1 (spec §8.6): stages the new language's pack beside the current one, then swaps it in
-   * and removes the other language's pack in one transaction. Review state is keyed by entry, so all progress
-   * carries over. Nothing changes when the pack cannot be had (offline): the caller tries again later. Also installs
-   * a learner's first pack (the setup's Language step): with no pack yet active, this always fetches and installs,
-   * even when `l1` already equals `Client.l1` (which follows `settings.l1` before any pack exists).
+   * Switches the installed course (spec §5.5, §8.6), its L1 or its target: stages the new course's pack beside the
+   * current one, then swaps it in and removes the other course's pack in one transaction. Review state is keyed by
+   * entry, so all progress carries over (another target's entries have IDs of their own, so its reviews wait for it).
+   * Nothing changes when the pack cannot be had (offline): the caller tries again later. Also installs a learner's
+   * first pack (the setup's Language step): with no pack yet active, this always fetches and installs, even when
+   * `course` already equals `Client.course` (which follows the settings before any pack exists).
+   *
+   * With `switchCourse`, a switch to a course started before (Settings' course page): the settings follow the pack
+   * (`switchCourse`'s patch) once it is active and before anyone is told, so nothing ever sees the new pack under the
+   * old course's settings, and nothing changes at all when the pack cannot be had.
    */
-  changeL1(l1: L1, manifest: PackManifest, fetchPack: PackFetcher): Promise<ChangeL1Outcome> {
+  changeCourse(course: Course, manifest: PackManifest, fetchPack: PackFetcher, options: { readonly switchCourse?: boolean } = {}): Promise<ChangeL1Outcome> {
     return this.guarded(async () => {
-      if (!isSupportedL1(l1)) return { ok: false, reason: 'unsupported' }
-      // Compared with the active corpus, not `this.l1`: with no pack yet, `this.l1` follows the setting, and the first
-      // install (the setup's Language step) must still fetch.
-      if (this.corpus !== null && l1 === this.corpus.l1) return { ok: true }
-      const report = await installPacks(this.db, this.env, manifest, l1, fetchPack)
+      if (!isCourseL1(course.target, course.l1)) return { ok: false, reason: 'unsupported' }
+      // Compared with the active corpus, not `this.course`: with no pack yet, `this.course` follows the settings, and
+      // the first install (the setup's Language step) must still fetch.
+      if (this.corpus !== null && this.corpus.target === course.target && this.corpus.l1 === course.l1) {
+        if (options.switchCourse) {
+          await this.switchSettings(course.target)
+          this.refresh()
+        }
+        return { ok: true }
+      }
+      const report = await installPacks(this.db, this.env, manifest, course, fetchPack)
       const installed = await installedPacks(this.db)
-      const has = report.staged.length > 0 || installed.some((p) => p.pack_id === `corpus-${l1}`)
+      const has = report.staged.length > 0 || installed.some((p) => p.pack_id === coursePackId(course.target, course.l1))
       if (!has) return { ok: false, reason: 'unavailable' }
-      await activateStagedPacks(this.db, l1)
+      const promoted = await activateStagedPacks(this.db, course)
+      // A `startSession` running at the same moment may have dropped the staged pack (another course's, to it) between
+      // staging and activating: nothing of the course is then active, and the caller tries again later.
+      if (promoted.length === 0 && !(await hasActiveCourse(this.db, course))) return { ok: false, reason: 'unavailable' }
+      // Parked while the old course's pack is still the corpus, so an L1 installed from the default is parked with it.
+      if (options.switchCourse) await this.switchSettings(course.target)
       // Reload what `open` loads from the active packs (corpus, pack version, session plan), as `startSession` does.
-      // The new corpus's L1 is now `this.l1`.
+      // The new corpus's course is now `this.course`.
       await this.reloadCorpus()
       this.refresh()
       return { ok: true }
     })
+  }
+
+  /**
+   * Switches the course studied (spec §8.6): the current course's L1, level and theme are parked in its `course`
+   * document and the other course's are restored (or reset, for a course never started), in one settings patch. The
+   * pack follows through `changeCourse` once the caller has an L1: `needsSetup` says the course was never started.
+   * Switching to the course already studied changes nothing.
+   */
+  switchCourse(to: Target): Promise<{ needsSetup: boolean }> {
+    return this.guarded(async () => {
+      await this.switchSettings(to)
+      this.refresh()
+      return { needsSetup: this.settings.l1 === null }
+    })
+  }
+
+  /** `switchCourse`'s settings patch and parking, in one transaction; the caller refreshes. */
+  private async switchSettings(to: Target): Promise<void> {
+    this.settings = await this.db.transaction(async (tx) => {
+      const stored = await readSettings(tx)
+      // A course installed from the default L1 (a demo, or before the setup wrote `settings.l1`) is still started:
+      // its installed L1 is parked with it, so its level and theme are not lost as those of a course never begun.
+      const installed = this.corpus !== null && this.corpus.target === stored.course && isCourseL1(stored.course, this.corpus.l1) ? this.corpus.l1 : null
+      // An L1 the course is not taught from (a two-device merge can leave `{ course: 'de', l1: 'de' }`) is not parked:
+      // the server would refuse the write. The course is then parked as never started.
+      const l1 = isCourseL1(stored.course, stored.l1) ? stored.l1 : installed
+      const current = l1 === stored.l1 ? stored : { ...stored, l1 }
+      const { park, settings } = courseSwitchPatch(current, await readParkedCourse(tx, to), to)
+      if (park) await writeParkedCourse(tx, current.course, park)
+      return Object.keys(settings).length === 0 ? stored : patchSettings(tx, settings)
+    })
+  }
+
+  /** A course the learner is not studying now, as parked in its `course` document (spec §8.6); null when never parked. */
+  parkedCourse(target: Target): Promise<ParkedCourse | null> {
+    return readParkedCourse(this.db.driver, target)
   }
 
   entry(wordId: WordId): CorpusEntry | null {

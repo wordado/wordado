@@ -1,5 +1,6 @@
 import { act, cleanup, fireEvent, screen } from '@testing-library/react'
-import { ITEM_SETTLE_MS } from '@wordado/client-data'
+import { ITEM_SETTLE_MS, StudyRun } from '@wordado/client-data'
+import { germanServing } from '@wordado/client-data/src/testing/sample'
 import { corpusWordId, DAY_MS, Grade, themeEntries } from '@wordado/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { answerNew, renderWith, setup } from '../test/fixtures'
@@ -267,6 +268,29 @@ describe('Study', () => {
       ['Back to the path', '/path'],
       ['Practise more', `/practice?unit=${third.unitId}`],
     ])
+  })
+
+  it('ends the run and starts a fresh one in the new course when the course changes mid-run (spec §5.1)', async () => {
+    const ctx = await setup()
+    const german = await germanServing(ctx.env)
+    const start = vi.spyOn(StudyRun, 'start')
+    renderWith(<Study kind="session" mode="flashcard" />, ctx)
+    await screen.findByRole('button', { name: 'Show answer' })
+    expect(document.querySelector('.card [lang="en"]')).not.toBeNull()
+    expect(start).toHaveBeenCalledTimes(1)
+
+    // A course pack activated while the card is on screen (the watcher installing a switch made on another device).
+    await act(async () => {
+      await ctx.client.switchCourse('de')
+      await ctx.client.updateSettings({ l1: 'bg' })
+      expect(await ctx.client.changeCourse({ target: 'de', l1: 'bg' }, german.manifest, german.fetch)).toEqual({ ok: true })
+    })
+
+    await screen.findByRole('button', { name: 'Show answer' })
+    expect(start).toHaveBeenCalledTimes(2)
+    expect(document.querySelector('.card [lang="de"]')).not.toBeNull()
+    expect(document.querySelector('.card [lang="en"]')).toBeNull()
+    start.mockRestore()
   })
 
   it('says the words are being got ready while the run starts, with a bar that claims no share', async () => {

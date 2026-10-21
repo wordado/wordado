@@ -12,6 +12,12 @@ describe('sampleFiles', () => {
     expect(files).not.toContain('source-de.json')
   })
 
+  it('lists the German course in its subfolder, and not its sources either (#313)', () => {
+    const files = sampleFiles(SAMPLE_DIR)
+    expect(files).toEqual(expect.arrayContaining(['de/manifest.json', 'de/corpus-v0-bg.pack', 'de/corpus-v0-en.pack']))
+    expect(files.filter((f) => /(^|\/)source[^/]*\.json$/.test(f))).toEqual([])
+  })
+
   it('names content types the browser needs', () => {
     expect(contentType('manifest.json')).toBe('application/json')
     expect(contentType('corpus-v0-bg.pack')).toBe('application/json')
@@ -53,6 +59,12 @@ describe('samplePack in development', () => {
     const missing = new FakeResponse()
     serve({ url: `/${SAMPLE_PREFIX}source.json` }, missing, () => undefined)
     expect(missing.statusCode).toBe(404)
+    const german = new FakeResponse()
+    serve({ url: `/${SAMPLE_PREFIX}de/manifest.json` }, german, () => undefined)
+    expect(JSON.parse(german.body!.toString('utf8')).packs.map((p: { pack_id: string }) => p.pack_id)).toEqual(['corpus-de-bg', 'corpus-de-en'])
+    const germanSource = new FakeResponse()
+    serve({ url: `/${SAMPLE_PREFIX}de/source-bg.json` }, germanSource, () => undefined)
+    expect(germanSource.statusCode).toBe(404)
   })
 
   it('passes other requests on', () => {

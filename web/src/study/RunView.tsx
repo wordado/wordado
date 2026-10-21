@@ -1,5 +1,5 @@
 import { useClient, useClientSnapshot, type RunKind, type RunSnapshot, type StudyRun } from '@wordado/client-data'
-import { entryClips, Grade, isAboveLevel, type ChoiceItem, type CorpusEntry, type StudyItem } from '@wordado/core'
+import { entryClips, Grade, headwordForm, isAboveLevel, type ChoiceItem, type CorpusEntry, type StudyItem } from '@wordado/core'
 import { BookPlus, Check, Clock, Ellipsis, Flag, Flame, LockOpen, Play, Volume2, X } from 'lucide-react'
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { useApp } from '../app/context'
@@ -8,7 +8,7 @@ import { usePopover } from '../app/usePopover'
 import { ClipSuperseded } from '../content/audio'
 import { refusedByBrowser } from '../content/player'
 import { errorMessageKey } from '../errors'
-import { localized, useT } from '../i18n/i18n'
+import { languageInSentence, localized, useT } from '../i18n/i18n'
 import { GRADE_LABEL } from '../labels'
 import { Link } from '../router'
 import type { PracticeScopeView } from '../screens/practiceScope'
@@ -272,7 +272,7 @@ function Flashcard(props: { readonly run: StudyRun; readonly snapshot: RunSnapsh
                 <Translation entry={entry} lang={corpus?.l1 ?? 'bg'} stacked />
               </p>
               {entry.examples[0] !== undefined && (
-                <p className="example" lang="en">
+                <p className="example" lang={corpus?.target ?? 'en'}>
                   {entry.examples[0]}
                 </p>
               )}
@@ -353,10 +353,11 @@ function Choice(props: {
   /** The learner is acting on the card (the ⋯ menu was opened, or "Learn this word" pressed): the feedback waits for Continue. */
   readonly stays: boolean
 }) {
-  const { t } = useT()
+  const { t, locale } = useT()
   const { corpus } = useClientSnapshot()
   const { run, snapshot, item } = props
   const l1 = corpus?.l1 ?? 'bg'
+  const target = corpus?.target ?? 'en'
   const listening = item.mode === 'listening_select'
   const { replay, failed } = useListening(item, run)
   const feedback = snapshot.phase === 'feedback' ? snapshot.feedback : null
@@ -404,7 +405,7 @@ function Choice(props: {
             <p className="prompt-text">
               <Translation entry={item.entry} lang={l1} stacked />
             </p>
-            <p className="instruction">{t('study.chooseWord')}</p>
+            <p className="instruction">{t('study.chooseWord', { language: languageInSentence(target, locale) })}</p>
           </>
         ),
       )}
@@ -425,7 +426,7 @@ function Choice(props: {
                   <span className="option-key" aria-hidden="true">
                     {index + 1}
                   </span>{' '}
-                  <span className="option-text">{showsTranslations ? <Translation entry={option} lang={l1} stacked /> : <span lang="en">{option.headword}</span>}</span>
+                  <span className="option-text">{showsTranslations ? <Translation entry={option} lang={l1} stacked /> : <span lang={target}>{headwordForm(target, option).lead}</span>}</span>
                   {/* Its place is kept before the answer, so a gloss does not wrap anew when the mark comes. */}
                   <span className="option-mark" aria-hidden="true">
                     {isAnswer ? '✓' : isWrong ? '✗' : ''}

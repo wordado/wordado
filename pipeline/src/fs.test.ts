@@ -1,9 +1,9 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { buildPack } from './build'
-import { writeArtifacts } from './fs'
+import { readSourceDir, writeArtifacts } from './fs'
 
 const water = {
   entry_id: 'water-1',
@@ -53,5 +53,22 @@ describe('writeArtifacts', () => {
     const de = buildPack(source('de', 3), clips)
     const mismatched = { ...de, manifest: { ...de.manifest, schema_version: de.manifest.schema_version + 1 } }
     expect(() => writeArtifacts(tempDir(), [bg, mismatched])).toThrow(/schema_version/)
+  })
+})
+
+describe('readSourceDir', () => {
+  const dirs: string[] = []
+  afterEach(() => {
+    for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('reads a course with no audio yet as no clips: a missing audio folder is not an error (#313)', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'fs-test-'))
+    dirs.push(dir)
+    writeFileSync(join(dir, 'source-bg.json'), JSON.stringify({ l1: 'bg' }))
+    expect(readSourceDir(dir)).toEqual({ sources: [{ l1: 'bg' }], clips: [] })
+    mkdirSync(join(dir, 'audio'))
+    writeFileSync(join(dir, 'audio', 'water-1-uk.m4a'), 'x')
+    expect(readSourceDir(dir).clips.map((c) => c.clipId)).toEqual(['water-1-uk'])
   })
 })

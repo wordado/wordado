@@ -3,16 +3,26 @@ import { Client, ITEM_SETTLE_MS, type PackFetcher } from '@wordado/client-data'
 import { nodeSqliteDriver } from '@wordado/client-data/src/drivers/nodeSqlite'
 import { sampleFetcher, sampleManifest } from '@wordado/client-data/src/testing/sample'
 import { testEnv } from '@wordado/client-data/src/testing/testEnv'
-import type { PackManifest } from '@wordado/core'
+import { offeredThemes, type PackManifest } from '@wordado/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AccountRecord } from '../account/storage'
-import { fakeAudio, fakeReminders, renderWith, setupTrial, type RenderContext } from '../test/fixtures'
+import { fakeAudio, fakePacks, fakeReminders, renderWith, setup, setupTrial, type RenderContext } from '../test/fixtures'
 import { packsFrom, twoLevels } from '../test/twoLevels'
 import { Setup } from './Setup'
+
+/** The courses the build offers: English alone unless a test says otherwise (spec §5.5). */
+const build = vi.hoisted(() => ({ offered: ['en'] as readonly ('en' | 'de')[] }))
+vi.mock('../content/packs', async (original) => ({
+  ...(await original<typeof import('../content/packs')>()),
+  get OFFERED_TARGETS() {
+    return build.offered
+  },
+}))
 
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
+  build.offered = ['en']
 })
 
 /** A brand-new demo: no pack installed, no L1 chosen, as the boot hands the setup over (plan 11). */
@@ -73,7 +83,7 @@ describe('Setup, the demo (plan 11)', () => {
     await pastLanguage()
     const heading = screen.getByRole('heading', { level: 2, name: 'What do you want English for?' })
     expect(document.activeElement).toBe(heading)
-    expect(screen.queryByRole('heading', { name: 'Your English level' })).toBeNull()
+    expect(screen.queryByRole('heading', { name: 'Your level in English' })).toBeNull()
     expect(screen.getByText('Step 2 of 3')).toBeTruthy()
   })
 
@@ -143,6 +153,140 @@ describe('Setup, the demo (plan 11)', () => {
   })
 })
 
+describe('Setup, the course (spec §8.6)', () => {
+  it('asks the course first when the build offers two (en,de)', async () => {
+    build.offered = ['en', 'de']
+    const ctx = await fresh()
+    renderWith(<Setup onFinish={() => undefined} />, ctx)
+    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 2, name: 'What do you want to learn?' }))
+    expect(screen.getAllByRole('radio').map((r) => r.closest('label')?.textContent)).toEqual(['English', 'German'])
+    fireEvent.click(screen.getByRole('radio', { name: 'German' }))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue' })))
+    expect(ctx.client.snapshot.settings.course).toBe('de')
+    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 2, name: 'Which language do you speak?' }))
+    // German is taught from Bulgarian, Spanish and English.
+    expect(screen.getAllByRole('radio').map((r) => (r as HTMLInputElement).value)).toEqual(['bg', 'es', 'en'])
+  })
+
+  it('skips the course question when the build offers one (Review Focus 4)', async () => {
+    const ctx = await fresh()
+    renderWith(<Setup onFinish={() => undefined} />, ctx)
+    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 2, name: 'Which language do you speak?' }))
+    expect(screen.queryByRole('heading', { name: 'What do you want to learn?' })).toBeNull()
+  })
+
+  it('counts the course among the steps once the words are known', async () => {
+    build.offered = ['en', 'de']
+    const ctx = await fresh()
+    renderWith(<Setup onFinish={() => undefined} />, ctx)
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue' })))
+    await pastLanguage()
+    expect(screen.getByRole('heading', { level: 2, name: 'What do you want English for?' })).toBeTruthy()
+    expect(screen.getByText('Step 3 of 4')).toBeTruthy()
+  })
+
+  it('starts a new course’s setup at the language: the course is already chosen', async () => {
+    build.offered = ['en', 'de']
+    const ctx = await setup()
+    await ctx.client.switchCourse('de')
+    renderWith(<Setup onFinish={() => undefined} />, { ...ctx, packs: packsFrom(sampleManifest, sampleFetcher) })
+    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 2, name: 'Which language do you speak?' }))
+    expect(screen.queryByRole('heading', { name: 'What do you want to learn?' })).toBeNull()
+  })
+})
+
+describe('Setup, leaving a new course’s setup (spec §8.6)', () => {
+  /** English studied from Bulgarian at B1 in a theme, then German switched to: its setup is owed. */
+  async function switched() {
+    build.offered = ['en', 'de']
+    const ctx = await setup()
+    const theme = offeredThemes(ctx.client.snapshot.corpus!)[0]!.themeId
+    await ctx.client.updateSettings({ l1: 'bg', declaredLevel: 'B1', activeTheme: theme })
+    await ctx.client.switchCourse('de')
+    // No manifest can be fetched: the device is offline.
+    const packs = fakePacks()
+    const install = vi.spyOn(packs, 'install')
+    return { ctx: { ...ctx, packs }, theme, install }
+  }
+
+  it('offers Back to the previous course, which restores it and ends the setup with nothing installed', async () => {
+    const { ctx, theme, install } = await switched()
+    const onFinish = vi.fn()
+    renderWith(<Setup onFinish={onFinish} />, ctx)
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Back to English' })))
+    expect(ctx.client.snapshot.settings).toMatchObject({ course: 'en', l1: 'bg', declaredLevel: 'B1', activeTheme: theme })
+    expect(onFinish).toHaveBeenCalledTimes(1)
+    expect(install).not.toHaveBeenCalled()
+  })
+
+  it('names the previous course in the interface language', async () => {
+    const { ctx } = await switched()
+    renderWith(<Setup onFinish={() => undefined} />, { ...ctx, locale: 'bg' })
+    expect(screen.getByRole('button', { name: 'Обратно към английски' })).toBeTruthy()
+  })
+
+  it('offers Back offline too, after the words failed to download', async () => {
+    const { ctx } = await switched()
+    const onFinish = vi.fn()
+    renderWith(<Setup onFinish={onFinish} />, ctx)
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue' })))
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy()
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Back to English' })))
+    expect(ctx.client.snapshot.settings).toMatchObject({ course: 'en', l1: 'bg' })
+    expect(onFinish).toHaveBeenCalledTimes(1)
+  })
+
+  it('acts once on a double click, and says why when the switch back cannot be saved', async () => {
+    const { ctx } = await switched()
+    const back = vi.spyOn(ctx.client, 'switchCourse').mockRejectedValue(new Error('disk full'))
+    const onFinish = vi.fn()
+    renderWith(<Setup onFinish={onFinish} />, ctx)
+    const button = screen.getByRole('button', { name: 'Back to English' })
+    await act(async () => {
+      fireEvent.click(button)
+      fireEvent.click(button)
+    })
+    expect(back).toHaveBeenCalledTimes(1)
+    expect(screen.getByRole('alert').textContent).toMatch(/^Your change wasn’t saved/)
+    expect(onFinish).not.toHaveBeenCalled()
+  })
+
+  it('in a first-run setup that asked the course, Back on the language returns to the course', async () => {
+    build.offered = ['en', 'de']
+    const ctx = await fresh()
+    renderWith(<Setup onFinish={() => undefined} />, ctx)
+    fireEvent.click(screen.getByRole('radio', { name: 'German' }))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue' })))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Back' })))
+    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 2, name: 'What do you want to learn?' }))
+    expect((screen.getByRole('radio', { name: 'German' }) as HTMLInputElement).checked).toBe(true)
+  })
+
+  it('offers no Back in a first-run setup that did not ask the course', async () => {
+    const ctx = await fresh()
+    renderWith(<Setup onFinish={() => undefined} />, ctx)
+    expect(screen.queryByRole('button', { name: /^Back/ })).toBeNull()
+  })
+
+  it('keeps that it was opened by a switch in the step it reports, so a reload counts no course step', async () => {
+    const { ctx } = await switched()
+    vi.spyOn(ctx.packs, 'install').mockResolvedValue({ ok: true })
+    const onStep = vi.fn()
+    const { unmount } = renderWith(<Setup onFinish={() => undefined} onStep={onStep} />, ctx)
+    await pastLanguage()
+    expect(onStep).toHaveBeenLastCalledWith('new:theme')
+    expect(screen.getByText('Step 2 of 3')).toBeTruthy()
+    unmount()
+    // The reload: the course's words are installed (here, as the switch left them), the mark says where and how.
+    await ctx.client.switchCourse('en')
+    renderWith(<Setup onFinish={() => undefined} resumeAt="new:theme" />, ctx)
+    expect(screen.getByText('Step 2 of 3')).toBeTruthy()
+    cleanup()
+    renderWith(<Setup onFinish={() => undefined} resumeAt="theme" />, ctx)
+    expect(screen.getByText('Step 3 of 4')).toBeTruthy()
+  })
+})
+
 describe('Setup, a trial with an open theme (#290)', () => {
   it('has no Theme step: language, then the goal', async () => {
     const ctx = { ...(await setupTrial({ openTheme: 'daily-life' })), packs: packsFrom(sampleManifest, sampleFetcher) }
@@ -158,7 +302,7 @@ describe('Setup, a corpus with two levels (plan 11)', () => {
     const ctx = await fresh(twoLevels())
     renderWith(<Setup onFinish={() => undefined} />, ctx)
     await pastLanguage()
-    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 2, name: 'Your English level' }))
+    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 2, name: 'Your level in English' }))
     expect(screen.getByText('Step 2 of 4')).toBeTruthy()
     expect(screen.getByText('A1 · Beginner', { selector: 'p.note' })).toBeTruthy()
     const a1 = screen.getByRole('radio', { name: /^A1/ }) as HTMLInputElement
@@ -202,7 +346,7 @@ describe('Setup, a corpus with two levels (plan 11)', () => {
     expect(screen.queryByRole('link', { name: 'Back to settings' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Back to the setup' }))
     expect(onFocus).toHaveBeenLastCalledWith(false)
-    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 2, name: 'Your English level' }))
+    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 2, name: 'Your level in English' }))
     expect(screen.getByText('Step 2 of 4')).toBeTruthy()
     expect(ctx.client.snapshot.settings.declaredLevel).toBe('A1')
     expect(screen.queryByRole('status')).toBeNull()
@@ -222,7 +366,7 @@ describe('Setup, a corpus with two levels (plan 11)', () => {
     // Keeping the level that was chosen is a way back too.
     expect(screen.getByRole('button', { name: 'Keep A2' })).toBeTruthy()
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Use A1' })))
-    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 2, name: 'Your English level' }))
+    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 2, name: 'Your level in English' }))
     expect(ctx.client.snapshot.settings.declaredLevel).toBe('A1')
     expect((screen.getByRole('radio', { name: /^A1/ }) as HTMLInputElement).checked).toBe(true)
     expect(screen.getByRole('status').textContent).toBe('The test placed you at A1. You can still change it.')
@@ -242,7 +386,7 @@ describe('Setup, a corpus with two levels (plan 11)', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Find your level' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Back to the setup' }))
     expect(onFocus).toHaveBeenLastCalledWith(false)
-    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 2, name: 'Your English level' }))
+    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 2, name: 'Your level in English' }))
     expect(screen.getByText('Step 2 of 4')).toBeTruthy()
     expect(ctx.client.snapshot.settings.declaredLevel).toBe('A1')
   })
@@ -252,7 +396,7 @@ describe('Setup, a corpus with two levels (plan 11)', () => {
     const onFocus = vi.fn()
     renderWith(<Setup onFinish={() => undefined} onFocus={onFocus} startWithTest />, ctx)
     await pastLanguage()
-    expect(screen.getByRole('heading', { level: 2, name: 'Your English level' })).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 2, name: 'Your level in English' })).toBeTruthy()
     expect(onFocus).not.toHaveBeenCalledWith(true)
   })
 
@@ -260,7 +404,7 @@ describe('Setup, a corpus with two levels (plan 11)', () => {
     const ctx = await fresh(twoLevels())
     renderWith(<Setup onFinish={() => undefined} />, ctx)
     await pastLanguage()
-    expect(screen.getByRole('heading', { level: 2, name: 'Your English level' })).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 2, name: 'Your level in English' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Find your level with a short test' })).toBeNull()
     expect(screen.queryByText(/^Not sure\?/)).toBeNull()
   })

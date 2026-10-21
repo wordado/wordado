@@ -1,5 +1,5 @@
 import { useClientSnapshot } from '@wordado/client-data'
-import { isSupportedL1, type L1 } from '@wordado/core'
+import { COURSE_L1S, isCourseL1, type L1 } from '@wordado/core'
 import { languageName, useT } from '../i18n/i18n'
 import { Link } from '../router'
 
@@ -10,14 +10,14 @@ import { Link } from '../router'
 export function NativeLanguageSettings() {
   const { t, locale } = useT()
   const { settings, l1: installedText } = useClientSnapshot()
-  // `Client.l1` (the active pack's L1, or the default before any pack exists) is always one of SUPPORTED_L1S in
-  // practice — Boot's own default and every installed corpus are. The fallback only satisfies the type checker,
-  // since the snapshot carries it as a plain `string`; it never masks a real pending change.
-  const installed: L1 = isSupportedL1(installedText) ? installedText : 'bg'
+  // `Client.l1` is the active pack's L1, or the default before any pack exists. Under a course switched to and not set
+  // up yet it may be the course's own language (German installed for English, now learning German): the course's
+  // first native language stands in then, as it does for a value the snapshot carries as a plain `string`.
+  const installed: L1 = isCourseL1(settings.course, installedText) ? installedText : COURSE_L1S[settings.course][0]!
   const current = settings.l1 ?? installed
   // Intl's own form of the name, as it sits mid-sentence: "German", "Deutsch", "немски".
   const inSentence = (l1: L1) => new Intl.DisplayNames([locale], { type: 'language' }).of(l1) ?? l1
-  /** A setting the installed pack does not match yet: `watchL1` installs it once it can (offline, it waits). */
+  /** A setting the installed pack does not match yet: `watchCourse` installs it once it can (offline, it waits). */
   const pending = settings.l1 !== null && settings.l1 !== installed ? settings.l1 : null
 
   return (

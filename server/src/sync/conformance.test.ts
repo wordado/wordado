@@ -88,4 +88,27 @@ describe('the server and the fake server (plan 4 contract)', () => {
       expect(normalise(real)).toEqual(normalise(await fake.pull(pull)))
     }
   })
+
+  it('merge a parked course document and pull it back, and both refuse a course that is no target (#313)', async () => {
+    const h = harness()
+    const s = await h.signIn()
+    const [user] = await h.deps.db.query<{ created_at: Date }>('select "createdAt" as created_at from "user" where id = $1', [s.userId])
+    const fake = new FakeServer({ now: () => h.clock.now, accountCreatedAt: user!.created_at.getTime() })
+    fake.setServerOwned(DOCUMENT_TYPES.entitlement, '', defaultEntitlementFields(), 0)
+
+    const page = pushPage('dev-a', h.clock.now, [], {
+      documents: [write('course', 'en', { l1: 'bg', declaredLevel: 'B1', activeTheme: 'food' }), write('course', 'fr', { l1: 'bg' })],
+    })
+    const real = await s.post('/v1/sync/push', page)
+    expect(real.status).toBe(200)
+    expect(real.body).toEqual(await fake.push(page))
+    expect(real.body.rejected).toEqual([{ type: 'course', key: 'fr', reason: 'invalid' }])
+
+    const pull = { protocolVersion: SYNC_PROTOCOL_VERSION, deviceId: 'dev-b', documentsSince: 0 }
+    const pulled = (await s.post('/v1/sync/pull', pull)).body as PullResponse
+    expect(normalise(pulled)).toEqual(normalise(await fake.pull(pull)))
+    if (pulled.status !== 'ok') throw new Error('the pull failed')
+    const courses = pulled.documents.filter((d) => d.type === 'course')
+    expect(courses.map((d) => [d.key, d.fields])).toEqual([['en', { l1: 'bg', declaredLevel: 'B1', activeTheme: 'food' }]])
+  })
 })

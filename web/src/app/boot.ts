@@ -1,5 +1,5 @@
 import { Client, createStore, type ClientEnv, type InstallReport, type PackFetcher, type SqlDriver, type Store, type SyncTransport } from '@wordado/client-data'
-import { isSupportedL1, type L1, type PackManifest } from '@wordado/core'
+import { isCourseL1, type Corpus, type L1, type PackManifest, type Settings, type Target } from '@wordado/core'
 import { DEMO_FILE, learnerFile, type AccountRecord, type AccountStorage } from '../account/storage'
 import type { Locale } from '../i18n/i18n'
 import type { Backend } from '../storage/protocol'
@@ -43,7 +43,7 @@ export type BootState =
  */
 export function defaultL1(account: AccountRecord | null, locale: Locale): L1 {
   if (account !== null) return 'bg'
-  return isSupportedL1(locale) ? locale : 'bg'
+  return isCourseL1('en', locale) ? locale : 'bg'
 }
 
 /** What Boot needs of the tab lock (Task 5's TabLock). */
@@ -78,8 +78,11 @@ export interface BootDeps {
   readonly setupPullTimeoutMs?: number
   /** Tests shorten OPEN_TIMEOUT_MS. */
   readonly openTimeoutMs?: number
-  /** The manifest to install from: a visitor's (the trial manifest when the build names one, the bundled sample otherwise) or a learner's (the CDN, plan 7). */
-  fetchManifest(account: AccountRecord | null): Promise<PackManifest>
+  /**
+   * The manifest to install from: a visitor's (the trial manifest when the build names one, the bundled sample
+   * otherwise) or a learner's (the CDN, plan 7), for `target`'s course (spec §5.5).
+   */
+  fetchManifest(account: AccountRecord | null, target: Target): Promise<PackManifest>
   readonly fetchPack: PackFetcher
   /** Quick work before the app shows, such as reading the audio cache's index. Its failure never fails the boot. */
   prepare?(client: Client, account: AccountRecord | null): Promise<void>
@@ -95,6 +98,17 @@ export interface SwitchOptions {
 }
 
 const messageOf = (err: unknown): string => (err instanceof Error ? err.message : String(err))
+
+/**
+ * The first-run setup, or a new course's (spec §8.6): its language is not chosen and its words are not installed. With
+ * no words at all, English owes it only to a learner who has studied nothing (progress from before plan 10 installs
+ * the default L1); any other course always does, since a default L1 may be one that course does not offer.
+ */
+export function setupNeeded(s: { corpus: Corpus | null; settings: Settings; states: ReadonlyMap<unknown, unknown> }): boolean {
+  if (s.settings.l1 !== null) return false
+  if (s.corpus === null) return s.states.size === 0 || s.settings.course !== 'en'
+  return s.corpus.target !== s.settings.course
+}
 
 /**
  * Starts the app (spec §9.1, §5.1): take the tab lock, open the database,
@@ -371,7 +385,11 @@ export class Boot {
       if (generation !== this.generation) return
       let installFailure: unknown = null
       try {
-        const report = await client.installPacks(await this.deps.fetchManifest(this.account), this.deps.fetchPack)
+        // The installed course's manifest (spec §8.6), for its newer packs: `installPacks` stages only that course's, so
+        // the background update check never fetches another's. A course the settings name that is not installed yet
+        // (switched to, here or on another device) is the course watcher's to install once the app is open. Before any
+        // pack, `Client.course` is the settings' course: the first install of a reopened file.
+        const report = await client.installPacks(await this.deps.fetchManifest(this.account, client.course.target), this.deps.fetchPack)
         this.deps.onInstallReport?.(report)
       } catch (err) {
         installFailure = err
@@ -391,12 +409,18 @@ export class Boot {
 
   /**
    * The first-run setup (plan 11, Decision 1): this file has no pack, its settings name no L1, and nothing has been
-   * studied. For an account those facts count only after a pull completes, so a returning learner's own settings and
-   * progress decide. A pull that fails or times out takes the ordinary path. Even without the setup, a completed pull
-   * has done its other job: `settings.l1` now chooses the first install.
+   * studied. Or a new course's (spec §8.6): the settings name a course whose L1 is not chosen, and the installed pack
+   * is another course's (`setupNeeded`). For an account those facts count only after a pull completes, so a returning
+   * learner's own settings and progress decide. With no pack, a pull that fails or times out takes the ordinary path.
+   * With another course's pack installed, this device's own settings decide then: a new course's setup survives a
+   * reload offline (Review Focus 2), and only a completed pull may say otherwise. Even without the setup, a completed
+   * pull has done its other job: `settings.l1` now chooses the first install.
    */
   private async needsSetup(client: Client, generation: number): Promise<boolean> {
-    if (client.snapshot.corpus !== null) return false
+    const { corpus, settings } = client.snapshot
+    if (corpus !== null && corpus.target === settings.course) return false
+    // A course started before (its language restored by the switch): no setup whatever a pull says, so none is waited for.
+    if (corpus !== null && settings.l1 !== null) return false
     if (this.account) {
       let timer: ReturnType<typeof setTimeout> | undefined
       const timeout = new Promise<'timeout'>((resolve) => {
@@ -404,10 +428,10 @@ export class Boot {
       })
       const outcome = await Promise.race([client.sync({ force: true }).catch(() => 'failed' as const), timeout])
       clearTimeout(timer)
-      if (generation !== this.generation || outcome !== 'synced') return false
+      if (generation !== this.generation) return false
+      if (outcome !== 'synced' && client.snapshot.corpus === null) return false
     }
-    const { settings, states } = client.snapshot
-    return settings.l1 === null && states.size === 0
+    return setupNeeded(client.snapshot)
   }
 
   /**
@@ -421,6 +445,16 @@ export class Boot {
     this.store.set({ ...state, setup: false })
     void this.deps.onReady?.(state.client, state.account).catch(() => undefined)
     if (state.account) void state.client.sync().catch(() => undefined)
+  }
+
+  /**
+   * Opens the setup for the current client (spec §8.6), as the first-run path does: a course switched to in Settings
+   * that was never started owes its setup, which starts at the language since the course is chosen.
+   */
+  startSetup(): void {
+    const state = this.store.get()
+    if (state.status !== 'ready' || state.setup) return
+    this.store.set({ status: 'ready', client: state.client, backend: state.backend, resumed: false, account: state.account, setup: true })
   }
 
   /** The learner was asked for a level after the demo was carried over, or needs no asking: the record forgets it. */

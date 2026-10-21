@@ -238,11 +238,12 @@ function TrialClosedThemes(props: { readonly corpus: Corpus; /** Under the open 
   )
 }
 
-/** A word a search found: the English word, then its translation and sense note. */
+/** A word a search found: the course-language word, then its translation and sense note. */
 function MatchedWord(props: { readonly entry: CorpusEntry; readonly lang: string }) {
+  const { corpus } = useClientSnapshot()
   return (
     <>
-      <span lang="en" className="word-head">
+      <span lang={corpus?.target ?? 'en'} className="word-head">
         {props.entry.headword}
       </span>{' '}
       <Translation entry={props.entry} lang={props.lang} />

@@ -1,16 +1,21 @@
 import {
+  CEFR_LEVELS,
   DOCUMENT_TYPES,
   ENTITLEMENT_SOURCES,
   ENTITLEMENT_TIERS,
   REPORT_FIELDS,
+  isCourseL1,
   isSupportedL1,
   isWordId,
   settingsFromFields,
   validateSettingsPatch,
+  type CefrLevel,
   type Entitlement,
+  type ParkedCourse,
   type ReportField,
   type ReportRecord,
   type Settings,
+  type Target,
   type WordFlag,
   type WordId,
 } from '@wordado/core'
@@ -35,6 +40,26 @@ export async function patchSettings(tx: SqlDriver, patch: Record<string, unknown
   if (!result.ok) throw new Error(`Invalid settings: ${result.errors.join(', ')}`)
   await writeLocalPatch(tx, DOC.settings, '', result.fields as Fields)
   return readSettings(tx)
+}
+
+/**
+ * A course the learner is not studying now (spec §8.6), or null when it was never parked. A stored field this build
+ * cannot read falls back to the course's start, as a settings field does.
+ */
+export async function readParkedCourse(driver: SqlDriver, target: Target): Promise<ParkedCourse | null> {
+  const doc = await getDocument(driver, DOC.course, target)
+  if (!doc || doc.deleted) return null
+  const f = doc.fields
+  return {
+    l1: isCourseL1(target, f['l1']) ? f['l1'] : null,
+    declaredLevel: (CEFR_LEVELS as readonly unknown[]).includes(f['declaredLevel']) ? (f['declaredLevel'] as CefrLevel) : 'A1',
+    activeTheme: typeof f['activeTheme'] === 'string' && f['activeTheme'] !== '' ? f['activeTheme'] : null,
+  }
+}
+
+/** Parks a course's three settings in its `course` document, keyed by its target; synced like any document. */
+export async function writeParkedCourse(tx: SqlDriver, target: Target, parked: ParkedCourse): Promise<void> {
+  await writeLocalPatch(tx, DOC.course, target, { l1: parked.l1, declaredLevel: parked.declaredLevel, activeTheme: parked.activeTheme } as Fields)
 }
 
 export async function readFlags(driver: SqlDriver): Promise<Map<WordId, WordFlag>> {

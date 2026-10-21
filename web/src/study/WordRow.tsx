@@ -1,5 +1,6 @@
 import type { CorpusEntry } from '@wordado/core'
-import { corpusWordId } from '@wordado/core'
+import { useClientSnapshot } from '@wordado/client-data'
+import { corpusWordId, headwordForm } from '@wordado/core'
 import { useState, type ReactNode } from 'react'
 import { FlagControls } from './FlagControls'
 import { Translation } from './Headword'
@@ -15,14 +16,15 @@ import { PlayWord } from './RunView'
  */
 export function WordRow(props: { readonly entry: CorpusEntry; readonly lang: string; readonly learn: boolean; readonly where?: ReactNode }) {
   const { entry } = props
+  const { corpus } = useClientSnapshot()
   const wordId = corpusWordId(entry.entryId)
   const [reporting, setReporting] = useState(false)
   return (
     <li>
       <PlayWord entry={entry} inList />
       <span className="word-text">
-        <span lang="en" className="word-head">
-          {entry.headword}
+        <span lang={corpus?.target ?? 'en'} className="word-head">
+          {headwordForm(corpus?.target ?? 'en', entry).lead}
         </span>
         <Translation entry={entry} lang={props.lang} />
       </span>

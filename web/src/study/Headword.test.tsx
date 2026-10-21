@@ -1,7 +1,11 @@
 import { cleanup, render, screen } from '@testing-library/react'
 import type { CorpusEntry } from '@wordado/core'
-import { afterEach, describe, expect, it } from 'vitest'
-import { Translation } from './Headword'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { I18nProvider } from '../i18n/i18n'
+import { Headword, Translation } from './Headword'
+
+const snapshot = vi.hoisted(() => ({ target: 'en' }))
+vi.mock('@wordado/client-data', () => ({ useClientSnapshot: () => ({ corpus: { target: snapshot.target } }) }))
 
 afterEach(cleanup)
 
@@ -30,5 +34,46 @@ describe('Translation', () => {
     render(<Translation entry={apple} lang="bg" stacked />)
     expect(document.querySelector('.translation')?.textContent).toBe('ябълка')
     expect(document.querySelector('.sense')).toBeNull()
+  })
+})
+
+describe('Headword', () => {
+  const storage = { getItem: () => 'en', setItem: () => undefined }
+  const haus = { headword: 'Haus', pos: 'noun', ipa: '/haʊs/', grammar: { gender: 'n', plural: 'Häuser' } } as unknown as CorpusEntry
+  const apple = { headword: 'apple', pos: 'noun', ipa: '/ˈæp.əl/', grammar: null } as unknown as CorpusEntry
+
+  it('shows a German noun with its article and plural', () => {
+    snapshot.target = 'de'
+    render(
+      <I18nProvider storage={storage}>
+        <Headword entry={haus} />
+      </I18nProvider>,
+    )
+    expect(document.querySelector('.hw-word')?.textContent).toBe('das Haus')
+    expect(document.querySelector('.hw-after')?.textContent).toBe('die Häuser')
+  })
+
+  it('marks a German verb that takes sein after the word', () => {
+    snapshot.target = 'de'
+    const gehen = { headword: 'gehen', pos: 'verb', ipa: '/ˈɡeːən/', grammar: { separable: false, irregular: true, auxiliary: 'sein' } } as unknown as CorpusEntry
+    render(
+      <I18nProvider storage={storage}>
+        <Headword entry={gehen} />
+      </I18nProvider>,
+    )
+    expect(document.querySelector('.hw-word')?.textContent).toBe('gehen')
+    expect(document.querySelector('.hw-after')?.textContent).toBe('(+ sein)')
+    expect(document.querySelector('.hw-after')?.getAttribute('lang')).toBe('de')
+  })
+
+  it('shows an English entry exactly as before', () => {
+    snapshot.target = 'en'
+    render(
+      <I18nProvider storage={storage}>
+        <Headword entry={apple} />
+      </I18nProvider>,
+    )
+    expect(document.querySelector('.hw-word')?.textContent).toBe('apple')
+    expect(document.querySelector('.hw-after')).toBeNull()
   })
 })

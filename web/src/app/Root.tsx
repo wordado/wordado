@@ -69,7 +69,7 @@ function Opened(props: { readonly boot: Boot; readonly state: Extract<BootState,
 /** Renders the boot state: starting (with the pack it is fetching, if any), open in another tab, failed, or the app. */
 export function Root(props: {
   readonly boot: Boot
-  readonly services: Omit<AppServices, 'backend' | 'account'>
+  readonly services: Omit<AppServices, 'backend' | 'account' | 'startSetup'>
   /** Set while the opening app downloads a pack; a pack fetched behind an open app is never here. */
   readonly download?: Store<OpeningDownload | null>
   /** Where the device keeps that it asked a visitor for a level; the browser's own storage unless a test says otherwise. */
@@ -86,7 +86,7 @@ export function Root(props: {
     case 'ready':
       return (
         <ClientProvider client={state.client}>
-          <AppProvider value={{ ...props.services, backend: state.backend, account: state.account }}>
+          <AppProvider value={{ ...props.services, backend: state.backend, account: state.account, startSetup: () => props.boot.startSetup() }}>
             <Opened boot={props.boot} state={state} mark={mark} setupStep={setupStep} />
           </AppProvider>
         </ClientProvider>

@@ -160,6 +160,20 @@ describe('data export (spec §11)', () => {
   })
 
 
+  it('has the parked course documents, each course’s level, theme and native language (#313)', async () => {
+    const h = harness()
+    const s = await h.signIn()
+    const reply = await s.post(
+      '/v1/sync/push',
+      pushPage('dev-a', h.clock.now, [], { documents: [{ type: 'course', key: 'de', patch: { baseVersion: 0, fields: { l1: 'en', declaredLevel: 'A2', activeTheme: null } } }] }),
+    )
+    expect(reply.body.rejected).toEqual([])
+    const exported = (await s.get('/v1/export')).body
+    expect(exported.documents.filter((d: { type: string }) => d.type === 'course').map((d: { key: string; fields: unknown }) => [d.key, d.fields])).toEqual([
+      ['de', { l1: 'en', declaredLevel: 'A2', activeTheme: null }],
+    ])
+  })
+
   it('lists passkeys by creation date, with no key material', async () => {
     const h = harness()
     const s = await h.signIn()

@@ -1,4 +1,6 @@
-import { isSupportedL1, validateSettingsPatch } from './settings'
+import { isCourseL1, isSupportedL1, validateSettingsPatch } from './settings'
+import { isTarget } from './target'
+import { CEFR_LEVELS } from './types'
 import type { DocumentWrite } from './syncProtocol'
 import { ID } from './validation'
 import { isWordId } from './wordId'
@@ -13,6 +15,8 @@ export const DOCUMENT_TYPES = {
   wordAlias: 'word_alias',
   entitlement: 'entitlement',
   contentReport: 'content_report',
+  /** Another course's level, theme and L1 (spec §8.6), keyed by its target. */
+  course: 'course',
 } as const
 export type DocumentType = (typeof DOCUMENT_TYPES)[keyof typeof DOCUMENT_TYPES]
 
@@ -110,6 +114,16 @@ function checkFields(type: string, key: string, fields: Readonly<Record<string, 
         ...(isCount(createdAt) ? [] : ['createdAt must be a time']),
         ...(l1 === undefined || isSupportedL1(l1) ? [] : ['l1 must be a supported L1']),
         ...unknownFields(fields, ['wordId', 'field', 'note', 'suggestion', 'packVersion', 'createdAt', 'l1']),
+      ]
+    }
+    case DOCUMENT_TYPES.course: {
+      const { l1, declaredLevel, activeTheme } = fields
+      return [
+        ...(isTarget(key) ? [] : ['a course key must be a target language']),
+        ...(l1 === undefined || l1 === null || !isTarget(key) || isCourseL1(key, l1) ? [] : ['l1 must be a language the course is taught from']),
+        ...(declaredLevel === undefined || (CEFR_LEVELS as readonly unknown[]).includes(declaredLevel) ? [] : ['declaredLevel must be a level']),
+        ...(activeTheme === undefined || activeTheme === null || (typeof activeTheme === 'string' && activeTheme !== '') ? [] : ['activeTheme must be a theme ID or null']),
+        ...unknownFields(fields, ['l1', 'declaredLevel', 'activeTheme']),
       ]
     }
     default:

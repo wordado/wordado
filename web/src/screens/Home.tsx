@@ -3,7 +3,7 @@ import type { Mode } from '@wordado/core'
 import { Flame, Headphones, Layers, ListChecks, type LucideIcon } from 'lucide-react'
 import { useApp } from '../app/context'
 import { TrialInvite } from '../app/TrialInvite'
-import { useT } from '../i18n/i18n'
+import { languageInSentence, useT } from '../i18n/i18n'
 import { MODE_LABEL } from '../labels'
 import { Link } from '../router'
 import { useOnline } from '../useOnline'
@@ -14,9 +14,9 @@ const MODE_ICON: Readonly<Record<(typeof ONE_WAY)[number], LucideIcon>> = { flas
 
 /** Today (spec §8.3): the capped due figure first, the backlog second, then the day's motivation. */
 export function Home() {
-  const { t } = useT()
+  const { t, locale } = useT()
   const { audio } = useApp()
-  const { plan, progress, xp, settings, path } = useClientSnapshot()
+  const { plan, progress, xp, settings, path, course } = useClientSnapshot()
   useOnline() // re-renders on every `online`/`offline` event, so `canListen` below is re-evaluated
   if (!plan || !progress) return null
   const { reviews, fresh, nothing } = todayCounts(plan)
@@ -40,6 +40,9 @@ export function Home() {
           {!nothing && reviews > 0 && fresh > 0 && <p className="today-more">{t('home.newWords', { count: fresh })}</p>}
           {progress.backlogTotal > progress.dueToday && <p className="note">{t('home.backlog', { count: progress.backlogTotal })}</p>}
           {progress.newWordsPaused && <p className="note">{t('home.paused')}</p>}
+          {/* The settings name another course than the one installed (a switch synced while offline): the installed
+              course's words are studied until the watcher has installed it. */}
+          {settings.course !== course.target && <p className="note">{t('settings.coursePending', { language: languageInSentence(settings.course, locale) })}</p>}
         </div>
         <div className="home-actions">
           {nothing ? (

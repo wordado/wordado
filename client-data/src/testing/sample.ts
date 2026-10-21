@@ -119,3 +119,32 @@ export async function openTrialClient(unitLevels: readonly CefrLevel[], env: Tes
 export function trialCorpus(unitLevels: readonly CefrLevel[], probeLevels: readonly CefrLevel[] = unitLevels, options: OpenThemeOptions = {}): Corpus {
   return loadCorpus([trialPack(unitLevels, probeLevels, options)])
 }
+
+/**
+ * The sample re-cut as a German course for Bulgarian speakers (spec §5.5): the same words under the German target,
+ * with `de.` IDs so the two courses never share one. No German sample exists yet; this stands in for it.
+ */
+export function germanPack(pack: Pack = JSON.parse(readFileSync(join(SAMPLE_DIR, 'corpus-v0-bg.pack'), 'utf8')) as Pack): Pack {
+  const id = (s: string) => `de.${s}`
+  return {
+    ...pack,
+    pack_id: 'corpus-de-bg',
+    target: 'de',
+    entries: pack.entries.map((e) => ({ ...e, entry_id: id(e.entry_id), unit_id: id(e.unit_id) })),
+    units: pack.units.map((u) => ({ ...u, unit_id: id(u.unit_id), entry_ids: u.entry_ids.map(id) })),
+  }
+}
+
+/**
+ * The sample's manifest with the German Bulgarian course added beside the English packs, as the CDN serves both
+ * courses from one list, and a fetcher for all of them.
+ */
+export async function germanServing(env: TestEnv): Promise<{ manifest: PackManifest; fetch: PackFetcher; bytes: Uint8Array }> {
+  const bytes = new TextEncoder().encode(canonicalJson(germanPack()))
+  const descriptor: PackDescriptor = { ...sampleManifest.packs[0]!, pack_id: 'corpus-de-bg', target: 'de', url: 'corpus-v0-de-bg.pack', sha256: await env.sha256(bytes), bytes: bytes.byteLength }
+  return {
+    manifest: { ...sampleManifest, packs: [...sampleManifest.packs, descriptor] },
+    fetch: async (d) => (d.pack_id === 'corpus-de-bg' ? bytes : sampleFetcher(d)),
+    bytes,
+  }
+}

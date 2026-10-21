@@ -26,6 +26,17 @@ describe('Settings: the native language (plan 11)', () => {
     expect(screen.getByText('Deutsch')).toBeTruthy()
   })
 
+  it('never names the course’s own language: German installed under a German course not set up yet shows its first (#313)', async () => {
+    const ctx = await setup()
+    const client = await Client.open({ driver: nodeSqliteDriver(), env: ctx.env, l1: 'de' })
+    await client.installPacks(sampleManifest, sampleFetcher)
+    await client.startSession()
+    await client.switchCourse('de')
+    renderWith(<NativeLanguageSettings />, { ...ctx, client })
+    expect(screen.queryByText('Deutsch')).toBeNull()
+    expect(screen.getByText('Български')).toBeTruthy()
+  })
+
   it('"Change" links to the language page, with a descriptive accessible name (fix round 1)', async () => {
     const ctx = await setup()
     renderWith(<NativeLanguageSettings />, ctx)

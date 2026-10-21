@@ -85,3 +85,17 @@ describe('checkDocumentWrite', () => {
     expect(checkDocumentWrite(reportWrite({ l1: 'xx' })).ok).toBe(false)
   })
 })
+
+describe('course documents', () => {
+  it('accepts a parked course keyed by a target', () => {
+    expect(checkDocumentWrite(write('course', 'en', { l1: 'bg', declaredLevel: 'B1', activeTheme: 'food' }))).toEqual({ ok: true })
+  })
+  it('refuses a key that is not a target, an L1 the course does not offer, and unknown fields', () => {
+    expect(checkDocumentWrite(write('course', 'fr', { l1: 'bg' }))).toMatchObject({ ok: false, errors: ['a course key must be a target language'] })
+    expect(checkDocumentWrite(write('course', 'de', { l1: 'de' }))).toMatchObject({ ok: false, errors: ['l1 must be a language the course is taught from'] })
+    expect(checkDocumentWrite(write('course', 'en', { level: 'B1' }))).toMatchObject({ ok: false, errors: ['unknown field level'] })
+  })
+  it('accepts a report made in English as the L1', () => {
+    expect(checkDocumentWrite(write('content_report', 'r1', { wordId: 'c:de.haus-1', field: 'translation', note: '', packVersion: 1, createdAt: 1, l1: 'en' }))).toEqual({ ok: true })
+  })
+})

@@ -1,4 +1,5 @@
 import { act, cleanup, fireEvent, screen } from '@testing-library/react'
+import { germanServing } from '@wordado/client-data/src/testing/sample'
 import { corpusWordId, themeEntries } from '@wordado/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { answerNew, renderWith, setup } from '../test/fixtures'
@@ -17,6 +18,25 @@ describe('Matching', () => {
     renderWith(<Matching />, ctx)
     expect(screen.getByText('Learn a few words first: matching needs five.')).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Back to practice' }).getAttribute('href')).toBe('/practice')
+  })
+
+  it('deals again from the new course when the course changes mid-board (spec §5.1)', async () => {
+    const ctx = await setup()
+    const german = await germanServing(ctx.env)
+    await answerNew(ctx.client, ctx.env, 5)
+    renderWith(<Matching />, ctx)
+    expect(english()).toHaveLength(5)
+    expect(document.querySelector('[data-side="left"] [lang="en"]')).not.toBeNull()
+
+    await act(async () => {
+      await ctx.client.switchCourse('de')
+      await ctx.client.updateSettings({ l1: 'bg' })
+      expect(await ctx.client.changeCourse({ target: 'de', l1: 'bg' }, german.manifest, german.fetch)).toEqual({ ok: true })
+    })
+
+    // No German word is started yet: the old English board is gone, and the new course has none to deal.
+    expect(screen.getByText('Learn a few words first: matching needs five.')).toBeTruthy()
+    expect(english()).toHaveLength(0)
   })
 
   it('needs five words of the unit that are not set aside, whatever is started elsewhere', async () => {

@@ -20,8 +20,8 @@ function controlledPacks() {
   const packs = fakePacks()
   const calls: L1[] = []
   const pending: ((outcome: ChangeL1Outcome) => void)[] = []
-  vi.spyOn(packs, 'install').mockImplementation((_client, _account, l1) => {
-    calls.push(l1)
+  vi.spyOn(packs, 'install').mockImplementation((_client, _account, course) => {
+    calls.push(course.l1)
     return new Promise<ChangeL1Outcome>((resolve) => pending.push(resolve))
   })
   const reset = vi.spyOn(packs, 'reset')
@@ -32,9 +32,8 @@ function controlledPacks() {
     /** Settles the oldest pending install, as the real switcher's store would. */
     async settle(outcome: ChangeL1Outcome) {
       const index = calls.length - pending.length
-      const l1 = calls[index]!
-      const client = vi.mocked(packs.install).mock.calls[index]![0]
-      packs.store.set(outcome.ok ? { phase: 'idle' } : { phase: 'failed', client, l1 })
+      const [client, , course] = vi.mocked(packs.install).mock.calls[index]!
+      packs.store.set(outcome.ok ? { phase: 'idle' } : { phase: 'failed', client, course })
       await act(async () => pending.shift()!(outcome))
     },
   }
@@ -64,6 +63,29 @@ describe('LanguageStep, setup mode (plan 11)', () => {
     expect(choice('Español').checked).toBe(true)
     expect(choice('Български').checked).toBe(false)
     expect(choice('Deutsch').checked).toBe(false)
+  })
+
+  it('lists the languages the course is taught from', async () => {
+    const ctx = await setup()
+    const values = () => screen.getAllByRole('radio').map((r) => (r as HTMLInputElement).value)
+    const { unmount } = renderWith(<LanguageStep mode="setup" onDone={() => undefined} />, ctx)
+    expect(values()).toEqual(['bg', 'de', 'es'])
+    unmount()
+    await ctx.client.switchCourse('de')
+    renderWith(<LanguageStep mode="setup" onDone={() => undefined} />, { ...ctx, locale: 'de' })
+    // Never the course's own language: a German interface preselects the first the course offers.
+    expect(values()).toEqual(['bg', 'es', 'en'])
+    expect(choice('Български').checked).toBe(true)
+  })
+
+  it('installs the chosen language for the course chosen', async () => {
+    const ctx = await setup()
+    await ctx.client.switchCourse('de')
+    const fake = controlledPacks()
+    renderWith(<LanguageStep mode="setup" onDone={() => undefined} />, { ...ctx, packs: fake.packs })
+    fireEvent.click(choice('English'))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue' })))
+    expect(vi.mocked(fake.packs.install).mock.calls[0]![2]).toEqual({ target: 'de', l1: 'en' })
   })
 
   it('gives its heading focus when it appears', async () => {
@@ -128,12 +150,12 @@ describe('LanguageStep, setup mode (plan 11)', () => {
     expect(screen.queryByRole('progressbar')).toBeNull()
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue' })))
     // Before the manifest arrives the size is unknown: the status says what is happening, and the bar claims no share.
-    act(() => fake.packs.store.set({ phase: 'downloading', client: ctx.client, l1: 'bg', received: 0, total: 0 }))
+    act(() => fake.packs.store.set({ phase: 'downloading', client: ctx.client, course: { target: 'en', l1: 'bg' }, received: 0, total: 0 }))
     expect(screen.getByRole('status').textContent).toContain('Getting your words ready')
     const waiting = screen.getByRole('progressbar', { name: 'Getting your words ready' })
     expect(waiting.hasAttribute('aria-valuenow')).toBe(false)
     expect(screen.queryByText(/%/)).toBeNull()
-    act(() => fake.packs.store.set({ phase: 'downloading', client: ctx.client, l1: 'bg', received: 50, total: 100 }))
+    act(() => fake.packs.store.set({ phase: 'downloading', client: ctx.client, course: { target: 'en', l1: 'bg' }, received: 50, total: 100 }))
     const bar = screen.getByRole('progressbar', { name: 'Getting your words ready' })
     expect(bar.getAttribute('aria-valuenow')).toBe('50')
     expect(bar.getAttribute('aria-valuemax')).toBe('100')
@@ -146,11 +168,11 @@ describe('LanguageStep, setup mode (plan 11)', () => {
     const ctx = await setup()
     const fake = controlledPacks()
     renderWith(<LanguageStep mode="setup" onDone={() => undefined} />, { ...ctx, packs: fake.packs })
-    // `watchL1` installing in the background, while this step is idle.
-    act(() => fake.packs.store.set({ phase: 'downloading', client: ctx.client, l1: 'bg', received: 50, total: 100 }))
+    // `watchCourse` installing in the background, while this step is idle.
+    act(() => fake.packs.store.set({ phase: 'downloading', client: ctx.client, course: { target: 'en', l1: 'bg' }, received: 50, total: 100 }))
     expect(screen.queryByRole('progressbar')).toBeNull()
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue' })))
-    act(() => fake.packs.store.set({ phase: 'downloading', client: ctx.client, l1: 'de', received: 50, total: 100 }))
+    act(() => fake.packs.store.set({ phase: 'downloading', client: ctx.client, course: { target: 'en', l1: 'de' }, received: 50, total: 100 }))
     expect(screen.queryByRole('progressbar')).toBeNull()
   })
 
@@ -219,7 +241,7 @@ describe('LanguageStep, setup mode (plan 11)', () => {
     const fake = controlledPacks()
     renderWith(<LanguageStep mode="setup" onDone={() => undefined} />, { ...ctx, packs: fake.packs })
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue' })))
-    act(() => fake.packs.store.set({ phase: 'downloading', client: ctx.client, l1: 'de', received: 50, total: 100 }))
+    act(() => fake.packs.store.set({ phase: 'downloading', client: ctx.client, course: { target: 'en', l1: 'de' }, received: 50, total: 100 }))
     expect(screen.queryByRole('progressbar')).toBeNull()
   })
 
@@ -229,9 +251,9 @@ describe('LanguageStep, setup mode (plan 11)', () => {
     const fake = controlledPacks()
     renderWith(<LanguageStep mode="setup" onDone={() => undefined} />, { ...ctx, packs: fake.packs })
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue' })))
-    act(() => fake.packs.store.set({ phase: 'downloading', client: other.client, l1: 'bg', received: 50, total: 100 }))
+    act(() => fake.packs.store.set({ phase: 'downloading', client: other.client, course: { target: 'en', l1: 'bg' }, received: 50, total: 100 }))
     expect(screen.queryByRole('progressbar')).toBeNull()
-    act(() => fake.packs.store.set({ phase: 'downloading', client: ctx.client, l1: 'bg', received: 50, total: 100 }))
+    act(() => fake.packs.store.set({ phase: 'downloading', client: ctx.client, course: { target: 'en', l1: 'bg' }, received: 50, total: 100 }))
     expect(screen.getByRole('progressbar')).toBeTruthy()
   })
 

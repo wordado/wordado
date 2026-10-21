@@ -1,5 +1,5 @@
 import { useClient, useClientSnapshot } from '@wordado/client-data'
-import { isSupportedL1, SUPPORTED_L1S, type L1 } from '@wordado/core'
+import { COURSE_L1S, isCourseL1, isSupportedL1, type L1 } from '@wordado/core'
 import { useEffect, useRef, useState } from 'react'
 import { useApp } from '../app/context'
 import { ProgressBar } from '../app/ProgressBar'
@@ -18,18 +18,29 @@ type Attempt = { readonly phase: 'idle' } | { readonly phase: 'installing'; read
  * installed. A failed install says so and offers Try again, and the setup's link to Sign in stays, so it is never a
  * dead end (Review Focus 4). `ownBack` is false when the page around it already has its own Back link.
  */
-export function LanguageStep(props: { readonly mode: 'setup' | 'change'; readonly ownBack?: boolean; onDone(): void }) {
+export function LanguageStep(props: {
+  readonly mode: 'setup' | 'change'
+  readonly ownBack?: boolean
+  onDone(): void
+  /**
+   * The setup's way back (spec §8.6): to the course question, or out of a new course's setup to the course before it.
+   * `go` may fail (the switch back is not saved): the step says why and stays.
+   */
+  readonly back?: { readonly label: string; go(): void | Promise<void> }
+}) {
   const { t, locale, setLocale } = useT()
   const client = useClient()
   const { account, packs } = useApp()
   const { settings, l1: installedText } = useClientSnapshot()
   const download = useStore(packs.store)
   const heading = useRef<HTMLHeadingElement>(null)
+  /** The native languages the course is taught from (spec §8.6): never the course's own language. */
+  const offered = COURSE_L1S[settings.course]
   const installed: L1 | null = isSupportedL1(installedText) ? installedText : null
   // In `change` mode the current choice is the setting, even while it is pending (offline): choosing the installed
   // language again then cancels that change.
-  const current: L1 = settings.l1 ?? installed ?? 'bg'
-  const [chosen, setChosen] = useState<L1>(() => (props.mode === 'change' ? current : (settings.l1 ?? (isSupportedL1(locale) ? locale : 'bg'))))
+  const current: L1 = settings.l1 ?? (installed !== null && offered.includes(installed) ? installed : offered[0]!)
+  const [chosen, setChosen] = useState<L1>(() => (props.mode === 'change' ? current : (settings.l1 ?? (isCourseL1(settings.course, locale) ? locale : offered[0]!))))
   const [attempt, setAttempt] = useState<Attempt>({ phase: 'idle' })
   const [saveError, setSaveError] = useState<string | null>(null)
   // Intl's own form of the name, as it sits mid-sentence: "German", "Deutsch", "немски".
@@ -51,7 +62,7 @@ export function LanguageStep(props: { readonly mode: 'setup' | 'change'; readonl
   /** Installs `l1`; the caller has set `going`. */
   const install = async (l1: L1) => {
     setAttempt({ phase: 'installing', l1 })
-    const outcome = await packs.install(client, account, l1)
+    const outcome = await packs.install(client, account, { target: settings.course, l1 })
     going.current = false
     if (!mounted.current) return
     if (outcome.ok) {
@@ -83,23 +94,36 @@ export function LanguageStep(props: { readonly mode: 'setup' | 'change'; readonl
     }
     // An interface that spoke the old native language follows the new one (plan 10).
     if (props.mode === 'change' && locale === installed) setLocale(l1)
-    // In `change` mode `watchL1` asks for the same install; the switcher joins the two.
+    // In `change` mode `watchCourse` asks for the same install; the switcher joins the two.
     await install(l1)
   }
 
   const retry = async (l1: L1) => {
     if (going.current) return
     going.current = true
-    // Only a failure is cleared: a download that is running (`watchL1`'s, say) is left alone.
+    // Only a failure is cleared: a download that is running (`watchCourse`'s, say) is left alone.
     const state = packs.store.get()
     if (state.phase === 'failed' && state.client === client) packs.reset()
     await install(l1)
   }
 
+  const goBack = async (back: NonNullable<typeof props.back>) => {
+    if (going.current) return
+    going.current = true
+    setSaveError(null)
+    try {
+      await back.go()
+    } catch (err) {
+      if (mounted.current) setSaveError(t('settings.saveFailed', { message: t(errorMessageKey(err)) }))
+    } finally {
+      going.current = false
+    }
+  }
+
   const busy = attempt.phase === 'installing'
   const failed = attempt.phase === 'failed' ? attempt.l1 : null
   // Until the pack's size is known (its manifest is still being fetched) the bar only says that something is happening.
-  const progress = busy && download.phase === 'downloading' && download.client === client && download.l1 === attempt.l1 ? download : null
+  const progress = busy && download.phase === 'downloading' && download.client === client && download.course.target === settings.course && download.course.l1 === attempt.l1 ? download : null
   const percent = progress && progress.total > 0
     ? new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 0 }).format(Math.min(1, progress.received / progress.total))
     : null
@@ -114,7 +138,7 @@ export function LanguageStep(props: { readonly mode: 'setup' | 'change'; readonl
       <fieldset className="choices" disabled={busy}>
         <legend className="visually-hidden">{props.mode === 'setup' ? t('setup.language.title') : t('settings.nativeLanguage')}</legend>
         <p className="note">{props.mode === 'setup' ? t('setup.language.hint') : t('settings.nativeLanguageHint')}</p>
-        {SUPPORTED_L1S.map((l1) => (
+        {offered.map((l1) => (
           <label key={l1} lang={l1}>
             <input
               type="radio"
@@ -170,6 +194,11 @@ export function LanguageStep(props: { readonly mode: 'setup' | 'change'; readonl
               {t('settings.nativeLanguageChange')}
             </button>
           )
+        )}
+        {props.mode === 'setup' && props.back && (
+          <button type="button" className="button" disabled={busy} onClick={() => void goBack(props.back!)}>
+            {props.back.label}
+          </button>
         )}
         {props.mode === 'setup' ? (
           // A signed-in account has nothing to sign in to: the link would be a dead end.

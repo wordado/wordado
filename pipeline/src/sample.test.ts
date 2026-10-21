@@ -10,6 +10,7 @@ import {
   seededRng,
   themeEntries,
   validatePack,
+  type Pack,
   type WordId,
 } from '@wordado/core'
 import { describe, expect, it } from 'vitest'
@@ -136,6 +137,91 @@ describe('the A1 Spanish sample pack (plan 12)', () => {
     }
     expect(buildMatchingBoard(esPool, 5, seededRng(3))).toHaveLength(5)
   })
+})
+
+const DE_DIR = join(DIR, 'de')
+
+describe('the A1 German course sample (#313)', () => {
+  // Built exactly as the CLI's `build` builds a folder; the German course has no audio yet, so no `audio/` folder.
+  const { sources: deSources, clips: deClips } = readSourceDir(DE_DIR)
+  const deBuilt = deSources.map((source) => buildPack(source, deClips))
+  const readPack = (file: string): Pack => {
+    const result = validatePack(JSON.parse(readFileSync(join(DE_DIR, file), 'utf8')))
+    if (result.status !== 'ok') throw new Error(`${file} does not validate`)
+    return result.pack
+  }
+
+  it('builds one pack per L1, Bulgarian and English, with no clips', () => {
+    expect(deClips).toEqual([])
+    expect(deBuilt.map((o) => [o.pack.pack_id, o.pack.l1, o.pack.target, o.packFile])).toEqual([
+      ['corpus-de-bg', 'bg', 'de', 'corpus-v0-bg.pack'],
+      ['corpus-de-en', 'en', 'de', 'corpus-v0-en.pack'],
+    ])
+  })
+
+  for (const l1 of ['bg', 'en']) {
+    it(`is committed byte for byte as the build produces it (${l1})`, () => {
+      const out = deBuilt.find((o) => o.pack.l1 === l1)!
+      expect(readFileSync(join(DE_DIR, out.packFile)).equals(Buffer.from(out.packBytes))).toBe(true)
+      expect(out.pack.audio).toEqual([])
+      expect(out.manifest.packs[0]?.target).toBe('de')
+    })
+  }
+
+  it('has a manifest listing both packs as the build writes it', () => {
+    const manifest = JSON.parse(readFileSync(join(DE_DIR, 'manifest.json'), 'utf8')) as unknown
+    expect(manifest).toEqual({
+      schema_version: deBuilt[0]!.manifest.schema_version,
+      corpus_version: 0,
+      packs: deBuilt.flatMap((o) => o.manifest.packs),
+    })
+  })
+
+  it('is a German course: prefixed IDs, grammar on every noun and verb, two units of 20', () => {
+    const pack = readPack('corpus-v0-bg.pack')
+    expect(pack.target).toBe('de')
+    expect(pack.pack_id).toBe('corpus-de-bg')
+    expect(pack.entries).toHaveLength(40)
+    expect(pack.entries.every((e) => e.entry_id.startsWith('de.'))).toBe(true)
+    expect(pack.units.map((u) => [u.unit_id, u.entry_ids.length])).toEqual([['de.a1-01', 20], ['de.a1-02', 20]])
+    expect(pack.entries.filter((e) => e.pos === 'noun' || e.pos === 'verb').every((e) => e.grammar !== undefined)).toBe(true)
+    expect(pack.entries.filter((e) => e.pos === 'noun')).toHaveLength(24)
+    expect(pack.entries.filter((e) => e.pos === 'verb')).toHaveLength(10)
+    expect(pack.themes.map((t) => t.theme_id)).toEqual(bgOut.pack.themes.map((t) => t.theme_id))
+    expect(pack.entries.find((e) => e.entry_id === 'de.maedchen-1')?.grammar).toEqual({ gender: 'n', plural: 'Mädchen' })
+    expect(pack.entries.find((e) => e.entry_id === 'de.aufstehen-1')?.grammar).toEqual({ separable: true, irregular: true, auxiliary: 'sein' })
+  })
+
+  it('has the same entries, units and grammar in both packs, and only the translations differ', () => {
+    const [bg, en] = [readPack('corpus-v0-bg.pack'), readPack('corpus-v0-en.pack')]
+    const strip = (p: Pack) => p.entries.map((e) => ({ ...e, translation: '', alternates: [] }))
+    expect(strip(en)).toEqual(strip(bg))
+    expect(en.units.map((u) => [u.unit_id, u.entry_ids, u.title.en])).toEqual(bg.units.map((u) => [u.unit_id, u.entry_ids, u.title.en]))
+    expect(en.units.every((u) => u.title.l1 === u.title.en)).toBe(true)
+  })
+
+  for (const l1 of ['bg', 'en']) {
+    it(`has no two entries sharing a translation (${l1})`, () => {
+      const norm = (s: string) => s.trim().normalize('NFC').toLowerCase()
+      const seen = new Map<string, string>()
+      for (const e of loadCorpus([readPack(`corpus-v0-${l1}.pack`)]).entries.values()) {
+        for (const t of e.translations.map(norm)) {
+          expect(seen.get(t), `${t} in ${e.entryId} and ${seen.get(t)}`).toBeUndefined()
+          seen.set(t, e.entryId)
+        }
+      }
+    })
+
+    it(`gives every entry three distractors and fills a matching board (${l1})`, () => {
+      const dePool = [...loadCorpus([readPack(`corpus-v0-${l1}.pack`)]).entries.values()]
+      const encountered = new Set<WordId>()
+      for (const e of dePool) {
+        expect(pickDistractors(e, { pool: dePool, encountered, listening: false }, 3, seededRng(1))).toHaveLength(3)
+        expect(pickDistractors(e, { pool: dePool, encountered, listening: true }, 3, seededRng(2))).toHaveLength(3)
+      }
+      expect(buildMatchingBoard(dePool, 5, seededRng(3))).toHaveLength(5)
+    })
+  }
 })
 
 describe('the sample manifest (plan 10)', () => {

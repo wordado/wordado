@@ -1,4 +1,4 @@
-import { StudyRun, useClient, type RunKind } from '@wordado/client-data'
+import { StudyRun, useClient, useClientSnapshot, type RunKind } from '@wordado/client-data'
 import type { Mode } from '@wordado/core'
 import { useEffect, useState } from 'react'
 import { useApp } from '../app/context'
@@ -21,6 +21,10 @@ export function Study(props: { readonly kind: RunKind; readonly mode: Mode | nul
   // The scope by its parts: the run restarts when the learner moves to another unit or theme, not on every answer.
   const scopeKind = scope?.scope.kind
   const scopeId = scope?.scope.id
+  // The installed course by its parts (a new object on every snapshot): a course pack activated mid-run (another
+  // device's switch, installed by the watcher) ends this run and starts a fresh one in the new course (spec §5.1).
+  const { course } = useClientSnapshot()
+  const courseKey = `${course.target}:${course.l1}`
 
   useEffect(() => {
     let live = true
@@ -43,7 +47,8 @@ export function Study(props: { readonly kind: RunKind; readonly mode: Mode | nul
     return () => {
       live = false
     }
-  }, [client, env, audio, kind, mode, scopeKind, scopeId])
+    // `courseKey` is a dependency on purpose: the run starts again in the new course.
+  }, [client, env, audio, kind, mode, scopeKind, scopeId, courseKey])
 
   // Focus mode hides the navigation, so a run that cannot start offers the way back itself.
   if (error !== null)
@@ -63,5 +68,5 @@ export function Study(props: { readonly kind: RunKind; readonly mode: Mode | nul
         <ProgressBar label={t('study.loading')} />
       </section>
     )
-  return <RunView key={`${kind}:${mode ?? 'mixed'}:${scopeKind ?? ''}:${scopeId ?? ''}`} run={run} kind={kind} scope={scope} />
+  return <RunView key={`${courseKey}:${kind}:${mode ?? 'mixed'}:${scopeKind ?? ''}:${scopeId ?? ''}`} run={run} kind={kind} scope={scope} />
 }

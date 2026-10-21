@@ -22,3 +22,6 @@ content/
 
 # Brainstorming companion mockups
 .superpowers/
+
+# The e2e run's two-course build (web/playwright.config.ts).
+dist-courses/

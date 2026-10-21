@@ -1,9 +1,9 @@
 import { act, cleanup, fireEvent, screen } from '@testing-library/react'
 import { ITEM_SETTLE_MS, type PlacementSource } from '@wordado/client-data'
-import { leveledCorpus } from '@wordado/client-data/src/testing/sample'
+import { germanServing, leveledCorpus } from '@wordado/client-data/src/testing/sample'
 import type { CefrLevel, Corpus } from '@wordado/core'
 import { afterEach, describe, expect, it } from 'vitest'
-import { renderWith, setup } from '../test/fixtures'
+import { renderWith, setup, setupTrial } from '../test/fixtures'
 import { Placement } from './Placement'
 
 afterEach(cleanup)
@@ -48,7 +48,7 @@ describe('Placement (spec §7.2)', () => {
     expect(document.querySelector('.study-bar')?.textContent).toContain('0 words answered')
     // The word in the learner's language, and English words to choose from (owner's decision, 2026-10-14).
     expect(document.querySelector('.card .prompt-text')?.textContent).not.toBe('')
-    expect(document.querySelector('.card .instruction')?.textContent).toBe('Choose the English word')
+    expect(document.querySelector('.card .instruction')?.textContent).toBe('Choose the word in English')
     expect(document.querySelector('.study-actions .option-text')?.getAttribute('lang')).toBe('en')
     expect(document.querySelectorAll('.study-actions .option')).toHaveLength(4)
     expect(screen.getByRole('button', { name: 'I don’t know' }).classList.contains('dont-know')).toBe(true)
@@ -102,5 +102,37 @@ describe('Placement (spec §7.2)', () => {
     }
     const heading = screen.getByRole('heading', { level: 1, name: /^Your level: / })
     expect(document.activeElement).toBe(heading)
+  })
+
+  it('shows a German option with its article, as a study run’s choices do', async () => {
+    const ctx = await setup()
+    const english = leveledCorpus(ctx.client.snapshot.corpus!, ['A1', 'A2', 'B1'])
+    const entries = new Map([...english.entries].map(([id, e]) => [id, { ...e, pos: 'noun', grammar: { gender: 'n', plural: 'Dinge' } }]))
+    const corpus = { ...english, target: 'de', entries } as Corpus
+    renderWith(<Placement source={{ corpus, setLevel: async () => {} }} />, ctx)
+    const options = [...document.querySelectorAll('.study-actions .option-text')]
+    expect(options).toHaveLength(4)
+    for (const option of options) {
+      expect(option.getAttribute('lang')).toBe('de')
+      expect(option.textContent).toMatch(/^das \S/)
+      expect(option.textContent).not.toContain('Dinge')
+    }
+  })
+
+  it('starts again on the new course’s words when the course changes mid-test (spec §5.1)', async () => {
+    const ctx = await setupTrial()
+    const german = await germanServing(ctx.env)
+    renderWith(<Placement />, ctx)
+    expect(document.querySelector('.study-actions .option-text')?.getAttribute('lang')).toBe('en')
+
+    await act(async () => {
+      await ctx.client.switchCourse('de')
+      await ctx.client.updateSettings({ l1: 'bg' })
+      expect(await ctx.client.changeCourse({ target: 'de', l1: 'bg' }, german.manifest, german.fetch)).toEqual({ ok: true })
+    })
+
+    // The German sample has one level only: the test, started again on it, is not offered.
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('The placement test isn’t available yet')
+    expect(document.querySelector('.study-actions .option-text')).toBeNull()
   })
 })

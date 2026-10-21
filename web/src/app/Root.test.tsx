@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { nodeSqliteDriver } from '@wordado/client-data/src/drivers/nodeSqlite'
 import { packServing, sampleFetcher, sampleManifest, trialPack } from '@wordado/client-data/src/testing/sample'
 import { testEnv } from '@wordado/client-data/src/testing/testEnv'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { I18nProvider } from '../i18n/i18n'
 import { createStore } from '@wordado/client-data'
 import { fakeAccounts, fakeAudio, fakeCredits, fakeFixNotices, fakeLegalNotice, fakeLifecycle, fakePacks, fakeReminders } from '../test/fixtures'
@@ -16,8 +16,20 @@ import type { LifecyclePort } from './lifecycle'
 import { PackSwitcher } from './packSwitch'
 import { Root, type OpeningDownload } from './Root'
 
+/** The courses the build offers: English alone unless a test says otherwise (spec §5.5). */
+const build = vi.hoisted(() => ({ offered: ['en'] as readonly ('en' | 'de')[] }))
+vi.mock('../content/packs', async (original) => ({
+  ...(await original<typeof import('../content/packs')>()),
+  get OFFERED_TARGETS() {
+    return build.offered
+  },
+}))
+
 beforeEach(() => window.history.replaceState(null, '', '/'))
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  build.offered = ['en']
+})
 
 async function renderRoot(
   options: { free?: boolean; backend?: Backend; fresh?: boolean; packs?: PackSwitcher; accounts?: AccountActions; lifecycle?: LifecyclePort; /** The content host serves a trial pack, one unit per level. */ trial?: boolean; /** Where the device keeps that it asked for a level. */ storage?: KeyValue } = {},
@@ -156,6 +168,38 @@ describe('Root', () => {
     expect(window.location.pathname).toBe('/settings/languages')
   })
 
+  it('switches course on its own Settings page, and a new course opens its setup at the language (spec §8.6)', async () => {
+    build.offered = ['en', 'de']
+    window.history.replaceState(null, '', '/settings/course')
+    await renderRoot({ packs: samplePacks() })
+    expect(document.querySelector('.settings.has-section')).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 2, name: 'Course' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Languages' }).getAttribute('href')).toBe('/settings/languages')
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Switch to German' })))
+    expect(screen.getByRole('heading', { level: 1, name: 'Set up Wordado' })).toBeTruthy()
+    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 2, name: 'Which language do you speak?' }))
+    expect(screen.queryByRole('heading', { name: 'What do you want to learn?' })).toBeNull()
+    expect(screen.getAllByRole('radio').filter((r) => (r as HTMLInputElement).name === 'native-language').map((r) => (r as HTMLInputElement).value)).toEqual(['bg', 'es', 'en'])
+  })
+
+  it('leaves a new course’s setup by Back, to the previous course on today, with nothing installed (spec §8.6)', async () => {
+    build.offered = ['en', 'de']
+    window.history.replaceState(null, '', '/settings/course')
+    const packs = samplePacks()
+    const install = vi.spyOn(packs, 'install')
+    const boot = await renderRoot({ packs })
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Switch to German' })))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Back to English' })))
+    expect(screen.queryByRole('heading', { name: 'Set up Wordado' })).toBeNull()
+    expect(window.location.pathname).toBe('/')
+    expect(boot.store.get()).toMatchObject({ status: 'ready', setup: false })
+    const state = boot.store.get()
+    if (state.status !== 'ready') throw new Error('not ready')
+    expect(state.client.snapshot.settings).toMatchObject({ course: 'en', l1: 'bg' })
+    expect(state.client.snapshot.corpus?.target).toBe('en')
+    expect(install).not.toHaveBeenCalled()
+  })
+
   it('hides the masthead, navigation and banners while studying, and brings them back after', async () => {
     await renderRoot()
     expect(screen.getByRole('navigation', { name: 'Main' })).toBeTruthy()
@@ -249,7 +293,7 @@ describe('Root', () => {
     const boot = await renderRoot({ fresh: true })
     const state = boot.store.get()
     if (state.status !== 'ready') throw new Error('not ready')
-    await act(async () => void (await state.client.changeL1('bg', sampleManifest, sampleFetcher)))
+    await act(async () => void (await state.client.changeCourse({ target: 'en', l1: 'bg' }, sampleManifest, sampleFetcher)))
     act(() => boot.finishSetup())
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('10 new words')
   })
@@ -342,7 +386,7 @@ describe('the level, asked once of a visitor whose device got the trial after it
     await renderRoot({ trial: true, fresh: true, storage })
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue' })))
     // The setup's own level step.
-    expect(screen.getByRole('heading', { level: 2, name: 'Your English level' })).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 2, name: 'Your level in English' })).toBeTruthy()
     expect(storage.getItem('wordado.trialLevelAsked')).toBeNull()
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Start studying' })))
     expect(storage.getItem('wordado.trialLevelAsked')).toBe('1')
@@ -355,7 +399,7 @@ describe('the level, asked once of a visitor whose device got the trial after it
     const storage = memoryStorage()
     await renderRoot({ trial: true, fresh: true, storage })
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue' })))
-    expect(screen.getByRole('heading', { level: 2, name: 'Your English level' })).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 2, name: 'Your level in English' })).toBeTruthy()
     await act(async () => fireEvent.click(screen.getByRole('radio', { name: /^B1/ })))
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue' })))
     expect(screen.getByRole('heading', { level: 2, name: 'A daily goal' })).toBeTruthy()
@@ -386,7 +430,7 @@ describe('the level, asked once of a visitor whose device got the trial after it
     await renderRoot({ trial: true, storage })
     expect(asking()).toBeNull()
     expect(screen.getByText('Step 2 of 3')).toBeTruthy()
-    expect(screen.getByRole('heading', { level: 2, name: 'Your English level' })).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 2, name: 'Your level in English' })).toBeTruthy()
   })
 
   it('leaves the mark unset when a setup on the sample finishes: it had no level to ask about, so a trial pack that comes later still asks', async () => {

@@ -12,13 +12,14 @@ import { Practice } from '../screens/Practice'
 import { Progress } from '../screens/Progress'
 import { Search } from '../screens/Search'
 import { Settings } from '../screens/Settings'
+import { CourseSettings } from '../settings/CourseSettings'
 import { SignIn } from '../screens/SignIn'
 import { Study } from '../screens/Study'
 import { ThemeWords } from '../screens/Theme'
 import { Themes } from '../screens/Themes'
 import { LanguageStep } from '../setup/LanguageStep'
 import { hasLevels, LevelAsk } from '../setup/LevelAsk'
-import { Setup, type StepName } from '../setup/Setup'
+import { Setup } from '../setup/Setup'
 import { AccountMenu } from './AccountMenu'
 import { useInterfaceLocales } from './interfaceLanguage'
 import { Banners, NoticeLine } from './Banners'
@@ -73,6 +74,9 @@ function Screen(props: { readonly route: Route }) {
           page={{ section: 'languages', content: <LanguageStep mode="change" ownBack={false} onDone={() => navigate({ name: 'settings', section: 'languages' })} /> }}
         />
       )
+    case 'course':
+      // Switching course (spec §8.6): a sub-page of Settings' Languages section, as the native language's is.
+      return <Settings section={null} page={{ section: 'languages', content: <CourseSettings /> }} />
     default:
       return <Home />
   }
@@ -115,7 +119,7 @@ export function App(props: {
   onFinishSetup(): void
   /** The step a reload left a visitor's setup on, and where the setup tells each step it shows (#234). */
   readonly resumeSetupAt?: string | null
-  onSetupStep?(step: StepName): void
+  onSetupStep?(mark: string): void
   /** Nobody asked for a level yet (a demo carried into this account, or a visitor's device that got the trial pack): Today gives way to that question once. */
   readonly askLevel?: boolean
   /** Why it is asked, when not for an account. */

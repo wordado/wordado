@@ -2,23 +2,24 @@ import { placementAvailable, useClient, useClientSnapshot } from '@wordado/clien
 import type { CefrLevel } from '@wordado/core'
 import { useState } from 'react'
 import { errorMessageKey } from '../errors'
-import { useT, type MessageKey } from '../i18n/i18n'
+import { languageInSentence, useT, type MessageKey } from '../i18n/i18n'
 import { offeredLevels } from '../settings/StudySettings'
 import { StepActions, useStepHeading, type StepProps } from './step'
 
 /**
- * The learner's English level (plan 11), in Settings' segmented level control: a radio per level the installed words
+ * The learner's level in the course's language (plan 11), in Settings' segmented level control: a radio per level the installed words
  * come in, the declared level (A1 for a new learner) preselected. Choosing one saves it at once, as Settings does;
  * Continue and Skip move on either way. Under the choice, the placement test (spec §7.2) for who is not sure:
  * `onTest` opens it inside the setup, and `placed` is the level it gave when the learner took its result. It is
  * offered only where it can run (enough words of the first levels), as in Settings.
  */
 export function LevelStep(props: StepProps & { readonly placed: CefrLevel | null; onTest(): void; /** Outside the setup (`LevelAsk`): Continue is the one way on. */ readonly alone?: boolean }) {
-  const { t } = useT()
+  const { t, locale } = useT()
   const client = useClient()
   const { settings, corpus } = useClientSnapshot()
   const heading = useStepHeading()
   const [error, setError] = useState<string | null>(null)
+  const language = languageInSentence(corpus?.target ?? settings.course, locale)
   const levels = offeredLevels(corpus, settings.declaredLevel)
 
   const choose = async (level: CefrLevel) => {
@@ -33,11 +34,11 @@ export function LevelStep(props: StepProps & { readonly placed: CefrLevel | null
   return (
     <section className="setup-step" aria-labelledby="setup-level-title">
       <h2 id="setup-level-title" ref={heading} tabIndex={-1}>
-        {t('setup.level.title')}
+        {t('setup.level.title', { language })}
       </h2>
       {/* Settings' level control (StudySettings): a segment per level over real radios, the chosen level named below. */}
       <fieldset className="choices segmented-field">
-        <legend className="visually-hidden">{t('setup.level.title')}</legend>
+        <legend className="visually-hidden">{t('setup.level.title', { language })}</legend>
         <div className="segmented">
           {levels.map((level) => (
             <label key={level}>

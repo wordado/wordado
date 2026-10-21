@@ -62,6 +62,8 @@ jobs:
           VITE_CONTENT_MANIFEST_URL: ${{ vars.CONTENT_MANIFEST_URL }}
           # Optional: without it a visitor studies the bundled sample.
           VITE_TRIAL_MANIFEST_URL: ${{ vars.TRIAL_MANIFEST_URL }}
+          # Optional: the courses offered, as target codes (`en,de`); without it, English alone (docs/deploy.md, step 6).
+          VITE_COURSE_TARGETS: ${{ vars.COURSE_TARGETS }}
       - name: Refuse a Hyperdrive that was never created
         working-directory: server
         # Fails closed: a dry run that fails is an error, never a pass for want of the zero id.

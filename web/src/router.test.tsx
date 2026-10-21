@@ -131,6 +131,11 @@ describe('routes', () => {
     expect(parseRoute('/settings/native-language', '')).toEqual({ name: 'native-language' })
     expect(routeHref({ name: 'native-language' })).toBe('/settings/native-language')
   })
+
+  it('routes switching course under settings (spec §8.6)', () => {
+    expect(parseRoute('/settings/course', '')).toEqual({ name: 'course' })
+    expect(routeHref({ name: 'course' })).toBe('/settings/course')
+  })
 })
 
 function Where() {
