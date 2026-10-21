@@ -154,7 +154,7 @@ describe('ai_review', () => {
         },
       }),
     ).toEqual([
-      'ai_review.queues[0]: english is not a queue AI review covers (translation-<l1>, title-<l1>, level)',
+      'ai_review.queues[0]: english is not a queue AI review covers (translation-<l1>, title-<l1>, level, grammar)',
       'ai_review.queues[1]: translation-de is not a queue of this content (l1s)',
       'ai_review.reviewers.x.provider: must be openrouter or local',
       'ai_review.reviewers.x.model: must be a non-empty string',
@@ -184,6 +184,10 @@ describe('target', () => {
   })
   it('refuses a target it does not know', () => {
     expect(configProblems({ ...valid(), target: 'fr' })).toContain('target: must be one of en, de')
+  })
+  it('refuses English as the lead L1 of another target: its titles would be asked twice', () => {
+    expect(configProblems({ ...valid(), ...de, l1s: ['en', 'bg'] })).toContain('l1s: en may not lead a de course; put it after another L1')
+    expect(configProblems({ ...valid(), ...de, l1s: ['bg', 'en'] })).not.toContain('l1s: en may not lead a de course; put it after another L1')
   })
   it('refuses an L1 that is the target', () => {
     expect(configProblems({ ...valid(), ...de, l1s: ['bg', 'de'] })).toContain('l1s: de is the target language')

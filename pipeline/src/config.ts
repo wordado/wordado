@@ -118,7 +118,7 @@ function aiReviewProblems(raw: unknown, l1s: readonly string[], profile: Languag
   if (!Array.isArray(queues) || queues.length === 0) p.push('ai_review.queues: must list at least one queue')
   else
     queues.forEach((q, i) => {
-      if (typeof q !== 'string' || !AI_REVIEW_QUEUE.test(q)) p.push(`ai_review.queues[${i}]: ${String(q)} is not a queue AI review covers (translation-<l1>, title-<l1>, level)`)
+      if (typeof q !== 'string' || !AI_REVIEW_QUEUE.test(q)) p.push(`ai_review.queues[${i}]: ${String(q)} is not a queue AI review covers (translation-<l1>, title-<l1>, level, grammar)`)
       else if (!known.includes(q)) p.push(`ai_review.queues[${i}]: ${q} is not a queue of this content (l1s)`)
     })
   const reviewers = raw['reviewers']
@@ -170,6 +170,8 @@ export function configProblems(raw: unknown): string[] {
       if (typeof l !== 'string' || !LANG.test(l)) p.push(`l1s[${i}]: must be a two-letter lowercase language code`)
     })
   if (Array.isArray(l1s)) for (const l1 of l1s) if (l1 === profile.code) p.push(`l1s: ${l1} is the target language`)
+  // The lead's English title is the course's English title; English leading another target would review it twice.
+  if (Array.isArray(l1s) && profile.code !== 'en' && l1s[0] === 'en') p.push(`l1s: en may not lead a ${profile.code} course; put it after another L1`)
   const levels = raw['levels']
   if (!Array.isArray(levels) || levels.length === 0) p.push('levels: must list at least one level')
   else {
