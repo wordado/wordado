@@ -1,4 +1,4 @@
-import type { CorpusEntry } from '@wordado/core'
+import { headwordForm, type CorpusEntry } from '@wordado/core'
 import { useClientSnapshot } from '@wordado/client-data'
 import { useT } from '../i18n/i18n'
 import { POS_LABEL } from '../labels'
@@ -9,13 +9,21 @@ export function Headword(props: { readonly entry: CorpusEntry; readonly id?: str
   const { entry } = props
   const { corpus } = useClientSnapshot()
   const target = corpus?.target ?? 'en'
+  const form = headwordForm(target, entry)
   const ipa = entry.ipa.replace(/^\/|\/$/g, '')
   return (
     <div className="headword">
       <p className="hw-word" lang={target} id={props.id}>
-        {entry.headword}
+        {form.lead}
       </p>
       <p className="hw-meta">
+        {form.after !== '' && (
+          <>
+            <span className="hw-after" lang={target}>
+              {form.after}
+            </span>{' '}
+          </>
+        )}
         {ipa !== '' && (
           <span className="hw-ipa" lang={`${target}-fonipa`}>
             /{ipa}/

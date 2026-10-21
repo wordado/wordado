@@ -1,5 +1,5 @@
 import { useClient, useClientSnapshot, type RunKind, type RunSnapshot, type StudyRun } from '@wordado/client-data'
-import { entryClips, Grade, isAboveLevel, type ChoiceItem, type CorpusEntry, type StudyItem } from '@wordado/core'
+import { entryClips, Grade, headwordForm, isAboveLevel, type ChoiceItem, type CorpusEntry, type StudyItem } from '@wordado/core'
 import { BookPlus, Check, Clock, Ellipsis, Flag, Flame, LockOpen, Play, Volume2, X } from 'lucide-react'
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { useApp } from '../app/context'
@@ -426,7 +426,7 @@ function Choice(props: {
                   <span className="option-key" aria-hidden="true">
                     {index + 1}
                   </span>{' '}
-                  <span className="option-text">{showsTranslations ? <Translation entry={option} lang={l1} stacked /> : <span lang={target}>{option.headword}</span>}</span>
+                  <span className="option-text">{showsTranslations ? <Translation entry={option} lang={l1} stacked /> : <span lang={target}>{headwordForm(target, option).lead}</span>}</span>
                   {/* Its place is kept before the answer, so a gloss does not wrap anew when the mark comes. */}
                   <span className="option-mark" aria-hidden="true">
                     {isAnswer ? '✓' : isWrong ? '✗' : ''}

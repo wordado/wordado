@@ -1,5 +1,5 @@
 import { MatchingRun, useClient, useClientSnapshot, type MatchingSide } from '@wordado/client-data'
-import type { CorpusEntry } from '@wordado/core'
+import { headwordForm, type CorpusEntry } from '@wordado/core'
 import { Check, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useApp } from '../app/context'
@@ -96,7 +96,7 @@ function Board(props: { readonly run: MatchingRun; readonly scope: ScopeParams; 
           }
           onClick={() => void run.select(side, entry.entryId)}
         >
-          {side === 'left' ? <span lang={target}>{entry.headword}</span> : <Translation entry={entry} lang={l1} />}
+          {side === 'left' ? <span lang={target}>{headwordForm(target, entry).lead}</span> : <Translation entry={entry} lang={l1} />}
           {matched && (
             <>
               <span aria-hidden="true"> ✓</span>
