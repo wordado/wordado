@@ -18,7 +18,16 @@ type Attempt = { readonly phase: 'idle' } | { readonly phase: 'installing'; read
  * installed. A failed install says so and offers Try again, and the setup's link to Sign in stays, so it is never a
  * dead end (Review Focus 4). `ownBack` is false when the page around it already has its own Back link.
  */
-export function LanguageStep(props: { readonly mode: 'setup' | 'change'; readonly ownBack?: boolean; onDone(): void }) {
+export function LanguageStep(props: {
+  readonly mode: 'setup' | 'change'
+  readonly ownBack?: boolean
+  onDone(): void
+  /**
+   * The setup's way back (spec §8.6): to the course question, or out of a new course's setup to the course before it.
+   * `go` may fail (the switch back is not saved): the step says why and stays.
+   */
+  readonly back?: { readonly label: string; go(): void | Promise<void> }
+}) {
   const { t, locale, setLocale } = useT()
   const client = useClient()
   const { account, packs } = useApp()
@@ -98,6 +107,19 @@ export function LanguageStep(props: { readonly mode: 'setup' | 'change'; readonl
     await install(l1)
   }
 
+  const goBack = async (back: NonNullable<typeof props.back>) => {
+    if (going.current) return
+    going.current = true
+    setSaveError(null)
+    try {
+      await back.go()
+    } catch (err) {
+      if (mounted.current) setSaveError(t('settings.saveFailed', { message: t(errorMessageKey(err)) }))
+    } finally {
+      going.current = false
+    }
+  }
+
   const busy = attempt.phase === 'installing'
   const failed = attempt.phase === 'failed' ? attempt.l1 : null
   // Until the pack's size is known (its manifest is still being fetched) the bar only says that something is happening.
@@ -172,6 +194,11 @@ export function LanguageStep(props: { readonly mode: 'setup' | 'change'; readonl
               {t('settings.nativeLanguageChange')}
             </button>
           )
+        )}
+        {props.mode === 'setup' && props.back && (
+          <button type="button" className="button" disabled={busy} onClick={() => void goBack(props.back!)}>
+            {props.back.label}
+          </button>
         )}
         {props.mode === 'setup' ? (
           // A signed-in account has nothing to sign in to: the link would be a dead end.

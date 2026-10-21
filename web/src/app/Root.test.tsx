@@ -182,6 +182,24 @@ describe('Root', () => {
     expect(screen.getAllByRole('radio').filter((r) => (r as HTMLInputElement).name === 'native-language').map((r) => (r as HTMLInputElement).value)).toEqual(['bg', 'es', 'en'])
   })
 
+  it('leaves a new course’s setup by Back, to the previous course on today, with nothing installed (spec §8.6)', async () => {
+    build.offered = ['en', 'de']
+    window.history.replaceState(null, '', '/settings/course')
+    const packs = samplePacks()
+    const install = vi.spyOn(packs, 'install')
+    const boot = await renderRoot({ packs })
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Switch to German' })))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Back to English' })))
+    expect(screen.queryByRole('heading', { name: 'Set up Wordado' })).toBeNull()
+    expect(window.location.pathname).toBe('/')
+    expect(boot.store.get()).toMatchObject({ status: 'ready', setup: false })
+    const state = boot.store.get()
+    if (state.status !== 'ready') throw new Error('not ready')
+    expect(state.client.snapshot.settings).toMatchObject({ course: 'en', l1: 'bg' })
+    expect(state.client.snapshot.corpus?.target).toBe('en')
+    expect(install).not.toHaveBeenCalled()
+  })
+
   it('hides the masthead, navigation and banners while studying, and brings them back after', async () => {
     await renderRoot()
     expect(screen.getByRole('navigation', { name: 'Main' })).toBeTruthy()

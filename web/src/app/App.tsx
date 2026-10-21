@@ -19,7 +19,7 @@ import { ThemeWords } from '../screens/Theme'
 import { Themes } from '../screens/Themes'
 import { LanguageStep } from '../setup/LanguageStep'
 import { hasLevels, LevelAsk } from '../setup/LevelAsk'
-import { Setup, type StepName } from '../setup/Setup'
+import { Setup } from '../setup/Setup'
 import { AccountMenu } from './AccountMenu'
 import { useInterfaceLocales } from './interfaceLanguage'
 import { Banners, NoticeLine } from './Banners'
@@ -119,7 +119,7 @@ export function App(props: {
   onFinishSetup(): void
   /** The step a reload left a visitor's setup on, and where the setup tells each step it shows (#234). */
   readonly resumeSetupAt?: string | null
-  onSetupStep?(step: StepName): void
+  onSetupStep?(mark: string): void
   /** Nobody asked for a level yet (a demo carried into this account, or a visitor's device that got the trial pack): Today gives way to that question once. */
   readonly askLevel?: boolean
   /** Why it is asked, when not for an account. */

@@ -198,6 +198,7 @@ export const bg: Messages = {
   'setup.goal.hint': 'По желание. Можете да я зададете или промените по всяко време в Настройки.',
   'setup.course.title': 'Какво искате да учите?',
   'setup.language.title': 'Кой език говорите?',
+  'setup.language.backToCourse': 'Обратно към {language}',
   'setup.language.hint': 'Думите се обясняват на този език. Можете да го смените по-късно в Настройки.',
   'setup.continue': 'Продължете',
   'setup.haveAccount': 'Вече имам профил',

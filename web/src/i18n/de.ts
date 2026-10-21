@@ -207,6 +207,7 @@ export const de: Messages = {
   'setup.goal.hint': 'Optional. Du kannst es jederzeit in den Einstellungen festlegen oder ändern.',
   'setup.course.title': 'Was möchtest du lernen?',
   'setup.language.title': 'Welche Sprache sprichst du?',
+  'setup.language.backToCourse': 'Zurück zu {language}',
   'setup.language.hint': 'Die Wörter werden in dieser Sprache erklärt. Du kannst das später in den Einstellungen ändern.',
   'setup.continue': 'Weiter',
   'setup.haveAccount': 'Ich habe schon ein Konto',

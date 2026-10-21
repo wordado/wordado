@@ -3,10 +3,10 @@ import { Client, ITEM_SETTLE_MS, type PackFetcher } from '@wordado/client-data'
 import { nodeSqliteDriver } from '@wordado/client-data/src/drivers/nodeSqlite'
 import { sampleFetcher, sampleManifest } from '@wordado/client-data/src/testing/sample'
 import { testEnv } from '@wordado/client-data/src/testing/testEnv'
-import type { PackManifest } from '@wordado/core'
+import { offeredThemes, type PackManifest } from '@wordado/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AccountRecord } from '../account/storage'
-import { fakeAudio, fakeReminders, renderWith, setup, setupTrial, type RenderContext } from '../test/fixtures'
+import { fakeAudio, fakePacks, fakeReminders, renderWith, setup, setupTrial, type RenderContext } from '../test/fixtures'
 import { packsFrom, twoLevels } from '../test/twoLevels'
 import { Setup } from './Setup'
 
@@ -192,6 +192,98 @@ describe('Setup, the course (spec §8.6)', () => {
     renderWith(<Setup onFinish={() => undefined} />, { ...ctx, packs: packsFrom(sampleManifest, sampleFetcher) })
     expect(document.activeElement).toBe(screen.getByRole('heading', { level: 2, name: 'Which language do you speak?' }))
     expect(screen.queryByRole('heading', { name: 'What do you want to learn?' })).toBeNull()
+  })
+})
+
+describe('Setup, leaving a new course’s setup (spec §8.6)', () => {
+  /** English studied from Bulgarian at B1 in a theme, then German switched to: its setup is owed. */
+  async function switched() {
+    build.offered = ['en', 'de']
+    const ctx = await setup()
+    const theme = offeredThemes(ctx.client.snapshot.corpus!)[0]!.themeId
+    await ctx.client.updateSettings({ l1: 'bg', declaredLevel: 'B1', activeTheme: theme })
+    await ctx.client.switchCourse('de')
+    // No manifest can be fetched: the device is offline.
+    const packs = fakePacks()
+    const install = vi.spyOn(packs, 'install')
+    return { ctx: { ...ctx, packs }, theme, install }
+  }
+
+  it('offers Back to the previous course, which restores it and ends the setup with nothing installed', async () => {
+    const { ctx, theme, install } = await switched()
+    const onFinish = vi.fn()
+    renderWith(<Setup onFinish={onFinish} />, ctx)
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Back to English' })))
+    expect(ctx.client.snapshot.settings).toMatchObject({ course: 'en', l1: 'bg', declaredLevel: 'B1', activeTheme: theme })
+    expect(onFinish).toHaveBeenCalledTimes(1)
+    expect(install).not.toHaveBeenCalled()
+  })
+
+  it('names the previous course in the interface language', async () => {
+    const { ctx } = await switched()
+    renderWith(<Setup onFinish={() => undefined} />, { ...ctx, locale: 'bg' })
+    expect(screen.getByRole('button', { name: 'Обратно към английски' })).toBeTruthy()
+  })
+
+  it('offers Back offline too, after the words failed to download', async () => {
+    const { ctx } = await switched()
+    const onFinish = vi.fn()
+    renderWith(<Setup onFinish={onFinish} />, ctx)
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue' })))
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy()
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Back to English' })))
+    expect(ctx.client.snapshot.settings).toMatchObject({ course: 'en', l1: 'bg' })
+    expect(onFinish).toHaveBeenCalledTimes(1)
+  })
+
+  it('acts once on a double click, and says why when the switch back cannot be saved', async () => {
+    const { ctx } = await switched()
+    const back = vi.spyOn(ctx.client, 'switchCourse').mockRejectedValue(new Error('disk full'))
+    const onFinish = vi.fn()
+    renderWith(<Setup onFinish={onFinish} />, ctx)
+    const button = screen.getByRole('button', { name: 'Back to English' })
+    await act(async () => {
+      fireEvent.click(button)
+      fireEvent.click(button)
+    })
+    expect(back).toHaveBeenCalledTimes(1)
+    expect(screen.getByRole('alert').textContent).toMatch(/^Your change wasn’t saved/)
+    expect(onFinish).not.toHaveBeenCalled()
+  })
+
+  it('in a first-run setup that asked the course, Back on the language returns to the course', async () => {
+    build.offered = ['en', 'de']
+    const ctx = await fresh()
+    renderWith(<Setup onFinish={() => undefined} />, ctx)
+    fireEvent.click(screen.getByRole('radio', { name: 'German' }))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue' })))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Back' })))
+    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 2, name: 'What do you want to learn?' }))
+    expect((screen.getByRole('radio', { name: 'German' }) as HTMLInputElement).checked).toBe(true)
+  })
+
+  it('offers no Back in a first-run setup that did not ask the course', async () => {
+    const ctx = await fresh()
+    renderWith(<Setup onFinish={() => undefined} />, ctx)
+    expect(screen.queryByRole('button', { name: /^Back/ })).toBeNull()
+  })
+
+  it('keeps that it was opened by a switch in the step it reports, so a reload counts no course step', async () => {
+    const { ctx } = await switched()
+    vi.spyOn(ctx.packs, 'install').mockResolvedValue({ ok: true })
+    const onStep = vi.fn()
+    const { unmount } = renderWith(<Setup onFinish={() => undefined} onStep={onStep} />, ctx)
+    await pastLanguage()
+    expect(onStep).toHaveBeenLastCalledWith('new:theme')
+    expect(screen.getByText('Step 2 of 3')).toBeTruthy()
+    unmount()
+    // The reload: the course's words are installed (here, as the switch left them), the mark says where and how.
+    await ctx.client.switchCourse('en')
+    renderWith(<Setup onFinish={() => undefined} resumeAt="new:theme" />, ctx)
+    expect(screen.getByText('Step 2 of 3')).toBeTruthy()
+    cleanup()
+    renderWith(<Setup onFinish={() => undefined} resumeAt="theme" />, ctx)
+    expect(screen.getByText('Step 3 of 4')).toBeTruthy()
   })
 })
 

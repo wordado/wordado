@@ -203,6 +203,7 @@ export const en = {
   'setup.goal.hint': 'Optional. You can set it or change it any time in Settings.',
   'setup.course.title': 'What do you want to learn?',
   'setup.language.title': 'Which language do you speak?',
+  'setup.language.backToCourse': 'Back to {language}',
   'setup.language.hint': 'Words are explained in this language. You can change it later in Settings.',
   'setup.continue': 'Continue',
   'setup.haveAccount': 'I already have an account',

@@ -53,6 +53,21 @@ describe('CourseStep (spec §8.6)', () => {
     expect(onDone).toHaveBeenCalledTimes(1)
   })
 
+  it('writes nothing when the current course is chosen again', async () => {
+    const env = testEnv()
+    const driver = nodeSqliteDriver()
+    const client = await Client.open({ driver, env, l1: 'bg' })
+    await client.startSession()
+    const documents = () => driver.all('SELECT * FROM document')
+    const before = await documents()
+    const onDone = vi.fn()
+    renderWith(<CourseStep onDone={onDone} />, { env, client, audio: fakeAudio() })
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue' })))
+    expect(await documents()).toEqual(before)
+    expect(await client.hasUnsynced()).toBe(false)
+    expect(onDone).toHaveBeenCalledTimes(1)
+  })
+
   it('says why when the course cannot be saved, and stays', async () => {
     const ctx = await fresh()
     vi.spyOn(ctx.client, 'switchCourse').mockRejectedValue(new Error('disk full'))
