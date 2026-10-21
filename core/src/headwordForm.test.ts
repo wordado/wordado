@@ -19,4 +19,8 @@ describe('headwordForm', () => {
     expect(headwordForm('de', { headword: 'groß', pos: 'adj', grammar: null })).toEqual({ lead: 'groß', after: '' })
     expect(headwordForm('de', { headword: 'Haus', pos: 'noun', grammar: { gender: 'n', plural: 'Häuser', case: 'x' } })).toEqual({ lead: 'das Haus', after: 'die Häuser' })
   })
+  it('reads no article from an inherited property: a gender of "constructor" or "toString" shows none', () => {
+    expect(headwordForm('de', { headword: 'Ding', pos: 'noun', grammar: { gender: 'constructor', plural: '' } })).toEqual({ lead: 'Ding', after: '' })
+    expect(headwordForm('de', { headword: 'Ding', pos: 'noun', grammar: { gender: 'toString', plural: '' } })).toEqual({ lead: 'Ding', after: '' })
+  })
 })
