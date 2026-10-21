@@ -15,6 +15,10 @@ describe('grammarProblems', () => {
   it('ignores a field it does not know, as an older client must', () => {
     expect(grammarProblems('de', 'noun', { gender: 'f', plural: '', case: 'x' })).toEqual([])
   })
+  it('ignores names inherited from Object, and a target named so', () => {
+    expect(grammarProblems('de', 'noun', { gender: 'f', plural: '', constructor: 'x' })).toEqual([])
+    expect(grammarProblems('toString', 'noun', {})).toEqual(['toString has no grammar block'])
+  })
   it('refuses a grammar block on a target without a schema', () => {
     expect(GRAMMAR_SCHEMAS.en).toBeUndefined()
     expect(grammarProblems('en', 'noun', { gender: 'm' })).toEqual(['en has no grammar block'])

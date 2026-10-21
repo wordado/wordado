@@ -25,13 +25,14 @@ export const GRAMMAR_SCHEMAS: Readonly<Partial<Record<Target, Readonly<Record<st
 
 /** What is wrong with an entry's grammar block. A field the schema does not know is ignored (§5.2). */
 export function grammarProblems(target: string, pos: PartOfSpeech, grammar: unknown): string[] {
-  const schema = GRAMMAR_SCHEMAS[target as Target]
+  const schema = Object.hasOwn(GRAMMAR_SCHEMAS, target) ? GRAMMAR_SCHEMAS[target as Target] : undefined
   if (!schema) return [`${target} has no grammar block`]
   if (typeof grammar !== 'object' || grammar === null || Array.isArray(grammar)) return ['must be an object']
   const problems: string[] = []
   for (const [name, value] of Object.entries(grammar)) {
-    const field = schema[name]
-    if (!field) continue
+    // Own keys only: JSON from outside may name `constructor` or `toString`.
+    if (!Object.hasOwn(schema, name)) continue
+    const field = schema[name]!
     if (!field.pos.includes(pos)) problems.push(`${name} is not a field of a ${pos}`)
     else if (field.kind === 'text' && typeof value !== 'string') problems.push(`${name} must be text`)
     else if (field.kind === 'flag' && typeof value !== 'boolean') problems.push(`${name} must be true or false`)
