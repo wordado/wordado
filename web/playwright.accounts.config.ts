@@ -17,6 +17,8 @@ export default defineConfig({
   webServer: {
     command: 'pnpm build && pnpm preview',
     url: 'http://localhost:4173',
+    // English alone, as a build without the variable offers, whatever the shell has set (as `playwright.config.ts`).
+    env: { VITE_COURSE_TARGETS: '' },
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,
   },
