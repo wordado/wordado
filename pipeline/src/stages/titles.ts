@@ -1,5 +1,6 @@
 import type { CefrLevel, LocalizedText } from '@wordado/core'
 import { cachedBatch } from '../cache'
+import { titleFollowsLead } from '../decisions'
 import { ParseError } from '../llm'
 import type { LanguageProfile } from '../profiles'
 import type { StageRun } from './lemmas'
@@ -69,7 +70,7 @@ export async function titleUnits(units: readonly TitleUnit[], l1s: readonly stri
   const lead = l1s[0]
   for (const l1 of l1s) {
     // English as an L1 (a German corpus): its title is the English one, so a second answer could only disagree with the lead's.
-    if (l1 === 'en' && l1 !== lead) continue
+    if (titleFollowsLead(l1, l1s)) continue
     const one = [l1]
     byL1.set(
       l1,
@@ -100,7 +101,7 @@ export async function titleUnits(units: readonly TitleUnit[], l1s: readonly stri
   return new Map(
     units.map((u, i) => {
       const en = lead === undefined ? '' : byL1.get(lead)![i]![lead]!.en
-      return [u.unit_id, Object.fromEntries(l1s.map((l1) => [l1, { en, l1: byL1.get(l1)?.[i]![l1]!.l1 ?? en }]))]
+      return [u.unit_id, Object.fromEntries(l1s.map((l1) => [l1, { en, l1: titleFollowsLead(l1, l1s) ? en : byL1.get(l1)![i]![l1]!.l1 }]))]
     }),
   )
 }

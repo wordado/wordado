@@ -166,6 +166,8 @@ describe('a German corpus', () => {
     // The German profile's queues: headwords under its own name, and the grammar block.
     expect(existsSync(join(dir, 'review', 'german'))).toBe(true)
     expect(existsSync(join(dir, 'review', 'grammar'))).toBe(true)
+    // English as a non-lead L1 reviews no titles of its own: they are the lead's English.
+    expect(existsSync(join(dir, 'review', 'title-en'))).toBe(false)
     review(dir)
     expect(importQueues(dir, specs, { by: 'reviewer', now: '2026-10-21T12:00:00Z' }).errors).toEqual([])
 

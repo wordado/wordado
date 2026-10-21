@@ -1,7 +1,7 @@
 import { CEFR_LEVELS, TARGETS, isTarget, type Accent, type CefrLevel, type Target } from '@wordado/core'
 import { readJson } from './files'
 import { contentPaths } from './content'
-import { QUEUES } from './decisions'
+import { QUEUES, titleFollowsLead } from './decisions'
 import { PROFILES, type LanguageProfile } from './profiles'
 
 export interface TtsVoice {
@@ -97,7 +97,7 @@ export const reviewQueues = (l1s: readonly string[], profile: LanguageProfile): 
   QUEUES.level,
   QUEUES.audio,
   ...(profile.grammar ? [QUEUES.grammar] : []),
-  ...l1s.flatMap((l1) => [QUEUES.translation(l1), QUEUES.title(l1)]),
+  ...l1s.flatMap((l1) => [QUEUES.translation(l1), ...(titleFollowsLead(l1, l1s) ? [] : [QUEUES.title(l1)])]),
 ]
 
 export const AI_REVIEW_QUEUE = /^(translation|title)-[a-z]{2}$|^level$|^grammar$/

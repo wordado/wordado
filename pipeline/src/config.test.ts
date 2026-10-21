@@ -199,4 +199,8 @@ describe('target', () => {
     expect(reviewQueues(['bg'], PROFILES.en)).toEqual(['english', 'level', 'audio', 'translation-bg', 'title-bg'])
     expect(reviewQueues(['bg'], PROFILES.de)).toEqual(['german', 'level', 'audio', 'grammar', 'translation-bg', 'title-bg'])
   })
+  it('has no title queue for English as an L1 that is not the lead: its title is the lead’s English', () => {
+    expect(reviewQueues(['bg', 'en'], PROFILES.de)).toEqual(['german', 'level', 'audio', 'grammar', 'translation-bg', 'title-bg', 'translation-en'])
+    expect(reviewQueues(['en', 'bg'], PROFILES.de)).toEqual(['german', 'level', 'audio', 'grammar', 'translation-en', 'title-en', 'translation-bg', 'title-bg'])
+  })
 })

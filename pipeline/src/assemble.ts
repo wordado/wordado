@@ -1,7 +1,7 @@
 import { coursePackId, norm, type Accent, type Pack, type PackEntry, type PackUnit } from '@wordado/core'
 import { currentClips, voiceKey, type AudioRecord } from './audio'
 import type { CuratedTheme, PipelineConfig, TtsVoice } from './config'
-import { foldField, QUEUES, type Decisions } from './decisions'
+import { foldField, QUEUES, titleFollowsLead, type Decisions } from './decisions'
 import type { Draft } from './draft'
 import { profileOf } from './profiles'
 import { levelSampled } from './queues'
@@ -140,9 +140,20 @@ export function assemble(input: AssembleInput): Assembled {
     const listed = new Set(members)
     const entry_ids = [...members, ...byUnit.get(u.unit_id)!.filter((id) => !listed.has(id))]
     const hasLive = entry_ids.some((id) => live.has(id))
+    // Every L1's title shares the lead's English (titleUnits): a decision that changes the lead's own title
+    // is folded only into the lead's pack, so a non-lead pack picks up the lead's current English here.
+    const leadTitleOf = () => {
+      const leadProposed = lead === undefined ? undefined : draftUnits.get(u.unit_id)?.titles[lead]
+      return hasLive && leadProposed ? foldField(leadProposed, decisions.for(QUEUES.title(lead!), u.unit_id)).value : previousLeadUnits.get(u.unit_id)?.title
+    }
     let title = previousUnits.get(u.unit_id)?.title
+    const follows = titleFollowsLead(l1, config.l1s)
     const proposed = draftUnits.get(u.unit_id)?.titles[l1]
-    if (hasLive && proposed) {
+    if (follows) {
+      // English as a non-lead L1 has no title queue: its whole title is the lead's English (the lead's pack waits on its review).
+      const leadTitle = leadTitleOf()
+      if (leadTitle) title = { en: leadTitle.en, l1: leadTitle.en }
+    } else if (hasLive && proposed) {
       const state = foldField(proposed, decisions.for(QUEUES.title(l1), u.unit_id))
       if (!state.reviewed) awaiting(QUEUES.title(l1), `unit ${u.unit_id}: title (${l1}) not reviewed`)
       title = state.value
@@ -150,13 +161,8 @@ export function assemble(input: AssembleInput): Assembled {
     if (!title) {
       problems.push(`unit ${u.unit_id}: has no ${l1} title`)
       title = { en: u.unit_id, l1: u.unit_id }
-    } else if (lead !== undefined && l1 !== lead) {
-      // Every L1's title shares the lead's English (titleUnits): a decision that changes the lead's own title
-      // is folded only into the lead's pack, so a non-lead pack picks up the lead's current English here.
-      const leadProposed = draftUnits.get(u.unit_id)?.titles[lead]
-      const leadTitle = hasLive && leadProposed
-        ? foldField(leadProposed, decisions.for(QUEUES.title(lead), u.unit_id)).value
-        : previousLeadUnits.get(u.unit_id)?.title
+    } else if (!follows && lead !== undefined && l1 !== lead) {
+      const leadTitle = leadTitleOf()
       if (leadTitle) title = { en: leadTitle.en, l1: title.l1 }
     }
     return { unit_id: u.unit_id, level: u.level, order: i + 1, title, entry_ids }

@@ -86,6 +86,15 @@ describe('queueSpecs', () => {
     expect(items.get('grammar')![0]!.context).toMatchObject({ example: 'Water, please.' })
     expect(pendingItems(draft([noun]), Decisions.read(makeContent()), ['bg'], PROFILES.en).has('grammar')).toBe(false)
   })
+  it('queues no title for English as an L1 that is not the lead, and has no spec or alive keys for it', () => {
+    const d = { ...draft([entry('de.haus-1')]), units: [{ unit_id: 'de.a1-01', level: 'A1' as const, entry_ids: ['de.haus-1'], titles: { bg: { en: 'Home', l1: 'Дом' }, en: { en: 'Home', l1: 'Home' } } }] }
+    const items = pendingItems(d, Decisions.read(makeContent()), ['bg', 'en'], PROFILES.de)
+    expect(items.get('title-bg')!.map((i) => i.key)).toEqual(['de.a1-01'])
+    expect(items.has('title-en')).toBe(false)
+    expect(items.has('translation-en')).toBe(true)
+    expect(queueSpecs(['bg', 'en'], PROFILES.de).has('title-en')).toBe(false)
+    expect(aliveKeys(d, ['bg', 'en'], PROFILES.de).has('title-en')).toBe(false)
+  })
 })
 
 describe('pendingItems', () => {

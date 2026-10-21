@@ -4,7 +4,7 @@ import { canonicalJson, CEFR_LEVELS, grammarProblems, PARTS_OF_SPEECH, type Gram
 import { sha256Hex } from './checksum'
 import { contentPaths } from './content'
 import { csvRecords, formatCsv } from './csv'
-import { Decisions, foldField, QUEUES, type DecisionEvent, type Verdict } from './decisions'
+import { Decisions, foldField, QUEUES, titleFollowsLead, titledL1s, type DecisionEvent, type Verdict } from './decisions'
 import type { Draft } from './draft'
 import { readJson, writeJson } from './files'
 import type { LanguageProfile } from './profiles'
@@ -142,6 +142,7 @@ export function queueSpecs(l1s: readonly string[], profile: LanguageProfile): Ma
       },
       fromCells: (c) => ({ translation: required(c, 'translation'), alternates: splitList(c['alternates'] ?? ''), sense: (c['sense'] ?? '').trim() }),
     })
+    if (titleFollowsLead(l1, l1s)) continue
     specs.push({
       name: QUEUES.title(l1),
       columns: ['title_en', 'title_l1'],
@@ -167,7 +168,7 @@ export function pendingItems(draft: Draft, decisions: Decisions, l1s: readonly s
   const out = new Map<string, QueueItem[]>([[profile.reviewQueue, []], [QUEUES.level, []], ...(profile.grammar ? [[QUEUES.grammar, []] as [string, QueueItem[]]] : [])])
   for (const l1 of l1s) {
     out.set(QUEUES.translation(l1), [])
-    out.set(QUEUES.title(l1), [])
+    if (!titleFollowsLead(l1, l1s)) out.set(QUEUES.title(l1), [])
   }
   const live = new Set(draft.live)
   const push = <T>(queue: string, key: string, proposal: T, context: Record<string, string>) => {
@@ -192,7 +193,7 @@ export function pendingItems(draft: Draft, decisions: Decisions, l1s: readonly s
   for (const u of draft.units) {
     const words = u.entry_ids.filter((id) => live.has(id))
     if (words.length === 0) continue
-    for (const l1 of l1s) {
+    for (const l1 of titledL1s(l1s)) {
       const title = u.titles[l1]
       if (title) push(QUEUES.title(l1), u.unit_id, title, { level: u.level, words: words.map((id) => byId.get(id)?.headword ?? id).join(', ') })
     }
@@ -222,7 +223,7 @@ export function aliveKeys(draft: Draft, l1s: readonly string[], profile: Languag
   const out = new Map<string, Set<string>>([[profile.reviewQueue, live], [QUEUES.level, live], ...(profile.grammar ? [[QUEUES.grammar, live] as [string, Set<string>]] : [])])
   for (const l1 of l1s) {
     out.set(QUEUES.translation(l1), live)
-    out.set(QUEUES.title(l1), units)
+    if (!titleFollowsLead(l1, l1s)) out.set(QUEUES.title(l1), units)
   }
   return out
 }
