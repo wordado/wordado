@@ -1193,6 +1193,11 @@ describe('setupNeeded', () => {
     expect(setupNeeded({ corpus: englishCorpus, settings: s({ course: 'en', l1: 'bg' }), states: new Map() })).toBe(false)
   })
 
+  it('is always owed by a course other than English with no language and no words, studied or not', () => {
+    expect(setupNeeded({ corpus: null, settings: s({ course: 'de', l1: null }), states: new Map([['c:apple-1', {}]]) })).toBe(true)
+    expect(setupNeeded({ corpus: null, settings: s({ course: 'de', l1: null }), states: new Map() })).toBe(true)
+  })
+
   it('is not owed once the language is chosen, nor for the installed course', () => {
     expect(setupNeeded({ corpus: null, settings: s({ course: 'de', l1: 'bg' }), states: new Map() })).toBe(false)
     expect(setupNeeded({ corpus: englishCorpus, settings: s({ course: 'en', l1: null }), states: new Map() })).toBe(false)
@@ -1254,6 +1259,63 @@ describe('Boot opens the settings’ course (spec §5.5, §8.6)', () => {
     expect(ready(again.boot).snapshot.settings).toMatchObject({ course: 'en', l1: 'bg' })
     // The pending change (as for an L1 changed offline): `watchCourse` installs the English pack from here.
     expect(ready(again.boot).course).toEqual({ target: 'de', l1: 'bg' })
+  })
+})
+
+describe('Boot and a signed-in learner’s course (spec §8.6, Review Focus 2)', () => {
+  /** A learner's file with the English course installed, its transport offline (`flaky`); `requests` counts every push and pull asked for. */
+  async function learnerOnEnglish() {
+    const env = testEnv()
+    const d = disk()
+    const c = courses()
+    const server = flaky(new FakeServer({ now: env.now }))
+    let requests = 0
+    const transport: SyncTransport = {
+      push: (page) => {
+        requests += 1
+        return server.push(page)
+      },
+      pull: (request) => {
+        requests += 1
+        return server.pull(request)
+      },
+    }
+    const accounts = accountStorage(memoryStorage())
+    accounts.save(ana)
+    const open = () => boot({ env, accounts, openDriver: choosing(d.openDriver), transport: () => transport, fetchManifest: c.fetchManifest, fetchPack: c.fetchPack })
+    const first = open()
+    await first.boot.start()
+    expect(ready(first.boot).snapshot.corpus).toMatchObject({ target: 'en', l1: 'bg' })
+    return { first, open, c, requests: () => requests }
+  }
+
+  it('opens in the new course’s setup after a reload whose sync fails', async () => {
+    const l = await learnerOnEnglish()
+    expect(await ready(l.first.boot).switchCourse('de')).toEqual({ needsSetup: true })
+    await l.first.release()
+
+    const before = l.requests()
+    const again = l.open()
+    await again.boot.start()
+    expect(l.requests()).toBeGreaterThan(before)
+    expect(again.boot.store.get()).toMatchObject({ status: 'ready', setup: true })
+    expect(ready(again.boot).snapshot.settings).toMatchObject({ course: 'de', l1: null })
+  })
+
+  it('does not wait for a sync when the course switched to was started before', async () => {
+    const l = await learnerOnEnglish()
+    const client = ready(l.first.boot)
+    await client.switchCourse('de')
+    await client.updateSettings({ l1: 'bg' })
+    expect(await client.switchCourse('en')).toEqual({ needsSetup: false })
+    expect(await client.switchCourse('de')).toEqual({ needsSetup: false })
+    await l.first.release()
+
+    const before = l.requests()
+    const again = l.open()
+    await again.boot.start()
+    expect(l.requests()).toBe(before)
+    expect(again.boot.store.get()).toMatchObject({ status: 'ready', setup: false })
   })
 })
 

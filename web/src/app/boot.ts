@@ -99,10 +99,14 @@ export interface SwitchOptions {
 
 const messageOf = (err: unknown): string => (err instanceof Error ? err.message : String(err))
 
-/** The first-run setup, or a new course's (spec §8.6): its language is not chosen and its words are not installed. */
+/**
+ * The first-run setup, or a new course's (spec §8.6): its language is not chosen and its words are not installed. With
+ * no words at all, English owes it only to a learner who has studied nothing (progress from before plan 10 installs
+ * the default L1); any other course always does, since a default L1 may be one that course does not offer.
+ */
 export function setupNeeded(s: { corpus: Corpus | null; settings: Settings; states: ReadonlyMap<unknown, unknown> }): boolean {
   if (s.settings.l1 !== null) return false
-  if (s.corpus === null) return s.states.size === 0
+  if (s.corpus === null) return s.states.size === 0 || s.settings.course !== 'en'
   return s.corpus.target !== s.settings.course
 }
 
@@ -405,11 +409,16 @@ export class Boot {
    * The first-run setup (plan 11, Decision 1): this file has no pack, its settings name no L1, and nothing has been
    * studied. Or a new course's (spec §8.6): the settings name a course whose L1 is not chosen, and the installed pack
    * is another course's (`setupNeeded`). For an account those facts count only after a pull completes, so a returning
-   * learner's own settings and progress decide. A pull that fails or times out takes the ordinary path. Even without
-   * the setup, a completed pull has done its other job: `settings.l1` now chooses the first install.
+   * learner's own settings and progress decide. With no pack, a pull that fails or times out takes the ordinary path.
+   * With another course's pack installed, this device's own settings decide then: a new course's setup survives a
+   * reload offline (Review Focus 2), and only a completed pull may say otherwise. Even without the setup, a completed
+   * pull has done its other job: `settings.l1` now chooses the first install.
    */
   private async needsSetup(client: Client, generation: number): Promise<boolean> {
-    if (client.snapshot.corpus !== null && client.snapshot.corpus.target === client.snapshot.settings.course) return false
+    const { corpus, settings } = client.snapshot
+    if (corpus !== null && corpus.target === settings.course) return false
+    // A course started before (its language restored by the switch): no setup whatever a pull says, so none is waited for.
+    if (corpus !== null && settings.l1 !== null) return false
     if (this.account) {
       let timer: ReturnType<typeof setTimeout> | undefined
       const timeout = new Promise<'timeout'>((resolve) => {
@@ -417,7 +426,8 @@ export class Boot {
       })
       const outcome = await Promise.race([client.sync({ force: true }).catch(() => 'failed' as const), timeout])
       clearTimeout(timer)
-      if (generation !== this.generation || outcome !== 'synced') return false
+      if (generation !== this.generation) return false
+      if (outcome !== 'synced' && client.snapshot.corpus === null) return false
     }
     return setupNeeded(client.snapshot)
   }
