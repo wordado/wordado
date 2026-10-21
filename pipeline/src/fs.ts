@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { basename, extname, join } from 'node:path'
 import { MANIFEST_SCHEMA_VERSION, type PackManifest } from '@wordado/core'
 import { AUDIO_EXT, type BuildOutput, type ClipFile } from './build'
@@ -9,14 +9,18 @@ export interface SourceDir {
   readonly clips: ClipFile[]
 }
 
-/** A source directory: one `source*.json` per L1 beside a shared `audio/` directory of `.m4a` clips named by clip ID. */
+/**
+ * A source directory: one `source*.json` per L1 beside a shared `audio/` directory of `.m4a` clips named by clip ID.
+ * A course with no audio yet (the German sample, #313) has no `audio/` directory: no clips.
+ */
 export function readSourceDir(dir: string): SourceDir {
   const sources = readdirSync(dir)
     .filter((name) => /^source.*\.json$/.test(name))
     .sort()
     .map((name): unknown => JSON.parse(readFileSync(join(dir, name), 'utf8')))
   const audioDir = join(dir, 'audio')
-  const clips = readdirSync(audioDir)
+  const names = existsSync(audioDir) ? readdirSync(audioDir) : []
+  const clips = names
     .filter((name) => extname(name) === `.${AUDIO_EXT}`)
     .sort()
     .map((name) => ({ clipId: basename(name, `.${AUDIO_EXT}`), bytes: new Uint8Array(readFileSync(join(audioDir, name))) }))

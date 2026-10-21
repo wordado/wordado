@@ -1,0 +1,1320 @@
+{
+  "pack_id": "corpus-de-en",
+  "corpus_version": 0,
+  "l1": "en",
+  "target": "de",
+  "units": [
+    {
+      "unit_id": "de.a1-01",
+      "level": "A1",
+      "order": 1,
+      "title": {
+        "en": "Everyday life",
+        "l1": "Everyday life"
+      },
+      "entry_ids": [
+        "de.haus-1",
+        "de.frau-1",
+        "de.mann-1",
+        "de.kind-1",
+        "de.maedchen-1",
+        "de.tisch-1",
+        "de.strasse-1",
+        "de.schule-1",
+        "de.arbeit-1",
+        "de.tag-1",
+        "de.uhr-1",
+        "de.gehen-1",
+        "de.aufstehen-1",
+        "de.kommen-1",
+        "de.fahren-1",
+        "de.schlafen-1",
+        "de.hallo-1",
+        "de.danke-1",
+        "de.gut-1",
+        "de.gross-1"
+      ]
+    },
+    {
+      "unit_id": "de.a1-02",
+      "level": "A1",
+      "order": 2,
+      "title": {
+        "en": "Food and drink",
+        "l1": "Food and drink"
+      },
+      "entry_ids": [
+        "de.brot-1",
+        "de.milch-1",
+        "de.apfel-1",
+        "de.ei-1",
+        "de.kaese-1",
+        "de.fisch-1",
+        "de.kaffee-1",
+        "de.tee-1",
+        "de.kartoffel-1",
+        "de.fruehstueck-1",
+        "de.tasse-1",
+        "de.teller-1",
+        "de.fleisch-1",
+        "de.essen-1",
+        "de.trinken-1",
+        "de.kochen-1",
+        "de.kaufen-1",
+        "de.einkaufen-1",
+        "de.lecker-1",
+        "de.kalt-1"
+      ]
+    }
+  ],
+  "themes": [
+    {
+      "theme_id": "people",
+      "name": {
+        "en": "People and family",
+        "l1": "People and family"
+      },
+      "description": {
+        "en": "Family members and the people around you.",
+        "l1": "Family members and the people around you."
+      }
+    },
+    {
+      "theme_id": "greetings",
+      "name": {
+        "en": "Greetings and politeness",
+        "l1": "Greetings and politeness"
+      },
+      "description": {
+        "en": "Saying hello, thank you and sorry.",
+        "l1": "Saying hello, thank you and sorry."
+      }
+    },
+    {
+      "theme_id": "food",
+      "name": {
+        "en": "Food and drink",
+        "l1": "Food and drink"
+      },
+      "description": {
+        "en": "What you eat and drink every day.",
+        "l1": "What you eat and drink every day."
+      }
+    },
+    {
+      "theme_id": "restaurant",
+      "name": {
+        "en": "Eating out",
+        "l1": "Eating out"
+      },
+      "description": {
+        "en": "Ordering, paying and asking for the menu.",
+        "l1": "Ordering, paying and asking for the menu."
+      }
+    },
+    {
+      "theme_id": "home",
+      "name": {
+        "en": "At home",
+        "l1": "At home"
+      },
+      "description": {
+        "en": "Rooms, furniture and things around the house.",
+        "l1": "Rooms, furniture and things around the house."
+      }
+    },
+    {
+      "theme_id": "daily-life",
+      "name": {
+        "en": "Daily life",
+        "l1": "Daily life"
+      },
+      "description": {
+        "en": "Your day from morning to night.",
+        "l1": "Your day from morning to night."
+      }
+    },
+    {
+      "theme_id": "time",
+      "name": {
+        "en": "Time and dates",
+        "l1": "Time and dates"
+      },
+      "description": {
+        "en": "Days, weeks, hours and the calendar.",
+        "l1": "Days, weeks, hours and the calendar."
+      }
+    },
+    {
+      "theme_id": "numbers",
+      "name": {
+        "en": "Numbers and amounts",
+        "l1": "Numbers and amounts"
+      },
+      "description": {
+        "en": "Counting, prices and how much.",
+        "l1": "Counting, prices and how much."
+      }
+    },
+    {
+      "theme_id": "travel",
+      "name": {
+        "en": "Travel and transport",
+        "l1": "Travel and transport"
+      },
+      "description": {
+        "en": "Trips, tickets, trains and planes.",
+        "l1": "Trips, tickets, trains and planes."
+      }
+    },
+    {
+      "theme_id": "directions",
+      "name": {
+        "en": "Places and directions",
+        "l1": "Places and directions"
+      },
+      "description": {
+        "en": "Finding your way around town.",
+        "l1": "Finding your way around town."
+      }
+    },
+    {
+      "theme_id": "shopping",
+      "name": {
+        "en": "Shopping and money",
+        "l1": "Shopping and money"
+      },
+      "description": {
+        "en": "Shops, prices and paying.",
+        "l1": "Shops, prices and paying."
+      }
+    },
+    {
+      "theme_id": "work",
+      "name": {
+        "en": "Work and jobs",
+        "l1": "Work and jobs"
+      },
+      "description": {
+        "en": "Jobs, the office and colleagues.",
+        "l1": "Jobs, the office and colleagues."
+      }
+    },
+    {
+      "theme_id": "school",
+      "name": {
+        "en": "School and study",
+        "l1": "School and study"
+      },
+      "description": {
+        "en": "Classes, learning and exams.",
+        "l1": "Classes, learning and exams."
+      }
+    },
+    {
+      "theme_id": "body",
+      "name": {
+        "en": "Body and health",
+        "l1": "Body and health"
+      },
+      "description": {
+        "en": "Parts of the body and feeling well.",
+        "l1": "Parts of the body and feeling well."
+      }
+    },
+    {
+      "theme_id": "doctor",
+      "name": {
+        "en": "At the doctor",
+        "l1": "At the doctor"
+      },
+      "description": {
+        "en": "Symptoms, medicine and appointments.",
+        "l1": "Symptoms, medicine and appointments."
+      }
+    },
+    {
+      "theme_id": "clothes",
+      "name": {
+        "en": "Clothes",
+        "l1": "Clothes"
+      },
+      "description": {
+        "en": "What you wear, and sizes.",
+        "l1": "What you wear, and sizes."
+      }
+    },
+    {
+      "theme_id": "weather",
+      "name": {
+        "en": "Weather and nature",
+        "l1": "Weather and nature"
+      },
+      "description": {
+        "en": "Sun, rain, seasons and the outdoors.",
+        "l1": "Sun, rain, seasons and the outdoors."
+      }
+    },
+    {
+      "theme_id": "animals",
+      "name": {
+        "en": "Animals",
+        "l1": "Animals"
+      },
+      "description": {
+        "en": "Pets, farm animals and wildlife.",
+        "l1": "Pets, farm animals and wildlife."
+      }
+    },
+    {
+      "theme_id": "colours",
+      "name": {
+        "en": "Colours and shapes",
+        "l1": "Colours and shapes"
+      },
+      "description": {
+        "en": "Describing how things look.",
+        "l1": "Describing how things look."
+      }
+    },
+    {
+      "theme_id": "feelings",
+      "name": {
+        "en": "Feelings and opinions",
+        "l1": "Feelings and opinions"
+      },
+      "description": {
+        "en": "Saying how you feel and what you think.",
+        "l1": "Saying how you feel and what you think."
+      }
+    },
+    {
+      "theme_id": "hobbies",
+      "name": {
+        "en": "Free time and sport",
+        "l1": "Free time and sport"
+      },
+      "description": {
+        "en": "Hobbies, games and going out.",
+        "l1": "Hobbies, games and going out."
+      }
+    },
+    {
+      "theme_id": "technology",
+      "name": {
+        "en": "Phones and computers",
+        "l1": "Phones and computers"
+      },
+      "description": {
+        "en": "Devices, the internet and messages.",
+        "l1": "Devices, the internet and messages."
+      }
+    },
+    {
+      "theme_id": "city",
+      "name": {
+        "en": "Town and city",
+        "l1": "Town and city"
+      },
+      "description": {
+        "en": "Streets, buildings and public places.",
+        "l1": "Streets, buildings and public places."
+      }
+    },
+    {
+      "theme_id": "actions",
+      "name": {
+        "en": "Everyday actions",
+        "l1": "Everyday actions"
+      },
+      "description": {
+        "en": "Common verbs for what you do.",
+        "l1": "Common verbs for what you do."
+      }
+    }
+  ],
+  "entries": [
+    {
+      "entry_id": "de.haus-1",
+      "headword": "Haus",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "haʊ̯s",
+      "level": "A1",
+      "unit_id": "de.a1-01",
+      "themes": [
+        "home"
+      ],
+      "translation": "house",
+      "alternates": [],
+      "examples": [
+        "Das Haus ist groß."
+      ],
+      "audio": {},
+      "retired": false,
+      "grammar": {
+        "gender": "n",
+        "plural": "Häuser"
+      }
+    },
+    {
+      "entry_id": "de.frau-1",
+      "headword": "Frau",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "fʁaʊ̯",
+      "level": "A1",
+      "unit_id": "de.a1-01",
+      "themes": [
+        "people"
+      ],
+      "translation": "woman",
+      "alternates": [],
+      "examples": [
+        "Die Frau trinkt einen Kaffee."
+      ],
+      "audio": {},
+      "retired": false,
+      "grammar": {
+        "gender": "f",
+        "plural": "Frauen"
+      }
+    },
+    {
+      "entry_id": "de.mann-1",
+      "headword": "Mann",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "man",
+      "level": "A1",
+      "unit_id": "de.a1-01",
+      "themes": [
+        "people"
+      ],
+      "translation": "man",
+      "alternates": [],
+      "examples": [
+        "Der Mann liest die Zeitung."
+      ],
+      "audio": {},
+      "retired": false,
+      "grammar": {
+        "gender": "m",
+        "plural": "Männer"
+      }
+    },
+    {
+      "entry_id": "de.kind-1",
+      "headword": "Kind",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "kɪnt",
+      "level": "A1",
+      "unit_id": "de.a1-01",
+      "themes": [
+        "people"
+      ],
+      "translation": "child",
+      "alternates": [],
+      "examples": [
+        "Das Kind spielt im Garten."
+      ],
+      "audio": {},
+      "retired": false,
+      "grammar": {
+        "gender": "n",
+        "plural": "Kinder"
+      }
+    },
+    {
+      "entry_id": "de.maedchen-1",
+      "headword": "Mädchen",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "ˈmɛːtçən",
+      "level": "A1",
+      "unit_id": "de.a1-01",
+      "themes": [
+        "people"
+      ],
+      "translation": "girl",
+      "alternates": [],
+      "examples": [
+        "Das Mädchen heißt Anna."
+      ],
+      "audio": {},
+      "retired": false,
+      "grammar": {
+        "gender": "n",
+        "plural": "Mädchen"
+      }
+    },
+    {
+      "entry_id": "de.tisch-1",
+      "headword": "Tisch",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "tɪʃ",
+      "level": "A1",
+      "unit_id": "de.a1-01",
+      "themes": [
+        "home"
+      ],
+      "translation": "table",
+      "alternates": [],
+      "examples": [
+        "Das Buch liegt auf dem Tisch."
+      ],
+      "audio": {},
+      "retired": false,
+      "grammar": {
+        "gender": "m",
+        "plural": "Tische"
+      }
+    },
+    {
+      "entry_id": "de.strasse-1",
+      "headword": "Straße",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "ˈʃtʁaːsə",
+      "level": "A1",
+      "unit_id": "de.a1-01",
+      "themes": [
+        "city",
+        "directions"
+      ],
+      "translation": "street",
+      "alternates": [],
+      "examples": [
+        "Wir wohnen in einer ruhigen Straße."
+      ],
+      "audio": {},
+      "retired": false,
+      "grammar": {
+        "gender": "f",
+        "plural": "Straßen"
+      }
+    },
+    {
+      "entry_id": "de.schule-1",
+      "headword": "Schule",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "ˈʃuːlə",
+      "level": "A1",
+      "unit_id": "de.a1-01",
+      "themes": [
+        "school"
+      ],
+      "translation": "school",
+      "alternates": [],
+      "examples": [
+        "Die Kinder gehen in die Schule."
+      ],
+      "audio": {},
+      "retired": false,
+      "grammar": {
+        "gender": "f",
+        "plural": "Schulen"
+      }
+    },
+    {
+      "entry_id": "de.arbeit-1",
+      "headword": "Arbeit",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "ˈaʁbaɪ̯t",
+      "level": "A1",
+      "unit_id": "de.a1-01",
+      "themes": [
+        "work"
+      ],
+      "translation": "work",
+      "alternates": [],
+      "examples": [
+        "Meine Arbeit beginnt um neun Uhr."
+      ],
+      "audio": {},
+      "retired": false,
+      "grammar": {
+        "gender": "f",
+        "plural": "Arbeiten"
+      }
+    },
+    {
+      "entry_id": "de.tag-1",
+      "headword": "Tag",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "taːk",
+      "level": "A1",
+      "unit_id": "de.a1-01",
+      "themes": [
+        "time"
+      ],
+      "translation": "day",
+      "alternates": [],
+      "examples": [
+        "Heute ist ein schöner Tag."
+      ],
+      "audio": {},
+      "retired": false,
+      "grammar": {
+        "gender": "m",
+        "plural": "Tage"
+      }
+    },
+    {
+      "entry_id": "de.uhr-1",
+      "headword": "Uhr",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "uːɐ̯",
+      "level": "A1",
+      "unit_id": "de.a1-01",
+      "themes": [
+        "time",
+        "home"
+      ],
+      "translation": "clock",
+      "alternates": [
+        "watch"
+      ],
+      "examples": [
+        "Die Uhr hängt an der Wand."
+      ],
+      "audio": {},
+      "retired": false,
+      "grammar": {
+        "gender": "f",
+        "plural": "Uhren"
+      }
+    },
+    {
+      "entry_id": "de.gehen-1",
+      "headword": "gehen",
+      "variants": [],
+      "pos": "verb",
+      "sense": "",
+      "ipa": "ˈɡeːən",
+      "level": "A1",
+      "unit_id": "de.a1-01",
+      "themes": [
+        "actions"
+      ],
+      "translation": "go",
+      "alternates": [
+        "walk"
+      ],
+      "examples": [
+        "Ich gehe heute Abend ins Kino."
+      ],
+      "audio": {},
+      "retired": false,
+      "grammar": {
+        "separable": false,
+        "irregular": true,
+        "auxiliary": "sein"
+      }
+    },
+    {
+      "entry_id": "de.aufstehen-1",
+      "headword": "aufstehen",
+      "variants": [],
+      "pos": "verb",
+      "sense": "",
+      "ipa": "ˈaʊ̯fˌʃteːən",
+      "level": "A1",
+      "unit_id": "de.a1-01",
+      "themes": [
+        "daily-life",
+        "actions"
+      ],
+      "translation": "get up",
+      "alternates": [],
+      "examples": [
+        "Ich stehe jeden Morgen um sieben Uhr auf."
+      ],
+      "audio": {},
+      "retired": false,
+      "grammar": {
+        "separable": true,
+        "irregular": true,
+        "auxiliary": "sein"
+      }
+    },
+    {
+      "entry_id": "de.kommen-1",
+      "headword": "kommen",
+      "variants": [],
+      "pos": "verb",
+      "sense": "",
+      "ipa": "ˈkɔmən",
+      "level": "A1",
+      "unit_id": "de.a1-01",
+      "themes": [
+        "actions"
+      ],
+      "translation": "come",
+      "alternates": [],
+      "examples": [
+        "Woher kommst du?"
+      ],
+      "audio": {},
+      "retired": false,
+      "grammar": {
+        "separable": false,
+        "irregular": true,
+        "auxiliary": "sein"
+      }
+    },
+    {
+      "entry_id": "de.fahren-1",
+      "headword": "fahren",
+      "variants": [],
+      "pos": "verb",
+      "sense": "",
+      "ipa": "ˈfaːʁən",
+      "level": "A1",
+      "unit_id": "de.a1-01",
+      "themes": [
+        "travel",
+        "actions"
+      ],
+      "translation": "travel",
+      "alternates": [
+        "drive",
+        "ride"
+      ],
+      "examples": [
+        "Wir fahren morgen mit dem Zug nach Berlin."
+      ],
+      "audio": {},
+      "retired": false,
+      "grammar": {
+        "separable": false,
+        "irregular": true,
+        "auxiliary": "sein"
+      }
+    },
+    {
+      "entry_id": "de.schlafen-1",
+      "headword": "schlafen",
+      "variants": [],
+      "pos": "verb",
+      "sense": "",
+      "ipa": "ˈʃlaːfn̩",
+      "level": "A1",
+      "unit_id": "de.a1-01",
+      "themes": [
+        "daily-life"
+      ],
+      "translation": "sleep",
+      "alternates": [],
+      "examples": [
+        "Das Baby schläft schon."
+      ],
+      "audio": {},
+      "retired": false,
+      "grammar": {
+        "separable": false,
+        "irregular": true,
+        "auxiliary": "haben"
+      }
+    },
+    {
+      "entry_id": "de.hallo-1",
+      "headword": "hallo",
+      "variants": [],
+      "pos": "intj",
+      "sense": "",
+      "ipa": "haˈloː",
+      "level": "A1",
+      "unit_id": "de.a1-01",
+      "themes": [
+        "greetings"
+      ],
+      "translation": "hello",
+      "alternates": [
+        "hi"
+      ],
+      "examples": [
+        "Hallo, wie geht es dir?"
+      ],
+      "audio": {},
+      "retired": false
+    },
+    {
+      "entry_id": "de.danke-1",
+      "headword": "danke",
+      "variants": [],
+      "pos": "intj",
+      "sense": "",
+      "ipa": "ˈdaŋkə",
+      "level": "A1",
+      "unit_id": "de.a1-01",
+      "themes": [
+        "greetings"
+      ],
+      "translation": "thank you",
+      "alternates": [
+        "thanks"
+      ],
+      "examples": [
+        "Danke für deine Hilfe!"
+      ],
+      "audio": {},
+      "retired": false
+    },
+    {
+      "entry_id": "de.gut-1",
+      "headword": "gut",
+      "variants": [],
+      "pos": "adj",
+      "sense": "",
+      "ipa": "ɡuːt",
+      "level": "A1",
+      "unit_id": "de.a1-01",
+      "themes": [
+        "feelings"
+      ],
+      "translation": "good",
+      "alternates": [],
+      "examples": [
+        "Das Essen hier ist gut."
+      ],
+      "audio": {},
+      "retired": false
+    },
+    {
+      "entry_id": "de.gross-1",
+      "headword": "groß",
+      "variants": [],
+      "pos": "adj",
+      "sense": "",
+      "ipa": "ɡʁoːs",
+      "level": "A1",
+      "unit_id": "de.a1-01",
+      "themes": [
+        "daily-life"
+      ],
+      "translation": "big",
+      "alternates": [
+        "tall"
+      ],
+      "examples": [
+        "Mein Bruder ist sehr groß."
+      ],
+      "audio": {},
+      "retired": false
+    },
+    {
+      "entry_id": "de.brot-1",
+      "headword": "Brot",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "bʁoːt",
+      "level": "A1",
+      "unit_id": "de.a1-02",
+      "themes": [
+        "food"
+      ],
+      "translation": "bread",
+      "alternates": [],
+      "examples": [
+        "Ich kaufe ein Brot beim Bäcker."
+      ],
+      "audio": {},
+      "retired": false,
+      "grammar": {
+        "gender": "n",
+        "plural": "Brote"
+      }
+    },
+    {
+      "entry_id": "de.milch-1",
+      "headword": "Milch",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "mɪlç",
+      "level": "A1",
+      "unit_id": "de.a1-02",
+      "themes": [
+        "food"
+      ],
+      "translation": "milk",
+      "alternates": [],
+      "examples": [
+        "Möchtest du Milch in den Kaffee?"
+      ],
+      "audio": {},
+      "retired": false,
+      "grammar": {
+        "gender": "f",
+        "plural": ""
+      }
+    },
+    {
+      "entry_id": "de.apfel-1",
+      "headword": "Apfel",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "ˈapfl̩",
+      "level": "A1",
+      "unit_id": "de.a1-02",
+      "themes": [
+        "food"
+      ],
+      "translation": "apple",
+      "alternates": [],
+      "examples": [
+        "Der Apfel ist rot."
+      ],
+      "audio": {},
+      "retired": false,
+      "grammar": {
+        "gender": "m",
+        "plural": "Äpfel"
+      }
+    },
+    {
+      "entry_id": "de.ei-1",
+      "headword": "Ei",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "aɪ̯",
+      "level": "A1",
+      "unit_id": "de.a1-02",
+      "themes": [
+        "food"
+      ],
+      "translation": "egg",
+      "alternates": [],
+      "examples": [
+        "Zum Frühstück esse ich ein Ei."
+      ],
+      "audio": {},
+      "retired": false,
+      "grammar": {
+        "gender": "n",
+        "plural": "Eier"
+      }
+    },
+    {
+      "entry_id": "de.kaese-1",
+      "headword": "Käse",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "ˈkɛːzə",
+      "level": "A1",
+      "unit_id": "de.a1-02",
+      "themes": [
+        "food"
+      ],
+      "translation": "cheese",
+      "alternates": [],
+      "examples": [
+        "Ich esse gern Käse."
+      ],
+      "audio": {},
+      "retired": false,
+      "grammar": {
+        "gender": "m",
+        "plural": "Käse"
+      }
+    },
+    {
+      "entry_id": "de.fisch-1",
+      "headword": "Fisch",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "fɪʃ",
+      "level": "A1",
+      "unit_id": "de.a1-02",
+      "themes": [
+        "food",
+        "animals"
+      ],
+      "translation": "fish",
+      "alternates": [],
+      "examples": [
+        "Am Freitag gibt es Fisch."
+      ],
+      "audio": {},
+      "retired": false,
+      "grammar": {
+        "gender": "m",
+        "plural": "Fische"
+      }
+    },
+    {
+      "entry_id": "de.kaffee-1",
+      "headword": "Kaffee",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "ˈkafe",
+      "level": "A1",
+      "unit_id": "de.a1-02",
+      "themes": [
+        "food",
+        "restaurant"
+      ],
+      "translation": "coffee",
+      "alternates": [],
+      "examples": [
+        "Einen Kaffee, bitte!"
+      ],
+      "audio": {},
+      "retired": false,
+      "grammar": {
+        "gender": "m",
+        "plural": "Kaffees"
+      }
+    },
+    {
+      "entry_id": "de.tee-1",
+      "headword": "Tee",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "teː",
+      "level": "A1",
+      "unit_id": "de.a1-02",
+      "themes": [
+        "food",
+        "restaurant"
+      ],
+      "translation": "tea",
+      "alternates": [],
+      "examples": [
+        "Der Tee ist noch heiß."
+      ],
+      "audio": {},
+      "retired": false,
+      "grammar": {
+        "gender": "m",
+        "plural": "Tees"
+      }
+    },
+    {
+      "entry_id": "de.kartoffel-1",
+      "headword": "Kartoffel",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "kaʁˈtɔfl̩",
+      "level": "A1",
+      "unit_id": "de.a1-02",
+      "themes": [
+        "food"
+      ],
+      "translation": "potato",
+      "alternates": [],
+      "examples": [
+        "Heute gibt es Kartoffeln mit Gemüse."
+      ],
+      "audio": {},
+      "retired": false,
+      "grammar": {
+        "gender": "f",
+        "plural": "Kartoffeln"
+      }
+    },
+    {
+      "entry_id": "de.fruehstueck-1",
+      "headword": "Frühstück",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "ˈfʁyːʃtʏk",
+      "level": "A1",
+      "unit_id": "de.a1-02",
+      "themes": [
+        "food",
+        "daily-life"
+      ],
+      "translation": "breakfast",
+      "alternates": [],
+      "examples": [
+        "Das Frühstück ist um acht Uhr."
+      ],
+      "audio": {},
+      "retired": false,
+      "grammar": {
+        "gender": "n",
+        "plural": "Frühstücke"
+      }
+    },
+    {
+      "entry_id": "de.tasse-1",
+      "headword": "Tasse",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "ˈtasə",
+      "level": "A1",
+      "unit_id": "de.a1-02",
+      "themes": [
+        "food",
+        "home"
+      ],
+      "translation": "cup",
+      "alternates": [],
+      "examples": [
+        "Ich trinke eine Tasse Tee."
+      ],
+      "audio": {},
+      "retired": false,
+      "grammar": {
+        "gender": "f",
+        "plural": "Tassen"
+      }
+    },
+    {
+      "entry_id": "de.teller-1",
+      "headword": "Teller",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "ˈtɛlɐ",
+      "level": "A1",
+      "unit_id": "de.a1-02",
+      "themes": [
+        "food",
+        "home"
+      ],
+      "translation": "plate",
+      "alternates": [],
+      "examples": [
+        "Der Teller ist leer."
+      ],
+      "audio": {},
+      "retired": false,
+      "grammar": {
+        "gender": "m",
+        "plural": "Teller"
+      }
+    },
+    {
+      "entry_id": "de.fleisch-1",
+      "headword": "Fleisch",
+      "variants": [],
+      "pos": "noun",
+      "sense": "",
+      "ipa": "flaɪ̯ʃ",
+      "level": "A1",
+      "unit_id": "de.a1-02",
+      "themes": [
+        "food"
+      ],
+      "translation": "meat",
+      "alternates": [],
+      "examples": [
+        "Er isst kein Fleisch."
+      ],
+      "audio": {},
+      "retired": false,
+      "grammar": {
+        "gender": "n",
+        "plural": ""
+      }
+    },
+    {
+      "entry_id": "de.essen-1",
+      "headword": "essen",
+      "variants": [],
+      "pos": "verb",
+      "sense": "",
+      "ipa": "ˈɛsn̩",
+      "level": "A1",
+      "unit_id": "de.a1-02",
+      "themes": [
+        "food",
+        "daily-life",
+        "actions"
+      ],
+      "translation": "eat",
+      "alternates": [],
+      "examples": [
+        "Wir essen um zwölf Uhr zu Mittag."
+      ],
+      "audio": {},
+      "retired": false,
+      "grammar": {
+        "separable": false,
+        "irregular": true,
+        "auxiliary": "haben"
+      }
+    },
+    {
+      "entry_id": "de.trinken-1",
+      "headword": "trinken",
+      "variants": [],
+      "pos": "verb",
+      "sense": "",
+      "ipa": "ˈtʁɪŋkn̩",
+      "level": "A1",
+      "unit_id": "de.a1-02",
+      "themes": [
+        "food",
+        "daily-life",
+        "actions"
+      ],
+      "translation": "drink",
+      "alternates": [],
+      "examples": [
+        "Ich trinke gern Wasser."
+      ],
+      "audio": {},
+      "retired": false,
+      "grammar": {
+        "separable": false,
+        "irregular": true,
+        "auxiliary": "haben"
+      }
+    },
+    {
+      "entry_id": "de.kochen-1",
+      "headword": "kochen",
+      "variants": [],
+      "pos": "verb",
+      "sense": "",
+      "ipa": "ˈkɔxn̩",
+      "level": "A1",
+      "unit_id": "de.a1-02",
+      "themes": [
+        "food",
+        "home",
+        "actions"
+      ],
+      "translation": "cook",
+      "alternates": [],
+      "examples": [
+        "Mein Vater kocht heute Abend."
+      ],
+      "audio": {},
+      "retired": false,
+      "grammar": {
+        "separable": false,
+        "irregular": false,
+        "auxiliary": "haben"
+      }
+    },
+    {
+      "entry_id": "de.kaufen-1",
+      "headword": "kaufen",
+      "variants": [],
+      "pos": "verb",
+      "sense": "",
+      "ipa": "ˈkaʊ̯fn̩",
+      "level": "A1",
+      "unit_id": "de.a1-02",
+      "themes": [
+        "shopping",
+        "actions"
+      ],
+      "translation": "buy",
+      "alternates": [],
+      "examples": [
+        "Sie kauft Obst auf dem Markt."
+      ],
+      "audio": {},
+      "retired": false,
+      "grammar": {
+        "separable": false,
+        "irregular": false,
+        "auxiliary": "haben"
+      }
+    },
+    {
+      "entry_id": "de.einkaufen-1",
+      "headword": "einkaufen",
+      "variants": [],
+      "pos": "verb",
+      "sense": "",
+      "ipa": "ˈaɪ̯nˌkaʊ̯fn̩",
+      "level": "A1",
+      "unit_id": "de.a1-02",
+      "themes": [
+        "shopping",
+        "daily-life"
+      ],
+      "translation": "go shopping",
+      "alternates": [
+        "shop"
+      ],
+      "examples": [
+        "Am Samstag kaufen wir im Supermarkt ein."
+      ],
+      "audio": {},
+      "retired": false,
+      "grammar": {
+        "separable": true,
+        "irregular": false,
+        "auxiliary": "haben"
+      }
+    },
+    {
+      "entry_id": "de.lecker-1",
+      "headword": "lecker",
+      "variants": [],
+      "pos": "adj",
+      "sense": "",
+      "ipa": "ˈlɛkɐ",
+      "level": "A1",
+      "unit_id": "de.a1-02",
+      "themes": [
+        "food",
+        "restaurant"
+      ],
+      "translation": "delicious",
+      "alternates": [
+        "tasty"
+      ],
+      "examples": [
+        "Die Suppe ist sehr lecker."
+      ],
+      "audio": {},
+      "retired": false
+    },
+    {
+      "entry_id": "de.kalt-1",
+      "headword": "kalt",
+      "variants": [],
+      "pos": "adj",
+      "sense": "",
+      "ipa": "kalt",
+      "level": "A1",
+      "unit_id": "de.a1-02",
+      "themes": [
+        "weather"
+      ],
+      "translation": "cold",
+      "alternates": [],
+      "examples": [
+        "Das Wasser ist kalt."
+      ],
+      "audio": {},
+      "retired": false
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "corpus_version": 0,
+  "packs": [
+    {
+      "pack_id": "corpus-de-bg",
+      "l1": "bg",
+      "target": "de",
+      "corpus_version": 0,
+      "schema_version": 1,
+      "url": "corpus-v0-bg.pack",
+      "sha256": "45efa8856b41a3f6f0c2edc80680133bbaf30bdd17adf87b328bc661e2e1f0a9",
+      "bytes": 18891
+    },
+    {
+      "pack_id": "corpus-de-en",
+      "l1": "en",
+      "target": "de",
+      "corpus_version": 0,
+      "schema_version": 1,
+      "url": "corpus-v0-en.pack",
+      "sha256": "c8f1e07d752bb04dc06019d80316f55eed28e4e19594969ae7cb0a7c29b972fc",
+      "bytes": 17662
+    }
+  ]
+}
