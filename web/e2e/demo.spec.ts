@@ -1819,15 +1819,6 @@ test.describe('a second course (#313)', () => {
     await page.getByRole('button', { name: `Switch to ${course}` }).click()
   }
 
-  /**
-   * After a switch to a course started before, its words are installed while the page stays (the course watcher):
-   * the path, reached by the nav without a reload, shows a unit of that course once they are.
-   */
-  async function expectCourseOnPath(page: Page, unit: string): Promise<void> {
-    await page.locator('.nav').getByRole('link', { name: 'Path' }).click()
-    await expect(page.getByText(unit, { exact: true }).first()).toBeVisible()
-  }
-
   /** The new word a flashcard shows first, as it is written on the card. */
   async function firstCard(page: Page): Promise<Locator> {
     await page.goto('/study?mode=flashcard')
@@ -1898,6 +1889,10 @@ test.describe('a second course (#313)', () => {
       await switchTo(page, 'English')
       await expect(page.getByRole('heading', { name: 'Which language do you speak?', level: 2 })).toBeFocused()
       await expect(page.getByRole('heading', { name: 'What do you want to learn?' })).toHaveCount(0)
+      // A reload at the language step, the German words still the installed ones, comes back to this setup.
+      await page.reload()
+      await expect(page.getByRole('heading', { name: 'Which language do you speak?', level: 2 })).toBeFocused()
+      await expect(today(page)).toHaveCount(0)
       await page.getByRole('radio', { name: 'Български' }).check()
       await page.getByRole('button', { name: 'Continue' }).click()
       await expect(page.getByRole('heading', { name: 'Your level in English' })).toBeVisible()
@@ -1920,10 +1915,10 @@ test.describe('a second course (#313)', () => {
       await expect(page.getByText('1 of 20 started')).toBeVisible()
       await expectLevel(page, 'A2 · Elementary')
 
-      // Back to German: its words at once, at its own level, with no setup.
+      // Back to German, at its own level, with no setup: its words are installed first, then the course switches, so
+      // the course page names German only once they are, and a session started at once is German.
       await switchTo(page, 'German')
       await expect(page.getByText('German, from Bulgarian', { exact: true })).toBeVisible()
-      await expectCourseOnPath(page, 'Everyday life')
       await expect(page.getByRole('heading', { name: 'Set up Wordado' })).toHaveCount(0)
       await expect(await firstCard(page)).toHaveText('das Haus')
       await expectLevel(page, 'A1 · Beginner')
@@ -1931,8 +1926,8 @@ test.describe('a second course (#313)', () => {
       // And English again: its level, and the word studied in it still started.
       await switchTo(page, 'English')
       await expect(page.getByText('English, from Bulgarian', { exact: true })).toBeVisible()
-      await expectCourseOnPath(page, 'Home and every day')
       await expect(page.getByRole('heading', { name: 'Set up Wordado' })).toHaveCount(0)
+      await page.goto('/path')
       await expect(page.getByText('1 of 20 started')).toBeVisible()
       await expectLevel(page, 'A2 · Elementary')
       const next = await firstCard(page)
