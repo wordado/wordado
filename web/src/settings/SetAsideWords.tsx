@@ -44,7 +44,7 @@ export function SetAsideWords() {
         <ul className="unit-words">
           {words.map(({ wordId, entry }) => (
             <li key={wordId}>
-              <span lang="en" className="word-head">
+              <span lang={corpus?.target ?? 'en'} className="word-head">
                 {entry.headword}
               </span>
               <FlagControls

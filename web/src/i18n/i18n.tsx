@@ -51,9 +51,14 @@ export function interfaceLocales(packL1: string | null): readonly Locale[] {
   return own === undefined ? ['en'] : [own, 'en']
 }
 
+/** A language's name as it sits mid-sentence in `locale` ("German", "немски", "Deutsch", "alemán"). */
+export function languageInSentence(code: string, locale: Locale): string {
+  return new Intl.DisplayNames([locale], { type: 'language' }).of(code) ?? code
+}
+
 /** A language's name, in `locale`, capitalised (plan 10): for headings such as the Matching translation column. */
 export function languageName(code: string, locale: Locale): string {
-  const name = new Intl.DisplayNames([locale], { type: 'language' }).of(code) ?? code
+  const name = languageInSentence(code, locale)
   return name.charAt(0).toUpperCase() + name.slice(1)
 }
 

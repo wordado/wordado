@@ -29,7 +29,7 @@ describe('the level, asked once after the demo was carried into an account', () 
     renderWith(app(asked), ctx)
     expect(screen.getByRole('heading', { level: 1, name: 'Where do you start?' })).toBeTruthy()
     expect(screen.getByText(/^Your account has the whole course now, at every level\. Words below your level count as known/)).toBeTruthy()
-    expect(screen.getByRole('heading', { level: 2, name: 'Your English level' })).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 2, name: 'Your level in English' })).toBeTruthy()
     // The rest of the app stays within reach.
     expect(screen.getByRole('navigation', { name: 'Main' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Find your level with a short test' })).toBeTruthy()

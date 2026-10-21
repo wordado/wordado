@@ -48,7 +48,7 @@ describe('Placement (spec §7.2)', () => {
     expect(document.querySelector('.study-bar')?.textContent).toContain('0 words answered')
     // The word in the learner's language, and English words to choose from (owner's decision, 2026-10-14).
     expect(document.querySelector('.card .prompt-text')?.textContent).not.toBe('')
-    expect(document.querySelector('.card .instruction')?.textContent).toBe('Choose the English word')
+    expect(document.querySelector('.card .instruction')?.textContent).toBe('Choose the word in English')
     expect(document.querySelector('.study-actions .option-text')?.getAttribute('lang')).toBe('en')
     expect(document.querySelectorAll('.study-actions .option')).toHaveLength(4)
     expect(screen.getByRole('button', { name: 'I don’t know' }).classList.contains('dont-know')).toBe(true)

@@ -2,7 +2,7 @@ import { PlacementRun, placementSource, useClient, useClientSnapshot, type Place
 import { X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useApp } from '../app/context'
-import { useT } from '../i18n/i18n'
+import { languageInSentence, useT } from '../i18n/i18n'
 import { Link } from '../router'
 import { Translation } from '../study/Headword'
 import { useStore } from '../useStore'
@@ -16,7 +16,7 @@ import { useStore } from '../useStore'
  * with nothing changed, `taken` once the result is the learner's level.
  */
 export function Placement(props: { readonly source?: PlacementSource; readonly setup?: { leave(): void; taken(): void } }) {
-  const { t } = useT()
+  const { t, locale } = useT()
   const client = useClient()
   const { env } = useApp()
   const { corpus, settings } = useClientSnapshot()
@@ -126,6 +126,8 @@ export function Placement(props: { readonly source?: PlacementSource; readonly s
   }
   const item = s.item!
   const l1 = (props.source?.corpus ?? corpus)?.l1 ?? 'bg'
+  const target = (props.source?.corpus ?? corpus)?.target ?? settings.course
+  const language = languageInSentence(target, locale)
   return (
     <section className="study" aria-labelledby="placement-title">
       <div className="study-bar">
@@ -143,13 +145,13 @@ export function Placement(props: { readonly source?: PlacementSource; readonly s
         </h1>
         <p className="study-count">{t('placement.progress', { count: s.asked })}</p>
       </div>
-      <p className="note placement-intro">{t('placement.intro')}</p>
+      <p className="note placement-intro">{t('placement.intro', { language })}</p>
       <div className="card" ref={card} tabIndex={-1} data-mode="placement">
-        {/* The word in the learner's language, to pick the English one (spec §7.2). */}
+        {/* The word in the learner's language, to pick the course-language one (spec §7.2). */}
         <p className="prompt-text">
           <Translation entry={item.entry} lang={l1} stacked />
         </p>
-        <p className="instruction">{t('study.chooseWord')}</p>
+        <p className="instruction">{t('study.chooseWord', { language })}</p>
       </div>
       <div className="study-actions">
         <ol className="options">
@@ -159,7 +161,7 @@ export function Placement(props: { readonly source?: PlacementSource; readonly s
                 <span className="option-key" aria-hidden="true">
                   {index + 1}
                 </span>{' '}
-                <span className="option-text" lang="en">
+                <span className="option-text" lang={target}>
                   {option.headword}
                 </span>
               </button>

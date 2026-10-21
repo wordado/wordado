@@ -3,7 +3,7 @@ import type { CorpusEntry } from '@wordado/core'
 import { Check, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useApp } from '../app/context'
-import { languageName, localized, useT } from '../i18n/i18n'
+import { languageInSentence, languageName, localized, useT } from '../i18n/i18n'
 import { Link } from '../router'
 import { Translation } from '../study/Headword'
 import { useStore } from '../useStore'
@@ -53,6 +53,7 @@ function Board(props: { readonly run: MatchingRun; readonly scope: ScopeParams; 
     if (s.done) afterRun()
   }, [s.done, afterRun])
   const l1 = corpus?.l1 ?? 'bg'
+  const target = corpus?.target ?? 'en'
   const byId = (entryId: string) => s.left.find((e) => e.entryId === entryId)
   const leftRefs = useRef(new Map<string, HTMLButtonElement>())
   const againRef = useRef<HTMLButtonElement>(null)
@@ -95,7 +96,7 @@ function Board(props: { readonly run: MatchingRun; readonly scope: ScopeParams; 
           }
           onClick={() => void run.select(side, entry.entryId)}
         >
-          {side === 'left' ? <span lang="en">{entry.headword}</span> : <Translation entry={entry} lang={l1} />}
+          {side === 'left' ? <span lang={target}>{entry.headword}</span> : <Translation entry={entry} lang={l1} />}
           {matched && (
             <>
               <span aria-hidden="true"> ✓</span>
@@ -130,7 +131,7 @@ function Board(props: { readonly run: MatchingRun; readonly scope: ScopeParams; 
       </div>
       <div className="matching-head">
         <h1 id="matching-title">{t('matching.title')}</h1>
-        {!s.done && <p className="lede">{t('matching.instructions')}</p>}
+        {!s.done && <p className="lede">{t('matching.instructions', { language: languageInSentence(target, locale) })}</p>}
       </div>
       {s.done ? (
         <div className="panel done-card">
@@ -144,7 +145,7 @@ function Board(props: { readonly run: MatchingRun; readonly scope: ScopeParams; 
       ) : (
         <div className="board">
           <div className="column" role="group" aria-labelledby="matching-en" data-side="left">
-            <h2 id="matching-en">{t('matching.english')}</h2>
+            <h2 id="matching-en">{languageName(target, locale)}</h2>
             <ul>{s.left.map((entry) => pair('left', entry))}</ul>
           </div>
           <div className="column" role="group" aria-labelledby="matching-l1" data-side="right">

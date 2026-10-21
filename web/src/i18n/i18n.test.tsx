@@ -4,7 +4,7 @@ import { bg } from './bg'
 import { de } from './de'
 import { en } from './en'
 import { es } from './es'
-import { I18nProvider, initialLocale, interfaceLocales, languageName, LOCALE_KEY, localized, translate, useT, type MessageKey } from './i18n'
+import { I18nProvider, initialLocale, interfaceLocales, languageInSentence, languageName, LOCALE_KEY, LOCALES, localized, translate, useT, type MessageKey } from './i18n'
 
 afterEach(() => {
   cleanup()
@@ -15,6 +15,22 @@ const placeholders = (message: string | { one: string; other: string }): string[
   const text = typeof message === 'string' ? message : `${message.one} ${message.other}`
   return [...new Set(text.match(/\{\w+\}/g) ?? [])].sort()
 }
+
+describe('the course language in messages', () => {
+  it('names a course language mid-sentence in each interface language', () => {
+    expect((['en', 'bg', 'de', 'es'] as const).map((l) => languageInSentence('de', l))).toEqual(['German', 'немски', 'Deutsch', 'alemán'])
+    expect(translate('en', 'study.chooseWord', { language: 'German' })).toBe('Choose the word in German')
+    expect(translate('bg', 'setup.level.title', { language: 'английски' })).toBe('Вашето ниво по английски')
+  })
+
+  it('leaves no message naming English', () => {
+    const tables = { bg, de, en, es }
+    // No message legitimately names English: the interface-language choice shows ENDONYM (not a message), and the
+    // About credits are not messages either.
+    for (const locale of LOCALES)
+      for (const [key, value] of Object.entries(tables[locale])) expect(JSON.stringify(value), `${locale} ${key}`).not.toMatch(/English|английск|nglisch|inglés/)
+  })
+})
 
 describe('the message tables', () => {
   it('have the same keys, the same shape and the same placeholders in every language', () => {

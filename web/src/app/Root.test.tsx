@@ -342,7 +342,7 @@ describe('the level, asked once of a visitor whose device got the trial after it
     await renderRoot({ trial: true, fresh: true, storage })
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue' })))
     // The setup's own level step.
-    expect(screen.getByRole('heading', { level: 2, name: 'Your English level' })).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 2, name: 'Your level in English' })).toBeTruthy()
     expect(storage.getItem('wordado.trialLevelAsked')).toBeNull()
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Start studying' })))
     expect(storage.getItem('wordado.trialLevelAsked')).toBe('1')
@@ -355,7 +355,7 @@ describe('the level, asked once of a visitor whose device got the trial after it
     const storage = memoryStorage()
     await renderRoot({ trial: true, fresh: true, storage })
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue' })))
-    expect(screen.getByRole('heading', { level: 2, name: 'Your English level' })).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 2, name: 'Your level in English' })).toBeTruthy()
     await act(async () => fireEvent.click(screen.getByRole('radio', { name: /^B1/ })))
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue' })))
     expect(screen.getByRole('heading', { level: 2, name: 'A daily goal' })).toBeTruthy()
@@ -386,7 +386,7 @@ describe('the level, asked once of a visitor whose device got the trial after it
     await renderRoot({ trial: true, storage })
     expect(asking()).toBeNull()
     expect(screen.getByText('Step 2 of 3')).toBeTruthy()
-    expect(screen.getByRole('heading', { level: 2, name: 'Your English level' })).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 2, name: 'Your level in English' })).toBeTruthy()
   })
 
   it('leaves the mark unset when a setup on the sample finishes: it had no level to ask about, so a trial pack that comes later still asks', async () => {

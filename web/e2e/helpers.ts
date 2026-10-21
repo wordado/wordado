@@ -180,7 +180,7 @@ export async function serveGlossedSample(context: BrowserContext, gloss: string)
 export async function finishSetupAt(page: Page, level: string): Promise<void> {
   await page.getByRole('radio', { name: 'Български' }).check()
   await page.getByRole('button', { name: en['setup.continue'] }).click()
-  await expect(page.getByRole('heading', { name: en['setup.level.title'] })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Your level in English' })).toBeVisible()
   // The radio is checked once the level is saved, a moment after the click: `check()` would not wait for it.
   await page.getByRole('radio', { name: level }).click()
   await expect(page.getByRole('radio', { name: level })).toBeChecked()

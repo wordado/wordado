@@ -3,7 +3,7 @@ import { offeredThemes } from '@wordado/core'
 import { ChevronRight } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { errorMessageKey } from '../errors'
-import { localized, useT } from '../i18n/i18n'
+import { languageInSentence, localized, useT } from '../i18n/i18n'
 import { ThemeIcon } from '../themes/icons'
 import { StepActions, useStepHeading, type StepProps } from './step'
 
@@ -14,7 +14,7 @@ import { StepActions, useStepHeading, type StepProps } from './step'
 export function ThemeStep(props: StepProps) {
   const { t, locale } = useT()
   const client = useClient()
-  const { corpus } = useClientSnapshot()
+  const { corpus, settings } = useClientSnapshot()
   const heading = useStepHeading()
   const [error, setError] = useState<string | null>(null)
   /** True while a choice is being saved: a second click before it settles does nothing. */
@@ -44,7 +44,7 @@ export function ThemeStep(props: StepProps) {
   return (
     <section className="setup-step" aria-labelledby="setup-theme-title">
       <h2 id="setup-theme-title" ref={heading} tabIndex={-1}>
-        {t('onboard.title')}
+        {t('onboard.title', { language: languageInSentence(corpus?.target ?? settings.course, locale) })}
       </h2>
       <p className="note">{t('onboard.hint')}</p>
       {corpus && (
