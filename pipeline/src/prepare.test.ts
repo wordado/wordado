@@ -137,11 +137,16 @@ describe('parquetTexts and countParquet', () => {
 describe('pruneRare', () => {
   it('drops the forms seen least often, raising the floor until the table is at most half the limit', () => {
     const counts = new Map([['a', 5], ['b', 1], ['c', 1], ['d', 2], ['e', 1], ['f', 2]])
-    pruneRare(counts, 3)
-    expect(Object.fromEntries(counts)).toEqual({ a: 5 })
-    const more = new Map([['a', 5], ['b', 1], ['d', 2]])
-    pruneRare(more, 4)
-    expect(Object.fromEntries(more)).toEqual({ a: 5, d: 2 })
+    expect(Object.fromEntries(pruneRare(counts, 3))).toEqual({ a: 5 })
+    expect(Object.fromEntries(pruneRare(new Map([['a', 5], ['b', 1], ['d', 2]]), 4))).toEqual({ a: 5, d: 2 })
+  })
+
+  it('returns a new table and leaves the old one alone, so no deleted slots count towards the Map size limit (#324)', () => {
+    const counts = new Map([['a', 5], ['b', 1]])
+    const kept = pruneRare(counts, 2)
+    expect(kept).not.toBe(counts)
+    expect(Object.fromEntries(kept)).toEqual({ a: 5 })
+    expect(counts.size).toBe(2)
   })
 })
 

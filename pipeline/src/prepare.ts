@@ -73,11 +73,20 @@ export const MAX_FORMS = 12_000_000
  * Drops the rarest forms, raising the floor (seen once, then twice, …) until at most half of `max` remain, so the
  * next pruning is far off. A pruned form that comes back starts again from zero, which costs it at most the floor
  * per pruning: nothing for the 200,000 most frequent forms of a corpus this size, whose counts run to hundreds.
+ *
+ * Returns a new table: V8 keeps a deleted entry's slot until the table is rebuilt, so a table pruned in place
+ * from 12 million forms to 6 million reaches the Map size limit at about 10.8 million live forms (#324).
  */
-export function pruneRare(counts: Map<string, number>, max: number): void {
-  for (let floor = 1; counts.size > max / 2; floor += 1) {
-    for (const [form, n] of counts) if (n <= floor) counts.delete(form)
+export function pruneRare(counts: ReadonlyMap<string, number>, max: number): Map<string, number> {
+  let floor = 0
+  for (let left = counts.size; left > max / 2; ) {
+    floor += 1
+    left = 0
+    for (const n of counts.values()) if (n > floor) left += 1
   }
+  const kept = new Map<string, number>()
+  for (const [form, n] of counts) if (n > floor) kept.set(form, n)
+  return kept
 }
 
 export async function countParquet(
@@ -87,12 +96,12 @@ export async function countParquet(
 ): Promise<Map<string, number>> {
   streamed(sources)
   const maxForms = opts.maxForms ?? MAX_FORMS
-  const counts = new Map<string, number>()
+  let counts = new Map<string, number>()
   for (const file of sources) {
     let texts = 0
     for await (const text of parquetTexts(file)) {
       countInto(counts, text)
-      if (counts.size > maxForms) pruneRare(counts, maxForms)
+      if (counts.size > maxForms) counts = pruneRare(counts, maxForms)
       texts += 1
       if (progress && texts % 100_000 === 0) progress(file, texts)
     }
