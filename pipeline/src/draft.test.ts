@@ -476,4 +476,15 @@ describe('adding an L1 (plan 9)', () => {
     expect(llm.calls).toEqual([])
     expect(readFileSync(join(dir, 'registry.json'), 'utf8')).toEqual(registryBefore)
   })
+
+  it('refuses a registry of another course than pipeline.json\'s target, before any LLM stage runs', async () => {
+    const english = makeContent()
+    writeJson(join(english, 'registry.json'), { entries: [{ entry_id: 'de.haus-1', headword: 'Haus', pos: 'noun', sense_en: '', pinned: false }], units: [] })
+    const llm = sampleLlm()
+    await expect(runDraft({ dir: english, llm, offline: false })).rejects.toThrow('registry.json holds de.haus-1, an ID of the de course, but pipeline.json\'s target is en')
+    expect(llm.calls).toEqual([])
+    const german = makeContent({ config: { target: 'de', l1s: ['bg'] } })
+    writeJson(join(german, 'registry.json'), { entries: [{ entry_id: 'water-1', headword: 'water', pos: 'noun', sense_en: '', pinned: false }], units: [] })
+    await expect(runDraft({ dir: german, llm, offline: false })).rejects.toThrow('registry.json holds water-1, an ID of the en course, but pipeline.json\'s target is de')
+  })
 })

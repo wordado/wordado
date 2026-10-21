@@ -1,5 +1,5 @@
 import { PROFILES, type LanguageProfile } from './profiles'
-import { norm, type CefrLevel, type Pack, type PartOfSpeech } from '@wordado/core'
+import { ENTRY_ID_PREFIX, norm, type CefrLevel, type Pack, type PartOfSpeech } from '@wordado/core'
 
 /** An entry ID and the English sense it stands for (spec §5.2's identity). Never removed (spec §5.1). */
 export interface RegistryEntry {
@@ -40,7 +40,9 @@ export function slugOf(headword: string, profile: LanguageProfile = PROFILES.en)
     .replace(/\s+/g, '_')
     .replace(/[^a-z0-9._-]/g, '')
     .replace(/^[^a-z0-9]+/, '')
-  return `${profile.idPrefix}${slug === '' ? 'w' : slug}`
+  // An unprefixed (English) slug never starts like another course's IDs: `de.x` would read as German.
+  const own = profile.idPrefix !== '' ? slug : Object.values(ENTRY_ID_PREFIX).reduce((s, p) => (p !== '' && s.startsWith(p) ? `${p.slice(0, -1)}_${s.slice(p.length)}` : s), slug)
+  return `${profile.idPrefix}${own === '' ? 'w' : own}`
 }
 
 const identity = (k: SenseKey) => `${norm(k.headword)}|${k.pos}|${norm(k.sense_en)}`

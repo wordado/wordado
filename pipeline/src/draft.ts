@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs'
-import { norm, type CefrLevel, type Grammar, type LocalizedText, type PartOfSpeech } from '@wordado/core'
+import { norm, targetOfEntryId, type CefrLevel, type Grammar, type LocalizedText, type PartOfSpeech } from '@wordado/core'
 import { StageCache } from './cache'
 import { readConfig, readThemes } from './config'
 import { contentPaths } from './content'
@@ -109,6 +109,11 @@ export async function runDraft(opts: DraftOptions): Promise<Draft> {
   }
   const decisions = Decisions.read(dir)
   let registry = readJson<Registry>(paths.registry)
+  // A directory whose registry is another course's would mint IDs of two courses into one (spec §5.5).
+  for (const id of [...registry.entries.map((e) => e.entry_id), ...registry.units.map((u) => u.unit_id)]) {
+    const of = targetOfEntryId(id)
+    if (of !== profile.code) throw new Error(`registry.json holds ${id}, an ID of the ${of} course, but pipeline.json's target is ${profile.code}`)
+  }
   const run = (stage: string): StageRun => ({ llm, cache: StageCache.open(paths.cache(stage)), concurrency: opts.concurrency ?? config.llm.concurrency, offline, profile })
 
   const forms = rankForms(sources.map((s) => parseFrequencyList(s.text, s.record.id)), config.max_forms)

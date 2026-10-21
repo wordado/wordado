@@ -86,6 +86,9 @@ describe('German IDs', () => {
   it('keeps English slugs exactly', () => {
     expect(['thank you', "o'clock", 'Café'].map((h) => slugOf(h))).toEqual(['thank_you', 'oclock', 'cafe'])
   })
+  it('never gives an English headword a slug with another course\'s prefix', () => {
+    expect(['de.x', 'De. Niro', 'de-x', 'delta', 'de'].map((h) => slugOf(h))).toEqual(['de_x', 'de__niro', 'de-x', 'delta', 'de'])
+  })
   it('numbers two headwords that transliterate alike apart', () => {
     const { ids } = assignIds({ entries: [], units: [] }, [
       { headword: 'Mädchen', pos: 'noun', sense_en: '' },
