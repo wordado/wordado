@@ -66,7 +66,10 @@ function parse(asked: readonly string[], l1s: readonly string[]) {
  */
 export async function titleUnits(units: readonly TitleUnit[], l1s: readonly string[], run: StageRun): Promise<Map<string, Titles>> {
   const byL1 = new Map<string, Titles[]>()
+  const lead = l1s[0]
   for (const l1 of l1s) {
+    // English as an L1 (a German corpus): its title is the English one, so a second answer could only disagree with the lead's.
+    if (l1 === 'en' && l1 !== lead) continue
     const one = [l1]
     byL1.set(
       l1,
@@ -94,11 +97,10 @@ export async function titleUnits(units: readonly TitleUnit[], l1s: readonly stri
       }),
     )
   }
-  const lead = l1s[0]
   return new Map(
     units.map((u, i) => {
       const en = lead === undefined ? '' : byL1.get(lead)![i]![lead]!.en
-      return [u.unit_id, Object.fromEntries(l1s.map((l1) => [l1, { en, l1: byL1.get(l1)![i]![l1]!.l1 }]))]
+      return [u.unit_id, Object.fromEntries(l1s.map((l1) => [l1, { en, l1: byL1.get(l1)?.[i]![l1]!.l1 ?? en }]))]
     }),
   )
 }
