@@ -190,6 +190,7 @@ export const de: Messages = {
   'settings.nativeLanguageChange': 'Wechseln',
   'settings.nativeLanguageChangeLink': 'Muttersprache wechseln',
   'settings.nativeLanguagePending': 'Sobald die Übersetzungen heruntergeladen sind, erscheinen deine Wörter auf {language}.',
+  'settings.coursePending': 'Deine Wörter wechseln zu {language}, sobald sie heruntergeladen sind.',
   'settings.language': 'Sprache der Oberfläche',
   'settings.languageHint': 'Die Wörter sind immer auf {language}; das ändert nur die Menüs und Meldungen.',
 

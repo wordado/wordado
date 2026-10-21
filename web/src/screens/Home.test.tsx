@@ -16,6 +16,19 @@ describe('Home', () => {
     expect(screen.getByText('0 XP today, 0 in all')).toBeTruthy()
   })
 
+  it('says a course switch is pending, and still offers the installed course’s words (a switch synced while offline)', async () => {
+    const ctx = await setup()
+    renderWith(<Home />, ctx)
+    expect(screen.queryByText(/when they have downloaded/)).toBeNull()
+    // Another device switched to German, started before; this one has not got its words yet.
+    await act(async () => {
+      await ctx.client.switchCourse('de')
+      await ctx.client.updateSettings({ l1: 'bg' })
+    })
+    expect(screen.getByText('Your words switch to German when they have downloaded.')).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Start studying' }).getAttribute('href')).toBe('/study')
+  })
+
   it('counts words chosen with Learn this word among today’s new words, within the daily limit (spec §7.4)', async () => {
     const ctx = await setup()
     await ctx.client.updateSettings({ declaredLevel: 'A2', newWordLimit: 2 })

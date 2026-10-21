@@ -27,21 +27,26 @@ export interface PackSwitchDeps {
  */
 export class PackSwitcher {
   readonly store: Store<PackSwitchState> = createStore<PackSwitchState>({ phase: 'idle' })
-  private running: { readonly course: Course; readonly client: Client; readonly promise: Promise<ChangeL1Outcome> } | null = null
+  private running: { readonly course: Course; readonly client: Client; readonly switching: boolean; readonly promise: Promise<ChangeL1Outcome> } | null = null
   /** The queue: each install chains onto this, whatever its own outcome, so the next one always gets its turn. */
   private queue: Promise<void> = Promise.resolve()
 
   constructor(private readonly deps: PackSwitchDeps) {}
 
-  install(client: Client, account: AccountRecord | null, course: Course): Promise<ChangeL1Outcome> {
+  /**
+   * `switchCourse`: a switch to a course started before (Settings' course page), whose settings follow its pack once it
+   * is active (`Client.changeCourse`'s option). Such a call never joins a plain install: the switch must still be made.
+   */
+  install(client: Client, account: AccountRecord | null, course: Course, options: { readonly switchCourse?: boolean } = {}): Promise<ChangeL1Outcome> {
+    const switching = options.switchCourse === true
     const joining = this.running
     // A join also needs the same client: a signed-out demo and the account that replaces it are different clients,
     // so an install for one must never hand back the other's (still-running) promise.
-    if (joining && sameCourse(joining.course, course) && joining.client === client) return joining.promise
+    if (joining && sameCourse(joining.course, course) && joining.client === client && joining.switching === switching) return joining.promise
 
     const after = this.queue
-    const promise: Promise<ChangeL1Outcome> = after.then(() => this.run(client, account, course))
-    this.running = { course, client, promise }
+    const promise: Promise<ChangeL1Outcome> = after.then(() => this.run(client, account, course, switching))
+    this.running = { course, client, switching, promise }
     this.queue = promise.then(
       () => undefined,
       () => undefined,
@@ -57,13 +62,13 @@ export class PackSwitcher {
     this.store.set({ phase: 'idle' })
   }
 
-  private async run(client: Client, account: AccountRecord | null, course: Course): Promise<ChangeL1Outcome> {
+  private async run(client: Client, account: AccountRecord | null, course: Course, switching: boolean): Promise<ChangeL1Outcome> {
     // Published before the manifest fetch too, so a retry never leaves a previous attempt's `failed` on screen.
     this.store.set({ phase: 'downloading', client, course, received: 0, total: 0 })
     try {
       const manifest = await this.deps.fetchManifest(account, course.target)
       const fetchPack = this.deps.fetcher((received, total) => this.store.set({ phase: 'downloading', client, course, received, total }))
-      const outcome = await client.changeCourse(course, manifest, fetchPack)
+      const outcome = await client.changeCourse(course, manifest, fetchPack, switching ? { switchCourse: true } : {})
       this.store.set(outcome.ok ? { phase: 'idle' } : { phase: 'failed', client, course })
       return outcome
     } catch (error) {

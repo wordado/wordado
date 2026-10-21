@@ -98,6 +98,27 @@ describe('PackSwitcher (plan 11)', () => {
     expect(courses).toEqual([{ target: 'de', l1: 'bg' }])
   })
 
+  it('a switch passes switchCourse to changeCourse, and never joins a plain install of the same course', async () => {
+    const switcher = harness()
+    const options: unknown[] = []
+    let release!: () => void
+    const held = new Promise<void>((resolve) => (release = resolve))
+    const client = {
+      changeCourse: async (_course: Course, _manifest: PackManifest, _fetch: PackFetcher, opts?: unknown) => {
+        options.push(opts)
+        await held
+        return { ok: true }
+      },
+    } as unknown as Client
+    const plain = switcher.install(client, null, { target: 'de', l1: 'bg' })
+    const switching = switcher.install(client, null, { target: 'de', l1: 'bg' }, { switchCourse: true })
+    expect(switching).not.toBe(plain)
+    release()
+    expect(await plain).toEqual({ ok: true })
+    expect(await switching).toEqual({ ok: true })
+    expect(options).toEqual([{}, { switchCourse: true }])
+  })
+
   it('joins only the same course: the same L1 in another course queues instead', async () => {
     const switcher = harness()
     const d = deferredClient()

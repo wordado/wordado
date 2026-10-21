@@ -181,6 +181,7 @@ export const bg: Messages = {
   'settings.nativeLanguageChange': 'Сменете',
   'settings.nativeLanguageChangeLink': 'Сменете родния език',
   'settings.nativeLanguagePending': 'Думите ви ще се превеждат на {language}, щом преводите бъдат изтеглени.',
+  'settings.coursePending': 'Думите ви ще се сменят на {language}, когато се изтеглят.',
   'settings.language': 'Език на интерфейса',
   'settings.languageHint': 'Думите винаги са на {language}; това сменя менютата и съобщенията.',
 

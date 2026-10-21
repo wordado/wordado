@@ -186,6 +186,7 @@ export const en = {
   'settings.nativeLanguageChange': 'Change',
   'settings.nativeLanguageChangeLink': 'Change native language',
   'settings.nativeLanguagePending': 'Your words switch to {language} as soon as the translations have downloaded.',
+  'settings.coursePending': 'Your words switch to {language} when they have downloaded.',
   'settings.language': 'Interface language',
   'settings.languageHint': 'The words are always in {language}; this changes the menus and messages.',
 
