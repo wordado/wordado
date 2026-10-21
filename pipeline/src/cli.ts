@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { checkPackSuccession, loadCorpus, offeredThemes, themeSize, validatePack, type CreditsFile, type Pack, type PackError } from '@wordado/core'
+import { TARGETS, checkPackSuccession, isTarget, loadCorpus, offeredThemes, themeSize, validatePack, type CreditsFile, type Pack, type PackError } from '@wordado/core'
 import { aiReviewConfig, runAiReview } from './aiReview/run'
 import { reviewerLlm } from './aiReview/reviewers'
 import { audioQueueItems, clipsNeeded, generateClips, readAudioRecords } from './audio'
@@ -30,7 +30,7 @@ import { openRouterTts } from './tts'
 
 const USAGE = `usage: corpus <command>
   content (a content directory, e.g. an absolute path to your clone of wordado-content):
-    init <dir>                     a new content directory, seeded with the sample
+    init <dir> [--target <code>]   a new content directory: English seeded with the sample, or another target's, empty
     draft <dir> [--offline] [--regroup | --rebuild]
                                    every LLM stage; --offline uses the cache only; --regroup rebuilds unpublished units;
                                    --rebuild, once: every entry takes its banded level and all units are built again
@@ -59,7 +59,7 @@ const USAGE = `usage: corpus <command>
     build <source-dir> | validate <pack-file> | check <previous-pack> <next-pack> | publishable <dir>`
 
 const argv = process.argv.slice(2)
-const VALUED = new Set(['--by', '--batch', '--from', '--to', '--keys', '--note', '--sample', '--stage', '--queue', '--reviewer'])
+const VALUED = new Set(['--by', '--batch', '--from', '--to', '--keys', '--note', '--sample', '--stage', '--queue', '--reviewer', '--target'])
 const option = (name: string): string | undefined => {
   const i = argv.indexOf(name)
   return i >= 0 ? argv[i + 1] : undefined
@@ -351,7 +351,14 @@ async function main(): Promise<void> {
   const [command, first, second] = positional
   switch (command) {
     case 'init':
-      initContent(arg(first))
+      {
+        const t = option('--target') ?? 'en'
+        if (!isTarget(t)) {
+          console.error(`unknown target "${t}"; the targets are ${TARGETS.join(', ')}`)
+          process.exit(2)
+        }
+        initContent(arg(first), { target: t })
+      }
       console.log(`initialised ${first}; next: fill in sources.json once the legal review clears a source`)
       break
     case 'draft':

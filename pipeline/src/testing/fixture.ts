@@ -1,10 +1,9 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Pack } from '@wordado/core'
 import { audioQueueItems, clipsNeeded, generateClips, readAudioRecords } from '../audio'
 import { readConfig } from '../config'
-import { contentPaths } from '../content'
 import type { PipelineConfig } from '../config'
 import { Decisions, QUEUES } from '../decisions'
 import { readDraft } from '../draft'
@@ -122,7 +121,7 @@ export function sampleLlm(opts: { grammar?: boolean } = {}) {
 /** A content directory as `corpus init` makes it, with a cleared invented source and small targets. */
 export function makeContent(overrides: { config?: Partial<PipelineConfig> } = {}): string {
   const dir = join(mkdtempSync(join(tmpdir(), 'content-')), 'content')
-  initContent(dir)
+  initContent(dir, { target: overrides.config?.target ?? 'en' })
   const config = JSON.parse(readFileSync(join(dir, 'pipeline.json'), 'utf8')) as PipelineConfig
   writeJson(join(dir, 'pipeline.json'), {
     ...config,
@@ -152,16 +151,9 @@ export function makeContent(overrides: { config?: Partial<PipelineConfig> } = {}
   // The template's starting list would ask the fake LLM about words it does not know; tests add their own.
   writeFileSync(join(dir, 'essentials.txt'), '')
   if ((overrides.config?.target ?? 'en') !== 'en') {
-    // The English sample is no predecessor of another target's corpus (spec §5.5): that directory starts with
-    // nothing published and no pinned IDs. The sample's words come in as essentials instead, so its themed units
-    // are built and named here too.
-    const paths = contentPaths(dir)
+    // `corpus init --target` starts another target with nothing published and no pinned IDs (spec §5.5). The
+    // sample's words come in as essentials instead, so its themed units are built and named here too.
     writeFileSync(join(dir, 'essentials.txt'), `${[...new Set(sample.entries.map((e) => e.headword))].join('\n')}\n`)
-    writeJson(paths.registry, { entries: [], units: [] })
-    rmSync(paths.lastPublished, { recursive: true })
-    mkdirSync(paths.lastPublished)
-    writeJson(join(paths.lastPublished, 'manifest.json'), { schema_version: 1, corpus_version: 0, packs: [] })
-    writeJson(join(paths.lastPublished, 'fixes.json'), { schema_version: 1, corpus_version: 0, fixes: [] })
   }
   return dir
 }
