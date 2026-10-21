@@ -6,6 +6,8 @@ import { memoryStorage, type KeyValue } from '../account/storage'
 import { fakeApi } from '../test/fakeApi'
 import { answerNew, fakeAccounts, renderWith, setup } from '../test/fixtures'
 import { App } from '../app/App'
+import { de } from '../i18n/de'
+import { useT } from '../i18n/i18n'
 import { SignIn } from './SignIn'
 
 /** This device's own values (the answer to the passkey offer), fresh for each test. */
@@ -695,6 +697,69 @@ describe('SignIn: passkeys in the email field’s autofill (#287)', () => {
   })
 })
 
+describe('SignIn: a request waiting in the field answers in the language of now (#302)', () => {
+  /** Switches the interface language, as the language menu does. */
+  function German() {
+    const { setLocale } = useT()
+    return (
+      <button type="button" onClick={() => setLocale('de')}>
+        German
+      </button>
+    )
+  }
+
+  it('says a refused passkey in the language chosen while the request waited', async () => {
+    passkeyBrowser({ conditional: true })
+    let refuse: (err: unknown) => void = () => {}
+    const api = fakeApi({ passkeySignIn: () => new Promise<void>((_, reject) => (refuse = reject)) })
+    const ctx = await setup()
+    renderWith(
+      <>
+        <German />
+        <SignIn deviceStore={device} />
+      </>,
+      { ...ctx, api, accounts: fakeAccounts() },
+    )
+    await act(async () => undefined)
+    fireEvent.click(screen.getByRole('button', { name: 'German' }))
+    await act(async () => refuse(new ApiError(401, 'PASSKEY_NOT_FOUND')))
+    expect(screen.getByRole('alert').textContent).toBe(de['signin.passkeyGone'])
+  })
+})
+
+describe('SignIn: back to Settings › Account when it asked for the sign-in (#302)', () => {
+  it('returns there after the code', async () => {
+    passkeyBrowser({ platform: false })
+    window.history.replaceState(null, '', '/signin?back=account')
+    const ctx = await setup()
+    renderWith(<SignIn deviceStore={device} />, { ...ctx, api: fakeApi(), accounts: fakeAccounts(), account: ANA })
+    await act(async () => undefined)
+    await enterEmail()
+    await enterCode()
+    expect(window.location.pathname).toBe('/settings/account')
+  })
+
+  it('returns there from the passkey offer too', async () => {
+    passkeyBrowser({ platform: true })
+    window.history.replaceState(null, '', '/signin?back=account')
+    const ctx = await setup()
+    renderWith(<SignIn deviceStore={device} />, { ...ctx, api: fakeApi(), accounts: fakeAccounts(), account: ANA })
+    await act(async () => undefined)
+    await enterEmail()
+    await enterCode()
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Not now' })))
+    expect(window.location.pathname).toBe('/settings/account')
+  })
+
+  it('goes home after a sign-in nothing asked for', async () => {
+    passkeyBrowser({ platform: false })
+    await render()
+    await enterEmail()
+    await enterCode()
+    expect(window.location.pathname).toBe('/')
+  })
+})
+
 describe('SignIn: the offer of a passkey after a code (#287)', () => {
   /** Finishing a sign-in switches the database, which mounts the app afresh: a new sign-in screen, the account now there. */
   async function remountSignedIn(apiOver: Parameters<typeof fakeApi>[0] = {}) {
@@ -818,6 +883,39 @@ describe('SignIn: the offer of a passkey after a code (#287)', () => {
     expect(offerPending.get()).toBe(false)
     await act(async () => release(true))
     expect(offerPending.get()).toBe(true)
+  })
+
+  it('owes the offer before the switch mounts the new screen, so it never opens on the email step (#302)', async () => {
+    passkeyBrowser({ platform: true })
+    let owedAtSwitch: boolean | null = null
+    await render({
+      completeSignIn: async () => {
+        // The switch: the new screen mounts here, and reads whether the offer is owed.
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        owedAtSwitch = offerPending.get()
+        return 'signed-in'
+      },
+    })
+    await enterEmail()
+    await act(async () => {
+      await enterCode()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    expect(owedAtSwitch).toBe(true)
+    expect(offerPending.get()).toBe(true)
+  })
+
+  it('owes nothing when the check answers only after the sign-in failed (#302)', async () => {
+    let release: (v: boolean) => void = () => {}
+    vi.stubGlobal('PublicKeyCredential', {
+      isUserVerifyingPlatformAuthenticatorAvailable: () => new Promise<boolean>((r) => (release = r)),
+      isConditionalMediationAvailable: async () => false,
+    })
+    await render({ completeSignIn: async () => Promise.reject(new OfflineError(new TypeError('Failed to fetch'))) })
+    await enterEmail()
+    await enterCode()
+    await act(async () => release(true))
+    expect(offerPending.get()).toBe(false)
   })
 
   it('offers nothing on a device without its own unlock', async () => {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ApiError, PasskeyCancelled, type PasskeyInfo } from '../account/api'
 import { platformAuthenticator } from '../account/passkeys'
 import { ConfirmDialog } from '../app/Confirm'
@@ -29,7 +29,8 @@ export function Passkeys() {
   const [focusHeading, setFocusHeading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const date = (at: number) => new Intl.DateTimeFormat(locale, { dateStyle: 'long' }).format(new Date(at))
+  const dateFormat = useMemo(() => new Intl.DateTimeFormat(locale, { dateStyle: 'long' }), [locale])
+  const date = (at: number) => dateFormat.format(new Date(at))
 
   const refresh = useCallback(async () => setPasskeys(await api.listPasskeys()), [api])
 
@@ -76,20 +77,22 @@ export function Passkeys() {
     setAdding(true)
     try {
       await api.passkeyRegister()
-      setAdded(true)
     } catch (err) {
+      setAdding(false)
       if (err instanceof PasskeyCancelled) return
       if (err instanceof ApiError && err.status === 403 && err.code === 'SESSION_NOT_FRESH') setNotFresh(true)
       else setError(t('passkey.addFailed'))
-    } finally {
-      setAdding(false)
+      return
     }
+    setAdded(true)
     // The passkey is added whatever the list says next; a list that cannot be fetched keeps the success message.
     try {
       await refresh()
     } catch {
       // The list is out of date until the next visit; nothing more to say.
     }
+    // Only now, so the button cannot be pressed again before the new passkey is listed.
+    setAdding(false)
   }
 
   const remove = async (passkey: PasskeyInfo) => {
@@ -97,6 +100,7 @@ export function Passkeys() {
     // The passkey is gone from the server whatever else happens; the device is told, but nothing waits for it.
     void api.signalGone(passkey.credentialId)
     setAdded(false)
+    setNotFresh(false)
     setRemoved(true)
     try {
       await refresh()
@@ -130,14 +134,18 @@ export function Passkeys() {
         </button>
       )}
       {!online && <p className="note">{t('passkey.offline')}</p>}
+      {/* One region, always there, so whatever fills it is announced (#302). */}
       <p className="note" role="status">
-        {added ? t('passkey.added') : removed ? t('passkey.removedNote') : ''}
+        {added ? (
+          t('passkey.added')
+        ) : removed ? (
+          t('passkey.removedNote')
+        ) : notFresh ? (
+          <>
+            {t('passkey.notFresh')} <Link to={{ name: 'signin', back: 'account' }}>{t('passkey.notFreshLink')}</Link>
+          </>
+        ) : null}
       </p>
-      {notFresh && (
-        <p className="note" role="status">
-          {t('passkey.notFresh')} <Link to={{ name: 'signin' }}>{t('passkey.notFreshLink')}</Link>
-        </p>
-      )}
       {error !== null && (
         <p className="field-error" role="alert">
           {error}

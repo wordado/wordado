@@ -1,6 +1,6 @@
 import { useClient } from '@wordado/client-data'
 import { newsConsentText } from '@wordado/core'
-import { useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useEffectEvent, useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { ApiError, OfflineError, PasskeyCancelled, type CodeOutcome } from '../account/api'
 import { consentAge } from '../account/ageGate'
 import { countryOptions } from '../account/countries'
@@ -11,7 +11,7 @@ import { AccountGives } from '../app/AccountGives'
 import { privacyUrl } from '../app/site'
 import { ProgressBar } from '../app/ProgressBar'
 import { useT, type MessageKey } from '../i18n/i18n'
-import { Link, navigate } from '../router'
+import { Link, navigate, useRoute, type Route } from '../router'
 import { useOnline } from '../useOnline'
 import { useStore } from '../useStore'
 
@@ -119,6 +119,9 @@ export function SignIn(props: { readonly deviceStore?: KeyValue }) {
   const { api, accounts, account } = useApp()
   const client = useClient()
   const online = useOnline()
+  const route = useRoute()
+  // Where a finished sign-in goes: back to Settings › Account when it asked for one (#302), else home.
+  const done: Route = route.name === 'signin' && route.back === 'account' ? { name: 'settings', section: 'account' } : { name: 'home' }
   const [deviceStore] = useState(() => props.deviceStore ?? browserStorage('localStorage'))
   const [step, setStep] = useState<Step>({ kind: 'method' })
   const pending = useStore(offerPending)
@@ -246,18 +249,34 @@ export function SignIn(props: { readonly deviceStore?: KeyValue }) {
   }
 
   /**
-   * The session is there: bring the account onto this device, and go home. After a code, a device that can hold a
-   * passkey and has not answered is offered one first: once the sign-in is complete, so the demo's carry-over or
-   * discard has run, and never for a sign-in refused for another account's progress.
+   * The session is there: bring the account onto this device, and go home, or back to Settings › Account when the
+   * sign-in was asked for there (#302). After a code, a device that can hold a passkey and has not answered is offered
+   * one first: once the sign-in is complete, so the demo's carry-over or discard has run, and never for a sign-in
+   * refused for another account's progress.
    */
   const finishSignIn = async (method: 'code' | 'passkey') => {
     offerPending.set(false)
+    // Set once the sign-in did not go through: a check that answers after that owes nothing.
+    let refused = false
     try {
       // The check runs beside completeSignIn, which it must not delay.
       const owed = method === 'code' && passkeysSupported() && !offerAnswered(deviceStore) ? platformAuthenticator() : Promise.resolve(false)
       owed.catch(() => {})
+      // With no account yet, the sign-in switches the database and mounts a new screen. Owing the offer as soon as the
+      // check answers lets that screen open on it, not on the email step for a moment (#302); it shows only once the
+      // account is there. With an account, nothing remounts and the offer waits for the sign-in, which may refuse it.
+      if (account === null) {
+        void owed.then(
+          (yes) => {
+            if (yes && !refused) offerPending.set(true)
+          },
+          () => undefined,
+        )
+      }
       const outcome = await accounts.completeSignIn()
       if (outcome === 'other-account') {
+        refused = true
+        offerPending.set(false)
         setFormError(t('signin.otherAccount', { email: account?.email ?? '' }))
         stopWorking()
         if (method === 'passkey') setAutofillRun((n) => n + 1)
@@ -270,8 +289,10 @@ export function SignIn(props: { readonly deviceStore?: KeyValue }) {
         stopWorking()
         return
       }
-      navigate({ name: 'home' }, { replace: true })
+      navigate(done, { replace: true })
     } catch (err) {
+      refused = true
+      offerPending.set(false)
       setFormError(t(failureKey(err, 'signin.failed')))
       stopWorking()
       if (method === 'passkey') setAutofillRun((n) => n + 1)
@@ -348,18 +369,21 @@ export function SignIn(props: { readonly deviceStore?: KeyValue }) {
     if (key !== null) setFormError(t(key))
   }
 
+  // The waiting request answers with this render's language and account, not those of the render it started in (#302).
+  const pickedInField = useEffectEvent(() => void signedInWithPasskey())
+  const refusedInField = useEffectEvent((err: unknown) => passkeyFailed(err, autofillFailureKey))
+
   // On the first step, a passkey picked from the email field's suggestions signs in; leaving the step aborts the wait.
-  // signedInWithPasskey and passkeyFailed only set state and finish the sign-in, so the first render's copies do.
   useEffect(() => {
     if (view !== 'method' || !autofill) return
     const controller = new AbortController()
     waiting.current = controller
     api.passkeySignIn({ conditional: true, signal: controller.signal }).then(
       () => {
-        if (!controller.signal.aborted) void signedInWithPasskey()
+        if (!controller.signal.aborted) pickedInField()
       },
       (err: unknown) => {
-        if (!controller.signal.aborted) passkeyFailed(err, autofillFailureKey)
+        if (!controller.signal.aborted) refusedInField(err)
       },
     )
     return () => controller.abort()
@@ -401,7 +425,7 @@ export function SignIn(props: { readonly deviceStore?: KeyValue }) {
   const leaveOffer = () => {
     markOfferAnswered(deviceStore)
     offerPending.set(false)
-    navigate({ name: 'home' }, { replace: true })
+    navigate(done, { replace: true })
   }
 
   /** Leaving the age step without an account: the server drops the ticket. */

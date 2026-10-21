@@ -171,7 +171,7 @@ first screen does not grow. Where `PublicKeyCredential` is missing, nothing abou
   more is done.
 - *Add a passkey on this device*, shown when the browser has a platform authenticator. If the session is not
   fresh (the server refuses), the app says *For your safety, sign in again with a code to add a passkey* and
-  offers the sign-in.
+  offers the sign-in, which returns to Settings › Account when done (`/signin?back=account`, #302).
 - Without passkeys: one line saying what a passkey is, and the add button.
 
 ## 6. Texts

@@ -19,7 +19,8 @@ export type Route =
   /** One theme's words (`/themes/<themeId>`); `q` is what its word search starts with (`?q=`). */
   | { readonly name: 'theme'; readonly themeId: string; readonly q?: string | undefined }
   | { readonly name: 'progress' }
-  | { readonly name: 'signin' }
+  /** `back` is where a finished sign-in returns to (`?back=account`): Settings › Account, when it asked for one (#302). */
+  | { readonly name: 'signin'; readonly back?: 'account' | undefined }
   | { readonly name: 'settings'; readonly section?: SettingsSection }
   | { readonly name: 'placement' }
   | { readonly name: 'native-language' }
@@ -82,7 +83,7 @@ export function parseRoute(pathname: string, search: string): Route {
     case '/progress':
       return { name: 'progress' }
     case '/signin':
-      return { name: 'signin' }
+      return new URLSearchParams(search).get('back') === 'account' ? { name: 'signin', back: 'account' } : { name: 'signin' }
     case '/settings':
       return { name: 'settings' }
     case '/settings/placement':
@@ -135,6 +136,8 @@ export function routeHref(route: Route): string {
       return '/settings/placement'
     case 'native-language':
       return '/settings/native-language'
+    case 'signin':
+      return route.back ? `/signin?back=${route.back}` : '/signin'
     case 'settings':
       return route.section ? `/settings/${route.section}` : '/settings'
     case 'feedback':
