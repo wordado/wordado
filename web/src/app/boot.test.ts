@@ -996,6 +996,28 @@ describe('the first-run setup (plan 11)', () => {
     expect(ready(again.boot).snapshot.corpus?.l1).toBe('bg')
   })
 
+  it('opens the setup for the open client on request, as the first-run path does, and finishSetup ends it (spec §8.6)', async () => {
+    const calls: string[] = []
+    const d = disk()
+    const first = boot({ openDriver: d.openDriver })
+    await first.boot.start()
+    expect(await ready(first.boot).changeCourse({ target: 'en', l1: 'bg' }, sampleManifest, sampleFetcher)).toEqual({ ok: true })
+    await first.release()
+
+    const again = boot({ openDriver: d.openDriver, onReady: async () => void calls.push('onReady') })
+    await again.boot.start()
+    const client = ready(again.boot)
+    await Promise.resolve()
+    calls.length = 0
+    again.boot.startSetup()
+    expect(again.boot.store.get()).toMatchObject({ status: 'ready', setup: true, resumed: false, account: null })
+    expect(ready(again.boot)).toBe(client)
+    again.boot.finishSetup()
+    expect(again.boot.store.get()).toMatchObject({ status: 'ready', setup: false })
+    await Promise.resolve()
+    expect(calls).toEqual(['onReady'])
+  })
+
   it('installs the chosen language without asking again when the tab closed during its download (Review Focus 3)', async () => {
     const d = disk()
     const first = boot({ openDriver: d.openDriver })

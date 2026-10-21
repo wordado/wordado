@@ -13,10 +13,20 @@ import { Settings } from './Settings'
 
 vi.mock('../download', () => ({ saveFile: vi.fn() }))
 
+/** The courses the build offers: English alone unless a test says otherwise (spec §5.5). */
+const build = vi.hoisted(() => ({ offered: ['en'] as readonly ('en' | 'de')[] }))
+vi.mock('../content/packs', async (original) => ({
+  ...(await original<typeof import('../content/packs')>()),
+  get OFFERED_TARGETS() {
+    return build.offered
+  },
+}))
+
 beforeEach(() => window.history.replaceState(null, '', '/settings'))
 afterEach(() => {
   cleanup()
   window.localStorage.removeItem(AUTO_CONTINUE_KEY)
+  build.offered = ['en']
 })
 
 const ana = { userId: 'u1', email: 'ana@example.com' }
@@ -89,6 +99,27 @@ describe('Settings: the menu', () => {
     expect(screen.getByRole('heading', { level: 2, name: 'Languages' })).toBeTruthy()
     expect(screen.getByRole('heading', { level: 3, name: 'Native language' })).toBeTruthy()
     expect(screen.getByRole('heading', { level: 3, name: 'Interface language' })).toBeTruthy()
+  })
+
+  it('shows the course as a row to its page when the build offers two (spec §8.6)', async () => {
+    build.offered = ['en', 'de']
+    const ctx = await setup()
+    renderWith(<Settings section="languages" />, ctx)
+    const row = page().getByRole('link', { name: /^Course/ })
+    expect(row.getAttribute('href')).toBe('/settings/course')
+    expect(row.textContent).toContain('English, from Bulgarian')
+  })
+
+  it('shows no course on a build that offers one, unless the settings name a course it does not offer', async () => {
+    const ctx = await setup()
+    const { unmount } = renderWith(<Settings section="languages" />, ctx)
+    expect(page().queryByRole('link', { name: /^Course/ })).toBeNull()
+    unmount()
+    // Switched to German on another device: this English-only build shows it, and its page offers the way back.
+    await ctx.client.switchCourse('de')
+    await ctx.client.updateSettings({ l1: 'bg' })
+    renderWith(<Settings section="languages" />, ctx)
+    expect(page().getByRole('link', { name: /^Course/ }).textContent).toContain('German, from Bulgarian')
   })
 
   it('offers the learner’s L1 and English as the interface language, nothing else (spec §11.2)', async () => {

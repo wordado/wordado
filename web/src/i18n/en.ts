@@ -176,6 +176,10 @@ export const en = {
   'settings.audioDownloaded': '{done} of {total} clips on this device',
   'settings.audioOffline': 'Connect to download audio.',
 
+  'settings.course': 'Course',
+  'settings.courseHint': 'Each course keeps its own level, theme and native language; your streak and goal are shared.',
+  'settings.courseSwitch': 'Switch to {language}',
+  'settings.courseCurrent': '{course}, from {language}',
   'settings.nativeLanguage': 'Native language',
   'settings.nativeLanguageHint': 'The language the words are translated into.',
   'settings.nativeLanguageConfirm': 'Your progress stays. The words switch to {language} translations.',
@@ -197,6 +201,7 @@ export const en = {
   'levelAsk.leadDemo': 'The demo now has a unit at every level.',
   'setup.goal.title': 'A daily goal',
   'setup.goal.hint': 'Optional. You can set it or change it any time in Settings.',
+  'setup.course.title': 'What do you want to learn?',
   'setup.language.title': 'Which language do you speak?',
   'setup.language.hint': 'Words are explained in this language. You can change it later in Settings.',
   'setup.continue': 'Continue',

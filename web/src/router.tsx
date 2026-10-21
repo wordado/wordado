@@ -24,6 +24,8 @@ export type Route =
   | { readonly name: 'settings'; readonly section?: SettingsSection }
   | { readonly name: 'placement' }
   | { readonly name: 'native-language' }
+  /** Switching course (spec §8.6), a sub-page of Settings' Languages section. */
+  | { readonly name: 'course' }
   /** Feedback about the app (spec §8.12). `from` is the path of the screen it was opened from, without its query. */
   | { readonly name: 'feedback'; readonly from?: string | undefined }
 
@@ -92,6 +94,8 @@ export function parseRoute(pathname: string, search: string): Route {
       return { name: 'placement' }
     case '/settings/native-language':
       return { name: 'native-language' }
+    case '/settings/course':
+      return { name: 'course' }
     case '/feedback':
       return { name: 'feedback', ...fromParam(search) }
     default: {
@@ -136,6 +140,8 @@ export function routeHref(route: Route): string {
       return '/settings/placement'
     case 'native-language':
       return '/settings/native-language'
+    case 'course':
+      return '/settings/course'
     case 'signin':
       return route.back ? `/signin?back=${route.back}` : '/signin'
     case 'settings':

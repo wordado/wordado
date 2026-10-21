@@ -25,11 +25,13 @@ export function LanguageStep(props: { readonly mode: 'setup' | 'change'; readonl
   const { settings, l1: installedText } = useClientSnapshot()
   const download = useStore(packs.store)
   const heading = useRef<HTMLHeadingElement>(null)
+  /** The native languages the course is taught from (spec §8.6): never the course's own language. */
+  const offered = COURSE_L1S[settings.course]
   const installed: L1 | null = isSupportedL1(installedText) ? installedText : null
   // In `change` mode the current choice is the setting, even while it is pending (offline): choosing the installed
   // language again then cancels that change.
-  const current: L1 = settings.l1 ?? installed ?? 'bg'
-  const [chosen, setChosen] = useState<L1>(() => (props.mode === 'change' ? current : (settings.l1 ?? (isCourseL1('en', locale) ? locale : 'bg'))))
+  const current: L1 = settings.l1 ?? (installed !== null && offered.includes(installed) ? installed : offered[0]!)
+  const [chosen, setChosen] = useState<L1>(() => (props.mode === 'change' ? current : (settings.l1 ?? (isCourseL1(settings.course, locale) ? locale : offered[0]!))))
   const [attempt, setAttempt] = useState<Attempt>({ phase: 'idle' })
   const [saveError, setSaveError] = useState<string | null>(null)
   // Intl's own form of the name, as it sits mid-sentence: "German", "Deutsch", "немски".
@@ -114,7 +116,7 @@ export function LanguageStep(props: { readonly mode: 'setup' | 'change'; readonl
       <fieldset className="choices" disabled={busy}>
         <legend className="visually-hidden">{props.mode === 'setup' ? t('setup.language.title') : t('settings.nativeLanguage')}</legend>
         <p className="note">{props.mode === 'setup' ? t('setup.language.hint') : t('settings.nativeLanguageHint')}</p>
-        {COURSE_L1S.en.map((l1) => (
+        {offered.map((l1) => (
           <label key={l1} lang={l1}>
             <input
               type="radio"

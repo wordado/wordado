@@ -180,6 +180,10 @@ export const es: Messages = {
   'settings.audioDownloaded': '{done} de {total} audios en este dispositivo',
   'settings.audioOffline': 'Conéctate para descargar el audio.',
 
+  'settings.course': 'Curso',
+  'settings.courseHint': 'Cada curso guarda su propio nivel, tema e idioma materno; tu racha y tu objetivo son comunes.',
+  'settings.courseSwitch': 'Cambiar a {language}',
+  'settings.courseCurrent': '{course}, desde el {language}',
   'settings.nativeLanguage': 'Lengua materna',
   'settings.nativeLanguageHint': 'El idioma al que se traducen las palabras.',
   'settings.nativeLanguageConfirm': 'Tu progreso se mantiene. Las palabras pasarán a tener traducciones en {language}.',
@@ -201,6 +205,7 @@ export const es: Messages = {
   'levelAsk.leadDemo': 'La demo ya tiene una unidad en cada nivel.',
   'setup.goal.title': 'Un objetivo diario',
   'setup.goal.hint': 'Opcional. Puedes fijarlo o cambiarlo cuando quieras en los ajustes.',
+  'setup.course.title': '¿Qué quieres aprender?',
   'setup.language.title': '¿Qué idioma hablas?',
   'setup.language.hint': 'Las palabras se explican en este idioma. Puedes cambiarlo más adelante en los ajustes.',
   'setup.continue': 'Continuar',

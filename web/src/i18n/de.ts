@@ -180,6 +180,10 @@ export const de: Messages = {
   'settings.audioDownloaded': '{done} von {total} Clips auf diesem Gerät',
   'settings.audioOffline': 'Stell eine Verbindung her, um Audio herunterzuladen.',
 
+  'settings.course': 'Kurs',
+  'settings.courseHint': 'Jeder Kurs behält sein eigenes Niveau, Thema und seine Muttersprache; Serie und Ziel teilen sie sich.',
+  'settings.courseSwitch': 'Zu {language} wechseln',
+  'settings.courseCurrent': '{course}, erklärt auf {language}',
   'settings.nativeLanguage': 'Muttersprache',
   'settings.nativeLanguageHint': 'Die Sprache, in die die Wörter übersetzt werden.',
   'settings.nativeLanguageConfirm': 'Dein Fortschritt bleibt erhalten. Die Wörter werden dann auf {language} übersetzt.',
@@ -201,6 +205,7 @@ export const de: Messages = {
   'levelAsk.leadDemo': 'Die Demo hat jetzt eine Einheit auf jedem Niveau.',
   'setup.goal.title': 'Ein Tagesziel',
   'setup.goal.hint': 'Optional. Du kannst es jederzeit in den Einstellungen festlegen oder ändern.',
+  'setup.course.title': 'Was möchtest du lernen?',
   'setup.language.title': 'Welche Sprache sprichst du?',
   'setup.language.hint': 'Die Wörter werden in dieser Sprache erklärt. Du kannst das später in den Einstellungen ändern.',
   'setup.continue': 'Weiter',

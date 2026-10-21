@@ -65,6 +65,29 @@ describe('LanguageStep, setup mode (plan 11)', () => {
     expect(choice('Deutsch').checked).toBe(false)
   })
 
+  it('lists the languages the course is taught from', async () => {
+    const ctx = await setup()
+    const values = () => screen.getAllByRole('radio').map((r) => (r as HTMLInputElement).value)
+    const { unmount } = renderWith(<LanguageStep mode="setup" onDone={() => undefined} />, ctx)
+    expect(values()).toEqual(['bg', 'de', 'es'])
+    unmount()
+    await ctx.client.switchCourse('de')
+    renderWith(<LanguageStep mode="setup" onDone={() => undefined} />, { ...ctx, locale: 'de' })
+    // Never the course's own language: a German interface preselects the first the course offers.
+    expect(values()).toEqual(['bg', 'es', 'en'])
+    expect(choice('Български').checked).toBe(true)
+  })
+
+  it('installs the chosen language for the course chosen', async () => {
+    const ctx = await setup()
+    await ctx.client.switchCourse('de')
+    const fake = controlledPacks()
+    renderWith(<LanguageStep mode="setup" onDone={() => undefined} />, { ...ctx, packs: fake.packs })
+    fireEvent.click(choice('English'))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue' })))
+    expect(vi.mocked(fake.packs.install).mock.calls[0]![2]).toEqual({ target: 'de', l1: 'en' })
+  })
+
   it('gives its heading focus when it appears', async () => {
     const ctx = await setup()
     renderWith(<LanguageStep mode="setup" onDone={() => undefined} />, ctx)

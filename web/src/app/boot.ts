@@ -445,6 +445,16 @@ export class Boot {
     if (state.account) void state.client.sync().catch(() => undefined)
   }
 
+  /**
+   * Opens the setup for the current client (spec §8.6), as the first-run path does: a course switched to in Settings
+   * that was never started owes its setup, which starts at the language since the course is chosen.
+   */
+  startSetup(): void {
+    const state = this.store.get()
+    if (state.status !== 'ready' || state.setup) return
+    this.store.set({ status: 'ready', client: state.client, backend: state.backend, resumed: false, account: state.account, setup: true })
+  }
+
   /** The learner was asked for a level after the demo was carried over, or needs no asking: the record forgets it. */
   levelAsked(): void {
     const state = this.store.get()

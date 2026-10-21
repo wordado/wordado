@@ -36,6 +36,8 @@ export interface AppServices {
   readonly legalNotice: LegalNoticePort
   /** The one place that installs a language's pack (plan 11): the L1 watcher, the setup and Settings' language page. */
   readonly packs: PackSwitcher
+  /** Opens the setup for this client, at the language (spec §8.6): a course switched to that was never started. */
+  startSetup(): void
   /**
    * Called when a run ends: fetches the clips of the words about to be met
    * (spec §9.3), flushes the outbox (spec §9.1), and asks once for persistent

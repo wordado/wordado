@@ -171,6 +171,10 @@ export const bg: Messages = {
   'settings.audioDownloaded': '{done} от {total} записа са на това устройство',
   'settings.audioOffline': 'Свържете се, за да изтеглите звука.',
 
+  'settings.course': 'Курс',
+  'settings.courseHint': 'Всеки курс пази свое ниво, тема и роден език; поредицата и целта ви са общи.',
+  'settings.courseSwitch': 'Превключи на {language}',
+  'settings.courseCurrent': '{course}, от {language}',
   'settings.nativeLanguage': 'Роден език',
   'settings.nativeLanguageHint': 'Езикът, на който се превеждат думите.',
   'settings.nativeLanguageConfirm': 'Напредъкът ви се запазва. Думите ще се превеждат на {language}.',
@@ -192,6 +196,7 @@ export const bg: Messages = {
   'levelAsk.leadDemo': 'Демото вече има урок на всяко ниво.',
   'setup.goal.title': 'Дневна цел',
   'setup.goal.hint': 'По желание. Можете да я зададете или промените по всяко време в Настройки.',
+  'setup.course.title': 'Какво искате да учите?',
   'setup.language.title': 'Кой език говорите?',
   'setup.language.hint': 'Думите се обясняват на този език. Можете да го смените по-късно в Настройки.',
   'setup.continue': 'Продължете',

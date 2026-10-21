@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { nodeSqliteDriver } from '@wordado/client-data/src/drivers/nodeSqlite'
 import { packServing, sampleFetcher, sampleManifest, trialPack } from '@wordado/client-data/src/testing/sample'
 import { testEnv } from '@wordado/client-data/src/testing/testEnv'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { I18nProvider } from '../i18n/i18n'
 import { createStore } from '@wordado/client-data'
 import { fakeAccounts, fakeAudio, fakeCredits, fakeFixNotices, fakeLegalNotice, fakeLifecycle, fakePacks, fakeReminders } from '../test/fixtures'
@@ -16,8 +16,20 @@ import type { LifecyclePort } from './lifecycle'
 import { PackSwitcher } from './packSwitch'
 import { Root, type OpeningDownload } from './Root'
 
+/** The courses the build offers: English alone unless a test says otherwise (spec §5.5). */
+const build = vi.hoisted(() => ({ offered: ['en'] as readonly ('en' | 'de')[] }))
+vi.mock('../content/packs', async (original) => ({
+  ...(await original<typeof import('../content/packs')>()),
+  get OFFERED_TARGETS() {
+    return build.offered
+  },
+}))
+
 beforeEach(() => window.history.replaceState(null, '', '/'))
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  build.offered = ['en']
+})
 
 async function renderRoot(
   options: { free?: boolean; backend?: Backend; fresh?: boolean; packs?: PackSwitcher; accounts?: AccountActions; lifecycle?: LifecyclePort; /** The content host serves a trial pack, one unit per level. */ trial?: boolean; /** Where the device keeps that it asked for a level. */ storage?: KeyValue } = {},
@@ -154,6 +166,20 @@ describe('Root', () => {
     fireEvent.click(screen.getByRole('radio', { name: 'Deutsch' }))
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Change' })))
     expect(window.location.pathname).toBe('/settings/languages')
+  })
+
+  it('switches course on its own Settings page, and a new course opens its setup at the language (spec §8.6)', async () => {
+    build.offered = ['en', 'de']
+    window.history.replaceState(null, '', '/settings/course')
+    await renderRoot({ packs: samplePacks() })
+    expect(document.querySelector('.settings.has-section')).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 2, name: 'Course' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Languages' }).getAttribute('href')).toBe('/settings/languages')
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Switch to German' })))
+    expect(screen.getByRole('heading', { level: 1, name: 'Set up Wordado' })).toBeTruthy()
+    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 2, name: 'Which language do you speak?' }))
+    expect(screen.queryByRole('heading', { name: 'What do you want to learn?' })).toBeNull()
+    expect(screen.getAllByRole('radio').filter((r) => (r as HTMLInputElement).name === 'native-language').map((r) => (r as HTMLInputElement).value)).toEqual(['bg', 'es', 'en'])
   })
 
   it('hides the masthead, navigation and banners while studying, and brings them back after', async () => {

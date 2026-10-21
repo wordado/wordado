@@ -12,6 +12,7 @@ import { Practice } from '../screens/Practice'
 import { Progress } from '../screens/Progress'
 import { Search } from '../screens/Search'
 import { Settings } from '../screens/Settings'
+import { CourseSettings } from '../settings/CourseSettings'
 import { SignIn } from '../screens/SignIn'
 import { Study } from '../screens/Study'
 import { ThemeWords } from '../screens/Theme'
@@ -73,6 +74,9 @@ function Screen(props: { readonly route: Route }) {
           page={{ section: 'languages', content: <LanguageStep mode="change" ownBack={false} onDone={() => navigate({ name: 'settings', section: 'languages' })} /> }}
         />
       )
+    case 'course':
+      // Switching course (spec §8.6): a sub-page of Settings' Languages section, as the native language's is.
+      return <Settings section={null} page={{ section: 'languages', content: <CourseSettings /> }} />
     default:
       return <Home />
   }

@@ -6,13 +6,23 @@ import { testEnv } from '@wordado/client-data/src/testing/testEnv'
 import type { PackManifest } from '@wordado/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AccountRecord } from '../account/storage'
-import { fakeAudio, fakeReminders, renderWith, setupTrial, type RenderContext } from '../test/fixtures'
+import { fakeAudio, fakeReminders, renderWith, setup, setupTrial, type RenderContext } from '../test/fixtures'
 import { packsFrom, twoLevels } from '../test/twoLevels'
 import { Setup } from './Setup'
+
+/** The courses the build offers: English alone unless a test says otherwise (spec §5.5). */
+const build = vi.hoisted(() => ({ offered: ['en'] as readonly ('en' | 'de')[] }))
+vi.mock('../content/packs', async (original) => ({
+  ...(await original<typeof import('../content/packs')>()),
+  get OFFERED_TARGETS() {
+    return build.offered
+  },
+}))
 
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
+  build.offered = ['en']
 })
 
 /** A brand-new demo: no pack installed, no L1 chosen, as the boot hands the setup over (plan 11). */
@@ -140,6 +150,48 @@ describe('Setup, the demo (plan 11)', () => {
     expect(screen.getByRole('textbox', { name: 'Answers a day' })).toBeTruthy()
     expect(screen.queryByRole('heading', { name: 'Reminders' })).toBeNull()
     expect(screen.queryByRole('checkbox', { name: 'Remind me to study' })).toBeNull()
+  })
+})
+
+describe('Setup, the course (spec §8.6)', () => {
+  it('asks the course first when the build offers two (en,de)', async () => {
+    build.offered = ['en', 'de']
+    const ctx = await fresh()
+    renderWith(<Setup onFinish={() => undefined} />, ctx)
+    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 2, name: 'What do you want to learn?' }))
+    expect(screen.getAllByRole('radio').map((r) => r.closest('label')?.textContent)).toEqual(['English', 'German'])
+    fireEvent.click(screen.getByRole('radio', { name: 'German' }))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue' })))
+    expect(ctx.client.snapshot.settings.course).toBe('de')
+    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 2, name: 'Which language do you speak?' }))
+    // German is taught from Bulgarian, Spanish and English.
+    expect(screen.getAllByRole('radio').map((r) => (r as HTMLInputElement).value)).toEqual(['bg', 'es', 'en'])
+  })
+
+  it('skips the course question when the build offers one (Review Focus 4)', async () => {
+    const ctx = await fresh()
+    renderWith(<Setup onFinish={() => undefined} />, ctx)
+    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 2, name: 'Which language do you speak?' }))
+    expect(screen.queryByRole('heading', { name: 'What do you want to learn?' })).toBeNull()
+  })
+
+  it('counts the course among the steps once the words are known', async () => {
+    build.offered = ['en', 'de']
+    const ctx = await fresh()
+    renderWith(<Setup onFinish={() => undefined} />, ctx)
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Continue' })))
+    await pastLanguage()
+    expect(screen.getByRole('heading', { level: 2, name: 'What do you want English for?' })).toBeTruthy()
+    expect(screen.getByText('Step 3 of 4')).toBeTruthy()
+  })
+
+  it('starts a new course’s setup at the language: the course is already chosen', async () => {
+    build.offered = ['en', 'de']
+    const ctx = await setup()
+    await ctx.client.switchCourse('de')
+    renderWith(<Setup onFinish={() => undefined} />, { ...ctx, packs: packsFrom(sampleManifest, sampleFetcher) })
+    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 2, name: 'Which language do you speak?' }))
+    expect(screen.queryByRole('heading', { name: 'What do you want to learn?' })).toBeNull()
   })
 })
 

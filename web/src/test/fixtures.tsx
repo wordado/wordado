@@ -79,6 +79,7 @@ export interface RenderContext {
   readonly fixNotices?: FixNoticesPort
   readonly legalNotice?: LegalNoticePort
   readonly packs?: PackSwitcher
+  readonly startSetup?: () => void
 }
 
 /** A real `PackSwitcher` with stub deps: no screen under test installs a pack unless it says so. */
@@ -250,6 +251,7 @@ export function withProviders(ui: ReactElement, ctx: RenderContext): ReactElemen
             fixNotices: ctx.fixNotices ?? fakeFixNotices(),
             legalNotice: ctx.legalNotice ?? fakeLegalNotice(),
             packs: ctx.packs ?? fakePacks(),
+            startSetup: ctx.startSetup ?? (() => undefined),
           }}
         >
           {ui}

@@ -10,6 +10,7 @@ import { AboutSettings } from '../settings/AboutSettings'
 import { AccountSettings } from '../settings/AccountSettings'
 import { AppSettings } from '../settings/AppSettings'
 import { AudioDownload } from '../settings/AudioDownload'
+import { CourseRow } from '../settings/CourseSettings'
 import { LanguageSettings } from '../settings/LanguageSettings'
 import { NativeLanguageSettings } from '../settings/NativeLanguageSettings'
 import { ReminderSettings } from '../settings/ReminderSettings'
@@ -159,6 +160,7 @@ function SectionPage(props: { readonly section: SettingsSection }) {
     languages: (
       <section className="settings-languages" aria-labelledby="settings-languages">
         <h2 id="settings-languages">{t('settings.languages')}</h2>
+        <CourseRow />
         <NativeLanguageSettings />
         <LanguageSettings />
       </section>
