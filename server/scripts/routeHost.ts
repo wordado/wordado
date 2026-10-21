@@ -36,6 +36,14 @@ export function productionRouteHost(wranglerJsonc: string): string | null {
   return pattern ? pattern.replace(/^https?:\/\//, '').replace(/\/.*$/, '') : null
 }
 
+/** The production vars' PASSKEY_RP_ID in a wrangler.jsonc text, or null when unset or blank (#304). */
+export function productionPasskeyRpId(wranglerJsonc: string): string | null {
+  const config = JSON.parse(stripJsonComments(wranglerJsonc).replace(/,(\s*[}\]])/g, '$1')) as {
+    env?: { production?: { vars?: { PASSKEY_RP_ID?: string } } }
+  }
+  return config.env?.production?.vars?.PASSKEY_RP_ID?.trim() || null
+}
+
 /** The host of a URL such as APP_ORIGIN, or null when it is not one. */
 export function originHost(origin: string): string | null {
   try {
