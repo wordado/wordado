@@ -15,7 +15,8 @@ export interface GrammarField {
 /** Per target (spec §5.5). English declares none. */
 export const GRAMMAR_SCHEMAS: Readonly<Partial<Record<Target, Readonly<Record<string, GrammarField>>>>> = {
   de: {
-    gender: { kind: 'enum', values: ['m', 'f', 'n'], pos: ['noun'] },
+    // `pl`: a noun used only in the plural (Leute, Eltern); its headword is the plural form and it has no separate plural (#316).
+    gender: { kind: 'enum', values: ['m', 'f', 'n', 'pl'], pos: ['noun'] },
     plural: { kind: 'text', pos: ['noun'] },
     separable: { kind: 'flag', pos: ['verb'] },
     irregular: { kind: 'flag', pos: ['verb'] },
@@ -38,5 +39,7 @@ export function grammarProblems(target: string, pos: PartOfSpeech, grammar: unkn
     else if (field.kind === 'flag' && typeof value !== 'boolean') problems.push(`${name} must be true or false`)
     else if (field.kind === 'enum' && !field.values!.includes(value as string)) problems.push(`${name} must be one of ${field.values!.join(', ')}`)
   }
+  const g = grammar as Record<string, unknown>
+  if (g['gender'] === 'pl' && typeof g['plural'] === 'string' && g['plural'] !== '') problems.push('a plural-only noun has no separate plural')
   return problems
 }

@@ -143,6 +143,14 @@ describe('describeLemmas for a target with grammar', () => {
     await expect(describeLemmas(ranked('haus'), [], runFor(PROFILES.de, bare))).rejects.toThrow(/haus sense 0: gender is missing; plural is missing/)
   })
 
+  it('keeps a plural-only noun: gender pl, the plural form as headword, an empty plural (#316)', async () => {
+    const answer = () => ({ items: [german('leute', { pos: 'noun', grammar: { gender: 'pl', plural: '', separable: false, irregular: false, auxiliary: '' } })] })
+    const out = await describeLemmas(ranked('leute'), [], runFor(PROFILES.de, answer))
+    expect(out[0]![0]!.grammar).toEqual({ gender: 'pl', plural: '' })
+    const named = () => ({ items: [german('leute', { pos: 'noun', grammar: { gender: 'pl', plural: 'Leuten', separable: false, irregular: false, auxiliary: '' } })] })
+    await expect(describeLemmas(ranked('leute'), [], runFor(PROFILES.de, named))).rejects.toThrow(/leute sense 0: a plural-only noun has no separate plural/)
+  })
+
   it('rejects a German grammar value of the wrong type', async () => {
     const bad = () => ({ items: [german('haus', { pos: 'noun', grammar: { gender: 'n', plural: 5, separable: false, irregular: false, auxiliary: '' } })] })
     await expect(describeLemmas(ranked('haus'), [], runFor(PROFILES.de, bad))).rejects.toThrow(/haus sense 0/)

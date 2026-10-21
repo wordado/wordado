@@ -329,7 +329,7 @@ describe('second target language', () => {
     expect(JSON.stringify(validatePack(withEntry(1, { grammar: { gender: 'm' } })))).toContain('en has no grammar block')
     const de = fixture({ target: 'de' })
     const bad = { ...de, entries: de.entries.map((e, i) => (i === 1 ? { ...e, grammar: { gender: 'x' } } : e)) }
-    expect(JSON.stringify(validatePack(bad))).toContain('gender must be one of m, f, n')
+    expect(JSON.stringify(validatePack(bad))).toContain('gender must be one of m, f, n, pl')
   })
   it('refuses an audio key that is not two lowercase letters', () => {
     expect(JSON.stringify(validatePack(withEntry(0, { audio: { UK: 'hello-1-uk' } })))).toContain('must be a clip id under a two-letter accent')

@@ -406,7 +406,9 @@ Each corpus entry carries:
 - Grammar block, optional, with the fields the target language's profile
   declares (§5.5). English declares none. German declares, for a noun, the
   gender and the plural; for a verb, whether it is separable, irregular, and
-  its auxiliary. The block is shown with the headword wherever the headword
+  its auxiliary. A noun used only in the plural (*Leute*, *Eltern*) has the
+  gender `pl`, its plural form as the headword and no separate plural, and is
+  shown with the plural article (decided 2026-10-21, #316). The block is shown with the headword wherever the headword
   is shown, in a per-language layout; a client that meets a field it does not
   know shows nothing for it.
 - Example sentences in the target language: at least one when a level first ships, three

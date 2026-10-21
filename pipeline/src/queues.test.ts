@@ -59,7 +59,7 @@ describe('queueSpecs', () => {
     expect(spec.toCells({ separable: true, irregular: false, auxiliary: 'sein' }))
       .toEqual({ gender: '', plural: '', separable: 'yes', irregular: 'no', auxiliary: 'sein' })
     expect(spec.fromCells({ gender: 'n', plural: 'Häuser', separable: '', irregular: '', auxiliary: '' })).toEqual({ gender: 'n', plural: 'Häuser' })
-    expect(() => spec.fromCells({ gender: 'x', plural: '', separable: '', irregular: '', auxiliary: '' })).toThrow('gender must be one of m, f, n')
+    expect(() => spec.fromCells({ gender: 'x', plural: '', separable: '', irregular: '', auxiliary: '' })).toThrow('gender must be one of m, f, n, pl')
     expect(() => spec.fromCells({ gender: '', plural: '', separable: 'ja', irregular: '', auxiliary: '' })).toThrow('separable must be yes or no')
     // A noun with no plural keeps its empty plural; a verb's row has no plural to keep.
     expect(spec.fromCells({ ...spec.toCells({ gender: 'n', plural: '' }), pos: 'noun' })).toEqual({ gender: 'n', plural: '' })

@@ -397,7 +397,8 @@ releases (spec §5.5). German (`de`) is the model.
 Sense glosses (`sense_en`) stay English in every corpus: they are a sense's identity, not what learners see.
 
 A German noun whose answer has no gender, or a verb with no auxiliary, is asked again (the senses stage requires
-them), so plural-only nouns (such as Leute) need a manual decision; this is tracked in wordado/wordado#316.
+them). A noun used only in the plural (Leute, Eltern) has the gender `pl`, its plural form as the headword and an
+empty plural (#316).
 
 ## When something is wrong
 

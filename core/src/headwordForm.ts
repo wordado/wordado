@@ -4,6 +4,8 @@ const GERMAN_ARTICLE: ReadonlyMap<string, string> = new Map([
   ['m', 'der'],
   ['f', 'die'],
   ['n', 'das'],
+  // A plural-only noun (#316) takes the plural article.
+  ['pl', 'die'],
 ])
 
 /** How a headword is shown with its grammar (spec §5.2): German nouns with article and plural, `sein` verbs marked. */

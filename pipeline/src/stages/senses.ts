@@ -62,7 +62,7 @@ const SENSE_REQUIRED = ['pos', 'gloss', 'level', 'ipa', 'variants', 'themes', 'e
 const GRAMMAR_ANSWER = {
   type: 'object',
   properties: {
-    gender: { type: 'string', enum: ['m', 'f', 'n', ''] },
+    gender: { type: 'string', enum: ['m', 'f', 'n', 'pl', ''] },
     plural: { type: 'string' },
     separable: { type: 'boolean' },
     irregular: { type: 'boolean' },

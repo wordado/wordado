@@ -6,8 +6,14 @@ describe('grammarProblems', () => {
     expect(grammarProblems('de', 'noun', { gender: 'n', plural: 'Häuser' })).toEqual([])
     expect(grammarProblems('de', 'verb', { separable: true, irregular: false, auxiliary: 'sein' })).toEqual([])
   })
+  it('accepts a plural-only noun, whose plural is empty (#316)', () => {
+    expect(grammarProblems('de', 'noun', { gender: 'pl', plural: '' })).toEqual([])
+  })
+  it('refuses a plural-only noun that names a separate plural', () => {
+    expect(grammarProblems('de', 'noun', { gender: 'pl', plural: 'Leuten' })).toEqual(['a plural-only noun has no separate plural'])
+  })
   it('refuses wrong values and fields of another part of speech', () => {
-    expect(grammarProblems('de', 'noun', { gender: 'x', plural: 'Häuser' })).toEqual(['gender must be one of m, f, n'])
+    expect(grammarProblems('de', 'noun', { gender: 'x', plural: 'Häuser' })).toEqual(['gender must be one of m, f, n, pl'])
     expect(grammarProblems('de', 'verb', { gender: 'm' })).toEqual(['gender is not a field of a verb'])
     expect(grammarProblems('de', 'noun', { plural: 3 })).toEqual(['plural must be text'])
     expect(grammarProblems('de', 'verb', { separable: 'yes' })).toEqual(['separable must be true or false'])
