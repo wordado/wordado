@@ -81,7 +81,7 @@ export function assemble(input: AssembleInput): Assembled {
     }
     const senses = perHead.get(`${norm(e.headword)}|${e.pos}`) ?? 1
     if (senses > 1 && translation.value.sense.trim() === '') problems.push(`${e.entry_id}: ${e.headword} (${e.pos}) has ${senses} live entries, so it needs a ${l1} sense gloss`)
-    const audio: Partial<Record<Accent, string>> = {}
+    const audio: Record<Accent, string> = {}
     for (const [accent, voice] of Object.entries(config.tts.accents) as [Accent, TtsVoice][]) {
       const cur = clips.get(`${e.entry_id}|${accent}`)
       if (cur && cur.voice_key === voiceKey(config.tts.model, voice) && input.hasClip(cur.clip_id)) audio[accent] = cur.clip_id

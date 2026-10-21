@@ -8,7 +8,9 @@ import {
   type PackTrial,
   type PackUnit,
 } from './pack'
-import { CEFR_LEVELS, PARTS_OF_SPEECH, levelIndex, type Accent, type CefrLevel } from './types'
+import { ACCENT, CEFR_LEVELS, PARTS_OF_SPEECH, levelIndex, type Accent, type CefrLevel } from './types'
+import { grammarProblems, type Grammar } from './grammar'
+import { isTarget, TARGETS } from './target'
 import {
   at,
   bool,
@@ -44,7 +46,7 @@ export interface ValidatePackOptions {
   readonly supportedSchemaVersions?: readonly number[]
 }
 
-function parseEntry(r: Report, raw: Raw, path: string): PackEntry {
+function parseEntry(r: Report, raw: Raw, path: string, target: string): PackEntry {
   const entryId = text(r, raw, 'entry_id', path)
   if (entryId !== '' && !isWordId(`c:${entryId}`)) r.add(at(path, 'entry_id'), 'must be a valid word_id key')
   const retired = bool(r, raw, 'retired', path)
@@ -52,21 +54,25 @@ function parseEntry(r: Report, raw: Raw, path: string): PackEntry {
   const taught = raw['taught'] === undefined ? undefined : bool(r, raw, 'taught', path)
   const examples = texts(r, raw, 'examples', path)
   if (!retired && examples.length === 0) r.add(at(path, 'examples'), 'a live entry needs at least one example sentence')
-  const audio: Partial<Record<Accent, string>> = {}
+  const audio: Record<Accent, string> = {}
   const rawAudio = raw['audio']
   if (!isRecord(rawAudio)) r.add(at(path, 'audio'), 'must be an object of clip ids by accent')
   else {
     for (const [accent, clip] of Object.entries(rawAudio)) {
-      if ((accent !== 'uk' && accent !== 'us') || typeof clip !== 'string' || clip === '') {
-        r.add(`${at(path, 'audio')}.${accent}`, 'must be a clip id under "uk" or "us"')
+      if (!ACCENT.test(accent) || typeof clip !== 'string' || clip === '') {
+        r.add(`${at(path, 'audio')}.${accent}`, 'must be a clip id under a two-letter accent')
       } else audio[accent] = clip
     }
   }
+  const pos = oneOf(r, raw, 'pos', path, PARTS_OF_SPEECH)
+  // Absent stays absent, so an English entry re-serialises as it was shipped.
+  const rawGrammar = raw['grammar']
+  if (rawGrammar !== undefined) for (const p of grammarProblems(target, pos, rawGrammar)) r.add(at(path, 'grammar'), p)
   return {
     entry_id: entryId,
     headword: text(r, raw, 'headword', path),
     variants: texts(r, raw, 'variants', path),
-    pos: oneOf(r, raw, 'pos', path, PARTS_OF_SPEECH),
+    pos,
     sense: text(r, raw, 'sense', path, false),
     ipa: text(r, raw, 'ipa', path, !retired),
     level: oneOf(r, raw, 'level', path, CEFR_LEVELS),
@@ -78,6 +84,7 @@ function parseEntry(r: Report, raw: Raw, path: string): PackEntry {
     audio,
     retired,
     ...(taught === undefined ? {} : { taught }),
+    ...(rawGrammar === undefined ? {} : { grammar: rawGrammar as Grammar }),
   }
 }
 
@@ -253,7 +260,7 @@ export function validatePack(value: unknown, options: ValidatePackOptions = {}):
   const l1 = text(r, value, 'l1', '')
   if (l1 !== '' && !LANG.test(l1)) r.add('l1', 'must be a two-letter lowercase language code')
   const target = text(r, value, 'target', '')
-  if (target !== '' && !LANG.test(target)) r.add('target', 'must be a two-letter lowercase language code')
+  if (target !== '' && !isTarget(target)) r.add('target', `must be one of ${TARGETS.join(', ')}`)
   const trial = value['trial'] === undefined ? undefined : parseTrial(r, value['trial'], 'trial')
   const pack: Pack = {
     schema_version: schema,
@@ -261,7 +268,7 @@ export function validatePack(value: unknown, options: ValidatePackOptions = {}):
     corpus_version: integer(r, value, 'corpus_version', '', 0),
     l1,
     target,
-    entries: records(r, value, 'entries', '').map((e, i) => parseEntry(r, e, `entries[${i}]`)),
+    entries: records(r, value, 'entries', '').map((e, i) => parseEntry(r, e, `entries[${i}]`, target)),
     units: records(r, value, 'units', '').map((u, i) => parseUnit(r, u, `units[${i}]`)),
     themes: records(r, value, 'themes', '').map((t, i) => parseTheme(r, t, `themes[${i}]`)),
     audio: records(r, value, 'audio', '').map((c, i) => parseClip(r, c, `audio[${i}]`)),

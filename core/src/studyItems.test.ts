@@ -25,6 +25,7 @@ function entry(headword: string, translation: string, over: Partial<CorpusEntry>
     audio: {},
     retired: false,
     taught: true,
+    grammar: null,
     ...over,
   }
 }
@@ -41,6 +42,7 @@ const ENTRIES = [apple, bread, cheese, milk, water, their, there, old]
 
 const corpus = (entries: readonly CorpusEntry[] = ENTRIES): Corpus => ({
   l1: 'bg',
+  target: 'en',
   entries: new Map(entries.map((e) => [e.entryId, e])),
   units: [],
   themes: [],

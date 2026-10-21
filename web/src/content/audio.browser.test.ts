@@ -14,6 +14,7 @@ async function clip(id: string, body: string, over: Partial<AudioClip> = {}): Pr
 
 const corpusOf = (clips: readonly AudioClip[]): Corpus => ({
   l1: 'bg',
+  target: 'en',
   entries: new Map(),
   units: [],
   themes: [],

@@ -72,4 +72,22 @@ describe('selectPacks', () => {
     const installed = [{ pack_id: 'gone-bg', corpus_version: 1, schema_version: 1 }]
     expect(selectPacks({ manifest: manifest([]), l1: 'bg', installed, supportedSchemaVersions: supported })).toEqual({ fetch: [], appUpdateNeeded: [] })
   })
+
+  it('reads a descriptor target and leaves it out when absent', () => {
+    const m = { schema_version: 1, corpus_version: 1, packs: [
+      { pack_id: 'corpus-de-bg', l1: 'bg', target: 'de', corpus_version: 1, schema_version: 1, url: 'corpus-v1-bg.pack', sha256: 'a'.repeat(64), bytes: 1 },
+      { pack_id: 'corpus-bg', l1: 'bg', corpus_version: 1, schema_version: 1, url: 'corpus-v1-bg.pack', sha256: 'b'.repeat(64), bytes: 1 },
+    ] }
+    const r = validateManifest(m)
+    expect(r.status).toBe('ok')
+    if (r.status !== 'ok') return
+    expect(r.manifest.packs[0]!.target).toBe('de')
+    expect('target' in r.manifest.packs[1]!).toBe(false)
+  })
+  it('refuses a descriptor target it does not teach', () => {
+    const m = { schema_version: 1, corpus_version: 1, packs: [
+      { pack_id: 'corpus-fr-bg', l1: 'bg', target: 'fr', corpus_version: 1, schema_version: 1, url: 'x.pack', sha256: 'a'.repeat(64), bytes: 1 },
+    ] }
+    expect(validateManifest(m)).toMatchObject({ status: 'invalid', errors: [{ path: 'packs[0].target', message: 'must be one of en, de' }] })
+  })
 })

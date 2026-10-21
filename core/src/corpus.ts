@@ -1,5 +1,5 @@
 import type { Pack, PackCourseSize } from './pack'
-import { levelIndex, type CefrLevel, type CorpusEntry, type LocalizedText, type Unit } from './types'
+import { ACCENT_ORDER, levelIndex, type CefrLevel, type CorpusEntry, type LocalizedText, type Unit } from './types'
 import { norm } from './validation'
 import { corpusWordId, type WordId } from './wordId'
 
@@ -34,6 +34,8 @@ export interface CorpusTrial {
 /** Every loaded pack, merged: what `PathContext`, `DistractorContext` and the screens read. */
 export interface Corpus {
   readonly l1: string
+  /** The language the pack teaches (spec §5.5). */
+  readonly target: string
   readonly entries: ReadonlyMap<string, CorpusEntry>
   /** In path order. */
   readonly units: readonly Unit[]
@@ -67,6 +69,7 @@ export function loadCorpus(packs: readonly Pack[]): Corpus {
   let trial: CorpusTrial | null = null
   for (const pack of packs) {
     if (pack.l1 !== first.l1) throw new Error(`Pack ${pack.pack_id} is for L1 ${pack.l1}, not ${first.l1}`)
+    if (pack.target !== first.target) throw new Error(`Pack ${pack.pack_id} is for target ${pack.target}, not ${first.target}`)
     for (const e of pack.entries) {
       if (entries.has(e.entry_id)) throw new Error(`Entry ${e.entry_id} appears in more than one pack`)
       const sense = `${norm(e.headword)}|${e.pos}|${norm(e.sense)}`
@@ -88,6 +91,7 @@ export function loadCorpus(packs: readonly Pack[]): Corpus {
         audio: e.audio,
         retired: e.retired,
         taught: e.taught !== false,
+        grammar: e.grammar ?? null,
       })
       if (e.retired) retired.add(corpusWordId(e.entry_id))
       if (e.taught === false) notTaught.add(corpusWordId(e.entry_id))
@@ -110,6 +114,7 @@ export function loadCorpus(packs: readonly Pack[]): Corpus {
           audio: {},
           retired: false,
           taught: true,
+          grammar: null,
         })),
         course: pack.trial.course,
         themes: pack.trial.themes ?? {},
@@ -135,7 +140,7 @@ export function loadCorpus(packs: readonly Pack[]): Corpus {
     }
   }
   units.sort((a, b) => a.order - b.order)
-  return { l1: first.l1, entries, units, themes: [...themes.values()], clips, retired, notTaught, trial }
+  return { l1: first.l1, target: first.target, entries, units, themes: [...themes.values()], clips, retired, notTaught, trial }
 }
 
 /** Each word's position along the path, for stable ordering inside a level. */
@@ -187,9 +192,16 @@ export function trialThemes(corpus: Corpus): { readonly theme: Theme; readonly w
   })
 }
 
-/** The clips an entry can play, UK first: what the audio prefetch and mode availability look at (spec §9.3). */
+const rank = (accent: string) => {
+  const i = ACCENT_ORDER.indexOf(accent)
+  return i === -1 ? ACCENT_ORDER.length : i
+}
+
+/** The clips an entry can play, UK, then US, then any other voice by name: what the audio prefetch and mode availability look at (spec §9.3). */
 export function entryClips(corpus: Corpus, entry: CorpusEntry): AudioClip[] {
-  return [entry.audio.uk, entry.audio.us].flatMap((id) => {
+  const accents = Object.keys(entry.audio).sort((a, b) => rank(a) - rank(b) || (a < b ? -1 : 1))
+  return accents.flatMap((accent) => {
+    const id = entry.audio[accent]
     const clip = id === undefined ? undefined : corpus.clips.get(id)
     return clip ? [clip] : []
   })

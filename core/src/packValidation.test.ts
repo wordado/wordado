@@ -77,9 +77,9 @@ describe('validatePack', () => {
   })
 
   it('collects every structural error instead of stopping at the first', () => {
-    const bad = withEntry(0, { headword: '', level: 'Z9' as never, audio: { fr: 'x' } as never })
+    const bad = withEntry(0, { headword: '', level: 'Z9' as never, audio: { fra: 'x' } as never })
     expect(paths(bad)).toEqual(
-      expect.arrayContaining(['entries[0].headword', 'entries[0].level', 'entries[0].audio.fr']),
+      expect.arrayContaining(['entries[0].headword', 'entries[0].level', 'entries[0].audio.fra']),
     )
     expect(paths({ ...fixture(), l1: 'bul', target: '', pack_id: 'has space', corpus_version: -1 })).toEqual(
       expect.arrayContaining(['l1', 'target', 'pack_id', 'corpus_version']),
@@ -299,5 +299,32 @@ describe('validatePack: trial', () => {
     if (result.status === 'invalid') {
       expect(result.errors).toEqual([{ path: 'trial.probes[0]', message: 'differs from the entry of the same id' }])
     }
+  })
+})
+
+describe('second target language', () => {
+  it('accepts a German pack with a grammar block and a German voice', () => {
+    const base = fixture({ target: 'de' })
+    const pack = { ...base, entries: base.entries.map((e, i) => (i === 1 ? { ...e, grammar: { gender: 'n', plural: 'Häuser' }, audio: { de: 'water-1-uk' } } : e)) }
+    const result = validatePack(pack)
+    expect(result.status).toBe('ok')
+    if (result.status === 'ok') expect(result.pack.entries[1]!.grammar).toEqual({ gender: 'n', plural: 'Häuser' })
+  })
+  it('leaves the grammar key out of an entry without one', () => {
+    const result = validatePack(fixture())
+    expect(result.status).toBe('ok')
+    if (result.status === 'ok') expect('grammar' in result.pack.entries[0]!).toBe(false)
+  })
+  it('refuses a target it does not teach', () => {
+    expect(validatePack(fixture({ target: 'fr' }))).toMatchObject({ status: 'invalid', errors: [{ path: 'target', message: 'must be one of en, de' }] })
+  })
+  it('refuses a grammar block with a wrong value, naming the field', () => {
+    expect(JSON.stringify(validatePack(withEntry(1, { grammar: { gender: 'm' } })))).toContain('en has no grammar block')
+    const de = fixture({ target: 'de' })
+    const bad = { ...de, entries: de.entries.map((e, i) => (i === 1 ? { ...e, grammar: { gender: 'x' } } : e)) }
+    expect(JSON.stringify(validatePack(bad))).toContain('gender must be one of m, f, n')
+  })
+  it('refuses an audio key that is not two lowercase letters', () => {
+    expect(JSON.stringify(validatePack(withEntry(0, { audio: { UK: 'hello-1-uk' } })))).toContain('must be a clip id under a two-letter accent')
   })
 })

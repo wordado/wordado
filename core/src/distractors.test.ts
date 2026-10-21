@@ -23,6 +23,7 @@ function entry(headword: string, translations: string[], over: Partial<CorpusEnt
     audio: {},
     retired: false,
     taught: true,
+    grammar: null,
     ...over,
   }
 }
@@ -132,7 +133,7 @@ describe('distractor invariants (spec §13)', () => {
     .array(entryArb, { minLength: 1, maxLength: 30 })
     .map((pool) =>
       pool.map(
-        (e, i): CorpusEntry => ({ ...e, entryId: `e${i}`, unitId: 'u', themes: [], variants: [], sense: '', examples: [], audio: {} }),
+        (e, i): CorpusEntry => ({ ...e, entryId: `e${i}`, unitId: 'u', themes: [], variants: [], sense: '', examples: [], audio: {}, grammar: null }),
       ),
     )
 

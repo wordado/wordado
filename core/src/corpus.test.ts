@@ -194,6 +194,7 @@ describe('trial', () => {
           ipa: '',
           retired: false,
           taught: true,
+          grammar: null,
         },
       ],
       course: { A1: { units: 2, words: 40 } },
@@ -247,5 +248,35 @@ describe('trial', () => {
   it('rejects two packs that carry a trial', () => {
     const other = pack({ pack_id: 'x', entries: [], units: [], audio: [], trial })
     expect(() => loadCorpus([pack({ trial }), other])).toThrow('More than one pack carries a trial')
+  })
+})
+
+describe('second target language', () => {
+  it('carries the target and each entry grammar', () => {
+    const base = pack()
+    const german = pack({
+      target: 'de',
+      entries: base.entries.map((e) => (e.entry_id === 'water-1' ? { ...e, grammar: { gender: 'f', plural: 'Frauen' } } : e)),
+    })
+    const corpus = loadCorpus([german])
+    expect(corpus.target).toBe('de')
+    expect([...corpus.entries.values()].some((e) => e.grammar?.['gender'] === 'f')).toBe(true)
+    expect([...corpus.entries.values()].filter((e) => e.grammar === null).length).toBeGreaterThan(0)
+  })
+  it('refuses packs of two targets', () => {
+    const other = pack({ pack_id: 'corpus-de-bg', target: 'de', entries: [], units: [], audio: [] })
+    expect(() => loadCorpus([pack(), other])).toThrow(/is for target de, not en/)
+  })
+  it('plays UK, then US, then any other accent', () => {
+    const base = pack()
+    const mixed = pack({
+      entries: base.entries.map((e) =>
+        e.entry_id === 'hello-1' ? { ...e, audio: { us: 'hello-1-us', uk: 'hello-1-uk' } }
+        : e.entry_id === 'water-1' ? { ...e, audio: { de: 'water-1-uk' } }
+        : e),
+    })
+    const corpus = loadCorpus([mixed])
+    expect(entryClips(corpus, corpus.entries.get('hello-1')!).map((c) => c.clipId)).toEqual(['hello-1-uk', 'hello-1-us'])
+    expect(entryClips(corpus, corpus.entries.get('water-1')!).map((c) => c.clipId)).toEqual(['water-1-uk'])
   })
 })
