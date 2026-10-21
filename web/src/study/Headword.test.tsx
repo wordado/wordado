@@ -53,6 +53,19 @@ describe('Headword', () => {
     expect(document.querySelector('.hw-after')?.textContent).toBe('die Häuser')
   })
 
+  it('marks a German verb that takes sein after the word', () => {
+    snapshot.target = 'de'
+    const gehen = { headword: 'gehen', pos: 'verb', ipa: '/ˈɡeːən/', grammar: { separable: false, irregular: true, auxiliary: 'sein' } } as unknown as CorpusEntry
+    render(
+      <I18nProvider storage={storage}>
+        <Headword entry={gehen} />
+      </I18nProvider>,
+    )
+    expect(document.querySelector('.hw-word')?.textContent).toBe('gehen')
+    expect(document.querySelector('.hw-after')?.textContent).toBe('(+ sein)')
+    expect(document.querySelector('.hw-after')?.getAttribute('lang')).toBe('de')
+  })
+
   it('shows an English entry exactly as before', () => {
     snapshot.target = 'en'
     render(
