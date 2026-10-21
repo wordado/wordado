@@ -8,15 +8,17 @@
 
 ## 1. Summary
 
-A cross-platform application for learning English vocabulary. Learners study a
-curated, CEFR-levelled corpus of English words with translations into their
-native language, maintain a personal dictionary of their own words, and
+A cross-platform application for learning vocabulary. Learners study a
+curated, CEFR-levelled corpus of words of a target language with translations
+into their native language, maintain a personal dictionary of their own words, and
 practise through game modes driven by a spaced-repetition scheduler. Progress
 is tracked honestly, and weekly leagues provide social motivation.
 
-Target language is always English. The learner's native language (L1) varies.
-The data model carries an explicit target-language field so additional target
-languages can be added later without migration, but only English ships.
+A learner's **course** is a target language and a native language (L1).
+English is the first target language; German is the second (decided
+2026-10-21, issue #313, §5.5). The target language is a field in every record
+that names a word, so a further target language is added as content and a
+language profile, not as a migration.
 
 **Platforms:** browser (desktop and mobile web) first; iOS and Android follow
 the MVP (§14).
@@ -53,7 +55,8 @@ product; none belongs here.
   entitlement architecture are in §8.8, so that charging later needs no
   migration; the business model, prices, providers, and checkout are not
   specified here.)
-- Target languages other than English
+- Target languages beyond those named in §3. The design admits more (§5.5);
+  nothing is built for a third.
 - Native desktop applications (macOS/Windows binaries)
 
 ---
@@ -66,7 +69,7 @@ awaiting confirmation. §16 lists every such change and its status.
 
 | Decision | Choice | Rationale |
 |---|---|---|
-| Language direction | English target only; multi-target-ready schema | Single corpus, N translation columns. Avoids a migration if scope grows. |
+| Language direction | One target language per course; English first, German second (decided 2026-10-21) | One corpus per target language, N translation columns each. The target is a field wherever a word is named, so a target is added as content and a language profile (§5.5), not as a migration. |
 | Core loop | FSRS spaced repetition, with a CEFR level path layered on top | Scheduler decides *what* to study; the level path decides what is *available* to study by default. Collections and linked personal words can pull a word forward (§8.9, §6.1). |
 | Memory model | One FSRS state per word, not per (word, skill) | Per-skill state multiplies review load by the number of skills. Mode escalation compensates; see §7.5. |
 | Offline | Offline-first with sync | Retrofitting offline support is far more expensive than building it in. |
@@ -87,6 +90,10 @@ The full product is described first; the MVP subset follows.
 - **MVP (Phase 1a):** web client only; Bulgarian; A1–B1; flashcard, multiple
   choice, listening by selection, matching. As built: Bulgarian, German and
   Spanish, A1–C1. See §14.
+- **Target languages:** English; German (decided 2026-10-21, #313), which joins
+  the beta when its corpus passes the AI review gate (§14). Each target has
+  its own L1s: German ships for Bulgarian, Spanish and English speakers.
+  English as an L1 is new with it.
 - **CEFR levels:** A1, A2, B1, B2, C1. (C2 is out of scope.)
 - **Native languages (L1):** Bulgarian, Spanish, German, French, Russian.
   Bulgarian is the lead language and ships first (§14).
@@ -286,14 +293,23 @@ locally.
 
 Built-in content is a **versioned build artifact, not editable rows**.
 
-A build-time pipeline produces numbered corpus packs, one per (version, L1)
-pair, each containing every level:
+A build-time pipeline produces numbered corpus packs, one per (target
+language, version, L1), each containing every level:
 
 ```
-corpus-v7-bg.pack
+corpus-v7-bg.pack          English for Bulgarian speakers
 corpus-v7-es.pack
+de/corpus-v1-bg.pack       German for Bulgarian speakers
+de/corpus-v1-en.pack
 ...
 ```
+
+Each target language is its own corpus, with its own version counter, its own
+manifest and its own release rhythm; the English corpus keeps `manifest.json`
+and the names its clients already know, and every later target lives under its
+code (`de/manifest.json`). A pack says which target it teaches in its
+`target` field, and the manifest repeats it on each descriptor; a client reads
+the fields, never the file name.
 
 At ~7,100 text entries a full pack is on the order of a megabyte or two, so
 packs are not split by level and updates are whole-pack refetches, not deltas.
@@ -301,13 +317,15 @@ Shipping every level in one pack also gives the client a complete headword
 index, which personal-word linking depends on (§8.2).
 
 A client's content is described by a **pack manifest, which is a list**. At
-launch the list has one item — the corpus pack for the learner's L1 — but the
-loader accepts several, each with its own version and checksum, and entry IDs
+launch the list has one item — the corpus pack for the learner's course, chosen
+by `target` and `l1` — but the loader accepts several, each with its own version and checksum, and entry IDs
 are unique across packs. This costs nothing now and keeps separately
 distributed content possible later (§8.8) without changing the loader or the
 ID scheme.
 
-A release also carries a **trial pack** per L1, `trial-v<n>-<l1>.trial`,
+A release also carries a **trial pack** per L1 of its target,
+`trial-v<n>-<l1>.trial` (under the target's directory for every target but
+English),
 listed by `trial-manifest.json` beside `manifest.json`; the extension keeps
 anything that handles the course's packs by name from taking one for a course
 pack. A trial pack is a pack with the course's pack ID and fewer units: the
@@ -322,7 +340,7 @@ count, and are never studied. The demo (§8.6) installs it.
 Each pack contains entry records, unit definitions, theme definitions (§8.9),
 and an audio manifest (URLs
 and checksums; audio files themselves live on the CDN and are fetched
-separately). Clients download the pack for their L1, verify a checksum, and
+separately). Clients download the pack for their course, verify a checksum, and
 load it into local SQLite as read-only data.
 
 Publishing new content means publishing version *n+1*. A given corpus version
@@ -356,9 +374,9 @@ spaced-repetition state points at corpus entries by stable ID for years.
   (§7.2). A unit whose entries are all retired or known from the start counts
   as done, and the path does not show it (§7.2).
 
-**Versions and compatibility.** The corpus version number is global; the
-manifest lists which L1 packs exist at each version, since L1s are released at
-different times (§14). Every pack carries a `schema_version`. A client that
+**Versions and compatibility.** The corpus version number is global within a
+target language; the manifest lists which L1 packs exist at each version, since
+L1s are released at different times (§14). Every pack carries a `schema_version`. A client that
 meets a pack schema newer than it understands keeps its current pack and asks
 the learner to update the app. A downloaded pack is swapped in at the start of
 the next session, never in the middle of one.
@@ -373,7 +391,8 @@ the L1 translations genuinely diverge.
 
 Each corpus entry carries:
 
-- Headword (English), plus accepted spelling variants (*colour* / *color*)
+- Headword, in the target language, plus accepted spelling variants
+  (*colour* / *color*)
 - Part of speech
 - Sense gloss — a few words, per L1, shown wherever the headword alone is
   ambiguous ("bank — *money*"). In a multiple-choice question and its answers
@@ -381,8 +400,16 @@ Each corpus entry carries:
   brackets; elsewhere it follows the translation in brackets.
 - IPA transcription
 - CEFR level (A1–C1)
-- Audio reference (TTS-generated at build time, UK and US where sensible)
-- Example sentences in English: at least one when a level first ships, three
+- Audio reference (TTS-generated at build time, in the voices the target
+  language's profile names, §5.5: UK and US for English, one standard voice
+  for German)
+- Grammar block, optional, with the fields the target language's profile
+  declares (§5.5). English declares none. German declares, for a noun, the
+  gender and the plural; for a verb, whether it is separable, irregular, and
+  its auxiliary. The block is shown with the headword wherever the headword
+  is shown, in a per-language layout; a client that meets a field it does not
+  know shows nothing for it.
+- Example sentences in the target language: at least one when a level first ships, three
   to five by the time cloze ships for that level (§14). With only one or two,
   learners memorise the cloze sentence instead of the word.
 - Optional image, for concrete A1–A2 nouns only (Phase 2). Images must be
@@ -460,6 +487,53 @@ without imposing share-alike on the resulting corpus. The same check applies
 to the dictionary API used for enrichment (§8.2), many of which forbid
 permanent caching of results. Both are legal-review items in §15.
 
+### 5.5 Target languages and language profiles
+
+Decided 2026-10-21 (#313): German is the second target language, built with
+the same pipeline, the same stages and the same review gate as English, at
+A1–C1, for Bulgarian, Spanish and English speakers. The English beta does not
+wait for it; German joins the beta when its corpus passes the gate.
+
+**One pipeline, one profile per language.** The pipeline's stages (frequency
+ranking, lemmas, senses, titles, themes, translation, AI review, audio,
+assembly) do not depend on the language they process. What does is collected
+in a **language profile**, one per target language, that the configuration
+names:
+
+- the sources: which frequency lists, and which public level references
+  (for German the Goethe-Institut word lists for A1–B1; B2–C1 come from the
+  frequency bands, as they do for English);
+- the prompt sections of each stage that describe the language: what counts
+  as a lemma (for German: compounds, the four cases, capitalised nouns,
+  separable verbs), how a sense is split, what the grammar block must carry;
+- the lemma rules and the language's own lemma cache;
+- the voices: English has two accents, German one standard voice;
+- the **grammar schema**: the fields an entry's grammar block may carry, with
+  their allowed values, which the pack validation checks. A target language
+  with different grammar declares a different schema (gender, aspect and stress
+  for Russian, say); the entry format, the stages and the clients do not
+  change for it. The app renders whatever fields a block carries, with a label
+  set per language.
+
+A second copy of the pipeline per language is ruled out: it would drift, and
+the content repository's workflows and the review app would have to follow
+both.
+
+**Content layout.** Each target language has its own content directory
+(`content/<target>/`) with its own caches, decisions, audio, registry and
+published packs. The caches are keyed by word forms and headwords, and a German
+*Bank* is not an English *bank*; the translation caches are keyed by (target,
+L1). The English content moves under `content/en/` in the same step.
+
+**Enrichment (§8.2)** uses the same profile when it drafts a learner's own
+word, so a target language has every feature of §8.2 as soon as it has a
+profile.
+
+**Scripts.** English and German are Latin-script, so typing modes need no
+input method beyond the keyboard. A target language in another script would
+need its typing modes and its placement test considered, and the fonts of
+§11.2; nothing of the kind is planned.
+
 ---
 
 ## 6. Data model
@@ -468,7 +542,8 @@ permanent caching of results. Both are legal-review items in §15.
 
 ```
 corpus_entry        Read-only shipped content. Keyed by stable entry_id.
-                    Carries target_language (always 'en' at launch).
+                    Carries target_language ('en' or 'de'; §5.5). Entry IDs
+                    are unique across targets.
 
 user_word           Anything the user added or customised.
                     Either a standalone word, or a sparse patch over a
@@ -1215,22 +1290,31 @@ records.
 Every persisted record therefore carries a `user_id` from creation, and no
 anonymous-profile claim or merge path is needed.
 
+**The course.** A learner's course is a target language and an L1 (§1). The
+setup asks what the learner wants to learn first and their native language
+second; while only one target language is published, the first question is
+skipped. The declared level, the placement test, the path, the unit unlocks,
+the themes and the progress screens belong to the course; the streak, the XP
+and the leagues belong to the learner. A learner may **switch course** at any
+time and switch back; each course keeps its own state, and the first session
+in a new course starts with its setup steps (level or placement test).
+
 **Changing language or level.** A learner may change their L1 at any time: the
-client fetches the other pack, and because review state is keyed by entry, not
-by translation, all progress carries over. Their own words and patches keep the
-translations they were written with, marked as being in the earlier language.
-Changing the declared level moves the *assumed known* line (§7.2) and deletes
-nothing.
+client fetches the other pack of the same target, and because review state is
+keyed by entry, not by translation, all progress carries over. Their own words
+and patches keep the translations they were written with, marked as being in
+the earlier language. Changing the declared level moves the *assumed known* line
+(§7.2) and deletes nothing.
 
 **Onboarding budget (Goal 1).** Demo mode is the first screen's primary action
 and needs no account and no placement test; it downloads one small file, the
-trial pack for the learner's L1. A build that names no trial manifest (§9.3)
+trial pack for the learner's course. A build that names no trial manifest (§9.3)
 uses a small A1 sample for each L1 that ships inside the app bundle. The full
 pack downloads in the background during the demo or sign-up. The placement test
 is offered, not required.
-Sign-up itself asks only for L1, credentials, and the age check (§11). One
-optional, skippable question — "What do you want English for?" — sets the
-learner's first theme (§8.9); it costs a tap and makes the first session feel
+Sign-up itself asks only for the course, credentials, and the age check (§11).
+One optional, skippable question — "What do you want English for?", naming
+the course's target language — sets the learner's first theme (§8.9); it costs a tap and makes the first session feel
 chosen rather than assigned.
 
 ### 8.7 XP
@@ -1950,9 +2034,12 @@ Bulgarian and Russian are Cyrillic-script languages. Consequences:
   depend on a system font being present.
 - Sorting and searching the personal dictionary uses locale-aware collation:
   ICU collations in Postgres, `Intl.Collator` on clients.
-- Typing game modes are unaffected — the learner always types **English**, so
-  no non-Latin input method is ever required. Cyrillic appears only on the
-  prompt side.
+- Typing game modes are unaffected — the learner always types the **target
+  language**, Latin-script for English and German (§5.5), so no non-Latin
+  input method is ever required. Cyrillic appears only on the prompt side.
+- No interface string names the target language literally. A string such as
+  "Your English level" takes the course's target language as a parameter,
+  in every interface language.
 
 ---
 
@@ -2079,6 +2166,15 @@ short, cheapest first: the matching game, the placement test (learners can
 declare a level), the desired-retention setting, reminders' streak-at-risk
 nudge, theme collections' onboarding question. The `entitlement` plumbing
 stays: it is small, and retrofitting it means a sync-protocol change.
+
+**A second target language in the beta (decided 2026-10-21, #313).** German,
+A1–C1, for Bulgarian, Spanish and English speakers, built and reviewed like
+the English corpus (§5.5). The design change (the course as target × L1, the
+manifest's `target`, the grammar block, the language profiles, the per-target
+content layout) comes first, before the beta opens, because the course per
+learner is a migration that is cheapest with test accounts only. German joins
+the beta when its corpus passes the AI review gate; the English beta does not
+wait. The marketing site keeps saying English until then.
 
 ### Phase 1b — General launch
 
@@ -2560,6 +2656,25 @@ owner (issue #144).
   search offer it for any word not yet started; the path's own list keeps
   its limit to a skipped level's unit.
 
+**2026-10-21 — a second target language.** Decided by the product owner
+(#313).
+
+- **Course (§1, §3, §8.6):** a learner's course is a target language and an
+  L1; English first, German second. The setup asks what to learn, then the
+  native language; course state is per course, habit state per learner.
+- **Packs (§5.1):** one corpus per target language with its own version
+  counter and manifest; `target` on each descriptor; English keeps its names
+  and `manifest.json`.
+- **Entries (§5.2):** headwords, examples and voices are the target's; an
+  optional grammar block with a per-language schema.
+- **Language profiles (§5.5):** one pipeline, one profile per target: sources,
+  prompt sections, lemma rules and cache, voices, grammar schema; content
+  under `content/<target>/`.
+- **Interface (§11.2):** no string names the target language literally.
+- **Phasing (§14):** German joins the beta when its corpus passes the review
+  gate; the design change comes before the beta opens; the English beta does
+  not wait.
+
 ### Approval status
 
 Every change since the original approval that alters a settled product
@@ -2677,6 +2792,7 @@ each: roughly 15,000 requests a day.
 | Resend | 3,000 emails/month; **100/day**; 3 domains | The daily cap, on a day many new learners sign up by email. Long sessions carry most of the load. | Resend's paid plan (price to be confirmed) |
 | GitHub Actions | 2,000 minutes/month on private repositories; unmetered on public ones; 500 MB artifacts | Frequent CI plus pipeline runs | Pay per minute (Linux is cheapest) |
 | Better Auth, Hono, React, Vite | Open source | — | — |
+| A second target language (German) in the beta; the course as target × L1; language profiles (§5.5) | Decided by the product owner, 2026-10-21 (#313) |
 
 **Expected running cost of the MVP:** nothing, moving to $5 a month when the
 Workers CPU cap is first hit. Outside the service tiers: a domain name, the
