@@ -2,6 +2,7 @@ import { LEGACY_L1, REPORT_FIELDS, type ReportField } from '@wordado/core'
 import pg from 'pg'
 import { currentClips, type AudioRecord } from './audio'
 import { sha256Hex } from './checksum'
+import type { LanguageProfile } from './profiles'
 import { QUEUES, type DecisionEvent, type Decisions } from './decisions'
 import type { Fix } from './lastPublished'
 
@@ -59,6 +60,7 @@ export interface TriageInput {
   readonly fixes: readonly Fix[]
   readonly live: ReadonlySet<string>
   readonly l1s: readonly string[]
+  readonly profile: LanguageProfile
   readonly threshold: number
   readonly now: string
 }
@@ -66,8 +68,8 @@ export interface TriageInput {
 const NOTE_LIMIT = 280
 
 /** Which queue a report sends its entry to, which fixes reset its count, and (for translation) which L1 those fixes must be. Audio is handled apart. */
-function routes(field: ReportField, l1s: readonly string[], reportL1: string | null): { queue: string; fixField: ReportField; l1: string }[] {
-  if (field === 'example') return [{ queue: QUEUES.english, fixField: 'example', l1: '' }]
+function routes(field: ReportField, l1s: readonly string[], reportL1: string | null, profile: LanguageProfile): { queue: string; fixField: ReportField; l1: string }[] {
+  if (field === 'example') return [{ queue: profile.reviewQueue, fixField: 'example', l1: '' }]
   if (field === 'level') return [{ queue: QUEUES.level, fixField: 'level', l1: '' }]
   // A report names the L1 it was made in; one from before plan 10 names none, and counts as Bulgarian (every
   // report made before plan 10 came from a Bulgarian learner, the same reading core/src/fixes.ts gives a fix
@@ -101,7 +103,7 @@ export function triage(input: TriageInput): { events: { queue: string; event: De
       audio.set(entryId, [...(audio.get(entryId) ?? []), report])
       continue
     }
-    for (const { queue, fixField, l1 } of routes(report.field, input.l1s, report.l1)) {
+    for (const { queue, fixField, l1 } of routes(report.field, input.l1s, report.l1, input.profile)) {
       if (report.pack_version < (lastFix.get(`${report.word_id}|${fixField}|${l1}`) ?? 0)) continue
       const key = `${queue}|${entryId}`
       const g = groups.get(key) ?? { queue, entryId, reports: [] }

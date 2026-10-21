@@ -27,6 +27,9 @@ export function reviewRows(queue: string, items: readonly QueueItem[], draft: Dr
     if (kind === 'level') {
       return { key: item.key, cells, context: { headword: item.context['headword'] ?? '', pos: item.context['pos'] ?? '', sense_en: item.context['sense_en'] ?? '', example, band: item.context['band'] ?? '', learner_reports } }
     }
+    if (kind === 'grammar') {
+      return { key: item.key, cells, context: { headword: item.context['headword'] ?? '', pos: item.context['pos'] ?? '', sense_en: item.context['sense_en'] ?? '', example, learner_reports } }
+    }
     const others = e ? (siblings.get(`${norm(e.headword)}|${e.pos}`) ?? []).filter((id) => id !== item.key) : []
     return {
       key: item.key,

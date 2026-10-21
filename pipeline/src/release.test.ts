@@ -233,7 +233,7 @@ describe('planRelease and writeRelease', () => {
     expect(publishProblems(reader(o))).toEqual([])
     expect(JSON.parse(readFileSync(join(o, 'release.json'), 'utf8')).unreviewed).toEqual(counts)
     // Nothing was recorded as reviewed: the accepted queues' items are still open for a later review.
-    expect(pendingItems(readDraft(dir), Decisions.read(dir), ['bg'], PROFILES.en).get(QUEUES.english)).toHaveLength(64)
+    expect(pendingItems(readDraft(dir), Decisions.read(dir), ['bg'], PROFILES.en).get('english')).toHaveLength(64)
   })
 
   it('carries an entry the last version had and this one does not, retired with its published fields', async () => {

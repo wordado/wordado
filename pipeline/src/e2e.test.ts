@@ -83,7 +83,7 @@ describe('the corpus pipeline, end to end (spec §13)', () => {
       id: i + 1, word_id: 'c:go-1', field: 'translation' as const, note: i === 0 ? 'ида' : '', suggestion: '', pack_version: 1, reporter, received_at: Date.parse('2026-10-03T00:00:00Z'), l1: 'bg' as const,
     }))
     const decisions = Decisions.read(dir)
-    const t = triage({ reports, decisions, records: readAudioRecords(dir), fixes: readLastPublished(dir).fixes.fixes, live: new Set(readDraft(dir).live), l1s: ['bg'], threshold: 2, now: '2026-10-04T00:00:00Z' })
+    const t = triage({ reports, decisions, records: readAudioRecords(dir), fixes: readLastPublished(dir).fixes.fixes, live: new Set(readDraft(dir).live), l1s: ['bg'], profile: PROFILES.en, threshold: 2, now: '2026-10-04T00:00:00Z' })
     for (const { queue, event } of t.events) decisions.append(queue, [event])
     expect(t.summary).toEqual(['go-1: translation-bg reopened (2 reports)'])
 

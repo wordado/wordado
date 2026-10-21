@@ -2,7 +2,7 @@ import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { csvRecords, formatCsv, parseCsv } from './csv'
-import { Decisions, QUEUES } from './decisions'
+import { Decisions } from './decisions'
 import type { Draft, DraftEntry } from './draft'
 import { aliveKeys, exportQueues, importQueues, levelSampled, pendingItems, queueSpecs, splitList } from './queues'
 import { PROFILES } from './profiles'
@@ -110,9 +110,9 @@ describe('pendingItems', () => {
     const dir = makeContent()
     const e = entry('water-1')
     const d = Decisions.read(dir)
-    d.append(QUEUES.english, [{ key: 'water-1', at: NOW, verdict: 'ok', proposed: e.english, by: 'r' }])
+    d.append('english', [{ key: 'water-1', at: NOW, verdict: 'ok', proposed: e.english, by: 'r' }])
     expect(pendingItems(draft([e]), Decisions.read(dir), ['bg'], PROFILES.en).get('english')).toEqual([])
-    d.append(QUEUES.english, [{ key: 'water-1', at: NOW, verdict: 'reopen', by: 'reports', note: '2 reports: example' }])
+    d.append('english', [{ key: 'water-1', at: NOW, verdict: 'reopen', by: 'reports', note: '2 reports: example' }])
     expect(pendingItems(draft([e]), Decisions.read(dir), ['bg'], PROFILES.en).get('english')![0]!.context).toMatchObject({ reopened: '2 reports: example' })
   })
 })

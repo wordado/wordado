@@ -33,7 +33,6 @@ export interface FieldState<T> {
 }
 
 export const QUEUES = {
-  english: 'english',
   level: 'level',
   audio: 'audio',
   /** The grammar block of a target that has one (spec §5.5). */

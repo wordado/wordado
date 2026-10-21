@@ -273,6 +273,7 @@ async function triageReports(dir: string): Promise<void> {
     fixes: readLastPublished(dir).fixes.fixes,
     live: new Set(readDraft(dir).live),
     l1s: config.l1s,
+    profile: profileOf(config),
     threshold: config.report_threshold,
     now: now(),
   })

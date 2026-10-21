@@ -15,7 +15,7 @@ export interface RowView {
   file: string
   version: string
   key: string
-  kind: 'translation' | 'title' | 'level'
+  kind: 'translation' | 'title' | 'level' | 'grammar'
   cells: Record<string, string>
   fields: string[]
   /** headword, pos, sense_en, level, example, band, words, as the CSV holds them */
