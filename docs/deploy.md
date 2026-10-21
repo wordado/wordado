@@ -109,6 +109,8 @@ private `wordado/wordado-research`, cloned into `docs/research/` and ignored her
      visitor studies the bundled sample, as before; the deploy does not refuse an environment that lacks it.
    - `APP_ORIGIN`: `https://wordado-preview.<subdomain>.workers.dev` for preview, `https://app.wordado.com` for production.
    - `PASSKEY_RP_ID`, the passkeys' relying party (#287): not a GitHub variable but a var in `server/wrangler.jsonc`.
+     `APP_ORIGIN`'s host must be that domain or on it (#304): a production deploy refuses one that is not, before
+     anything is built (`scripts/check-route-host.ts`), and the Worker refuses to start with it.
      Production has `wordado.com` there; the preview and local runs leave it unset, and it falls back to `BASE_URL`'s
      hostname (the preview's `workers.dev` name, `localhost`). Production uses the registrable domain rather than
      `app.wordado.com` because a passkey made for `wordado.com` works on every subdomain: it survives a move of the

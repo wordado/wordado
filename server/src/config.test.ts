@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { configFromEnv, DEFAULT_ANNOUNCEMENT_MAILS_PER_DAY, DEFAULT_MIN_PROTOCOL_VERSION, MIN_ADMIN_WRITE_TOKEN_LENGTH, MIN_FEEDBACK_READ_TOKEN_LENGTH, type Env } from './config'
+import { configFromEnv, DEFAULT_ANNOUNCEMENT_MAILS_PER_DAY, passkeyRpIdFits, DEFAULT_MIN_PROTOCOL_VERSION, MIN_ADMIN_WRITE_TOKEN_LENGTH, MIN_FEEDBACK_READ_TOKEN_LENGTH, type Env } from './config'
 
 const env = (over: Partial<Env> = {}): Env => ({
   HYPERDRIVE: { connectionString: 'postgres://localhost/x' },
@@ -25,8 +25,25 @@ describe('configFromEnv', () => {
   })
 
   it('takes the passkey relying party from PASSKEY_RP_ID, else from the BASE_URL hostname (#287)', () => {
-    expect(configFromEnv(env({ PASSKEY_RP_ID: 'wordado.com' })).passkeyRpId).toBe('wordado.com')
+    expect(configFromEnv(env({ BASE_URL: 'https://app.wordado.com', PASSKEY_RP_ID: 'wordado.com' })).passkeyRpId).toBe('wordado.com')
     expect(configFromEnv(env({ BASE_URL: 'https://app.example.test' })).passkeyRpId).toBe('app.example.test')
+  })
+
+  it("refuses a PASSKEY_RP_ID that BASE_URL's host is not on, so every passkey does not fail unexplained (#304)", () => {
+    expect(configFromEnv(env({ BASE_URL: 'https://app.wordado.com', PASSKEY_RP_ID: 'app.wordado.com' })).passkeyRpId).toBe('app.wordado.com')
+    expect(configFromEnv(env({ BASE_URL: 'https://app.wordado.com', PASSKEY_RP_ID: 'WORDADO.com' })).passkeyRpId).toBe('WORDADO.com')
+    expect(() => configFromEnv(env({ BASE_URL: 'https://app.wordado.com', PASSKEY_RP_ID: 'example.com' }))).toThrow(/PASSKEY_RP_ID/)
+    expect(() => configFromEnv(env({ BASE_URL: 'https://app.wordado.com', PASSKEY_RP_ID: 'ordado.com' }))).toThrow(/PASSKEY_RP_ID/)
+    expect(() => configFromEnv(env({ BASE_URL: 'https://wordado.com', PASSKEY_RP_ID: 'app.wordado.com' }))).toThrow(/PASSKEY_RP_ID/)
+  })
+
+  it('tells whether a relying party id is the host of a URL or a domain it is on (#304)', () => {
+    expect(passkeyRpIdFits('wordado.com', 'https://app.wordado.com')).toBe(true)
+    expect(passkeyRpIdFits('wordado.com', 'https://wordado.com:8443/x')).toBe(true)
+    expect(passkeyRpIdFits('localhost', 'http://localhost:8787')).toBe(true)
+    expect(passkeyRpIdFits('wordado.com', 'https://notwordado.com')).toBe(false)
+    expect(passkeyRpIdFits('', 'https://wordado.com')).toBe(false)
+    expect(passkeyRpIdFits('wordado.com', 'nonsense')).toBe(false)
   })
 
   it('reads the optional settings', () => {

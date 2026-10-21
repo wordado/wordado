@@ -45,6 +45,21 @@ export const MIN_ADMIN_WRITE_TOKEN_LENGTH = 32
  */
 export const DEFAULT_ANNOUNCEMENT_MAILS_PER_DAY = 50
 
+/**
+ * Whether a passkey relying party id may be used from a URL: the URL's host is that domain or on it (#304). A browser
+ * refuses any other, so every passkey would fail with nothing to say why.
+ */
+export function passkeyRpIdFits(rpId: string, url: string): boolean {
+  const id = rpId.trim().toLowerCase()
+  if (id === '') return false
+  try {
+    const host = new URL(url).hostname.toLowerCase()
+    return host === id || host.endsWith(`.${id}`)
+  } catch {
+    return false
+  }
+}
+
 export function configFromEnv(env: Env): ServerConfig {
   if (!env.BASE_URL) throw new Error('BASE_URL must be set')
   if (!env.BETTER_AUTH_SECRET || env.BETTER_AUTH_SECRET.length < 32) throw new Error('BETTER_AUTH_SECRET must be at least 32 characters')
@@ -56,6 +71,8 @@ export function configFromEnv(env: Env): ServerConfig {
   if (!Number.isInteger(min) || min < 1) throw new Error('MIN_PROTOCOL_VERSION must be a positive integer')
   const perDay = env.ANNOUNCEMENT_MAILS_PER_DAY ? Number(env.ANNOUNCEMENT_MAILS_PER_DAY) : DEFAULT_ANNOUNCEMENT_MAILS_PER_DAY
   if (!Number.isInteger(perDay) || perDay < 0) throw new Error('ANNOUNCEMENT_MAILS_PER_DAY must be a whole number, 0 or more')
+  const rpId = env.PASSKEY_RP_ID?.trim() || new URL(env.BASE_URL).hostname
+  if (!passkeyRpIdFits(rpId, env.BASE_URL)) throw new Error(`PASSKEY_RP_ID (${rpId}) must be BASE_URL's host or a domain it is on`)
   return {
     baseUrl: env.BASE_URL,
     trustedOrigins: (env.TRUSTED_ORIGINS ?? '')
@@ -63,7 +80,7 @@ export function configFromEnv(env: Env): ServerConfig {
       .map((origin) => origin.trim())
       .filter((origin) => origin !== ''),
     authSecret: env.BETTER_AUTH_SECRET,
-    passkeyRpId: env.PASSKEY_RP_ID?.trim() || new URL(env.BASE_URL).hostname,
+    passkeyRpId: rpId,
     minProtocolVersion: min,
     vapid:
       env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY
