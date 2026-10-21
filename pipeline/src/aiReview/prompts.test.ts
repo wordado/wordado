@@ -78,4 +78,37 @@ describe('reviewRequest', () => {
       { key: 'b-1', verdict: 'ok', objections: [] },
     ])
   })
+
+  it('asks for grammar flags as yes or no, and a field the part of speech lacks as empty', () => {
+    const system = systemPrompt('grammar', '', PROFILES.de)
+    expect(system).toContain('separable (yes or no)')
+    expect(system).toContain('A field the part of speech lacks is empty')
+    expect(system).not.toContain('true or false')
+  })
+
+  it('takes a grammar fix as the review cell writes it, of a field the row has, with an allowed value', () => {
+    const deReview = (rows: readonly ReviewRow[]) => reviewRequest('grammar', rows, PROFILES.de)
+    const noun = { gender: 'm', plural: 'Häuser', separable: '', irregular: '', auxiliary: '' }
+    const verb = { gender: '', plural: '', separable: 'no', irregular: 'no', auxiliary: 'haben' }
+    const req = deReview([row('de.haus-1', noun, { headword: 'Haus', pos: 'noun', sense_en: 'building', example: 'Das Haus ist alt.' }), row('de.gehen-1', verb, { headword: 'gehen', pos: 'verb', sense_en: 'walk', example: 'Wir gehen.' })])
+    expect(req.input).toEqual({
+      rows: [
+        { key: 'de.haus-1', ...noun, headword: 'Haus', pos: 'noun', sense_en: 'building', example: 'Das Haus ist alt.' },
+        { key: 'de.gehen-1', ...verb, headword: 'gehen', pos: 'verb', sense_en: 'walk', example: 'Wir gehen.' },
+      ],
+    })
+    const out = req.parse(
+      answer([
+        // gender x is no gender; a noun has no auxiliary
+        { key: 'de.haus-1', errors: [err('gender', 'gender', 'major', 'x'), err('auxiliary', 'verb-form', 'major', 'sein'), err('gender', 'gender', 'major', 'n')], verdict: 'major', confidence: 1 },
+        // a flag answered true is the cell's yes; an auxiliary of werden is no auxiliary; a verb has no gender
+        { key: 'de.gehen-1', errors: [err('irregular', 'verb-form', 'major', 'true'), err('separable', 'verb-form', 'minor', 'false'), err('auxiliary', 'verb-form', 'major', 'werden'), err('gender', 'gender', 'minor', 'n')], verdict: 'major', confidence: 1 },
+      ]),
+    )
+    expect(out).toEqual([
+      { key: 'de.haus-1', verdict: 'major', objections: [{ field: 'gender', category: 'gender', severity: 'major', reason: 'because', fix: 'n' }] },
+      { key: 'de.gehen-1', verdict: 'major', objections: [{ field: 'irregular', category: 'verb-form', severity: 'major', reason: 'because', fix: 'yes' }] },
+    ])
+  })
 })
+

@@ -76,7 +76,7 @@ ${COMMON}`
   }
   if (kind === 'grammar') {
     return `You are a native-speaker lexicographer checking the grammar of each word in ${profile.course} for adults.
-For a noun: gender (m, f or n) and plural (the nominative plural without the article; empty only if the noun has no plural). For a verb: separable (true or false), irregular (true for a strong or mixed verb) and auxiliary (haben or sein, for the perfect). A field that does not apply is absent.
+For a noun: gender (m, f or n) and plural (the nominative plural without the article; empty only if the noun has no plural). For a verb: separable (yes or no), irregular (yes for a strong or mixed verb) and auxiliary (haben or sein, for the perfect). A field the part of speech lacks is empty; do not correct it.
 Judge the word in the meaning its gloss (sense_en) and example show.
 
 ${COMMON}`
@@ -132,8 +132,26 @@ function schema(kind: QueueKind): Record<string, unknown> {
   }
 }
 
+/**
+ * A grammar fix as the review cell writes it, or null: a field the row's part of speech carries, a flag as yes or
+ * no (a model may answer true or false), an enum one of its values.
+ */
+function grammarFix(field: string, fix: string, pos: unknown, profile: LanguageProfile): string | null {
+  const f = profile.grammar?.[field]
+  if (!f || typeof pos !== 'string' || !(f.pos as readonly string[]).includes(pos)) return null
+  if (f.kind === 'flag') {
+    const flag = fix.toLowerCase()
+    if (flag === 'true' || flag === 'yes') return 'yes'
+    if (flag === 'false' || flag === 'no') return 'no'
+    return null
+  }
+  if (f.kind === 'enum') return f.values!.includes(fix) ? fix : null
+  return fix
+}
+
 /** What remains of a raw objection: a known field and category, and a fix that changes something. */
-function cleanObjection(kind: QueueKind, raw: unknown, cells: Readonly<Record<string, string>>): Objection | null {
+function cleanObjection(kind: QueueKind, raw: unknown, row: ReviewRow, profile: LanguageProfile): Objection | null {
+  const cells = row.cells
   const o = raw as Partial<Record<keyof Objection, unknown>>
   if (typeof o.field !== 'string' || !FIELDS[kind].includes(o.field)) return null
   if (typeof o.category !== 'string' || !CATEGORIES[kind].includes(o.category)) return null
@@ -142,6 +160,11 @@ function cleanObjection(kind: QueueKind, raw: unknown, cells: Readonly<Record<st
   if (kind === 'level') {
     fix = fix.toUpperCase()
     if (!(CEFR_LEVELS as readonly string[]).includes(fix)) return null
+  }
+  if (kind === 'grammar') {
+    const clean = grammarFix(o.field, fix, row.context['pos'], profile)
+    if (clean === null) return null
+    fix = clean
   }
   if (fix === (cells[o.field] ?? '').trim()) return null
   return { field: o.field, category: o.category, severity: o.severity, reason: typeof o.reason === 'string' ? o.reason : '', fix }
@@ -163,7 +186,7 @@ export function reviewRequest(queue: string, rows: readonly ReviewRow[], profile
         const row = rows[i]!
         const item = raw as { key?: unknown; errors?: unknown }
         if (item.key !== row.key) throw new ParseError(`answers other rows than it was asked: item ${i} is ${JSON.stringify(item.key)}, not ${row.key}`)
-        const objections = (Array.isArray(item.errors) ? item.errors : []).map((e) => cleanObjection(kind, e, row.cells)).filter((o): o is Objection => o !== null)
+        const objections = (Array.isArray(item.errors) ? item.errors : []).map((e) => cleanObjection(kind, e, row, profile)).filter((o): o is Objection => o !== null)
         const verdict: AiVerdictKind = objections.length === 0 ? 'ok' : objections.some((o) => o.severity === 'major') ? 'major' : 'minor'
         return { key: row.key, verdict, objections }
       })
