@@ -352,7 +352,12 @@ async function main(): Promise<void> {
   switch (command) {
     case 'init':
       {
-        const t = option('--target') ?? 'en'
+        const given = option('--target')
+        if (flag('--target') && (given === undefined || given.startsWith('--'))) {
+          console.error(`--target needs a target code: ${TARGETS.join(', ')}`)
+          process.exit(2)
+        }
+        const t = given ?? 'en'
         if (!isTarget(t)) {
           console.error(`unknown target "${t}"; the targets are ${TARGETS.join(', ')}`)
           process.exit(2)

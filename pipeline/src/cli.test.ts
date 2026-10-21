@@ -43,6 +43,14 @@ describe('corpus (the CLI)', () => {
     expect(readdirSync(contentPaths(dir).lastPublished)).toContain('corpus-v0-bg.pack')
   })
 
+  it('init refuses --target without a code, and makes nothing', () => {
+    const dir = join(mkdtempSync(join(tmpdir(), 'init-')), 'x')
+    const out = corpus('init', dir, '--target')
+    expect(out.status).toBe(2)
+    expect(out.stderr).toMatch(/--target needs a target code: en, de/)
+    expect(existsSync(dir)).toBe(false)
+  })
+
   it('init refuses an unknown target', () => {
     const out = corpus('init', join(mkdtempSync(join(tmpdir(), 'init-')), 'x'), '--target', 'fr')
     expect(out.status).toBe(2)
