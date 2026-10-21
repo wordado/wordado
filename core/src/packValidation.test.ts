@@ -310,6 +310,13 @@ describe('second target language', () => {
     expect(result.status).toBe('ok')
     if (result.status === 'ok') expect(result.pack.entries[1]!.grammar).toEqual({ gender: 'n', plural: 'Häuser' })
   })
+  it('keeps a grammar field it does not know when it is text or a flag, and drops one of any other kind', () => {
+    const base = fixture({ target: 'de' })
+    const grammar = { gender: 'n', plural: 'Häuser', later: 'x', soon: true, nested: { a: 1 }, count: 3, none: null, list: ['a'] }
+    const result = validatePack({ ...base, entries: base.entries.map((e, i) => (i === 1 ? { ...e, grammar } : e)) })
+    expect(result.status).toBe('ok')
+    if (result.status === 'ok') expect(result.pack.entries[1]!.grammar).toEqual({ gender: 'n', plural: 'Häuser', later: 'x', soon: true })
+  })
   it('leaves the grammar key out of an entry without one', () => {
     const result = validatePack(fixture())
     expect(result.status).toBe('ok')

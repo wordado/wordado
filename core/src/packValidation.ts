@@ -84,7 +84,7 @@ function parseEntry(r: Report, raw: Raw, path: string, target: string): PackEntr
     audio,
     retired,
     ...(taught === undefined ? {} : { taught }),
-    ...(rawGrammar === undefined ? {} : { grammar: rawGrammar as Grammar }),
+    ...(rawGrammar === undefined ? {} : { grammar: grammarValues(rawGrammar) }),
   }
 }
 
@@ -276,4 +276,13 @@ export function validatePack(value: unknown, options: ValidatePackOptions = {}):
   }
   if (r.errors.length === 0) crossCheck(r, pack)
   return r.errors.length > 0 ? { status: 'invalid', errors: r.errors } : { status: 'ok', pack }
+}
+
+/**
+ * The grammar values a client can hold: the schema's fields are checked above; a field it does not know is kept
+ * only as text or a flag (§5.2), never as another kind under a cast.
+ */
+function grammarValues(raw: unknown): Grammar {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return {}
+  return Object.fromEntries(Object.entries(raw).filter(([, v]) => typeof v === 'string' || typeof v === 'boolean'))
 }
