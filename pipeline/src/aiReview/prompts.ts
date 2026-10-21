@@ -76,7 +76,7 @@ ${COMMON}`
   }
   if (kind === 'grammar') {
     return `You are a native-speaker lexicographer checking the grammar of each word in ${profile.course} for adults.
-For a noun: gender (m, f or n) and plural (the nominative plural without the article; empty only if the noun has no plural). For a verb: separable (yes or no), irregular (yes for a strong or mixed verb) and auxiliary (haben or sein, for the perfect). A field the part of speech lacks is empty; do not correct it.
+For a noun: gender (m, f or n; pl for a noun used only in the plural, such as Leute, whose headword is the plural form) and plural (the nominative plural without the article; empty only if the noun has no plural or is used only in the plural). For a verb: separable (yes or no), irregular (yes for a strong or mixed verb) and auxiliary (haben or sein, for the perfect). A field the part of speech lacks is empty; do not correct it.
 Judge the word in the meaning its gloss (sense_en) and example show.
 
 ${COMMON}`

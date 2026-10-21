@@ -10,6 +10,9 @@ describe('headwordForm', () => {
   it('shows the article only for a noun with no plural (Review Focus 5)', () => {
     expect(headwordForm('de', { headword: 'Milch', pos: 'noun', grammar: { gender: 'f', plural: '' } })).toEqual({ lead: 'die Milch', after: '' })
   })
+  it('shows a plural-only noun with the plural article and no plural after it (#316)', () => {
+    expect(headwordForm('de', { headword: 'Leute', pos: 'noun', grammar: { gender: 'pl', plural: '' } })).toEqual({ lead: 'die Leute', after: '' })
+  })
   it('marks a verb that takes sein, and nothing for haben', () => {
     expect(headwordForm('de', { headword: 'gehen', pos: 'verb', grammar: { separable: false, irregular: true, auxiliary: 'sein' } })).toEqual({ lead: 'gehen', after: '(+ sein)' })
     expect(headwordForm('de', { headword: 'kaufen', pos: 'verb', grammar: { separable: false, irregular: false, auxiliary: 'haben' } })).toEqual({ lead: 'kaufen', after: '' })
