@@ -107,6 +107,10 @@ private `wordado/wordado-research`, cloned into `docs/research/` and ignored her
    - Optional, per environment: `TRIAL_MANIFEST_URL`, the manifest a visitor without an account installs from
      (built in as `VITE_TRIAL_MANIFEST_URL`, e.g. `https://content.example.test/trial-manifest.json`). Without it a
      visitor studies the bundled sample, as before; the deploy does not refuse an environment that lacks it.
+   - Optional, per environment: `COURSE_TARGETS`, the courses the app offers, as target codes separated by commas
+     (`en,de`; built in as `VITE_COURSE_TARGETS`). Unset offers English only. Set it to `en,de` once the German corpus
+     is published under `de/` beside the English manifest (each course's manifest sits in a folder named after its
+     target, next to `CONTENT_MANIFEST_URL`'s, and the trial's beside `TRIAL_MANIFEST_URL`'s), then deploy.
    - `APP_ORIGIN`: `https://wordado-preview.<subdomain>.workers.dev` for preview, `https://app.wordado.com` for production.
    - `PASSKEY_RP_ID`, the passkeys' relying party (#287): not a GitHub variable but a var in `server/wrangler.jsonc`.
      `APP_ORIGIN`'s host must be that domain or on it (#304): a production deploy refuses one that is not, before

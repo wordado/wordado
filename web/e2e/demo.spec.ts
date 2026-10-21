@@ -1,6 +1,7 @@
-import { expect, test, type Locator } from '@playwright/test'
+import { expect, test, type Browser, type BrowserContext, type Locator, type Page, type TestInfo } from '@playwright/test'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
+import { COURSES_URL } from './courses'
 import { answer, expectAccessible, finishSetup, finishSetupAt, forwardConsole, heading, sampleEntries, serveGlossedSample, serveTrialSample, serveTwoLevelSample, SETTLE_MS, studyNew, today } from './helpers'
 
 test.beforeEach(async ({ context }) => {
@@ -1785,5 +1786,202 @@ test.describe('the trial at the visitor’s level', () => {
     } finally {
       await context.close()
     }
+  })
+})
+
+// A second course (#313), in the build that offers English and German (playwright.config.ts). The bundled samples are
+// A1 alone, so a setup of either shows no level step; the tests that need a level to keep serve two (serveTwoLevelSample).
+test.describe('a second course (#313)', () => {
+  test.use({ baseURL: COURSES_URL })
+
+  /** A fresh English-interface context on the two-course build, without the app's service worker (so routes answer), and its page. */
+  async function open(browser: Browser, testInfo: TestInfo): Promise<{ context: BrowserContext; page: Page }> {
+    const context = await browser.newContext({ baseURL: COURSES_URL, serviceWorkers: 'block', ...(testInfo.project.use.viewport ? { viewport: testInfo.project.use.viewport } : {}) })
+    forwardConsole(context)
+    await context.addInitScript(() => {
+      if (localStorage.getItem('wordado.locale') === null) localStorage.setItem('wordado.locale', 'en')
+    })
+    return { context, page: await context.newPage() }
+  }
+
+  /** The setup's course question, answered: the course's name in the interface's language. */
+  async function chooseCourse(page: Page, course: string): Promise<void> {
+    await expect(page.getByRole('heading', { name: 'What do you want to learn?', level: 2 })).toBeFocused()
+    await page.getByRole('radio', { name: course }).check()
+    await page.getByRole('button', { name: 'Continue' }).click()
+    await expect(page.getByRole('heading', { name: 'Which language do you speak?', level: 2 })).toBeFocused()
+  }
+
+  /** Settings › Course's switch, from the course page. */
+  async function switchTo(page: Page, course: string): Promise<void> {
+    await page.goto('/settings/course')
+    await expect(page.getByRole('heading', { name: 'Course', level: 2 })).toBeVisible()
+    await page.getByRole('button', { name: `Switch to ${course}` }).click()
+  }
+
+  /**
+   * After a switch to a course started before, its words are installed while the page stays (the course watcher):
+   * the path, reached by the nav without a reload, shows a unit of that course once they are.
+   */
+  async function expectCourseOnPath(page: Page, unit: string): Promise<void> {
+    await page.locator('.nav').getByRole('link', { name: 'Path' }).click()
+    await expect(page.getByText(unit, { exact: true }).first()).toBeVisible()
+  }
+
+  /** The new word a flashcard shows first, as it is written on the card. */
+  async function firstCard(page: Page): Promise<Locator> {
+    await page.goto('/study?mode=flashcard')
+    await expect(page.locator('.card[data-phase="prompt"]')).toBeVisible()
+    return page.locator('.card .hw-word')
+  }
+
+  /** The level Settings › Study has chosen. */
+  async function expectLevel(page: Page, level: string): Promise<void> {
+    await page.goto('/settings/study')
+    await expect(page.getByRole('radio', { name: level })).toBeChecked()
+  }
+
+  test('a first visit chooses German from Bulgarian and studies German words with their articles', async ({ page }) => {
+    await page.goto('/')
+    await expect(heading(page)).toHaveText('Set up Wordado')
+    await chooseCourse(page, 'German')
+    // German is taught from Bulgarian and English: the course's own language is no native language to choose.
+    await expect(page.getByRole('radio', { name: 'Deutsch' })).toHaveCount(0)
+    await page.getByRole('radio', { name: 'Български' }).check()
+    await page.getByRole('button', { name: 'Continue' }).click()
+    // The German sample is A1 alone: no level to ask, so the next step is a later one, with Start studying.
+    await page.getByRole('button', { name: 'Start studying' }).click()
+    await expect(today(page)).toBeVisible()
+    await expect(page.locator('#main')).not.toContainText('English')
+
+    // The first unit's first word, a noun, with its article and its plural; in German, and said to be.
+    const word = await firstCard(page)
+    await expect(word).toHaveText('das Haus')
+    await expect(word).toHaveAttribute('lang', 'de')
+    await expect(page.locator('.card .hw-after')).toContainText('die Häuser')
+    await expect(page.locator('#main')).not.toContainText('English')
+    await page.waitForTimeout(SETTLE_MS)
+    await page.keyboard.press('Space')
+    await expect(page.locator('.card[data-phase="revealed"] .translation')).toHaveText('къща')
+    await expect(page.locator('#main')).not.toContainText('English')
+
+    for (const path of ['/path', '/settings', '/settings/course']) {
+      await page.goto(path)
+      await expect(heading(page)).toBeVisible()
+      // Settings names the interface's language, which is English, and the course page offers English as a course:
+      // those are meant.
+      const text = (await page.locator('#main').innerText()).replace('Menus: English', '').replace('Switch to English', '')
+      expect(text, path).not.toContain('English')
+    }
+    await expect(page.getByText('German, from Bulgarian', { exact: true })).toBeVisible()
+  })
+
+  test('switching to English and back keeps each course its level, and a reload during the new setup comes back to it (Review Focus 2, 3)', async ({ browser }, testInfo) => {
+    test.slow()
+    const { context, page } = await open(browser, testInfo)
+    await serveTwoLevelSample(context, 'en')
+    await serveTwoLevelSample(context, 'de')
+    try {
+      // German at A1.
+      await page.goto('/')
+      await chooseCourse(page, 'German')
+      await page.getByRole('radio', { name: 'Български' }).check()
+      await page.getByRole('button', { name: 'Continue' }).click()
+      await expect(page.getByRole('heading', { name: 'Your level in German' })).toBeVisible()
+      await page.getByRole('radio', { name: 'A1 · Beginner' }).click()
+      await expect(page.getByRole('radio', { name: 'A1 · Beginner' })).toBeChecked()
+      await page.getByRole('button', { name: 'Start studying' }).click()
+      await expect(today(page)).toBeVisible()
+      await expect(await firstCard(page)).toHaveText('das Haus')
+
+      // English, never started: its setup, at the language, with no course question.
+      await switchTo(page, 'English')
+      await expect(page.getByRole('heading', { name: 'Which language do you speak?', level: 2 })).toBeFocused()
+      await expect(page.getByRole('heading', { name: 'What do you want to learn?' })).toHaveCount(0)
+      await page.getByRole('radio', { name: 'Български' }).check()
+      await page.getByRole('button', { name: 'Continue' }).click()
+      await expect(page.getByRole('heading', { name: 'Your level in English' })).toBeVisible()
+
+      // A reload here comes back to the setup, at its level: not to the German words.
+      await page.reload()
+      await expect(page.getByRole('heading', { name: 'Your level in English' })).toBeVisible()
+      await expect(today(page)).toHaveCount(0)
+      await page.getByRole('radio', { name: 'A2 · Elementary' }).click()
+      await expect(page.getByRole('radio', { name: 'A2 · Elementary' })).toBeChecked()
+      await page.getByRole('button', { name: 'Start studying' }).click()
+      await expect(today(page)).toBeVisible()
+
+      // One English word studied: the first of the A2 units, the A1 one being skipped.
+      const word = await firstCard(page)
+      await expect(word).toHaveAttribute('lang', 'en')
+      const studied = (await word.textContent())!
+      await studyNew(page, 1)
+      await page.goto('/path')
+      await expect(page.getByText('1 of 20 started')).toBeVisible()
+      await expectLevel(page, 'A2 · Elementary')
+
+      // Back to German: its words at once, at its own level, with no setup.
+      await switchTo(page, 'German')
+      await expect(page.getByText('German, from Bulgarian', { exact: true })).toBeVisible()
+      await expectCourseOnPath(page, 'Everyday life')
+      await expect(page.getByRole('heading', { name: 'Set up Wordado' })).toHaveCount(0)
+      await expect(await firstCard(page)).toHaveText('das Haus')
+      await expectLevel(page, 'A1 · Beginner')
+
+      // And English again: its level, and the word studied in it still started.
+      await switchTo(page, 'English')
+      await expect(page.getByText('English, from Bulgarian', { exact: true })).toBeVisible()
+      await expectCourseOnPath(page, 'Home and every day')
+      await expect(page.getByRole('heading', { name: 'Set up Wordado' })).toHaveCount(0)
+      await expect(page.getByText('1 of 20 started')).toBeVisible()
+      await expectLevel(page, 'A2 · Elementary')
+      const next = await firstCard(page)
+      await expect(next).toHaveAttribute('lang', 'en')
+      await expect(next).not.toHaveText(studied)
+    } finally {
+      await context.close()
+    }
+  })
+
+  test('a setup a switch opened goes back to the course before, installing nothing', async ({ browser }, testInfo) => {
+    const { context, page } = await open(browser, testInfo)
+    try {
+      await page.goto('/')
+      await chooseCourse(page, 'German')
+      await page.getByRole('radio', { name: 'Български' }).check()
+      await page.getByRole('button', { name: 'Continue' }).click()
+      await page.getByRole('button', { name: 'Start studying' }).click()
+      await expect(today(page)).toBeVisible()
+
+      // English's sample is at /content/sample/, German's under de/.
+      const english: string[] = []
+      page.on('request', (request) => {
+        if (/\/content\/sample\/(manifest\.json|corpus-)/.test(new URL(request.url()).pathname)) english.push(request.url())
+      })
+      await switchTo(page, 'English')
+      await expect(page.getByRole('heading', { name: 'Which language do you speak?', level: 2 })).toBeFocused()
+      await page.getByRole('button', { name: 'Back to German' }).click()
+      await expect(today(page)).toBeVisible()
+      await expect(await firstCard(page)).toHaveText('das Haus')
+      await page.goto('/settings/course')
+      await expect(page.getByText('German, from Bulgarian', { exact: true })).toBeVisible()
+      expect(english).toEqual([])
+    } finally {
+      await context.close()
+    }
+  })
+
+  test('the setup’s course step and Settings › Course meet WCAG 2.2 A and AA, light and dark (spec §11.1)', async ({ page }) => {
+    await page.goto('/')
+    await expect(page.getByRole('heading', { name: 'What do you want to learn?' })).toBeFocused()
+    await expectAccessible(page, { dark: true })
+    await chooseCourse(page, 'German')
+    await page.getByRole('radio', { name: 'Български' }).check()
+    await page.getByRole('button', { name: 'Continue' }).click()
+    await page.getByRole('button', { name: 'Start studying' }).click()
+    await expect(today(page)).toBeVisible()
+    await page.goto('/settings/course')
+    await expect(page.getByRole('heading', { name: 'Course', level: 2 })).toBeVisible()
+    await expectAccessible(page, { dark: true })
   })
 })
