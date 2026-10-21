@@ -14,17 +14,20 @@ export function Matching(props: ScopeParams) {
   const { t, locale } = useT()
   const client = useClient()
   const { env } = useApp()
-  const { corpus } = useClientSnapshot()
+  const { corpus, course } = useClientSnapshot()
+  // The installed course by its parts (a new object on every snapshot): a course pack activated mid-board deals a
+  // new board from the new course's words (spec §5.1).
+  const courseKey = `${course.target}:${course.l1}`
   const scope = usePracticeScope(props)
   const params = scope?.params ?? {}
   const scopeKind = scope?.scope.kind
   const scopeId = scope?.scope.id
   const [round, setRound] = useState(0)
-  // `round` is a dependency on purpose: "Play again" deals a new board. The scope goes in by its parts, so a
+  // `round` and `courseKey` are dependencies on purpose: "Play again", or another course, deals a new board. The scope goes in by its parts, so a
   // board is not dealt again while it is being played (every answer renews the snapshot the scope is read from).
   const run = useMemo(
     () => MatchingRun.start(client, env, scopeKind !== undefined && scopeId !== undefined ? { kind: scopeKind, id: scopeId } : undefined),
-    [client, env, scopeKind, scopeId, round],
+    [client, env, scopeKind, scopeId, round, courseKey],
   )
   if (!run) {
     return (
@@ -38,7 +41,7 @@ export function Matching(props: ScopeParams) {
       </section>
     )
   }
-  return <Board key={round} run={run} scope={params} onAgain={() => setRound((r) => r + 1)} />
+  return <Board key={`${courseKey}:${round}`} run={run} scope={params} onAgain={() => setRound((r) => r + 1)} />
 }
 
 function Board(props: { readonly run: MatchingRun; readonly scope: ScopeParams; readonly onAgain: () => void }) {

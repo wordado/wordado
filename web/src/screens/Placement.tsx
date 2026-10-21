@@ -1,4 +1,5 @@
 import { PlacementRun, placementSource, useClient, useClientSnapshot, type PlacementSource } from '@wordado/client-data'
+import { headwordForm } from '@wordado/core'
 import { X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useApp } from '../app/context'
@@ -15,7 +16,16 @@ import { useStore } from '../useStore'
  * level step (`setup`), where every way back leads to that step: `leave`
  * with nothing changed, `taken` once the result is the learner's level.
  */
-export function Placement(props: { readonly source?: PlacementSource; readonly setup?: { leave(): void; taken(): void } }) {
+export function Placement(props: PlacementProps) {
+  // The installed course by its parts: a course pack activated mid-test (another device's switch, installed by the
+  // watcher) starts the test again on the new course's words, as a study run starts again (spec §5.1).
+  const { course } = useClientSnapshot()
+  return <PlacementTest key={`${course.target}:${course.l1}`} {...props} />
+}
+
+type PlacementProps = { readonly source?: PlacementSource; readonly setup?: { leave(): void; taken(): void } }
+
+function PlacementTest(props: PlacementProps) {
   const { t, locale } = useT()
   const client = useClient()
   const { env } = useApp()
@@ -162,7 +172,7 @@ export function Placement(props: { readonly source?: PlacementSource; readonly s
                   {index + 1}
                 </span>{' '}
                 <span className="option-text" lang={target}>
-                  {option.headword}
+                  {headwordForm(target, option).lead}
                 </span>
               </button>
             </li>
