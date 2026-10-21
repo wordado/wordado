@@ -42,6 +42,7 @@ describe('describeLemmas', () => {
     const lemma = [{ lemma: 'i', perMillion: 9000, rank: 10, pinned: false }]
     expect((await describeLemmas(lemma, [], run(() => ({ items: [pronoun] }))))[0]![0]!.headword).toBe('I')
     expect((await describeLemmas(lemma, [], run(() => ({ items: [{ ...pronoun, headword: 'Me' }] }))))[0]![0]!.headword).toBe('i')
+    expect((await describeLemmas(lemma, [], run(() => ({ items: [{ ...pronoun, headword: 'sich i' }] }))))[0]![0]!.headword).toBe('i')
   })
 
   it('drops a variant that is only the headword in other capitals', async () => {
@@ -100,7 +101,8 @@ describe('describeLemmas for a target with grammar', () => {
   })
   const deAnswer = () => ({
     items: [
-      german('gehen', { pos: 'verb', grammar: { gender: '', plural: '', separable: false, irregular: true, auxiliary: 'sein' } }),
+      // A verb's answer with noun fields filled: they are not a verb's fields, and are dropped.
+      german('gehen', { pos: 'verb', grammar: { gender: 'm', plural: 'x', separable: false, irregular: true, auxiliary: 'sein' } }),
       german('haus', { pos: 'noun', grammar: { gender: 'n', plural: 'Häuser', separable: false, irregular: false, auxiliary: '' } }),
     ],
   })
@@ -110,6 +112,15 @@ describe('describeLemmas for a target with grammar', () => {
     const out = await describeLemmas(ranked('gehen', 'haus'), [], runFor(PROFILES.de, deAnswer))
     expect(out[0]![0]!.grammar).toEqual({ separable: false, irregular: true, auxiliary: 'sein' })
     expect(out[1]![0]!.grammar).toEqual({ gender: 'n', plural: 'Häuser' })
+  })
+
+  it('keeps a German reflexive verb\'s headword with "sich", which the prompt asks for', async () => {
+    const answer = () => ({ items: [{ ...german('freuen', { pos: 'verb', grammar: { gender: '', plural: '', separable: false, irregular: false, auxiliary: 'haben' } }), headword: 'sich freuen' }] })
+    const out = await describeLemmas(ranked('freuen'), [], runFor(PROFILES.de, answer))
+    expect(out[0]![0]!.headword).toBe('sich freuen')
+    // Anything else that is not the lemma is still the lemma.
+    const other = () => ({ items: [{ ...german('freuen', { pos: 'verb', grammar: { gender: '', plural: '', separable: false, irregular: false, auxiliary: 'haben' } }), headword: 'mich freuen' }] })
+    expect((await describeLemmas(ranked('freuen'), [], runFor(PROFILES.de, other)))[0]![0]!.headword).toBe('freuen')
   })
 
   it('gives a part of speech without grammar fields no grammar block, and does not reject it', async () => {

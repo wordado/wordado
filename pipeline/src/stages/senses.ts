@@ -169,7 +169,9 @@ function parse(profile: LanguageProfile, asked: readonly string[], themeIds: Rea
       if (item.lemma !== asked[i]) throw new ParseError(`answers other items than it was asked: item ${i} is ${JSON.stringify(item.lemma)}`)
       // Frequency lists are lowercased; the headword keeps its capitals (I, Monday) when it is the same word.
       const display = String(item.headword ?? '').trim()
-      const headword = display !== '' && norm(display) === asked[i] ? display : asked[i]!
+      // German prints a reflexive verb with "sich" (sich freuen), as its prompt asks.
+      const same = norm(display) === asked[i] || (profile.code === 'de' && norm(display) === `sich ${asked[i]}`)
+      const headword = display !== '' && same ? display : asked[i]!
       const senses = (Array.isArray(item.senses) ? item.senses : []).slice(0, 4).map((s, j) => parseSense(profile, headword, themeIds, s as Record<string, unknown>, `${asked[i]} sense ${j}`))
       const byPos = new Map<string, SenseProposal[]>()
       for (const s of senses) byPos.set(s.pos, [...(byPos.get(s.pos) ?? []), s])
