@@ -123,6 +123,15 @@ describe('describeLemmas for a target with grammar', () => {
     await expect(describeLemmas(ranked('gut'), [], runFor(PROFILES.de, answer))).rejects.toThrow(/gut sense 0: grammar must be an object/)
   })
 
+  it('rejects a German noun without a gender and a verb without an auxiliary, so the stage asks again', async () => {
+    const noun = () => ({ items: [german('haus', { pos: 'noun', grammar: { gender: '', plural: 'Häuser', separable: false, irregular: false, auxiliary: '' } })] })
+    await expect(describeLemmas(ranked('haus'), [], runFor(PROFILES.de, noun))).rejects.toThrow(/haus sense 0: gender is missing/)
+    const verb = () => ({ items: [german('gehen', { pos: 'verb', grammar: { gender: '', plural: '', separable: false, irregular: true, auxiliary: '' } })] })
+    await expect(describeLemmas(ranked('gehen'), [], runFor(PROFILES.de, verb))).rejects.toThrow(/gehen sense 0: auxiliary is missing/)
+    const bare = () => ({ items: [german('haus', { pos: 'noun', grammar: { gender: '' } })] })
+    await expect(describeLemmas(ranked('haus'), [], runFor(PROFILES.de, bare))).rejects.toThrow(/haus sense 0: gender is missing; plural is missing/)
+  })
+
   it('rejects a German grammar value of the wrong type', async () => {
     const bad = () => ({ items: [german('haus', { pos: 'noun', grammar: { gender: 'n', plural: 5, separable: false, irregular: false, auxiliary: '' } })] })
     await expect(describeLemmas(ranked('haus'), [], runFor(PROFILES.de, bad))).rejects.toThrow(/haus sense 0/)

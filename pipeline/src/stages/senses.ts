@@ -142,10 +142,11 @@ function parseSense(profile: LanguageProfile, headword: string, themeIds: Readon
   if (profile.grammar && (typeof rawGrammar !== 'object' || rawGrammar === null || Array.isArray(rawGrammar))) throw new ParseError(`${where}: grammar must be an object`)
   const grammar = keptGrammar(profile, pos, (rawGrammar ?? {}) as Record<string, unknown>)
   // A part of speech the schema gives no field (an adjective, say) keeps no block, and there is nothing to check.
-  if (grammar) {
-    const problems = grammarProblems(profile.code, pos, grammar)
-    if (problems.length > 0) throw new ParseError(`${where}: ${problems.join('; ')}`)
-  }
+  // One that has fields must carry each (a noun its gender, a verb its auxiliary): the stage asks again rather than
+  // let an entry through without it.
+  const missing = Object.entries(profile.grammar ?? {}).filter(([name, f]) => f.pos.includes(pos) && !(grammar && name in grammar)).map(([name]) => `${name} is missing`)
+  const problems = [...missing, ...(grammar ? grammarProblems(profile.code, pos, grammar) : [])]
+  if (problems.length > 0) throw new ParseError(`${where}: ${problems.join('; ')}`)
   return {
     headword,
     pos,
