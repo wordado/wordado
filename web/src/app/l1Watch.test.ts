@@ -180,7 +180,7 @@ describe('watchL1 (plan 10, Decision 2)', () => {
     await before.installPacks(sampleManifest, sampleFetcher)
     await before.startSession()
     await before.updateSettings({ l1: 'de' })
-    await before.changeL1('de', sampleManifest, () => Promise.reject(new Error('offline')))
+    await before.changeCourse({ target: 'en', l1: 'de' }, sampleManifest, () => Promise.reject(new Error('offline')))
 
     // The relaunch: `settings.l1` names German while the Bulgarian pack is still the installed one.
     const client = await Client.open({ driver, env, l1: 'bg' })
@@ -190,7 +190,7 @@ describe('watchL1 (plan 10, Decision 2)', () => {
       client,
       (l1) => {
         calls.push(l1)
-        done = client.changeL1(l1, sampleManifest, sampleFetcher)
+        done = client.changeCourse({ target: 'en', l1 }, sampleManifest, sampleFetcher)
         return done
       },
       () => true,

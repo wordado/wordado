@@ -57,7 +57,7 @@ export class PackSwitcher {
     try {
       const manifest = await this.deps.fetchManifest(account)
       const fetchPack = this.deps.fetcher((received, total) => this.store.set({ phase: 'downloading', client, l1, received, total }))
-      const outcome = await client.changeL1(l1, manifest, fetchPack)
+      const outcome = await client.changeCourse({ target: 'en', l1 }, manifest, fetchPack)
       this.store.set(outcome.ok ? { phase: 'idle' } : { phase: 'failed', client, l1 })
       return outcome
     } catch (error) {

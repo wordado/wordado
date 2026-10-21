@@ -4,6 +4,7 @@ import {
   selectPacks,
   validatePack,
   type Corpus,
+  type Course,
   type InstalledPack,
   type Pack,
   type PackDescriptor,
@@ -64,7 +65,12 @@ async function checkFetched(
   if (result.status === 'unsupported_schema') return `schema ${result.schemaVersion} is not supported`
   if (result.status === 'invalid') return `invalid: ${result.errors[0]?.path}: ${result.errors[0]?.message}`
   const pack = result.pack
-  if (pack.pack_id !== descriptor.pack_id || pack.corpus_version !== descriptor.corpus_version || pack.l1 !== descriptor.l1) {
+  if (
+    pack.pack_id !== descriptor.pack_id ||
+    pack.corpus_version !== descriptor.corpus_version ||
+    pack.l1 !== descriptor.l1 ||
+    pack.target !== (descriptor.target ?? 'en')
+  ) {
     return 'the pack describes itself differently from the manifest'
   }
   try {
@@ -75,21 +81,28 @@ async function checkFetched(
   return { pack, text }
 }
 
+/** A pack of `course`: its L1 and its target both match (spec §5.5). */
+const sameCourse = (p: Pack, c: Course): boolean => p.l1 === c.l1 && p.target === c.target
+/** A descriptor offered for `course`'s target; one without a target is English (spec §5.5). */
+const offeredFor = (d: PackDescriptor, c: Course): boolean => (d.target ?? 'en') === c.target
+
 /**
- * Fetches, verifies and stages the packs the manifest offers for `l1` and this
- * build can read (spec §5.1, §9.3). Staged packs become visible only through
+ * Fetches, verifies and stages the packs the manifest offers for `course` and this
+ * build can read (spec §5.1, §5.5, §9.3). Staged packs become visible only through
  * `activateStagedPacks`, so a download never changes a running session.
  */
 export async function installPacks(
   db: Database,
   env: ClientEnv,
   manifest: PackManifest,
-  l1: string,
+  course: Course,
   fetchPack: PackFetcher,
 ): Promise<InstallReport> {
   const installed = await installedPacks(db)
-  const selection = selectPacks({ manifest, l1, installed, supportedSchemaVersions: [PACK_SCHEMA_VERSION] })
-  const others = (await activePacks(db.driver)).filter((p) => p.l1 === l1)
+  const offered = selectPacks({ manifest, l1: course.l1, installed, supportedSchemaVersions: [PACK_SCHEMA_VERSION] })
+  // The manifest lists every course's packs; an L1 is shared by several courses, so the target picks among them.
+  const selection = { fetch: offered.fetch.filter((d) => offeredFor(d, course)), appUpdateNeeded: offered.appUpdateNeeded.filter((d) => offeredFor(d, course)) }
+  const others = (await activePacks(db.driver)).filter((p) => sameCourse(p, course))
   const staged: string[] = []
   const rejected: { packId: string; reason: string }[] = []
   for (const descriptor of selection.fetch) {
@@ -121,37 +134,38 @@ export async function installPacks(
 }
 
 /**
- * Swaps `l1`'s staged packs in. Call at the start of a session, never in the
- * middle of one (spec §5.1), with the L1 the caller is about to serve (the
- * installed L1, or the one `changeL1` is switching to). Scoped to that one
- * L1 so an unrelated staged pack — a background upgrade of the *other*
- * language, or a leftover from an interrupted `changeL1` — can never be
- * promoted by mistake and brick the corpus (a pack merge refuses to mix
- * L1s). A staged pack of another L1 is dropped rather than left to be
- * activated later by surprise. The active packs of other L1s are dropped
- * too, but only once `l1` itself ends up active: if `l1`'s pack could not be
+ * Swaps `course`'s staged packs in: one course at a time (spec §5.5, §8.6).
+ * Call at the start of a session, never in the middle of one (spec §5.1),
+ * with the course the caller is about to serve (the installed course, or the
+ * one `changeCourse` is switching to). Scoped to that one course so an
+ * unrelated staged pack — a background upgrade of the *other* course, or a
+ * leftover from an interrupted `changeCourse` — can never be promoted by
+ * mistake and brick the corpus (a pack merge refuses to mix L1s or targets).
+ * A staged pack of another course is dropped rather than left to be
+ * activated later by surprise. The active packs of other courses are dropped
+ * too, but only once `course` itself ends up active: if its pack could not be
  * promoted (nothing staged and none already active), whatever was active
- * stays untouched, so a `changeL1` that finds nothing to activate changes
+ * stays untouched, so a `changeCourse` that finds nothing to activate changes
  * nothing (spec §8.6).
  */
-export async function activateStagedPacks(db: Database, l1: string): Promise<string[]> {
+export async function activateStagedPacks(db: Database, course: Course): Promise<string[]> {
   return db.transaction(async (tx) => {
     const staged = await tx.all<{ pack_id: string; json: string }>("SELECT pack_id, json FROM pack WHERE status = 'staged' ORDER BY pack_id")
     const promoted: string[] = []
     for (const row of staged) {
-      if ((JSON.parse(row.json) as Pack).l1 === l1) {
+      if (sameCourse(JSON.parse(row.json) as Pack, course)) {
         await tx.run("DELETE FROM pack WHERE pack_id = ? AND status = 'active'", [row.pack_id])
         await tx.run("UPDATE pack SET status = 'active' WHERE pack_id = ? AND status = 'staged'", [row.pack_id])
         promoted.push(row.pack_id)
       } else {
-        // Another L1's staged pack: never ours to activate, and not left behind to surprise a later call.
+        // Another course's staged pack: never ours to activate, and not left behind to surprise a later call.
         await tx.run("DELETE FROM pack WHERE pack_id = ? AND status = 'staged'", [row.pack_id])
       }
     }
     const active = await tx.all<{ pack_id: string; json: string }>("SELECT pack_id, json FROM pack WHERE status = 'active'")
-    if (active.some((r) => (JSON.parse(r.json) as Pack).l1 === l1)) {
+    if (active.some((r) => sameCourse(JSON.parse(r.json) as Pack, course))) {
       for (const row of active) {
-        if ((JSON.parse(row.json) as Pack).l1 !== l1) await tx.run("DELETE FROM pack WHERE pack_id = ? AND status = 'active'", [row.pack_id])
+        if (!sameCourse(JSON.parse(row.json) as Pack, course)) await tx.run("DELETE FROM pack WHERE pack_id = ? AND status = 'active'", [row.pack_id])
       }
     }
     return promoted

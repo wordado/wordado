@@ -13,7 +13,7 @@ import type { AnswerInput } from './learner'
 import { installPacks, type PackFetcher } from './packs'
 import { accountIsEmpty, UpgradeRequiredError } from './sync'
 import { FakeServer } from './testing/fakeServer'
-import { firstUnitOnly, openSampleClient, openTrialClient, packServing, trialPack } from './testing/sample'
+import { firstUnitOnly, germanServing, openSampleClient, openTrialClient, packServing, trialPack } from './testing/sample'
 import { testEnv, type TestEnv } from './testing/testEnv'
 
 const SAMPLE_DIR = fileURLToPath(new URL('../../pipeline/samples/a1/', import.meta.url))
@@ -552,7 +552,7 @@ describe('Client.reports', () => {
   })
 })
 
-describe('Client.changeL1 (spec §8.6)', () => {
+describe('Client.changeCourse (spec §8.6)', () => {
   it('switches the corpus, keeping every bit of progress, and drops the old language pack', async () => {
     const env = testEnv()
     const driver = nodeSqliteDriver()
@@ -570,7 +570,7 @@ describe('Client.changeL1 (spec §8.6)', () => {
     expect(flagsBefore.get('c:hello-1')).toBe('known')
 
     await client.updateSettings({ l1: 'de' })
-    expect(await client.changeL1('de', manifest, fromDisk)).toEqual({ ok: true })
+    expect(await client.changeCourse({ target: 'en', l1: 'de' }, manifest, fromDisk)).toEqual({ ok: true })
 
     expect(client.snapshot.l1).toBe('de')
     expect(client.snapshot.corpus?.l1).toBe('de')
@@ -586,7 +586,7 @@ describe('Client.changeL1 (spec §8.6)', () => {
     const client = await Client.open({ driver, env: testEnv(), l1: 'bg' })
     await client.installPacks(manifest, fromDisk)
     await client.startSession()
-    const outcome = await client.changeL1('de', manifest, () => Promise.reject(new Error('offline')))
+    const outcome = await client.changeCourse({ target: 'en', l1: 'de' }, manifest, () => Promise.reject(new Error('offline')))
     expect(outcome).toEqual({ ok: false, reason: 'unavailable' })
     expect(client.snapshot.l1).toBe('bg')
     expect(client.snapshot.corpus?.l1).toBe('bg')
@@ -607,7 +607,7 @@ describe('Client.changeL1 (spec §8.6)', () => {
       { pack_id: 'corpus-bg', status: 'staged', corpus_version: 1 },
     ])
 
-    expect(await client.changeL1('de', manifest, fromDisk)).toEqual({ ok: true })
+    expect(await client.changeCourse({ target: 'en', l1: 'de' }, manifest, fromDisk)).toEqual({ ok: true })
 
     expect(client.snapshot.l1).toBe('de')
     expect(client.snapshot.corpus?.l1).toBe('de')
@@ -624,11 +624,11 @@ describe('Client.changeL1 (spec §8.6)', () => {
     const client = await Client.open({ driver, env, l1: 'bg' })
     await client.installPacks(manifest, fromDisk)
     await client.startSession()
-    // An earlier `changeL1('de', …)` staged the pack but the app was killed before `activateStagedPacks` ran.
-    await installPacks(new Database(driver), env, manifest, 'de', fromDisk)
+    // An earlier `changeCourse({ target: 'en', l1: 'de' }, …)` staged the pack but the app was killed before `activateStagedPacks` ran.
+    await installPacks(new Database(driver), env, manifest, { target: 'en', l1: 'de' }, fromDisk)
     expect(await driver.all("SELECT pack_id, status FROM pack WHERE pack_id = 'corpus-de'")).toEqual([{ pack_id: 'corpus-de', status: 'staged' }])
 
-    const outcome = await client.changeL1('de', manifest, () => Promise.reject(new Error('offline')))
+    const outcome = await client.changeCourse({ target: 'en', l1: 'de' }, manifest, () => Promise.reject(new Error('offline')))
 
     expect(outcome).toEqual({ ok: true })
     expect(client.snapshot.l1).toBe('de')
@@ -658,7 +658,7 @@ describe('Client.changeL1 (spec §8.6)', () => {
     await client.installPacks(manifest, fromDisk)
     await client.startSession()
     await client.updateSettings({ l1: 'de' })
-    expect(await client.changeL1('de', manifest, () => Promise.reject(new Error('offline')))).toEqual({ ok: false, reason: 'unavailable' })
+    expect(await client.changeCourse({ target: 'en', l1: 'de' }, manifest, () => Promise.reject(new Error('offline')))).toEqual({ ok: false, reason: 'unavailable' })
 
     const reopened = await Client.open({ driver, env, l1: 'bg' })
     expect(reopened.snapshot.settings.l1).toBe('de')
@@ -677,7 +677,7 @@ describe('Client.changeL1 (spec §8.6)', () => {
     expect(reopened.snapshot.packVersion).toBe(1)
 
     // Once online, the pending change goes through.
-    expect(await reopened.changeL1('de', manifest, fromDisk)).toEqual({ ok: true })
+    expect(await reopened.changeCourse({ target: 'en', l1: 'de' }, manifest, fromDisk)).toEqual({ ok: true })
     expect(reopened.snapshot.l1).toBe('de')
     expect(reopened.snapshot.corpus?.l1).toBe('de')
   })
@@ -709,7 +709,7 @@ describe('Client.changeL1 (spec §8.6)', () => {
       return fromDisk(d)
     }
 
-    expect(await client.changeL1('bg', manifest, counting)).toEqual({ ok: true })
+    expect(await client.changeCourse({ target: 'en', l1: 'bg' }, manifest, counting)).toEqual({ ok: true })
 
     expect(client.snapshot.corpus?.l1).toBe('bg')
     expect(calls).toBe(1)
@@ -720,7 +720,7 @@ describe('Client.changeL1 (spec §8.6)', () => {
     const client = await Client.open({ driver, env: testEnv(), l1: 'bg' })
     await client.updateSettings({ l1: 'de' })
 
-    expect(await client.changeL1('de', manifest, fromDisk)).toEqual({ ok: true })
+    expect(await client.changeCourse({ target: 'en', l1: 'de' }, manifest, fromDisk)).toEqual({ ok: true })
 
     expect(client.snapshot.corpus?.l1).toBe('de')
   })
@@ -733,9 +733,79 @@ describe('Client.changeL1 (spec §8.6)', () => {
       return fromDisk(d)
     }
 
-    expect(await client.changeL1('bg', manifest, counting)).toEqual({ ok: true })
+    expect(await client.changeCourse({ target: 'en', l1: 'bg' }, manifest, counting)).toEqual({ ok: true })
 
     expect(calls).toBe(0)
+  })
+})
+
+describe('Client courses (spec §5.5, §8.6)', () => {
+  it('refuses a language the course is not taught from: English is no L1 of the English course', async () => {
+    const client = await openClient()
+    expect(await client.changeCourse({ target: 'en', l1: 'en' }, manifest, fromDisk)).toEqual({ ok: false, reason: 'unsupported' })
+    expect(client.course).toEqual({ target: 'en', l1: 'bg' })
+  })
+
+  it('names the course before any pack from the settings, and the installed one after', async () => {
+    const client = await Client.open({ driver: nodeSqliteDriver(), env: testEnv(), l1: 'bg' })
+    expect(client.course).toEqual({ target: 'en', l1: 'bg' })
+    await client.updateSettings({ course: 'de', l1: 'es' })
+    expect(client.course).toEqual({ target: 'de', l1: 'es' })
+    expect(client.snapshot.course).toEqual({ target: 'de', l1: 'es' })
+    expect(client.snapshot.l1).toBe('es')
+  })
+
+  it('switches course and back, keeping each course its own settings and every review', async () => {
+    const env = testEnv()
+    const german = await germanServing(env)
+    const client = await openClient(env)
+    await client.updateSettings({ declaredLevel: 'B1', activeTheme: 'food' })
+    await client.answer(answer('c:hello-1'))
+
+    const first = await client.switchCourse('de')
+    expect(first).toEqual({ needsSetup: true })
+    expect(client.snapshot.settings).toMatchObject({ course: 'de', l1: null, declaredLevel: 'A1', activeTheme: null })
+    await client.updateSettings({ l1: 'bg' })
+    expect(await client.changeCourse({ target: 'de', l1: 'bg' }, german.manifest, german.fetch)).toEqual({ ok: true })
+    expect(client.course).toEqual({ target: 'de', l1: 'bg' })
+    expect(client.snapshot.course).toEqual({ target: 'de', l1: 'bg' })
+    expect(client.snapshot.corpus?.target).toBe('de')
+
+    const back = await client.switchCourse('en')
+    expect(back).toEqual({ needsSetup: false })
+    expect(client.snapshot.settings).toMatchObject({ course: 'en', l1: 'bg', declaredLevel: 'B1', activeTheme: 'food' })
+    expect(await client.changeCourse({ target: 'en', l1: 'bg' }, german.manifest, german.fetch)).toEqual({ ok: true })
+    expect(client.snapshot.corpus?.target).toBe('en')
+    expect(client.snapshot.states.size).toBe(1) // the English review state survived both switches
+  })
+
+  it('switching to the course already studied changes nothing', async () => {
+    const client = await openClient()
+    await client.updateSettings({ l1: 'bg', declaredLevel: 'B1' })
+    expect(await client.switchCourse('en')).toEqual({ needsSetup: false })
+    expect(client.snapshot.settings).toMatchObject({ course: 'en', l1: 'bg', declaredLevel: 'B1' })
+  })
+
+  it('parks nothing for a course never started, and restores a parked one with what this build can read', async () => {
+    const driver = nodeSqliteDriver()
+    const client = await Client.open({ driver, env: testEnv(), l1: 'bg' })
+    // No pack and no L1 chosen: the English course was never started.
+    expect(await client.switchCourse('de')).toEqual({ needsSetup: true })
+    expect(await driver.all("SELECT key FROM document WHERE type = 'course'")).toEqual([])
+    // Another device parked the English course with values this build refuses: English is no L1 of it.
+    await new Database(driver).transaction((tx) => writeLocalPatch(tx, DOC.course, 'en', { l1: 'en', declaredLevel: 'Z9', activeTheme: '' }))
+    expect(await client.switchCourse('en')).toEqual({ needsSetup: true })
+    expect(client.snapshot.settings).toMatchObject({ course: 'en', l1: null, declaredLevel: 'A1', activeTheme: null })
+  })
+
+  it('writes no course document for a learner who never switches', async () => {
+    const driver = nodeSqliteDriver()
+    const client = await Client.open({ driver, env: testEnv(), l1: 'bg' })
+    await client.installPacks(manifest, fromDisk)
+    await client.startSession()
+    await client.answer(answer('c:hello-1'))
+    await client.updateSettings({ declaredLevel: 'A2' })
+    expect(await driver.all("SELECT key FROM document WHERE type = 'course'")).toEqual([])
   })
 })
 

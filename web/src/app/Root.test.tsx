@@ -249,7 +249,7 @@ describe('Root', () => {
     const boot = await renderRoot({ fresh: true })
     const state = boot.store.get()
     if (state.status !== 'ready') throw new Error('not ready')
-    await act(async () => void (await state.client.changeL1('bg', sampleManifest, sampleFetcher)))
+    await act(async () => void (await state.client.changeCourse({ target: 'en', l1: 'bg' }, sampleManifest, sampleFetcher)))
     act(() => boot.finishSetup())
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('10 new words')
   })
