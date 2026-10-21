@@ -172,6 +172,11 @@ export async function activateStagedPacks(db: Database, course: Course): Promise
   })
 }
 
+/** Whether a pack of `course` is active. */
+export async function hasActiveCourse(db: Database, course: Course): Promise<boolean> {
+  return (await activePacks(db.driver)).some((p) => sameCourse(p, course))
+}
+
 /** The active packs as one corpus, or null before the first pack is activated. */
 export async function loadActiveCorpus(db: Database): Promise<Corpus | null> {
   const packs = await activePacks(db.driver)

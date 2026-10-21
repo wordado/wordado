@@ -11,6 +11,7 @@ import {
   type Corpus,
   type CorpusEntry,
   type Course,
+  type ParkedCourse,
   type Entitlement,
   type L1,
   type Mode,
@@ -31,7 +32,7 @@ import type { SqlDriver } from './driver'
 import type { ClientEnv } from './env'
 import { appendAnswer, loadLearner, pendingDayComplete, provisionalXp, recordDayComplete, unpushedEvents, type AnswerInput, type Learner } from './learner'
 import { ensureDevice, getUserId, setUserId } from './meta'
-import { activateStagedPacks, activePackVersion, installedPacks, installPacks, loadActiveCorpus, type InstallReport, type PackFetcher } from './packs'
+import { activateStagedPacks, activePackVersion, hasActiveCourse, installedPacks, installPacks, loadActiveCorpus, type InstallReport, type PackFetcher } from './packs'
 import { migrate } from './schema'
 import { createStore, type Store } from './store'
 import { PracticeVisit } from './practiceVisit'
@@ -309,7 +310,10 @@ export class Client {
       const installed = await installedPacks(this.db)
       const has = report.staged.length > 0 || installed.some((p) => p.pack_id === coursePackId(course.target, course.l1))
       if (!has) return { ok: false, reason: 'unavailable' }
-      await activateStagedPacks(this.db, course)
+      const promoted = await activateStagedPacks(this.db, course)
+      // A `startSession` running at the same moment may have dropped the staged pack (another course's, to it) between
+      // staging and activating: nothing of the course is then active, and the caller tries again later.
+      if (promoted.length === 0 && !(await hasActiveCourse(this.db, course))) return { ok: false, reason: 'unavailable' }
       // Reload what `open` loads from the active packs (corpus, pack version, session plan), as `startSession` does.
       // The new corpus's course is now `this.course`.
       await this.reloadCorpus()
@@ -331,7 +335,10 @@ export class Client {
         // A course installed from the default L1 (a demo, or before the setup wrote `settings.l1`) is still started:
         // its installed L1 is parked with it, so its level and theme are not lost as those of a course never begun.
         const installed = this.corpus !== null && this.corpus.target === stored.course && isCourseL1(stored.course, this.corpus.l1) ? this.corpus.l1 : null
-        const current = stored.l1 === null && installed !== null ? { ...stored, l1: installed } : stored
+        // An L1 the course is not taught from (a two-device merge can leave `{ course: 'de', l1: 'de' }`) is not parked:
+        // the server would refuse the write. The course is then parked as never started.
+        const l1 = isCourseL1(stored.course, stored.l1) ? stored.l1 : installed
+        const current = l1 === stored.l1 ? stored : { ...stored, l1 }
         const { park, settings } = courseSwitchPatch(current, await readParkedCourse(tx, to), to)
         if (park) await writeParkedCourse(tx, current.course, park)
         return Object.keys(settings).length === 0 ? stored : patchSettings(tx, settings)
@@ -339,6 +346,11 @@ export class Client {
       this.refresh()
       return { needsSetup: this.settings.l1 === null }
     })
+  }
+
+  /** A course the learner is not studying now, as parked in its `course` document (spec §8.6); null when never parked. */
+  parkedCourse(target: Target): Promise<ParkedCourse | null> {
+    return readParkedCourse(this.db.driver, target)
   }
 
   entry(wordId: WordId): CorpusEntry | null {

@@ -635,6 +635,39 @@ describe('Client.changeCourse (spec §8.6)', () => {
     expect(await driver.all('SELECT pack_id, status FROM pack')).toEqual([{ pack_id: 'corpus-de', status: 'active' }])
   })
 
+  it('reports unavailable when the staged pack is gone before it is activated (a concurrent startSession dropped it)', async () => {
+    const inner = nodeSqliteDriver()
+    let armed = false
+    let stagedNow = false
+    // `startSession` running at the same moment drops another course's staged pack: simulated here at the point
+    // between staging and activating, where `changeCourse` reads what is installed.
+    const driver: SqlDriver = {
+      exec: (sql) => inner.exec(sql),
+      run: (sql, params) => {
+        if (armed && sql.includes('INSERT INTO pack')) stagedNow = true
+        return inner.run(sql, params)
+      },
+      all: async (sql, params) => {
+        if (stagedNow && sql.startsWith('SELECT pack_id, corpus_version, schema_version FROM pack')) {
+          armed = false
+          stagedNow = false
+          await inner.run("DELETE FROM pack WHERE status = 'staged'")
+        }
+        return inner.all(sql, params)
+      },
+      close: () => inner.close(),
+    }
+    const client = await Client.open({ driver, env: testEnv(), l1: 'bg' })
+    await client.installPacks(manifest, fromDisk)
+    await client.startSession()
+    armed = true
+
+    expect(await client.changeCourse({ target: 'en', l1: 'de' }, manifest, fromDisk)).toEqual({ ok: false, reason: 'unavailable' })
+
+    expect(client.snapshot.corpus?.l1).toBe('bg')
+    expect(client.course).toEqual({ target: 'en', l1: 'bg' })
+  })
+
   it('the default L1 only applies until the learner sets one explicitly, and only chooses the first install', async () => {
     const driver = nodeSqliteDriver()
     const env = testEnv()
@@ -784,6 +817,28 @@ describe('Client courses (spec §5.5, §8.6)', () => {
     await client.updateSettings({ l1: 'bg', declaredLevel: 'B1' })
     expect(await client.switchCourse('en')).toEqual({ needsSetup: false })
     expect(client.snapshot.settings).toMatchObject({ course: 'en', l1: 'bg', declaredLevel: 'B1' })
+  })
+
+  it('parks no L1 the course is not taught from (a two-device merge left German as the German course’s L1)', async () => {
+    const driver = nodeSqliteDriver()
+    await Client.open({ driver, env: testEnv(), l1: 'bg' }) // creates the schema
+    await new Database(driver).transaction((tx) => writeLocalPatch(tx, DOC.settings, '', { course: 'de', l1: 'de', declaredLevel: 'B1' }))
+    const reopened = await Client.open({ driver, env: testEnv(), l1: 'bg' })
+    expect(reopened.snapshot.settings).toMatchObject({ course: 'de', l1: 'de' })
+
+    expect(await reopened.switchCourse('en')).toEqual({ needsSetup: true })
+
+    expect(await driver.all("SELECT key FROM document WHERE type = 'course'")).toEqual([])
+    expect(reopened.snapshot.settings).toMatchObject({ course: 'en', l1: null })
+  })
+
+  it('reads a parked course: its L1, level and theme, or null for a course never parked', async () => {
+    const client = await openClient()
+    await client.updateSettings({ l1: 'bg', declaredLevel: 'B1' })
+    expect(await client.parkedCourse('en')).toBeNull()
+    await client.switchCourse('de')
+    expect(await client.parkedCourse('en')).toEqual({ l1: 'bg', declaredLevel: 'B1', activeTheme: null })
+    expect(await client.parkedCourse('de')).toBeNull()
   })
 
   it('parks nothing for a course never started, and restores a parked one with what this build can read', async () => {
