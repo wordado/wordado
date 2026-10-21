@@ -197,3 +197,15 @@ describe('inPathOrder', () => {
     expect(inPathOrder([u('a2-01', 'A2'), u('a1-10', 'A1'), u('a1-02', 'A1')]).map((x) => x.unit_id)).toEqual(['a1-02', 'a1-10', 'a2-01'])
   })
 })
+
+describe('unit ID prefix', () => {
+  const live = [1, 2, 3].map((r) => c(`w${r}`, 'A1', 'x', r))
+  it('puts the target prefix before the level', () => {
+    const out = assignUnits([], live, new Set(), 2, 'de.')
+    expect(out.length).toBeGreaterThan(0)
+    for (const u of out) expect(u.unit_id).toMatch(/^de\.a1-\d{2}$/)
+  })
+  it('gives a1-01 without it', () => {
+    expect(assignUnits([], live, new Set(), 20)[0]!.unit_id).toBe('a1-01')
+  })
+})

@@ -44,7 +44,7 @@ function groupOf(c: UnitCandidate, themeSize: ReadonlyMap<string, number>, posSi
  * group, and gets a plain title (`groupTitles`). New unit IDs continue each
  * level's numbering, so none is ever reused.
  */
-export function assignUnits(units: readonly RegistryUnit[], live: readonly UnitCandidate[], published: ReadonlySet<string>, unitSize: number): RegistryUnit[] {
+export function assignUnits(units: readonly RegistryUnit[], live: readonly UnitCandidate[], published: ReadonlySet<string>, unitSize: number, idPrefix: string = ''): RegistryUnit[] {
   const liveById = new Map(live.map((c) => [c.entry_id, c]))
   const kept = units.map((u) => ({
     ...u,
@@ -73,7 +73,7 @@ export function assignUnits(units: readonly RegistryUnit[], live: readonly UnitC
     const byRank = (a: UnitCandidate, b: UnitCandidate) => a.rank - b.rank || a.order - b.order || (a.entry_id < b.entry_id ? -1 : 1)
     const ordered = [...groups].map(([g, cs]) => [g, cs.sort(byRank)] as const)
     ordered.sort(([ga, a], [gb, b]) => a[0]!.rank - b[0]!.rank || (ga < gb ? -1 : 1))
-    const prefix = level.toLowerCase()
+    const prefix = `${idPrefix}${level.toLowerCase()}`
     let n = Math.max(0, ...out.filter((u) => u.unit_id.startsWith(`${prefix}-`)).map((u) => unitNumber(u.unit_id)))
     for (const [group, cs] of ordered) {
       const chunks: string[][] = []

@@ -4,6 +4,7 @@ import { StageCache } from './cache'
 import { readConfig, readThemes } from './config'
 import { contentPaths } from './content'
 import { Decisions, foldField, QUEUES } from './decisions'
+import { profileOf } from './profiles'
 import { readJson, writeJson } from './files'
 import { parseFrequencyList, rankForms } from './frequency'
 import { readLastPublished } from './lastPublished'
@@ -100,6 +101,7 @@ export async function runDraft(opts: DraftOptions): Promise<Draft> {
   const publishedLevel = new Map<string, CefrLevel>()
   for (const pack of last.packs.values()) for (const e of pack.entries) if (!e.retired) publishedLevel.set(e.entry_id, e.level)
   const lead = config.l1s[0]
+  const profile = profileOf(config)
   if (last.packs.size > 0 && lead !== undefined && !last.packs.has(lead)) {
     throw new Error("the lead L1 (the first in pipeline.json's l1s) must be one published before: senses merge on it; append a new L1 instead")
   }
@@ -151,7 +153,7 @@ export async function runDraft(opts: DraftOptions): Promise<Draft> {
     config.l1s,
   )
 
-  const assigned = assignIds(registry, merged.map((s) => ({ headword: s.headword, pos: s.pos, sense_en: s.gloss })))
+  const assigned = assignIds(registry, merged.map((s) => ({ headword: s.headword, pos: s.pos, sense_en: s.gloss })), profile)
   registry = assigned.registry
   const pinned = new Set(registry.entries.filter((e) => e.pinned).map((e) => e.entry_id))
   const unitOf = new Map(registry.units.flatMap((u) => u.entry_ids.map((id) => [id, u] as const)))
@@ -213,6 +215,7 @@ export async function runDraft(opts: DraftOptions): Promise<Draft> {
     liveEntries.map((e) => ({ entry_id: e.entry_id, level: e.level, theme: e.themes[0] ?? '', pos: e.pos, rank: e.rank, order: e.order })),
     last.published,
     config.unit_size,
+    profile.idPrefix,
   )
   registry = { entries: registry.entries, units }
 
