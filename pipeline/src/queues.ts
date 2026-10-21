@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
-import { canonicalJson, CEFR_LEVELS, type Grammar, type GrammarField, type GrammarValue } from '@wordado/core'
+import { canonicalJson, CEFR_LEVELS, grammarProblems, PARTS_OF_SPEECH, type Grammar, type GrammarField, type GrammarValue, type PartOfSpeech } from '@wordado/core'
 import { sha256Hex } from './checksum'
 import { contentPaths } from './content'
 import { csvRecords, formatCsv } from './csv'
@@ -108,15 +108,23 @@ export function queueSpecs(l1s: readonly string[], profile: LanguageProfile): Ma
         const value = (v as Grammar)[name]
         return [name, value === undefined ? '' : f.kind === 'flag' ? (value ? 'yes' : 'no') : String(value)]
       })),
+      // An empty text cell is an empty value (a noun with no plural) when the row's part of speech has the field;
+      // an empty enum or flag cell is a field the entry does not have.
       fromCells: (c) => {
         const out: Record<string, GrammarValue> = {}
+        const pos = (c['pos'] ?? '').trim()
         for (const [name, f] of Object.entries(schema)) {
           const cell = (c[name] ?? '').trim()
-          if (cell === '') continue
+          if (cell === '') {
+            if (f.kind === 'text' && (f.pos as readonly string[]).includes(pos)) out[name] = ''
+            continue
+          }
           if (f.kind === 'flag' && cell !== 'yes' && cell !== 'no') throw new Error(`${name} must be yes or no`)
           out[name] = f.kind === 'flag' ? cell === 'yes' : cell
         }
-        const problems = grammarShapeProblems(schema, out)
+        const problems = (PARTS_OF_SPEECH as readonly string[]).includes(pos)
+          ? grammarProblems(profile.code, pos as PartOfSpeech, out)
+          : grammarShapeProblems(schema, out)
         if (problems.length > 0) throw new Error(problems[0])
         return out
       },
@@ -173,7 +181,7 @@ export function pendingItems(draft: Draft, decisions: Decisions, l1s: readonly s
     if (!live.has(e.entry_id)) continue
     const base = { headword: e.headword, pos: e.pos, sense_en: e.sense_en, level: e.level }
     push(profile.reviewQueue, e.entry_id, e.english, base)
-    if (profile.grammar && e.grammar !== null) push(QUEUES.grammar, e.entry_id, e.grammar, { ...base, example: e.english.examples[0] ?? '' })
+    if (profile.grammar && e.grammar != null) push(QUEUES.grammar, e.entry_id, e.grammar, { ...base, example: e.english.examples[0] ?? '' })
     for (const l1 of l1s) push(QUEUES.translation(l1), e.entry_id, e.l1[l1], { ...base, example: e.english.examples[0] ?? '' })
   }
   for (const e of draft.entries) {

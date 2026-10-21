@@ -73,7 +73,7 @@ export function assemble(input: AssembleInput): Assembled {
     const level = foldField(e.level_proposal, decisions.for(QUEUES.level, e.entry_id))
     if (!english.reviewed) awaiting(profile.reviewQueue, `${e.entry_id}: ${profile.reviewQueue} not reviewed`)
     if (!translation.reviewed) awaiting(QUEUES.translation(l1), `${e.entry_id}: translation (${l1}) not reviewed`)
-    const grammar = profile.grammar && e.grammar !== null ? foldField(e.grammar, decisions.for(QUEUES.grammar, e.entry_id)) : null
+    const grammar = profile.grammar && e.grammar != null ? foldField(e.grammar, decisions.for(QUEUES.grammar, e.entry_id)) : null
     if (grammar && !grammar.reviewed) awaiting(QUEUES.grammar, `${e.entry_id}: grammar not reviewed`)
     if ((e.level_flagged || levelSampled(e.entry_id)) && !level.reviewed) {
       awaiting(QUEUES.level, `${e.entry_id}: level not reviewed`)

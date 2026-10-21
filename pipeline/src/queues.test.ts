@@ -62,6 +62,21 @@ describe('queueSpecs', () => {
     expect(spec.fromCells({ gender: 'n', plural: 'Häuser', separable: '', irregular: '', auxiliary: '' })).toEqual({ gender: 'n', plural: 'Häuser' })
     expect(() => spec.fromCells({ gender: 'x', plural: '', separable: '', irregular: '', auxiliary: '' })).toThrow('gender must be one of m, f, n')
     expect(() => spec.fromCells({ gender: '', plural: '', separable: 'ja', irregular: '', auxiliary: '' })).toThrow('separable must be yes or no')
+    // A noun with no plural keeps its empty plural; a verb's row has no plural to keep.
+    expect(spec.fromCells({ ...spec.toCells({ gender: 'n', plural: '' }), pos: 'noun' })).toEqual({ gender: 'n', plural: '' })
+    expect(spec.fromCells({ ...spec.toCells({ separable: true, irregular: false, auxiliary: 'sein' }), pos: 'verb' })).toEqual({ separable: true, irregular: false, auxiliary: 'sein' })
+    expect(() => spec.fromCells({ gender: 'm', plural: '', separable: '', irregular: '', auxiliary: '', pos: 'verb' })).toThrow('gender is not a field of a verb')
+  })
+  it('records an untouched ok on a noun with no plural as ok, not a fix', () => {
+    const dir = makeContent()
+    const de = queueSpecs(['bg'], PROFILES.de)
+    const noun = entry('de.obst-1', { grammar: { gender: 'n', plural: '' } })
+    const d = draft([noun])
+    const files = exportQueues(dir, new Map([['grammar', pendingItems(d, Decisions.read(dir), ['bg'], PROFILES.de).get('grammar')!]]), de, { stamp: '2026-10-01' })
+    expect(files).toHaveLength(1)
+    editRow(dir, files[0]!, 'de.obst-1', { verdict: 'ok' })
+    expect(importQueues(dir, de, { by: 'r', now: NOW }).errors).toEqual([])
+    expect(Decisions.read(dir).for('grammar', 'de.obst-1').map((e) => e.verdict)).toEqual(['ok'])
   })
   it('queues the grammar of a live German entry that has one', () => {
     const noun = entry('de.haus-1', { grammar: { gender: 'n', plural: 'Häuser' } })
