@@ -1261,7 +1261,7 @@ describe('Boot opens the settings’ course (spec §5.5, §8.6)', () => {
     expect(c.asked).toEqual(['en'])
   })
 
-  it('after a switch back to a course started before, fetches that course’s manifest: the watcher installs its pack, the old one meanwhile', async () => {
+  it('after a switch back to a course started before, checks the installed course’s manifest for updates: the watcher installs the other', async () => {
     const d = disk()
     const c = courses()
     const first = boot({ openDriver: choosing(d.openDriver), fetchManifest: c.fetchManifest, fetchPack: c.fetchPack })
@@ -1277,7 +1277,8 @@ describe('Boot opens the settings’ course (spec §5.5, §8.6)', () => {
     const again = boot({ openDriver: d.openDriver, fetchManifest: c.fetchManifest, fetchPack: c.fetchPack })
     await again.boot.start()
     expect(again.boot.store.get()).toMatchObject({ status: 'ready', setup: false })
-    expect(c.asked).toEqual(['en', 'en'])
+    // The background update check is for the installed course (German), whose packs `installPacks` looks for.
+    expect(c.asked).toEqual(['en', 'de'])
     expect(ready(again.boot).snapshot.settings).toMatchObject({ course: 'en', l1: 'bg' })
     // The pending change (as for an L1 changed offline): `watchCourse` installs the English pack from here.
     expect(ready(again.boot).course).toEqual({ target: 'de', l1: 'bg' })

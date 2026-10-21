@@ -385,9 +385,11 @@ export class Boot {
       if (generation !== this.generation) return
       let installFailure: unknown = null
       try {
-        // The settings' course's manifest (spec §8.6). A course switched to that is not installed yet stages nothing
-        // here (`installPacks` stages the installed course's packs): the course watcher installs it once the app is open.
-        const report = await client.installPacks(await this.deps.fetchManifest(this.account, client.snapshot.settings.course), this.deps.fetchPack)
+        // The installed course's manifest (spec §8.6), for its newer packs: `installPacks` stages only that course's, so
+        // the background update check never fetches another's. A course the settings name that is not installed yet
+        // (switched to, here or on another device) is the course watcher's to install once the app is open. Before any
+        // pack, `Client.course` is the settings' course: the first install of a reopened file.
+        const report = await client.installPacks(await this.deps.fetchManifest(this.account, client.course.target), this.deps.fetchPack)
         this.deps.onInstallReport?.(report)
       } catch (err) {
         installFailure = err
