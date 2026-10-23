@@ -400,6 +400,10 @@ A German noun whose answer has no gender, or a verb with no auxiliary, is asked 
 them). A noun used only in the plural (Leute, Eltern) has the gender `pl`, its plural form as the headword and an
 empty plural (#316).
 
+A clip says the headword as the app shows it: a German noun with its article ("die Frau", "das Kind"), every
+other word, and every English entry, as the headword alone (#326). A noun clip recorded without its article is
+made again by the next `audio` run.
+
 ## When something is wrong
 
 - **"pinned entry … is not live: the senses stage no longer proposes it".** The senses stage proposed no sense
