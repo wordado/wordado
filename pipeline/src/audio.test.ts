@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { audioProblems, audioQueueItems, audioSample, clipsNeeded, generateClips, readAudioRecords, voiceKey, type AudioRecord } from './audio'
+import { audioProblems, audioQueueItems, audioSample, clipText, clipsNeeded, generateClips, readAudioRecords, voiceKey, type AudioRecord } from './audio'
 import { readConfig } from './config'
 import { Decisions, QUEUES } from './decisions'
 import type { Encoder } from './encoder'
@@ -32,7 +32,7 @@ describe('clipsNeeded', () => {
   const rec = (extra: Partial<AudioRecord> = {}): AudioRecord => ({
     clip_id: 'water-1-uk-1', entry_id: 'water-1', accent: 'uk', text: 'water', voice_key: vk, generation: 1, batch: 'b1', reason: 'new', created_at: NOW, seconds: 0.6, ...extra,
   })
-  const live = [{ entry_id: 'water-1', headword: 'water' }]
+  const live = [{ entry_id: 'water-1', headword: 'water', pos: 'noun' as const }]
 
   it('needs a first clip, then nothing while the voice and the word stay the same', () => {
     expect(clipsNeeded(live, [], config, Decisions.read(dir))).toEqual([{ entry_id: 'water-1', accent: 'uk', text: 'water', generation: 1, reason: 'new' }])
@@ -45,6 +45,32 @@ describe('clipsNeeded', () => {
     d.append(QUEUES.audio, [{ key: 'water-1-uk-1', at: NOW, verdict: 'redo', proposed: 'water-1-uk-1', by: 'reports' }])
     expect(clipsNeeded(live, [rec()], config, d)).toMatchObject([{ generation: 2, reason: 'redo' }])
     expect(clipsNeeded(live, [rec(), rec({ clip_id: 'water-1-uk-2', generation: 2, reason: 'redo' })], config, d)).toEqual([])
+  })
+})
+
+describe('clipText', () => {
+  const frau = { headword: 'Frau', pos: 'noun' as const, grammar: { gender: 'f', plural: 'Frauen' } }
+
+  it('says a German noun with its article, as the app shows it, and anything else as the headword alone (#326)', () => {
+    expect(clipText('de', frau)).toBe('die Frau')
+    expect(clipText('de', { headword: 'Kind', pos: 'noun', grammar: { gender: 'n', plural: 'Kinder' } })).toBe('das Kind')
+    expect(clipText('de', { headword: 'Leute', pos: 'noun', grammar: { gender: 'pl', plural: '' } })).toBe('die Leute')
+    expect(clipText('de', { headword: 'gehen', pos: 'verb', grammar: { separable: false, irregular: true, auxiliary: 'sein' } })).toBe('gehen')
+    expect(clipText('de', { headword: 'über', pos: 'prep' })).toBe('über')
+  })
+
+  it('leaves English as it was: a noun is said without an article', () => {
+    expect(clipText('en', { headword: 'water', pos: 'noun' })).toBe('water')
+    expect(clipText('en', { headword: 'water', pos: 'noun', grammar: null })).toBe('water')
+  })
+
+  it('remakes a German noun clip that said the bare headword', () => {
+    const dir = makeContent()
+    const config = { ...readConfig(dir), target: 'de' as const }
+    const vk = voiceKey(config.tts.model, config.tts.accents.uk!)
+    const bare: AudioRecord = { clip_id: 'de.frau-1-uk-1', entry_id: 'de.frau-1', accent: 'uk', text: 'Frau', voice_key: vk, generation: 1, batch: 'b1', reason: 'new', created_at: NOW, seconds: 0.6 }
+    expect(clipsNeeded([{ entry_id: 'de.frau-1', ...frau }], [bare], config, Decisions.read(dir))).toEqual([{ entry_id: 'de.frau-1', accent: 'uk', text: 'die Frau', generation: 2, reason: 'voice' }])
+    expect(clipsNeeded([{ entry_id: 'de.frau-1', ...frau }], [{ ...bare, text: 'die Frau' }], config, Decisions.read(dir))).toEqual([])
   })
 })
 

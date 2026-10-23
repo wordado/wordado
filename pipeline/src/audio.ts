@@ -1,5 +1,5 @@
 import { writeFileSync, mkdirSync } from 'node:fs'
-import { canonicalJson, type Accent } from '@wordado/core'
+import { canonicalJson, headwordForm, type Accent, type Grammar, type PartOfSpeech } from '@wordado/core'
 import { sha256Hex } from './checksum'
 import type { PipelineConfig, TtsVoice } from './config'
 import { contentPaths } from './content'
@@ -62,8 +62,22 @@ export function currentClips(records: readonly AudioRecord[]): Map<string, Audio
 
 const isRedone = (decisions: Decisions, clipId: string) => decisions.for(QUEUES.audio, clipId).some((e) => e.verdict === 'redo')
 
+/**
+ * What a clip says: the headword as the app shows it, so a German noun is spoken with its article ("die Frau",
+ * "das Kind"), as learners are taught it (#326). Everything else, and every English entry, says the headword alone.
+ */
+export interface Spoken {
+  readonly headword: string
+  readonly pos: PartOfSpeech
+  readonly grammar?: Grammar | null
+}
+
+export function clipText(target: string, entry: Spoken): string {
+  return headwordForm(target, { headword: entry.headword, pos: entry.pos, grammar: entry.grammar ?? null }).lead
+}
+
 export function clipsNeeded(
-  live: readonly { entry_id: string; headword: string }[],
+  live: readonly (Spoken & { readonly entry_id: string })[],
   records: readonly AudioRecord[],
   config: PipelineConfig,
   decisions: Decisions,
@@ -73,9 +87,10 @@ export function clipsNeeded(
   for (const e of live) {
     for (const [accent, voice] of Object.entries(config.tts.accents) as [Accent, TtsVoice][]) {
       const cur = current.get(`${e.entry_id}|${accent}`)
-      const need = (reason: AudioRecord['reason']) => needs.push({ entry_id: e.entry_id, accent, text: e.headword, generation: (cur?.generation ?? 0) + 1, reason })
+      const text = clipText(config.target ?? 'en', e)
+      const need = (reason: AudioRecord['reason']) => needs.push({ entry_id: e.entry_id, accent, text, generation: (cur?.generation ?? 0) + 1, reason })
       if (!cur) need('new')
-      else if (cur.voice_key !== voiceKey(config.tts.model, voice) || cur.text !== e.headword) need('voice')
+      else if (cur.voice_key !== voiceKey(config.tts.model, voice) || cur.text !== text) need('voice')
       else if (isRedone(decisions, cur.clip_id)) need('redo')
     }
   }
