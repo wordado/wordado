@@ -1,6 +1,6 @@
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { checkPackSuccession, MANIFEST_SCHEMA_VERSION, type PackManifest, type CreditsFile } from '@wordado/core'
+import { checkPackSuccession, MANIFEST_SCHEMA_VERSION, type PackManifest, type CreditsFile, type Target } from '@wordado/core'
 import { aiGate } from './aiReview/gate'
 import { AiReviewStore } from './aiReview/store'
 import { assemble, type Unreviewed } from './assemble'
@@ -21,6 +21,8 @@ import { planTrial, TRIAL_MANIFEST, TRIAL_PROBES_PER_LEVEL, type TrialOutput } f
 
 export interface ReleaseInfo {
   readonly corpus_version: number
+  /** The corpus's target language; absent for English, so an English release.json keeps its bytes (#329). */
+  readonly target?: Target
   readonly draft: boolean
   readonly built_at: string
   readonly l1s: readonly string[]
@@ -137,8 +139,10 @@ export function planRelease(dir: string, opts: { draft: boolean; now: string }):
   const counts: Record<string, number> = {}
   for (const u of unreviewed) counts[u.queue] = (counts[u.queue] ?? 0) + 1
   const credits = creditsFile(sources, corpusVersion)
+  const target = config.target ?? 'en'
   const releaseInfo: ReleaseInfo = {
     corpus_version: corpusVersion,
+    ...(target === 'en' ? {} : { target }),
     draft: opts.draft,
     built_at: opts.now,
     l1s: config.l1s,
@@ -197,6 +201,10 @@ export function adoptRelease(dir: string, outDir: string): void {
   const target = contentPaths(dir).lastPublished
   const info = JSON.parse(readFileSync(join(outDir, 'release.json'), 'utf8')) as ReleaseInfo
   if (info.draft) throw new Error('a draft release is never adopted')
+  // Each target has its own last-published/ (spec §5.5): another corpus's release is never its predecessor.
+  const released = info.target ?? 'en'
+  const own = readConfig(dir).target ?? 'en'
+  if (released !== own) throw new Error(`${outDir} is a release of the ${released} corpus, but ${dir} is the ${own} corpus`)
   const current = readLastPublished(dir).manifest.corpus_version
   if (info.corpus_version !== current + 1) {
     throw new Error(`${outDir} is corpus version ${info.corpus_version}, but last-published/ is at ${current}; it can only adopt version ${current + 1}`)

@@ -36,7 +36,8 @@ absolutely: `"$PWD/content"` from the repository root.
 | `release <dir> <out> [--draft]` | The next corpus version, if every gate passes; `--draft` skips only the review gates and cannot be published. |
 | `credits <dir> <out.json>` | The sources' attributions at the last published version (`credits.json`). |
 | `published <dir> <out>` | After a publish: `<out>` becomes `last-published/`. |
-| `live <dir> <manifest-url>` | Whether the CDN serves `last-published/`. |
+| `live <dir> <manifest-url>` | Whether the CDN serves `last-published/` at the directory's own manifest URL. A 404 passes only before a corpus's first release, while `last-published/` is the empty version 0 of `init --target`. |
+| `cdn <dir> <manifest-url> <env-file>` | Where the directory's corpus is served, given English's manifest URL: appends `CDN_TARGET`, `CDN_DIR` (empty for English, the target code otherwise) and `CDN_MANIFEST_URL` to `<env-file>` (the workflow's `$GITHUB_ENV`). |
 
 ## Setting up (once)
 
@@ -191,6 +192,7 @@ On a workstation, not in Actions:
    `last-published/`, rebuilds the draft `--offline` from the committed caches (never spending money, and never
    publishing a proposal nobody has seen), builds with every gate, uploads packs, audio, `fixes.json` and
    `credits.json`, then the manifest, checks that the CDN serves it, and commits the new `last-published/` to main.
+   The *language* field picks the corpus: see *Releasing another target language*.
 
 ## An MVP release: shipping some queues unreviewed
 
@@ -391,8 +393,30 @@ releases (spec §5.5). German (`de`) is the model.
    and `sources/` with the language's frequency lists and licences; and check `themes.json` (init copies the
    curated themes, named in English and the L1s). Write the language's own `essentials.txt`: init keeps the
    template's header and no words, because the English list is English headwords.
-3. **Draft, review, audio, release** as for English. Entry and unit IDs start with the profile's prefix; packs are
-   `corpus-<target>-<l1>`; manifest descriptors carry `target`; the files are uploaded under `<target>/`.
+3. **Draft, review, audio, release** as for English, with the target in the Corpus workflow's *language* field.
+   Entry and unit IDs start with the profile's prefix; pack IDs are `corpus-<target>-<l1>`; manifest descriptors and
+   `release.json` carry `target`; the files are uploaded under `<target>/` (below).
+
+### Releasing another target language
+
+Each target is released on its own and never touches another's files (#329). English is served at the CDN's root,
+another target in a folder named after it, beside English's, which is where the app asks for a course's manifest
+(`targetManifestUrl`, `web/src/content/packs.ts`). With `CONTENT_MANIFEST_URL` at `https://content.wordado.com/manifest.json`:
+
+| | English (`content/`) | German (`content/de/`) |
+|---|---|---|
+| Manifest | `manifest.json` | `de/manifest.json` |
+| Packs, trial | `corpus-v<n>-<l1>.pack`, `trial-v<n>-<l1>.trial`, `trial-manifest.json` | the same names under `de/` |
+| Clips | `audio/<clip>.m4a` | `de/audio/<clip>.m4a` |
+| `fixes.json`, `credits.json` | at the root | under `de/` |
+| Recorded in | `last-published/` | `de/last-published/` |
+
+Every URL inside a release is relative to its manifest, so the release directory is uploaded as it is. The workflow's
+release and credits jobs run `corpus cdn` for the folder and the manifest URL, check that the directory's
+`pipeline.json` names the language chosen, and upload packs and trial packs, then clips, `fixes.json`, `credits.json`
+and the trial manifest, then the manifest last. `corpus live` accepts a CDN that has no manifest for the target only
+before its first release. `corpus published` refuses another target's release, so English's `last-published/` never
+takes a German one. A target is offered in the app once its corpus is published (`COURSE_TARGETS`, `docs/deploy.md`).
 
 Sense glosses (`sense_en`) stay English in every corpus: they are a sense's identity, not what learners see.
 

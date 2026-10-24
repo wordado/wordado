@@ -1,15 +1,17 @@
-import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { checkPackSuccession, loadCorpus, offeredThemes, validatePack, type Pack } from '@wordado/core'
 import { describe, expect, it } from 'vitest'
 import { audioQueueItems, readAudioRecords } from './audio'
+import { cdnLayout } from './cdn'
 import { readConfig } from './config'
 import { formatCsv, parseCsv } from './csv'
 import { Decisions } from './decisions'
 import { readDraft, runDraft } from './draft'
 import { readLastPublished } from './lastPublished'
+import { liveProblems } from './live'
 import { publishProblems } from './publishable'
 import { PROFILES } from './profiles'
 import { exportQueues, importQueues, pendingItems, queueSpecs } from './queues'
@@ -227,5 +229,58 @@ describe('a German corpus', () => {
     expect(en.pack_id).toBe('corpus-de-en')
     expect(en.units.every((u) => u.title.l1 === u.title.en)).toBe(true)
     expect(en.units.map((u) => u.title.en)).toEqual(bg.units.map((u) => u.title.en))
+  }, 30_000)
+
+  it('is released on its own (#329): v1 from nothing into de/ on the CDN, adopted into de/last-published/ alone, then v2', async () => {
+    // The content repository's layout: English at the root, German in de/.
+    const root = makeContent()
+    const englishBefore = new Map(readdirSync(join(root, 'last-published')).map((f) => [f, readFileSync(join(root, 'last-published', f))]))
+    const dir = join(root, 'de')
+    cpSync(
+      makeContent({ config: { target: 'de', l1s: ['bg', 'en'], tts: { model: 'fake', max_clips_per_run: 1000, accents: { de: { voice: 'v', instructions: 'Say it.' } } } } }),
+      dir,
+      { recursive: true },
+    )
+    await runDraft({ dir, llm: sampleLlm({ grammar: true }), offline: false })
+    await recordAudio(dir, '20261024T1000')
+    approveAll(dir)
+
+    // Where the app looks for the German course (targetManifestUrl, web/src/content/packs.ts).
+    const layout = cdnLayout(readConfig(dir).target ?? 'en', 'https://content.example.test/manifest.json')
+    expect(layout).toEqual({ target: 'de', dir: 'de', manifestUrl: 'https://content.example.test/de/manifest.json' })
+    // Nothing is served there before the first release, and that is what last-published/ says.
+    expect(await liveProblems(dir, layout.manifestUrl, async () => null)).toEqual([])
+
+    const v1 = planRelease(dir, { draft: false, now: '2026-10-24T12:00:00Z' })
+    expect([v1.problems, v1.pending, v1.corpusVersion]).toEqual([[], [], 1])
+    const v1Dir = join(mkdtempSync(join(tmpdir(), 'e2e-')), 'release')
+    const files = writeRelease(dir, v1Dir, v1)
+    expect(files).toEqual(expect.arrayContaining(['corpus-v1-bg.pack', 'corpus-v1-en.pack', 'trial-v1-bg.trial', 'fixes.json', 'credits.json', 'trial-manifest.json']))
+    expect(files.at(-1)).toBe('manifest.json')
+    // Every URL in the release is relative, so the folder serves as it is from de/.
+    const manifest = JSON.parse(readFileSync(join(v1Dir, 'manifest.json'), 'utf8')) as { packs: { url: string; target?: string }[] }
+    expect(manifest.packs.map((d) => [d.url, d.target])).toEqual([['corpus-v1-bg.pack', 'de'], ['corpus-v1-en.pack', 'de']])
+    const clips = pack(v1Dir, 'corpus-v1-bg.pack').audio.map((c) => c.url)
+    expect(clips.length).toBeGreaterThan(0)
+    expect(clips.every((u) => /^audio\/[^/]+\.m4a$/.test(u))).toBe(true)
+    expect(publishProblems(reader(v1Dir))).toEqual([])
+    expect(JSON.parse(readFileSync(join(v1Dir, 'release.json'), 'utf8')).target).toBe('de')
+
+    // English's last-published/ never takes a German release, and a German one is recorded under de/ only.
+    expect(() => adoptRelease(root, v1Dir)).toThrow(/release of the de corpus, but .* is the en corpus/)
+    adoptRelease(dir, v1Dir)
+    expect(readLastPublished(dir).manifest.corpus_version).toBe(1)
+    for (const [f, bytes] of englishBefore) expect(readFileSync(join(root, 'last-published', f)).equals(bytes), f).toBe(true)
+    expect(readdirSync(join(root, 'last-published')).sort()).toEqual([...englishBefore.keys()].sort())
+
+    // The CDN now serves v1 at de/manifest.json; the next release follows it.
+    const served = readFileSync(join(v1Dir, 'manifest.json'), 'utf8')
+    expect(await liveProblems(dir, layout.manifestUrl, async () => served)).toEqual([])
+    // A 404 after a release means the CDN lost it: the check fails rather than start again at v1.
+    expect(await liveProblems(dir, layout.manifestUrl, async () => null)).toEqual([
+      'https://content.example.test/de/manifest.json: not found, but last-published/ holds version 1; restore the manifest on the CDN, or check the manifest URL',
+    ])
+    const v2 = planRelease(dir, { draft: false, now: '2026-10-24T13:00:00Z' })
+    expect([v2.problems, v2.pending, v2.corpusVersion]).toEqual([[], [], 2])
   }, 30_000)
 })
