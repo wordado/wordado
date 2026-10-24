@@ -1,7 +1,10 @@
-import { type AssignmentView, type Language, LANGUAGE_NAMES, LANGUAGES, type ReviewerView, type SnapshotStatus, type SubmissionView } from '../../shared/hosted'
+import { TARGETS, type Target } from '@wordado/core'
+import { type AssignmentView, type Language, LANGUAGES, queueParts, type ReviewerView, type SnapshotStatus, type SubmissionView } from '../../shared/hosted'
+import { languageLabel } from '../labels'
 
-/** How far one language is: what is left in its queues, who is on them and what they have decided. */
+/** How far one language of a course is: what is left in its queues, who is on them and what they have decided. */
 export interface LanguageOverview {
+  readonly target: Target
   readonly language: Language
   readonly label: string
   /** what is left to decide, per queue: "741 translations · 8 titles" */
@@ -39,14 +42,15 @@ const KINDS = [
 function partsOf(queues: readonly Queue[]): string {
   const parts = KINDS.map(([, one, many], i) => {
     // a queue is of the first kind whose prefix it has; the last kind takes the rest
-    const mine = queues.filter((q) => KINDS.findIndex(([prefix]) => q.queue.startsWith(prefix)) === i)
+    const mine = queues.filter((q) => KINDS.findIndex(([prefix]) => (queueParts(q.queue)?.name ?? q.queue).startsWith(prefix)) === i)
     const n = mine.reduce((sum, q) => sum + openRows(q), 0)
     return n === 0 ? '' : `${n.toLocaleString('en')} ${n === 1 ? one : many}`
   }).filter(Boolean)
   return parts.join(' · ') || 'nothing left to decide'
 }
 
-/** The admin Overview, from what the admin API returns: four numbers and a row per language with a queue. */
+/** The admin Overview, from what the admin API returns: four numbers and a row per language with a queue, English's
+ * course first, then each other target's (#317). */
 export function overviewOf(data: {
   snapshot: SnapshotStatus | null
   assignments: readonly AssignmentView[]
@@ -55,16 +59,17 @@ export function overviewOf(data: {
 }): Overview {
   const queues = data.snapshot?.queues ?? []
   const open = data.assignments.filter((a) => !a.closedAt)
-  const languages = LANGUAGES.flatMap((language): LanguageOverview[] => {
-    const mine = queues.filter((q) => q.language === language)
+  const languages = TARGETS.flatMap((target) => LANGUAGES.flatMap((language): LanguageOverview[] => {
+    const mine = queues.filter((q) => q.language === language && queueParts(q.queue)?.target === target)
     if (mine.length === 0) return []
     // A spot check is on rows the AI review passed, not on what is left to decide: it does not hold the language.
     const held = open.filter((a) => a.spotCheck === null && mine.some((q) => q.queue === a.queue))
     const flagged = mine.reduce((n, q) => n + openRows(q), 0)
     return [
       {
+        target,
         language,
-        label: LANGUAGE_NAMES[language],
+        label: languageLabel(target, language),
         parts: partsOf(mine),
         reviewers: [...new Set(held.map((a) => a.reviewerName))],
         flagged,
@@ -73,7 +78,7 @@ export function overviewOf(data: {
         state: flagged === 0 ? 'done' : held.length === 0 ? 'unassigned' : 'on track',
       },
     ]
-  })
+  }))
   return {
     toDecide: queues.reduce((n, q) => n + openRows(q), 0),
     decided: open.reduce((n, a) => n + (a.progress?.decided ?? 0), 0),

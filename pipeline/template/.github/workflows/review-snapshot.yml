@@ -2,10 +2,11 @@ name: Review snapshot
 
 # Builds the hosted review app's rows from main and uploads them to the private R2 bucket (spec 2026-10-05 §4.3):
 # the files first, current.json last, so the app reads either the whole old snapshot or the whole new one.
+# Another target's corpus in its own directory (de/, spec §5.5) is in the same snapshot, its queues prefixed (#317).
 on:
   push:
     branches: [main]
-    paths: ['review/**', 'decisions/**', 'ai-review/**', 'pipeline.json']
+    paths: ['review/**', 'decisions/**', 'ai-review/**', 'pipeline.json', '*/review/**', '*/decisions/**', '*/ai-review/**', '*/pipeline.json']
   workflow_dispatch:
 
 permissions:
@@ -49,8 +50,12 @@ jobs:
           cache-dependency-path: wordado/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
         working-directory: wordado
-      - name: Rebuild the draft (no LLM calls)
-        run: $CORPUS draft "$GITHUB_WORKSPACE/content" --offline
+      - name: Rebuild the drafts (no LLM calls)
+        run: |
+          $CORPUS draft "$GITHUB_WORKSPACE/content" --offline
+          for dir in "$GITHUB_WORKSPACE"/content/*/; do
+            if [ -f "$dir/pipeline.json" ]; then $CORPUS draft "${dir%/}" --offline; fi
+          done
       - name: Build the snapshot
         run: pnpm --dir "$GITHUB_WORKSPACE/wordado" --filter @wordado/review-app snapshot "$GITHUB_WORKSPACE/content" "$RUNNER_TEMP/snap" --commit "$GITHUB_SHA"
       - name: Upload it, current.json last, and keep the newest two

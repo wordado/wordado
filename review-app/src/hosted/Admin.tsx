@@ -1,5 +1,6 @@
 import { type KeyboardEvent, useCallback, useEffect, useRef, useState } from 'react'
-import type { AssignmentView, Language, ReviewerView, SnapshotStatus, SubmissionView } from '../../shared/hosted'
+import type { Target } from '@wordado/core'
+import { type AssignmentView, type Language, queueParts, type ReviewerView, type SnapshotStatus, type SubmissionView } from '../../shared/hosted'
 import { HeaderSlot } from '../AppHeader'
 import { hostedApi } from '../hostedApi'
 import { AdminAccounts } from './AdminAccounts'
@@ -120,10 +121,10 @@ export function Admin(props: { onOpen(assignment: AssignmentView): void }) {
   )
   const clearNotice = useCallback(() => setNotice(''), [])
 
-  /** Assign on a language nobody holds: the Assign dialog with its translations chosen (its only queue otherwise). */
-  const assignLanguage = (language: Language) => {
-    const queues = (snapshot?.queues ?? []).filter((q) => q.language === language)
-    const queue = queues.find((q) => q.queue.startsWith('translation-')) ?? queues[0]
+  /** Assign on a language of a course nobody holds: the Assign dialog with its translations chosen (its first queue otherwise). */
+  const assignLanguage = (target: Target, language: Language) => {
+    const queues = (snapshot?.queues ?? []).filter((q) => q.language === language && queueParts(q.queue)?.target === target)
+    const queue = queues.find((q) => queueParts(q.queue)!.name.startsWith('translation-')) ?? queues[0]
     setNotice('')
     setAssigning({ queue: queue?.queue ?? '' })
     go('assignments')

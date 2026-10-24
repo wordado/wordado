@@ -1,5 +1,5 @@
 import { type FormEvent, useState } from 'react'
-import { type AssignmentView, languageOf, type ReviewerView, type SnapshotStatus, type SplitProposal } from '../../shared/hosted'
+import { type AssignmentView, languageOf, reviews, type ReviewerView, type SnapshotStatus, type SplitProposal } from '../../shared/hosted'
 import { Dialog } from '../Dialog'
 import { hostedApi } from '../hostedApi'
 import { assignmentLabel, queueLabel } from '../labels'
@@ -11,11 +11,8 @@ type Queue = SnapshotStatus['queues'][number]
 
 const active = (reviewers: readonly ReviewerView[] | undefined) => (reviewers ?? []).filter((r) => !r.disabledAt)
 
-/** Active reviewers who can review a queue (they have its language). */
-const reviewersFor = (reviewers: readonly ReviewerView[] | undefined, queue: string) => {
-  const language = languageOf(queue)
-  return active(reviewers).filter((r) => language !== null && r.languages.includes(language))
-}
+/** Active reviewers who can review a queue (they have its languages). */
+const reviewersFor = (reviewers: readonly ReviewerView[] | undefined, queue: string) => active(reviewers).filter((r) => reviews(r, queue))
 
 /** A two-button segmented control; `value` is the pressed side. */
 function Segmented<T extends string>(props: { label: string; options: readonly (readonly [T, string])[]; value: NoInfer<T>; onChange: (v: NoInfer<T>) => void }) {
@@ -129,10 +126,7 @@ function AssignForm(props: FormProps & { queue: string }) {
   const [files, setFiles] = useState<string[]>([])
 
   const who = active(reviewers).find((r) => r.email === reviewer)
-  const has = (r: ReviewerView | undefined, q: string) => {
-    const l = languageOf(q)
-    return r !== undefined && l !== null && r.languages.includes(l)
-  }
+  const has = (r: ReviewerView | undefined, q: string) => r !== undefined && reviews(r, q)
   // Without a reviewer the list holds only the queue chosen from the start, so the control can show it.
   const queues = (snapshot?.queues ?? []).filter((q) => (who ? has(who, q.queue) : q.queue === queue))
   const chosen: Queue | undefined = who ? queues.find((q) => q.queue === queue) : undefined
@@ -348,7 +342,7 @@ function SpotCheckForm(props: FormProps) {
   const [short, setShort] = useState<{ asked: number; drawn: number } | null>(null)
 
   const who = active(reviewers).find((r) => r.email === reviewer)
-  const queues = (snapshot?.queues ?? []).filter((q) => who !== undefined && who.languages.includes(q.language))
+  const queues = (snapshot?.queues ?? []).filter((q) => who !== undefined && reviews(who, q.queue))
   const n = Number(rows)
   const valid = queues.some((q) => q.queue === queue) && Number.isInteger(n) && n >= 1 && n <= SPOT_CHECK_MAX
 

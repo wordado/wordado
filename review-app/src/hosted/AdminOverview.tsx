@@ -1,3 +1,4 @@
+import type { Target } from '@wordado/core'
 import type { AssignmentView, Language, ReviewerView, SnapshotStatus, SubmissionView } from '../../shared/hosted'
 import { dateOf, share } from './adminUtil'
 import { type LanguageOverview, overviewOf } from './overview'
@@ -7,8 +8,8 @@ interface Props {
   reviewers: readonly ReviewerView[] | undefined
   assignments: readonly AssignmentView[] | undefined
   submissions: readonly SubmissionView[] | undefined
-  /** Assign on a language nobody holds */
-  onAssign(language: Language): void
+  /** Assign on a language of a course nobody holds */
+  onAssign(target: Target, language: Language): void
 }
 
 /** The Overview tab: how far the review is, in four numbers and a row per language, and what the review data was
@@ -42,7 +43,7 @@ export function AdminOverview(props: Props) {
           {o.languages.length > 0 && (
             <ul className="settings-rows" aria-label="By language">
               {o.languages.map((l) => (
-                <LanguageRow key={l.language} language={l} onAssign={() => props.onAssign(l.language)} />
+                <LanguageRow key={`${l.target}:${l.language}`} language={l} onAssign={() => props.onAssign(l.target, l.language)} />
               ))}
             </ul>
           )}

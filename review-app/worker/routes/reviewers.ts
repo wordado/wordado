@@ -1,5 +1,5 @@
 import type { Hono } from 'hono'
-import { LANGUAGES, languageOf, type Language, type ReviewerView, type Role } from '../../shared/hosted'
+import { LANGUAGES, reviews, type Language, type ReviewerView, type Role } from '../../shared/hosted'
 import { apiError, jsonBody, type AppEnv, type Deps } from '../app'
 import { getReviewer, insertReviewer, listReviewers, toReviewerView, updateReviewer, type ReviewerRow } from '../db'
 import { reviewMailer } from '../mail'
@@ -62,7 +62,7 @@ export function reviewersRoutes(app: Hono<AppEnv>, deps: Deps): void {
       const languages = languagesOf(body.languages)
       if (!languages) return apiError(c, 400, `pick one or more of ${LANGUAGES.join(', ')}`)
       patch.languages = languages
-      await closeAssignmentsWhere(deps, r.email, (a) => !languages.includes(languageOf(a.queue)!))
+      await closeAssignmentsWhere(deps, r.email, (a) => !reviews({ languages }, a.queue))
     }
     if (body.role === 'admin' || body.role === 'reviewer') patch.role = body.role
     if (body.disabled === true) {

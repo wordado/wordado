@@ -160,6 +160,31 @@ describe('POST /api/submit', () => {
     expect(out.count).toBe(1)
   })
 
+  it('commits a second target’s decisions into its own review files, on a branch and with a subject that name its queue', async () => {
+    const { content } = await putSnapshot(env, { german: true, commit: 'fedcba9876' })
+    resetSnapshotCache()
+    const files: Record<string, string> = {}
+    for (const path of [...walk(join(content, 'review')), ...walk(join(content, 'de', 'review'))]) files[relative(content, path).split('\\').join('/')] = readFileSync(path, 'utf8')
+    fake = new FakeGitHub(files)
+    await insertReviewer(env.DB, { email: 'hans@example.com', name: 'Hans', languages: ['bg', 'de'], role: 'reviewer', invitedAt: 't', inviteSentAt: null, disabledAt: null })
+    const de = await insertAssignment(env.DB, { reviewer: 'hans@example.com', queue: 'de/translation-bg', files: '*', flaggedOnly: true, createdAt: 't' })
+    const rows = ((await (await as('hans@example.com', 'GET', `/api/rows?assignment=${de}`)).json()) as RowsResponse).rows
+    const row = rows[0]!
+    expect(row.queue).toBe('de/translation-bg')
+    expect(row.file).toMatch(/^de\/review\/translation-bg\//)
+    const decided = await as('hans@example.com', 'POST', '/api/decision', { assignment: de, queue: row.queue, file: row.file, key: row.key, rowHash: row.rowHash, action: 'keep' })
+    expect(decided.status).toBe(200)
+    const out = (await (await as('hans@example.com', 'POST', '/api/submit', { assignment: de })).json()) as SubmitResult
+    expect(out).toMatchObject({ count: 1, leftOut: [] })
+    const pr = fake.pulls.at(-1)!
+    expect(pr.title).toBe('de/translation-bg: 1 decisions by Hans')
+    expect(pr.head).toBe('review/de/translation-bg-hans-20261005-1')
+    const commit = fake.commits.get(fake.branches.get(pr.head)!)!
+    expect(commit.message).toBe('review: de/translation-bg, 1 decisions by Hans')
+    for (const [path, text] of commit.files) if (path !== row.file) expect(text).toBe(files[path])
+    expect(csvRecords(commit.files.get(row.file)!).rows.find((r) => r['key'] === row.key)!['verdict']).toBe('ok')
+  })
+
   it('is 400 with nothing to submit, and 502 with nothing recorded when GitHub fails', async () => {
     expect((await as('ivan@example.com', 'POST', '/api/submit', { assignment: id })).status).toBe(400)
     await decideFirst(1)

@@ -367,6 +367,31 @@ test('an admin makes a spot check; its reviewer says how serious each fault was;
   await expect(spot).toContainText(`Serious: ${first.replace(/^Row /, '')}`)
 })
 
+// After the spot check above, whose pull request it reads as the last one.
+test('a reviewer who reads German decides a German grammar row; it goes to the German corpus’s file (#317)', async ({ browser }) => {
+  const page = await as(browser, 'hans')
+  await page.goto('/')
+  const mine = page.getByRole('listitem').filter({ hasText: 'German grammar · flagged rows' })
+  await mine.getByRole('button', { name: 'Start' }).click()
+  await expect(page.getByRole('banner').getByText('German grammar · flagged rows')).toBeVisible()
+  const article = page.getByRole('article')
+  await page.keyboard.press('3')
+  await expect(article.getByRole('textbox', { name: 'Gender' })).toBeVisible()
+  await page.keyboard.press('Escape')
+  await page.keyboard.press('2')
+  await page.getByRole('button', { name: /Submit 1 decision/ }).click()
+  await expect(page.getByRole('link', { name: /pull request \d+/ })).toBeVisible()
+  const state = (await (await fetch('http://127.0.0.1:4182/_state')).json()) as { pulls: { title: string; head: string }[] }
+  expect(state.pulls.at(-1)).toMatchObject({ title: 'de/grammar: 1 decisions by Hans', head: expect.stringMatching(/^review\/de\/grammar-hans-\d{8}-1$/) })
+
+  // The Overview lists the German course after English's.
+  const admin = await as(browser, 'admin')
+  await admin.goto('/#review/overview')
+  const rows = admin.getByRole('list', { name: 'By language' }).getByRole('listitem')
+  await expect(rows.filter({ hasText: 'German course: Bulgarian' })).toBeVisible()
+  await expect(rows.last()).toContainText('German course')
+})
+
 test('@phone an admin reads the Overview and moves between the tabs', async ({ browser }) => {
   const page = await as(browser, 'admin')
   await page.goto('/')
@@ -385,7 +410,7 @@ test('@phone an admin reads the Overview and moves between the tabs', async ({ b
   expect(third!.y).toBeGreaterThan(first!.y)
   expect(third!.x).toBe(first!.x)
   // A row per language; Rita has the Bulgarian translations.
-  const bulgarian = overview.getByRole('list', { name: 'By language' }).getByRole('listitem').filter({ hasText: 'Bulgarian' })
+  const bulgarian = overview.getByRole('list', { name: 'By language' }).getByRole('listitem').filter({ has: page.getByText('Bulgarian', { exact: true }) })
   await expect(bulgarian).toContainText('Rita')
   await expect(bulgarian.getByText('on track')).toBeVisible()
   await expect(overview.getByText(/Review data built .* from commit e2e0000/)).toBeVisible()

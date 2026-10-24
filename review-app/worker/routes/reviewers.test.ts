@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import type { ReviewerView } from '../../shared/hosted'
 import { createApp } from '../app'
 import type { Env } from '../bindings'
-import { listAssignments } from '../db'
+import { insertAssignment, listAssignments } from '../db'
 import { resetSnapshotCache } from '../snapshotStore'
 import { testKeys } from '../test/jwt'
 import { resetDb, startPlatform, testDeps } from '../test/platform'
@@ -98,6 +98,12 @@ describe('admin reviewers', () => {
     await admin('POST', '/api/admin/assignments', { reviewer: 'ivan@example.com', queue: 'level', files: '*', flaggedOnly: true })
     await admin('PATCH', '/api/admin/reviewers/ivan@example.com', { languages: ['en'] })
     expect((await listAssignments(env.DB, { reviewer: 'ivan@example.com', open: true })).map((a) => a.queue)).toEqual(['level'])
+  })
+  it('removing the target language closes that target’s assignments, whatever their L1', async () => {
+    await admin('POST', '/api/admin/reviewers', { email: 'ivan@example.com', name: 'Ivan', languages: ['bg', 'de'] })
+    for (const queue of ['translation-bg', 'de/translation-bg', 'de/level']) await insertAssignment(env.DB, { reviewer: 'ivan@example.com', queue, files: '*', flaggedOnly: true, createdAt: 't' })
+    await admin('PATCH', '/api/admin/reviewers/ivan@example.com', { languages: ['bg'] })
+    expect((await listAssignments(env.DB, { reviewer: 'ivan@example.com', open: true })).map((a) => a.queue)).toEqual(['translation-bg'])
   })
   it('an admin cannot disable or demote themselves', async () => {
     expect((await admin('PATCH', '/api/admin/reviewers/admin@example.com', { disabled: true })).status).toBe(400)
