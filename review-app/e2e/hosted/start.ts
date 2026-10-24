@@ -4,7 +4,7 @@ import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
 import { getPlatformProxy } from 'wrangler'
-import { reviewFixture } from '../../server/fixture'
+import { germanFixture } from '../../server/fixture'
 import { buildSnapshot } from '../../server/snapshot'
 import { CURRENT_KEY } from '../../shared/snapshot'
 import type { D1Database, R2Bucket } from '../../worker/bindings'
@@ -21,7 +21,8 @@ const walk = (dir: string): string[] => readdirSync(dir).flatMap((n) => (statSyn
 const TEAM = 'e2e.example.com'
 const AUD = 'e2e-aud'
 
-const content = await reviewFixture()
+// English's corpus, with a German one in de/ (#317).
+const content = await germanFixture()
 const snap = mkdtempSync(join(tmpdir(), 'snap-'))
 buildSnapshot(content, snap, { commit: 'e2e0000aaaa', built: new Date().toISOString() })
 
@@ -35,6 +36,7 @@ await proxy.env.SNAPSHOTS.put(CURRENT_KEY, readFileSync(join(snap, CURRENT_KEY),
 await proxy.env.DB.prepare("INSERT INTO reviewers (email, name, languages, role, invited_at) VALUES ('reviewer@example.com', 'Rita', '[\"bg\",\"en\"]', 'reviewer', '2026-10-05T00:00:00Z')").run()
 await proxy.env.DB.prepare("INSERT INTO reviewers (email, name, languages, role, invited_at) VALUES ('hans@example.com', 'Hans', '[\"de\",\"bg\"]', 'reviewer', '2026-10-05T00:00:00Z')").run()
 await proxy.env.DB.prepare("INSERT INTO assignments (reviewer, queue, files, flagged_only, created_at) VALUES ('reviewer@example.com', 'translation-bg', '*', 1, '2026-10-05T00:00:00Z')").run()
+await proxy.env.DB.prepare("INSERT INTO assignments (reviewer, queue, files, flagged_only, created_at) VALUES ('hans@example.com', 'de/grammar', '*', 1, '2026-10-05T00:00:00Z')").run()
 // The phone run has a reviewer and a queue of its own, so the two browser projects can run side by side.
 await proxy.env.DB.prepare("INSERT INTO reviewers (email, name, languages, role, invited_at) VALUES ('phone@example.com', 'Petra', '[\"en\"]', 'reviewer', '2026-10-05T00:00:00Z')").run()
 await proxy.env.DB.prepare("INSERT INTO assignments (reviewer, queue, files, flagged_only, created_at) VALUES ('phone@example.com', 'level', '*', 0, '2026-10-05T00:00:00Z')").run()
@@ -42,8 +44,8 @@ await proxy.env.DB.prepare("INSERT INTO assignments (reviewer, queue, files, fla
 for (const issue of KNOWN_ISSUES) await proxy.env.DB.prepare('INSERT INTO open_issues (number, title, read_at) VALUES (?, ?, ?)').bind(issue.number, issue.title, new Date().toISOString()).run()
 await proxy.dispose()
 
-// The fake GitHub: main holds the fixture's review files.
-const files = Object.fromEntries(walk(join(content, 'review')).map((p) => [relative(content, p), readFileSync(p, 'utf8')]))
+// The fake GitHub: main holds the fixture's review files, English's and German's.
+const files = Object.fromEntries([...walk(join(content, 'review')), ...walk(join(content, 'de', 'review'))].map((p) => [relative(content, p), readFileSync(p, 'utf8')]))
 const gh = new FakeGitHub(files)
 // The app's own repository is public: its open issues are listed for anyone, and the daily job reads them.
 gh.issues = [...KNOWN_ISSUES]

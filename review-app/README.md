@@ -101,6 +101,19 @@ A hosted copy of this app (spec 2026-10-05) runs at `https://review.wordado.com`
 Cloudflare Access. Coordinators invite reviewers by email; each reviewer gets their own assignments and submits them
 as a pull request against the content repository, with no local checkout and no CLI.
 
+**A second target language** (German, in the content repository's `de/`, spec §5.5) is served beside English
+(#317). Its queues carry the target in front of their names — `de/translation-bg`, `de/translation-en`, `de/level`
+("German levels"), `de/grammar` ("German grammar") — in the snapshot, the assignments, the branches
+(`review/de/translation-bg-<name>-<day>-<n>`) and the commit subjects, and its rows are written to `de/review/…`;
+English's queues, keys and paths are as they were. A reviewer gets a German queue only when their languages hold
+German as well as the queue's own (Bulgarian for `de/translation-bg`); the language *English* covers English's
+levels and English as an L1 of the German course. The Overview lists the German course's languages after
+English's. `de/grammar` can be left to the local app by taking `grammar` out of `HOSTED_KINDS`
+(`shared/hosted.ts`). The headword queues (`english`, `german`) are not served: they have no AI review, and are
+reviewed as CSV. The content repository's `review-snapshot.yml` and `review-import.yml` must be the templates'
+versions from the same change (they draft `de/` and import a `de/…` queue there); until they are, German rows are
+reviewed locally (`review "$PWD/content/de"`).
+
 ### One-time setup (operator)
 
 1. `wrangler d1 create wordado-review`; put its id into `env.production.d1_databases[0].database_id` in

@@ -1,6 +1,6 @@
 import { csvRecords } from '@wordado/pipeline/csv'
 import { applyDecisions, type QueueRules } from '../shared/apply'
-import type { SubmitResult } from '../shared/hosted'
+import { queueParts, type SubmitResult } from '../shared/hosted'
 import { rowHash } from '../shared/rowHash'
 import type { Deps } from './app'
 import { branchClaimedByOther, claimSubmission, completeSubmission, listDecisions, listReviewers, listSubmissions, pendingClaim, releaseSubmission, setSubmissionBranch, type AssignmentRow, type DecisionRow, type ReviewerRow, type SubmissionRow } from './db'
@@ -127,6 +127,8 @@ export async function submit(deps: Deps, me: ReviewerRow, a: AssignmentRow, gh: 
   const files: { path: string; content: string }[] = []
   const sent: DecisionRow[] = []
   const sidecarOf = (file: string) => file.replace(/\.csv$/, '.json')
+  // A row's hash is the pipeline's, of the queue's name in its own corpus ("translation-bg" for "de/translation-bg").
+  const hashQueue = queueParts(a.queue)?.name ?? a.queue
   // All of them in a few requests: a spot check touches files from all over its queue.
   const texts = await gh.readTexts([...byFile.keys()].flatMap((file) => [file, sidecarOf(file)]), head)
   for (const [file, decisions] of byFile) {
@@ -141,7 +143,7 @@ export async function submit(deps: Deps, me: ReviewerRow, a: AssignmentRow, gh: 
     const ok: DecisionRow[] = []
     for (const d of decisions) {
       if (!proposals.has(d.key) || !reopened.has(d.key)) leftOut.push({ key: d.key, reason: 'gone' })
-      else if ((await rowHash(a.queue, proposals.get(d.key), reopened.get(d.key)!)) !== d.rowHash) leftOut.push({ key: d.key, reason: 'changed' })
+      else if ((await rowHash(hashQueue, proposals.get(d.key), reopened.get(d.key)!)) !== d.rowHash) leftOut.push({ key: d.key, reason: 'changed' })
       else ok.push(d)
     }
     if (ok.length === 0) continue

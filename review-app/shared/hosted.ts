@@ -1,18 +1,52 @@
-import type { AnnouncementKind, AnnouncementLanguage, AnnouncementText, AnnouncementTexts, FeedbackItem } from '@wordado/core'
+import { isTarget, type AnnouncementKind, type AnnouncementLanguage, type AnnouncementText, type AnnouncementTexts, type FeedbackItem, type Target } from '@wordado/core'
 import type { Action, RowView } from '../server/types'
 
 export type Language = 'bg' | 'de' | 'es' | 'en'
 export const LANGUAGES: readonly Language[] = ['bg', 'de', 'es', 'en']
-export const LANGUAGE_NAMES: Readonly<Record<Language, string>> = { bg: 'Bulgarian', de: 'German', es: 'Spanish', en: 'English levels' }
+export const LANGUAGE_NAMES: Readonly<Record<Language, string>> = { bg: 'Bulgarian', de: 'German', es: 'Spanish', en: 'English' }
 export type Role = 'reviewer' | 'admin'
 
-/** The language a reviewer needs for a queue: translation-<l1> and title-<l1> need l1, level needs en; null for queues the hosted app does not serve. */
-export function languageOf(queue: string): Language | null {
-  if (queue === 'level') return 'en'
-  const m = /^(?:translation|title)-([a-z]{2})$/.exec(queue)
-  const l = m?.[1]
-  return l && (LANGUAGES as readonly string[]).includes(l) && l !== 'en' ? (l as Language) : null
+/**
+ * The kinds of queue the hosted app serves. `grammar` is a second target's (German's) grammar block, reviewed by
+ * those who read the target (#317); take it out of this list to leave it to the local app and the CSV.
+ */
+const HOSTED_KINDS: readonly string[] = ['translation', 'title', 'level', 'grammar']
+
+/** A queue as the hosted app names it: English's by its own name ("level"), another target's with the target in
+ * front ("de/level"), so that two corpora's queues never share a snapshot key, an assignment or a branch (#317). */
+export const hostedQueue = (target: Target, name: string): string => (target === 'en' ? name : `${target}/${name}`)
+
+/** A hosted queue's target and its name in that target's corpus; null for a prefix that is not another target. */
+export function queueParts(queue: string): { target: Target; name: string } | null {
+  const m = /^([a-z]{2})\/(.+)$/.exec(queue)
+  if (!m) return { target: 'en', name: queue }
+  return isTarget(m[1]) && m[1] !== 'en' ? { target: m[1], name: m[2]! } : null
 }
+
+/** The language a queue's rows are judged in, which the overview lists it under: translation-<l1> and title-<l1>
+ * need l1, level (and a target's grammar) the target; null for queues the hosted app does not serve. */
+export function languageOf(queue: string): Language | null {
+  const parts = queueParts(queue)
+  if (!parts) return null
+  const { target, name } = parts
+  const kind = name === 'level' || name === 'grammar' ? name : /^(translation|title)-[a-z]{2}$/.exec(name)?.[1]
+  if (!kind || !HOSTED_KINDS.includes(kind) || (kind === 'grammar' && target === 'en')) return null
+  if (kind === 'level' || kind === 'grammar') return target
+  const l = name.slice(kind.length + 1)
+  return (LANGUAGES as readonly string[]).includes(l) && l !== target ? (l as Language) : null
+}
+
+/** Every language a reviewer of the queue must read: a second target's queue needs the target as well (a German
+ * word's Bulgarian translation needs German and Bulgarian); English is taken as read by every reviewer. */
+export function languagesFor(queue: string): Language[] | null {
+  const language = languageOf(queue)
+  if (language === null) return null
+  const target = queueParts(queue)!.target
+  return target === 'en' || target === language ? [language] : [target, language]
+}
+
+/** Whether a reviewer with these languages can be given the queue. */
+export const reviews = (r: { readonly languages: readonly Language[] }, queue: string): boolean => languagesFor(queue)?.every((l) => r.languages.includes(l)) ?? false
 
 export interface Me {
   readonly email: string

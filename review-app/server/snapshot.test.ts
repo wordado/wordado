@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { rowContent } from '@wordado/pipeline/aiReview/store'
 import { describe, expect, it } from 'vitest'
 import { CURRENT_KEY, snapshotDigestKey, snapshotFileKey, snapshotIndexKey, type QueueDigest, type SnapshotFile, type SnapshotIndex } from '../shared/snapshot'
-import { reviewFixture } from './fixture'
+import { germanFixture, reviewFixture } from './fixture'
 import { listRows } from './model'
 import { buildSnapshot } from './snapshot'
 
@@ -60,5 +60,33 @@ describe('buildSnapshot', () => {
       }
     }
     expect([...scopes].sort()).toEqual([false, true])
+  })
+
+  it('serves a second target’s queues under its prefix, apart from English’s, with the rows its own corpus gives', async () => {
+    const dir = await germanFixture()
+    const out = mkdtempSync(join(tmpdir(), 'snap-'))
+    const index = buildSnapshot(dir, out, { commit: 'abcdef1', built: '2026-10-05T00:00:00Z' })
+    const queues = index.queues.map((q) => [q.queue, q.language])
+    expect(queues).toEqual(expect.arrayContaining([['translation-bg', 'bg'], ['level', 'en'], ['de/translation-bg', 'bg'], ['de/translation-en', 'en'], ['de/level', 'de'], ['de/grammar', 'de']]))
+    expect(queues.map(([q]) => q)).not.toContain('de/german')
+    const grammar = index.queues.find((q) => q.queue === 'de/grammar')!
+    expect(grammar.columns).toEqual(['gender', 'plural', 'separable', 'irregular', 'auxiliary'])
+    expect(grammar.verdicts).not.toContain('drop')
+    const de = index.queues.find((q) => q.queue === 'de/translation-bg')!
+    expect(de.files.length).toBeGreaterThan(0)
+    for (const f of de.files) {
+      expect(f.file).toMatch(/^de\/review\/translation-bg\/[^/]+\.csv$/)
+      const body = JSON.parse(readFileSync(join(out, snapshotFileKey(index.id, f.file)), 'utf8')) as SnapshotFile
+      expect(body.file).toBe(f.file)
+      // A row is the German corpus's row as the local app shows it there, under the hosted queue and path.
+      const local = listRows(join(dir, 'de'), 'translation-bg', { withUnflagged: true })
+      for (const r of body.rows) expect(r).toEqual({ ...local.find((x) => x.key === r.key)!, queue: 'de/translation-bg', file: f.file })
+      expect(body.rows.some((r) => r.ai === 'flagged')).toBe(true)
+      const digest = JSON.parse(readFileSync(join(out, snapshotDigestKey(index.id, 'de/translation-bg')), 'utf8')) as QueueDigest
+      expect(digest.files[f.file]).toEqual(body.rows.map((r) => [r.key, r.rowHash, r.ai === 'flagged' || r.reports !== '' || r.stale]))
+    }
+    // English's rows are where they were.
+    const bg = index.queues.find((q) => q.queue === 'translation-bg')!
+    for (const f of bg.files) expect(f.file).toMatch(/^review\/translation-bg\//)
   })
 })

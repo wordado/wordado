@@ -51,7 +51,7 @@ export const inFlaggedScope = (r: Pick<RowView, 'ai' | 'reports' | 'stale'>): bo
 export const digestRows = (rows: readonly RowView[]): DigestRow[] => rows.map((r) => [r.key, r.rowHash, inFlaggedScope(r)])
 
 export const snapshotIndexKey = (id: string) => `snapshots/${id}/index.json`
-/** review/<queue>/<stem>.csv → snapshots/<id>/<queue>/<stem>.json */
-export const snapshotFileKey = (id: string, file: string) => `snapshots/${id}/${file.replace(/^review\//, '').replace(/\.csv$/, '.json')}`
+/** review/<queue>/<stem>.csv → snapshots/<id>/<queue>/<stem>.json; a second target's de/review/<queue>/… → snapshots/<id>/de/<queue>/… */
+export const snapshotFileKey = (id: string, file: string) => `snapshots/${id}/${file.replace(/^(?:([a-z]{2})\/)?review\//, (_, t?: string) => (t ? `${t}/` : '')).replace(/\.csv$/, '.json')}`
 /** snapshots/<id>/<queue>/digest.json, beside the queue's files: no review file is named digest.csv (their stems are dated). */
 export const snapshotDigestKey = (id: string, queue: string) => `snapshots/${id}/${queue}/digest.json`

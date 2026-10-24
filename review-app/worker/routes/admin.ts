@@ -1,5 +1,5 @@
 import type { Hono } from 'hono'
-import { languageOf, type SnapshotStatus, type SplitProposal, type SpotCheckCreated } from '../../shared/hosted'
+import { reviews, type SnapshotStatus, type SplitProposal, type SpotCheckCreated } from '../../shared/hosted'
 import { apiError, jsonBody, type AppEnv, type Deps } from '../app'
 import type { RowView } from '../../server/types'
 import type { SnapshotQueue } from '../../shared/snapshot'
@@ -19,8 +19,7 @@ export const SPOT_CHECK_MAX = 500
 async function reviewerAndQueue(deps: Deps, reviewer: unknown, queue: unknown): Promise<{ r: ReviewerRow; snap: Snapshot; q: SnapshotQueue } | Refused> {
   const r = await getReviewer(deps.env.DB, String(reviewer))
   if (!r || r.disabledAt) return { status: 400, message: `${String(reviewer)} is not an active reviewer` }
-  const lang = languageOf(String(queue))
-  if (!lang || !r.languages.includes(lang)) return { status: 400, message: `${r.name} does not review ${String(queue)}` }
+  if (!reviews(r, String(queue))) return { status: 400, message: `${r.name} does not review ${String(queue)}` }
   const snap = await currentSnapshot(deps)
   if (!snap) return { status: 503, message: NO_SNAPSHOT }
   const q = snap.queue(String(queue))

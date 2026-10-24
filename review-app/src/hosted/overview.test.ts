@@ -32,8 +32,8 @@ describe('overviewOf', () => {
   it('gives a row per language that has a queue, with its parts, its reviewers and how far it is', () => {
     expect(o.languages.map((l) => l.language)).toEqual(['de', 'es'])
     const [german, spanish] = o.languages
-    expect(german).toEqual({ language: 'de', label: 'German', parts: '9 translations · 2 titles', reviewers: ['Anna'], flagged: 11, decided: 2, submitted: 1, state: 'on track' })
-    expect(spanish).toEqual({ language: 'es', label: 'Spanish', parts: '4 translations', reviewers: [], flagged: 4, decided: 0, submitted: 0, state: 'unassigned' })
+    expect(german).toEqual({ target: 'en', language: 'de', label: 'German', parts: '9 translations · 2 titles', reviewers: ['Anna'], flagged: 11, decided: 2, submitted: 1, state: 'on track' })
+    expect(spanish).toEqual({ target: 'en', language: 'es', label: 'Spanish', parts: '4 translations', reviewers: [], flagged: 4, decided: 0, submitted: 0, state: 'unassigned' })
   })
 
   it('does not take a spot check for someone working on the language’s flagged rows', () => {
@@ -48,6 +48,28 @@ describe('overviewOf', () => {
       assignments: [], submissions: [], reviewers: [],
     })
     expect(one.languages.map((l) => [l.label, l.parts])).toEqual([['Bulgarian', '1 translation · 1 title'], ['English levels', '21 rows']])
+  })
+
+  it('gives a second target’s queues rows of their own, after English’s, by language', () => {
+    const both = overviewOf({
+      snapshot: {
+        ...snapshot,
+        queues: [
+          { queue: 'translation-bg', language: 'bg', files: [file('translation-bg', 'a', 3, 0)] },
+          { queue: 'de/translation-bg', language: 'bg', files: [{ ...file('translation-bg', 'a', 2, 0), file: 'de/review/translation-bg/a.csv' }] },
+          { queue: 'de/level', language: 'de', files: [{ ...file('level', 'a', 5, 0), file: 'de/review/level/a.csv' }] },
+          { queue: 'de/grammar', language: 'de', files: [{ ...file('grammar', 'a', 1, 0), file: 'de/review/grammar/a.csv' }] },
+        ],
+      },
+      assignments: [assignment({ queue: 'de/translation-bg' })],
+      submissions: [],
+      reviewers,
+    })
+    expect(both.languages.map((l) => [l.target, l.language, l.label, l.parts, l.reviewers])).toEqual([
+      ['en', 'bg', 'Bulgarian', '3 translations', []],
+      ['de', 'bg', 'German course: Bulgarian', '2 translations', ['Anna']],
+      ['de', 'de', 'German course', '6 rows', []],
+    ])
   })
 
   it('calls a language with nothing flagged done, whoever holds it', () => {

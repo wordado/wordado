@@ -63,6 +63,19 @@ describe('admin assignments', () => {
     expect(bad.status).toBe(400)
   })
 
+  it('gives a second target’s queue only to a reviewer who reads the target as well as the L1', async () => {
+    await putSnapshot(env, { german: true, commit: 'fedcba9876' })
+    resetSnapshotCache()
+    await insertReviewer(env.DB, { email: 'mara@example.com', name: 'Mara', languages: ['bg', 'de'], role: 'reviewer', invitedAt: 't', inviteSentAt: null, disabledAt: null })
+    const assign = (reviewer: string, queue: string) => admin('POST', '/api/admin/assignments', { reviewer, queue, files: '*', flaggedOnly: true })
+    expect((await assign('eve@example.com', 'de/translation-bg')).status).toBe(400)
+    expect((await assign('hans@example.com', 'de/translation-bg')).status).toBe(400)
+    expect((await assign('mara@example.com', 'de/translation-bg')).status).toBe(201)
+    expect((await assign('hans@example.com', 'de/level')).status).toBe(201)
+    // English's queue of the same name is another queue: it can be assigned beside it.
+    expect((await assign('eve@example.com', 'translation-bg')).status).toBe(201)
+  })
+
   it('refuses an overlapping assignment and names who has the file', async () => {
     const file = index.queues.find((q) => q.queue === 'translation-bg')!.files[0]!.file
     await admin('POST', '/api/admin/assignments', { reviewer: 'ivan@example.com', queue: 'translation-bg', files: [file], flaggedOnly: false })
