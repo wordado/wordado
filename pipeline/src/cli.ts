@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { TARGETS, checkPackSuccession, isTarget, loadCorpus, offeredThemes, themeSize, validatePack, type CreditsFile, type Pack, type PackError } from '@wordado/core'
 import { aiReviewConfig, runAiReview } from './aiReview/run'
@@ -8,6 +8,7 @@ import { BuildError, buildPack, type BuildOutput, type ClipFile } from './build'
 import { claudeCodeLlm } from './claudeCode'
 import { COMPARE_STAGES, compareReport, compareStages, type CompareStage } from './compare'
 import { readConfig, reviewQueues, type PipelineConfig } from './config'
+import { cdnEnv, cdnLayout } from './cdn'
 import { checkedCredits } from './credits'
 import { Decisions, QUEUES } from './decisions'
 import { readDraft, runDraft } from './draft'
@@ -48,7 +49,10 @@ const USAGE = `usage: corpus <command>
     release <dir> <out> [--draft]  build the next corpus version into <out>
     credits <dir> <out.json>       the sources' attributions at the last published version (credits.json)
     published <dir> <out>          after a publish: <out> becomes last-published/
-    live <dir> <manifest-url>      does the CDN serve last-published/?
+    live <dir> <manifest-url>      does the CDN serve last-published/? (the dir's own manifest URL, from cdn)
+    cdn <dir> <manifest-url> <env-file>
+                                   where the dir's corpus is served, given English's manifest URL: appends
+                                   CDN_TARGET, CDN_DIR (empty for English) and CDN_MANIFEST_URL to <env-file>
   frequency lists (run on a workstation; the output goes into the content repository's sources/):
     count-text <out.tsv> <parquet URL...>      word forms in Parquet text shards (FineWeb), streamed, never saved
     sum-gbooks <out.tsv> <gz URL...> [--from Y] [--to Y]   Google Books 1-grams, years 2000-2019 by default, streamed, never saved
@@ -347,6 +351,24 @@ async function live(dir: string, url: string): Promise<void> {
   console.log('ok')
 }
 
+/** `corpus cdn`: the release workflow's upload folder and manifest URL for this directory's target (#329). */
+function cdn(dir: string, englishManifestUrl: string, envFile: string): void {
+  let url: URL
+  try {
+    url = new URL(englishManifestUrl)
+  } catch {
+    console.error(`${englishManifestUrl}: not an absolute URL`)
+    process.exit(2)
+  }
+  if (url.pathname.endsWith('/') || url.search !== '' || url.hash !== '') {
+    console.error(`${englishManifestUrl}: must name the manifest file, with no query`)
+    process.exit(2)
+  }
+  const layout = cdnLayout(readConfig(dir).target ?? 'en', englishManifestUrl)
+  appendFileSync(envFile, cdnEnv(layout))
+  console.log(`${layout.target}: uploads to ${layout.dir === '' ? 'the root' : `${layout.dir}/`}; manifest at ${layout.manifestUrl}`)
+}
+
 async function main(): Promise<void> {
   const [command, first, second] = positional
   switch (command) {
@@ -405,6 +427,9 @@ async function main(): Promise<void> {
       break
     case 'live':
       await live(arg(first), arg(second))
+      break
+    case 'cdn':
+      cdn(arg(first), arg(second), arg(positional[3]))
       break
     case 'count-text': {
       const [out, ...files] = positional.slice(1)

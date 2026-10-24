@@ -5,6 +5,10 @@ name: Corpus
 # draft, audio and triage open a pull request with what they changed; release publishes to R2,
 # manifest last, and commits the new last-published/ to main.
 #
+# Each target language is its own corpus (spec §5.5): English at this repository's root, German in de/. A release
+# of one never touches another's: English is served at the root of the CDN, German under de/, each with its own
+# manifest, packs, clips, fixes.json and credits.json, and each recorded in its own last-published/ (#329).
+#
 # This repository is private on GitHub Free, which offers neither environment secrets nor required
 # reviewers there. Secrets are repository secrets, each handed only to the step that needs it, and a
 # release runs only for a user named in vars.RELEASE_ACTORS who typed "release" in the confirm field.
@@ -16,6 +20,12 @@ on:
         type: choice
         required: true
         options: [draft, audio, ai-review, triage, release, credits]
+      language:
+        description: Which corpus (en at the root, de in de/)
+        type: choice
+        required: true
+        default: en
+        options: [en, de]
       confirm:
         description: For a release, type release
         type: string
@@ -36,12 +46,13 @@ concurrency:
 env:
   ACTION: ${{ inputs.action }}
   QUEUE: ${{ inputs.queue }}
+  LANGUAGE: ${{ inputs.language || 'en' }}
   # Absolute, so it works from any step's working directory.
   CORPUS: pnpm --dir ${{ github.workspace }}/wordado --filter @wordado/pipeline corpus
 
 jobs:
   work:
-    name: ${{ inputs.action }}
+    name: ${{ inputs.action }} (${{ inputs.language || 'en' }})
     if: inputs.action != 'release' && inputs.action != 'credits'
     runs-on: ubuntu-24.04
     timeout-minutes: 240
@@ -73,6 +84,8 @@ jobs:
           REPORTS_DATABASE_URL: ${{ secrets.REPORTS_DATABASE_URL }}
         run: |
           content="$GITHUB_WORKSPACE/content"
+          # English is the repository root; another language is its own directory.
+          if [ "$LANGUAGE" != en ]; then content="$content/$LANGUAGE"; fi
           case "$ACTION" in
             # A reviewer's drop or level fix can reshape units, whose titles are then asked again, so these
             # run online rather than --offline: an --offline draft would fail on the reshaped titles.
@@ -101,8 +114,10 @@ jobs:
         run: |
           git add -A
           if git diff --cached --quiet; then echo "Nothing changed."; exit 0; fi
-          branch="corpus/$ACTION-$GITHUB_RUN_ID"
-          title="corpus: $ACTION${QUEUE:+ $QUEUE} ($GITHUB_RUN_ID)"
+          # English keeps the names it always had; another language is named in both.
+          lang=""; if [ "$LANGUAGE" != en ]; then lang="$LANGUAGE-"; fi
+          branch="corpus/$lang$ACTION-$GITHUB_RUN_ID"
+          title="corpus: ${lang:+$LANGUAGE }$ACTION${QUEUE:+ $QUEUE} ($GITHUB_RUN_ID)"
           note="New review files are under review/."
           if [ "$JOB_STATUS" != success ]; then
             title="$title, stopped early"
@@ -116,7 +131,7 @@ jobs:
             --body "Results of the Corpus workflow's $ACTION run $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID. $note"
 
   release:
-    name: release
+    name: release (${{ inputs.language || 'en' }})
     if: inputs.action == 'release'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -124,6 +139,7 @@ jobs:
       OUT: ${{ github.workspace }}/out
       BUCKET: s3://${{ vars.CONTENT_BUCKET }}
       R2: https://${{ vars.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
+      # English's manifest; `corpus cdn` gives another language's, in a folder beside it.
       MANIFEST_URL: ${{ vars.CONTENT_MANIFEST_URL }}
       AWS_DEFAULT_REGION: auto
       # R2 does not take the AWS CLI's default integrity headers.
@@ -168,12 +184,27 @@ jobs:
           cache-dependency-path: wordado/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
         working-directory: wordado
+      # The corpus's directory, and where it is served: CDN_DIR is empty for English (the bucket's root) and the
+      # language otherwise; CDN_MANIFEST_URL is the URL the app asks for (targetManifestUrl in web/src/content/packs.ts).
+      - name: Where the ${{ inputs.language || 'en' }} corpus is served
+        run: |
+          content="$GITHUB_WORKSPACE/content"
+          if [ "$LANGUAGE" != en ]; then content="$content/$LANGUAGE"; fi
+          echo "CONTENT=$content" >> "$GITHUB_ENV"
+          $CORPUS cdn "$content" "$MANIFEST_URL" "$GITHUB_ENV"
+      - name: The directory is the chosen language's corpus
+        run: |
+          if [ "$CDN_TARGET" != "$LANGUAGE" ]; then
+            echo "::error::$CONTENT holds the $CDN_TARGET corpus, not $LANGUAGE (its pipeline.json's target)."
+            exit 1
+          fi
+          echo "DEST=$BUCKET${CDN_DIR:+/$CDN_DIR}" >> "$GITHUB_ENV"
       - name: The CDN serves last-published/, the version this release follows
-        run: $CORPUS live "$GITHUB_WORKSPACE/content" "$MANIFEST_URL"
+        run: $CORPUS live "$CONTENT" "$CDN_MANIFEST_URL"
       - name: Build the release (every gate)
         run: |
-          $CORPUS draft "$GITHUB_WORKSPACE/content" --offline
-          $CORPUS release "$GITHUB_WORKSPACE/content" "$OUT"
+          $CORPUS draft "$CONTENT" --offline
+          $CORPUS release "$CONTENT" "$OUT"
       - name: Every file the manifest reaches is present, with its checksum
         run: $CORPUS publishable "$OUT"
       - name: Upload the packs, the trial files and the audio (not the manifest)
@@ -181,41 +212,45 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
         run: |
-          aws s3 sync "$OUT" "$BUCKET" --endpoint-url "$R2" --exclude '*' --include '*.pack' --include '*.trial' \
+          # A sync's --exclude and --include patterns are relative to its source, so English's (at the root) never
+          # reach another language's folder; and a sync to a language's folder writes inside it only.
+          aws s3 sync "$OUT" "$DEST" --endpoint-url "$R2" --exclude '*' --include '*.pack' --include '*.trial' \
             --content-type application/json --cache-control 'public, max-age=31536000, immutable'
           # A clip's bytes never change (a new take is a new name), so a clip of the same size is already there:
           # a release uploads the new clips only.
-          aws s3 sync "$OUT/audio" "$BUCKET/audio" --endpoint-url "$R2" --size-only \
+          aws s3 sync "$OUT/audio" "$DEST/audio" --endpoint-url "$R2" --size-only \
             --content-type audio/mp4 --cache-control 'public, max-age=86400'
-          aws s3 cp "$OUT/fixes.json" "$BUCKET/fixes.json" --endpoint-url "$R2" \
+          aws s3 cp "$OUT/fixes.json" "$DEST/fixes.json" --endpoint-url "$R2" \
             --content-type application/json --cache-control no-cache
-          aws s3 cp "$OUT/credits.json" "$BUCKET/credits.json" --endpoint-url "$R2" \
+          aws s3 cp "$OUT/credits.json" "$DEST/credits.json" --endpoint-url "$R2" \
             --content-type application/json --cache-control no-cache
-          aws s3 cp "$OUT/trial-manifest.json" "$BUCKET/trial-manifest.json" --endpoint-url "$R2" \
+          aws s3 cp "$OUT/trial-manifest.json" "$DEST/trial-manifest.json" --endpoint-url "$R2" \
             --content-type application/json --cache-control no-cache
       - name: Publish the manifest, last
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
         run: |
-          aws s3 cp "$OUT/manifest.json" "$BUCKET/manifest.json" --endpoint-url "$R2" \
+          aws s3 cp "$OUT/manifest.json" "$DEST/manifest.json" --endpoint-url "$R2" \
             --content-type application/json --cache-control no-cache
       - name: The CDN serves the new manifest
         run: |
           expected=$(node -e "console.log(JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8')).corpus_version)" "$OUT/manifest.json")
-          served=$(curl --fail --silent --show-error -H 'cache-control: no-cache' "$MANIFEST_URL" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>console.log(JSON.parse(s).corpus_version))")
+          served=$(curl --fail --silent --show-error -H 'cache-control: no-cache' "$CDN_MANIFEST_URL" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>console.log(JSON.parse(s).corpus_version))")
           echo "corpus version: published $expected, served $served"
           test "$expected" = "$served"
       - name: Record the release as last-published/
         working-directory: content
         run: |
-          $CORPUS published "$GITHUB_WORKSPACE/content" "$OUT"
-          version=$(node -e "console.log(JSON.parse(require('fs').readFileSync('last-published/manifest.json','utf8')).corpus_version)")
+          $CORPUS published "$CONTENT" "$OUT"
+          # The language's own last-published/: de/last-published for German, last-published at the root for English.
+          record="${CDN_DIR:+$CDN_DIR/}last-published"
+          version=$(node -e "console.log(JSON.parse(require('fs').readFileSync(process.argv[1],'utf8')).corpus_version)" "$record/manifest.json")
           # Only last-published/: the offline draft leaves registry.json as the merged draft pull request left it,
           # and no other job writes last-published/, so the rebase below cannot conflict.
-          git add last-published
+          git add "$record"
           git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
-            commit -m "corpus: published version $version (run $GITHUB_RUN_ID)"
+            commit -m "corpus: published ${CDN_DIR:+$CDN_DIR }version $version (run $GITHUB_RUN_ID)"
           # The manifest is already live, so this must land: a pull request merged during the run would make a
           # plain push non-fast-forward. A push that loses a second race is retried once.
           for attempt in 1 2; do
@@ -225,7 +260,7 @@ jobs:
           exit 1
 
   credits:
-    name: credits
+    name: credits (${{ inputs.language || 'en' }})
     if: inputs.action == 'credits'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -270,12 +305,27 @@ jobs:
           cache-dependency-path: wordado/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
         working-directory: wordado
+      - name: Where the ${{ inputs.language || 'en' }} corpus is served
+        env:
+          MANIFEST_URL: ${{ vars.CONTENT_MANIFEST_URL }}
+        run: |
+          content="$GITHUB_WORKSPACE/content"
+          if [ "$LANGUAGE" != en ]; then content="$content/$LANGUAGE"; fi
+          echo "CONTENT=$content" >> "$GITHUB_ENV"
+          $CORPUS cdn "$content" "$MANIFEST_URL" "$GITHUB_ENV"
+      - name: The directory is the chosen language's corpus
+        run: |
+          if [ "$CDN_TARGET" != "$LANGUAGE" ]; then
+            echo "::error::$CONTENT holds the $CDN_TARGET corpus, not $LANGUAGE (its pipeline.json's target)."
+            exit 1
+          fi
+          echo "DEST=$BUCKET${CDN_DIR:+/$CDN_DIR}" >> "$GITHUB_ENV"
       - name: Write credits.json from the licence register
-        run: $CORPUS credits "$GITHUB_WORKSPACE/content" "$OUT/credits.json"
+        run: $CORPUS credits "$CONTENT" "$OUT/credits.json"
       - name: Upload credits.json
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
         run: |
-          aws s3 cp "$OUT/credits.json" "$BUCKET/credits.json" --endpoint-url "$R2" \
+          aws s3 cp "$OUT/credits.json" "$DEST/credits.json" --endpoint-url "$R2" \
             --content-type application/json --cache-control no-cache

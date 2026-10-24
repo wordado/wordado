@@ -115,4 +115,25 @@ describe('corpus (the CLI)', () => {
     // Every open translation-bg row is pending for both reasons; the grouped lines still show the AI-gate one.
     expect(out.stdout).toMatch(/× not yet AI-reviewed \(translation-bg\)/)
   })
+  it('cdn gives English the bucket root and its manifest URL unchanged, and German de/ beside it (#329)', () => {
+    const env = join(mkdtempSync(join(tmpdir(), 'cdn-')), 'env')
+    const en = corpus('cdn', makeContent(), 'https://content.example.test/manifest.json', env)
+    expect(en.status).toBe(0)
+    const de = corpus('cdn', makeContent({ config: { target: 'de', l1s: ['bg'] } }), 'https://content.example.test/manifest.json', env)
+    expect(de.status).toBe(0)
+    expect(readFileSync(env, 'utf8')).toBe(
+      'CDN_TARGET=en\nCDN_DIR=\nCDN_MANIFEST_URL=https://content.example.test/manifest.json\n' +
+        'CDN_TARGET=de\nCDN_DIR=de\nCDN_MANIFEST_URL=https://content.example.test/de/manifest.json\n',
+    )
+  })
+
+  it('cdn refuses a manifest URL it could not place a folder beside', () => {
+    const env = join(mkdtempSync(join(tmpdir(), 'cdn-')), 'env')
+    for (const url of ['manifest.json', 'https://content.example.test/', 'https://content.example.test/manifest.json?v=1']) {
+      const out = corpus('cdn', makeContent(), url, env)
+      expect(out.status, url).toBe(2)
+    }
+    expect(existsSync(env)).toBe(false)
+  })
 })
+

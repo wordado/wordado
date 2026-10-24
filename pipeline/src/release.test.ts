@@ -186,6 +186,23 @@ describe('planRelease and writeRelease', () => {
     expect(uploads.files.at(-1)).toBe('manifest.json')
   })
 
+  it('uploads every file to the language’s own folder at the path its manifest names, in the template’s release and credits jobs (#329)', () => {
+    const workflow = readFileSync(new URL('../template/.github/workflows/corpus.yml', import.meta.url), 'utf8')
+    for (const name of ['release', 'credits']) {
+      const job = new RegExp(`\\n {2}${name}:\\n([\\s\\S]*?)(?=\\n {2}[a-z-]+:\\n|$)`).exec(workflow)?.[1] ?? ''
+      const commands = job.replace(/\\\n\s*/g, ' ').split('\n').filter((line) => line.includes('aws s3 '))
+      expect(commands.length, name).toBeGreaterThan(0)
+      for (const command of commands) {
+        // "$OUT/x" goes to "$DEST/x" and "$OUT" to "$DEST": DEST is the bucket for English and the bucket's de/ for German.
+        const [, from, to] = /aws s3 (?:cp|sync) "\$OUT(\/[^"]+)?" "\$DEST(\/[^"]+)?"/.exec(command) ?? []
+        expect(command.includes('"$DEST'), command).toBe(true)
+        expect(to, command).toBe(from)
+      }
+      // Only the language's folder: the bucket's root is English's, reached through DEST when the language is en.
+      expect(job.match(/"DEST=\$BUCKET\$\{CDN_DIR:\+\/\$CDN_DIR\}"/g)?.length, name).toBe(1)
+    }
+  })
+
   it('refuses while anything awaits review, naming it; a draft builds anyway and cannot be published', async () => {
     const dir = makeContent()
     await runDraft({ dir, llm: sampleLlm(), offline: false })

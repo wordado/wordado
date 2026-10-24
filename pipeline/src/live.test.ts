@@ -24,4 +24,13 @@ describe('liveProblems', () => {
     expect(await liveProblems(dir, 'https://c/m', async () => { throw new Error('HTTP 404') })).toEqual(['https://c/m: HTTP 404'])
     expect(await liveProblems(dir, 'https://c/m', async () => '<html>')).toEqual(['https://c/m: not JSON'])
   })
+  it('accepts a CDN with nothing published only while last-published/ is the empty version 0 of a new target (#329)', async () => {
+    const empty = makeContent({ config: { target: 'de', l1s: ['bg'] } })
+    expect(await liveProblems(empty, 'https://c/de/manifest.json', async () => null)).toEqual([])
+    // English's version 0 is the sample, with a pack: a CDN without it is still a problem.
+    expect(await liveProblems(makeContent(), 'https://c/manifest.json', async () => null)).toEqual([
+      'https://c/manifest.json: not found, but last-published/ holds version 0; restore the manifest on the CDN, or check the manifest URL',
+    ])
+  })
 })
+
